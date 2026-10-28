@@ -54,7 +54,7 @@ impl Scaler {
         let key = ScalerKey {
             width: raw.width,
             height: raw.height,
-            format: decoder.raw().pix_fmt,
+            format: decoder.picture_format(),
             colorspace: raw.colorspace,
             range: raw.color_range,
             output_width,
