@@ -50,7 +50,7 @@ impl TimelineView {
                 self.context_clip = matches!(hit, Hit::Body { .. } | Hit::Edge { .. });
                 if let Hit::Body { clip, .. } | Hit::Edge { clip, .. } = hit {
                     if !self.selection.contains(&clip) {
-                        self.selection = sequence.with_links(&[clip]);
+                        self.selection = sequence.with_groups(&[clip]);
                     }
                 }
             }
@@ -205,7 +205,7 @@ impl TimelineView {
                 return;
             }
         };
-        let group = sequence.with_links(&[clip]);
+        let group = sequence.with_groups(&[clip]);
         if shift {
             if self.selection.contains(&clip) {
                 self.selection.retain(|id| !group.contains(id));
@@ -220,7 +220,7 @@ impl TimelineView {
     fn gesture(&mut self, sequence: &Sequence, hit: Hit) -> Option<Gesture> {
         let grabbed = |clip: ClipId, selection: &mut Vec<ClipId>| {
             if !selection.contains(&clip) {
-                *selection = sequence.with_links(&[clip]);
+                *selection = sequence.with_groups(&[clip]);
             }
             selection.clone()
         };

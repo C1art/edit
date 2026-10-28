@@ -94,6 +94,8 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         Command::AudioGain => editor.prompt_clip_gain(),
         Command::ToggleEnabled => editor.toggle_enabled(),
         Command::ToggleLink => editor.toggle_link(),
+        Command::Group => editor.set_grouped(true),
+        Command::Ungroup => editor.set_grouped(false),
         Command::MakeSubclip => editor.make_subclip(),
         Command::NudgeLeft => editor.nudge(-1),
         Command::NudgeRight => editor.nudge(1),

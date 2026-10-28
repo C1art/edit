@@ -32,6 +32,8 @@ pub enum Command {
     AudioGain,
     ToggleEnabled,
     ToggleLink,
+    Group,
+    Ungroup,
     MakeSubclip,
     NudgeLeft,
     NudgeRight,
@@ -99,7 +101,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Self; 89] = [
+    pub const ALL: [Self; 91] = [
         Self::NewProject,
         Self::OpenProject,
         Self::Save,
@@ -125,6 +127,8 @@ impl Command {
         Self::AudioGain,
         Self::ToggleEnabled,
         Self::ToggleLink,
+        Self::Group,
+        Self::Ungroup,
         Self::MakeSubclip,
         Self::NudgeLeft,
         Self::NudgeRight,
@@ -220,6 +224,8 @@ impl Command {
             Self::AudioGain => ("audio_gain", "Audio Gain"),
             Self::ToggleEnabled => ("toggle_enabled", "Enable"),
             Self::ToggleLink => ("toggle_link", "Link"),
+            Self::Group => ("group", "Group"),
+            Self::Ungroup => ("ungroup", "Ungroup"),
             Self::MakeSubclip => ("make_subclip", "Make Subclip"),
             Self::NudgeLeft => ("nudge_left", "Nudge Clip Selection Left One Frame"),
             Self::NudgeRight => ("nudge_right", "Nudge Clip Selection Right One Frame"),
@@ -321,9 +327,9 @@ impl Command {
             | NewTitle => "File",
             Undo | Redo | Cut | Copy | Paste | PasteInsert | PasteAttributes | Clear
             | RippleDelete | CancelDrag | SelectAll | DeselectAll | KeyboardShortcuts => "Edit",
-            SpeedDuration | AudioGain | ToggleEnabled | ToggleLink | MakeSubclip | Insert
-            | Overwrite | NudgeLeft | NudgeRight | NudgeLeftFive | NudgeRightFive | NudgeUp
-            | NudgeDown => "Clip",
+            SpeedDuration | AudioGain | ToggleEnabled | ToggleLink | Group | Ungroup
+            | MakeSubclip | Insert | Overwrite | NudgeLeft | NudgeRight | NudgeLeftFive
+            | NudgeRightFive | NudgeUp | NudgeDown => "Clip",
             AddEdit | ExtendEdit | SelectAtPlayhead | VideoTransition | AudioTransition
             | LiftMarked | ExtractMarked | RippleTrimPrevious | RippleTrimNext | MatchFrame
             | ToggleSnapping | ZoomIn | ZoomOut | ZoomToFit | IncreaseVideoHeights
@@ -383,6 +389,8 @@ impl Command {
             Self::AudioGain => vec![plain(Key::G)],
             Self::ToggleEnabled => vec![shift(Key::E)],
             Self::ToggleLink => vec![ctrl(Key::L)],
+            Self::Group => vec![ctrl(Key::G)],
+            Self::Ungroup => vec![ctrl_shift(Key::G)],
             Self::MakeSubclip => vec![ctrl(Key::U)],
             Self::NudgeLeft => vec![alt(Key::ArrowLeft)],
             Self::NudgeRight => vec![alt(Key::ArrowRight)],

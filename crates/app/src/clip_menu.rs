@@ -69,6 +69,12 @@ pub(crate) fn items(editor: &mut Editor, ui: &mut Ui) {
     if ui.add(link).clicked() {
         editor.toggle_link();
     }
+    for (command, grouped) in [(Command::Group, true), (Command::Ungroup, false)] {
+        let button = Button::new(command.name()).shortcut_text(editor.keymap.label(command));
+        if ui.add(button).clicked() {
+            editor.set_grouped(grouped);
+        }
+    }
     let gain = Button::new("Audio Gain…").shortcut_text(editor.keymap.label(Command::AudioGain));
     if ui.add(gain).clicked() {
         editor.prompt_clip_gain();

@@ -1,6 +1,6 @@
 use timeline::{
     AddFrameHold, AddTrack, Clipboard, FrameFit, Lift, PasteClips, PlaceMode, Razor, RazorTarget,
-    RippleDelete, SetClipsEnabled, SetLinked, SetToFrameSize, Timecode, TrackKind,
+    RippleDelete, SetClipsEnabled, SetGrouped, SetLinked, SetToFrameSize, Timecode, TrackKind,
 };
 
 use crate::editor::Editor;
@@ -190,6 +190,20 @@ impl Editor {
             self.apply(edit);
         } else if !self.apply(edit) {
             self.notice("Select two or more clips to link");
+        }
+    }
+
+    pub(crate) fn set_grouped(&mut self, grouped: bool) {
+        let edit = SetGrouped {
+            clips: self.view.selection.clone(),
+            grouped,
+        };
+        if self.apply(edit) {
+            self.view.selection = self.timeline.sequence().with_groups(&self.view.selection);
+        } else if grouped {
+            self.notice("Select two or more clips to group");
+        } else {
+            self.notice("Select a grouped clip to ungroup");
         }
     }
 
