@@ -164,8 +164,9 @@ struct VertexOutput {
 @group(0) @binding(0) var source: texture_2d<f32>;
 @group(0) @binding(1) var source_sampler: sampler;
 @group(0) @binding(2) var<uniform> placement: Placement;
-// Lookups in gamma-encoded values: curves as a row of outputs per channel, then the
-// input and look LUTs as cubes indexed by red, green and blue.
+// Lookups in gamma-encoded values: curves as a row of outputs per channel followed by
+// two rows of hue curves, then the input and look LUTs as cubes indexed by red, green
+// and blue.
 @group(1) @binding(0) var curves: texture_2d<f32>;
 @group(1) @binding(1) var input_lut: texture_3d<f32>;
 @group(1) @binding(2) var look_lut: texture_3d<f32>;
@@ -290,14 +291,19 @@ fn creative_grade(rgb_in: vec3<f32>) -> vec3<f32> {
         rgb = mix(rgb, lookup(look_lut, grade.y, rgb), grade.z);
     }
     rgb = creative_tone(rgb);
-    if grade.w > 0.5 {
+    let flags = u32(grade.w + 0.5);
+    if (flags & 1u) != 0u {
         let size = f32(textureDimensions(curves).x);
+        let row = 0.5 / f32(textureDimensions(curves).y);
         let u = srgb_encode(rgb) * ((size - 1.0) / size) + vec3<f32>(0.5 / size);
         rgb = srgb_decode(vec3<f32>(
-            textureSampleLevel(curves, grade_sampler, vec2<f32>(u.r, 0.5), 0.0).r,
-            textureSampleLevel(curves, grade_sampler, vec2<f32>(u.g, 0.5), 0.0).g,
-            textureSampleLevel(curves, grade_sampler, vec2<f32>(u.b, 0.5), 0.0).b,
+            textureSampleLevel(curves, grade_sampler, vec2<f32>(u.r, row), 0.0).r,
+            textureSampleLevel(curves, grade_sampler, vec2<f32>(u.g, row), 0.0).g,
+            textureSampleLevel(curves, grade_sampler, vec2<f32>(u.b, row), 0.0).b,
         ));
+    }
+    if (flags & 2u) != 0u {
+        rgb = hue_curves(rgb);
     }
     return rgb;
 }

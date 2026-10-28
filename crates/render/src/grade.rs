@@ -13,19 +13,27 @@ pub struct Grade {
     pub input: Option<Arc<Lut3d>>,
     /// Applied after the correction, mixed in by the look's intensity.
     pub look: Option<Arc<Lut3d>>,
-    /// [`CURVE_SIZE`] red, green and blue outputs, applied last.
+    /// [`CURVE_SIZE`] red, green and blue outputs, applied after the look.
     pub curves: Option<Vec<[f32; 3]>>,
+    /// Two rows of [`CURVE_SIZE`]: by hue, the saturation factor, turn of hue and
+    /// lightness offset; then the saturation factors by lightness and by saturation.
+    /// Applied last.
+    pub hue_curves: Option<Vec<[f32; 3]>>,
 }
 
 impl Grade {
     /// The input and look LUT sizes (0 for none), the look's intensity, then 1 when
-    /// curves apply.
+    /// curves apply plus 2 when hue curves do.
     pub(crate) fn uniform(grade: Option<&Grade>, look_intensity: f32) -> [f32; 4] {
         let Some(grade) = grade else {
             return [0.0; 4];
         };
         let size = |lut: &Option<Arc<Lut3d>>| lut.as_ref().map_or(0.0, |lut| lut.size as f32);
-        let curves = if grade.curves.is_some() { 1.0 } else { 0.0 };
+        let curves = [grade.curves.is_some(), grade.hue_curves.is_some()]
+            .into_iter()
+            .zip([1.0, 2.0])
+            .filter_map(|(applies, flag)| applies.then_some(flag))
+            .sum();
         [
             size(&grade.input),
             size(&grade.look),
@@ -91,15 +99,16 @@ impl GradeLayout {
         queue: &wgpu::Queue,
         grade: &Grade,
     ) -> wgpu::BindGroup {
-        let curves = match &grade.curves {
-            Some(table) => {
-                let width = u32::try_from(table.len()).unwrap_or(u32::MAX);
+        let curves = match curve_rows(grade) {
+            Some(rows) => {
+                let width = CURVE_SIZE as u32;
+                let height = (rows.len() / CURVE_SIZE) as u32;
                 upload(
                     device,
                     queue,
                     wgpu::TextureDimension::D2,
-                    table,
-                    (width, 1, 1),
+                    &rows,
+                    (width, height, 1),
                 )
             }
             None => blank(device, wgpu::TextureDimension::D2),
@@ -122,6 +131,28 @@ impl GradeLayout {
             [&curves, &input, &look],
         )
     }
+}
+
+/// The RGB curves row, then the two hue curves rows, with neutral rows standing in for
+/// whichever the grade lacks.
+fn curve_rows(grade: &Grade) -> Option<Vec<[f32; 3]>> {
+    if grade.curves.is_none() && grade.hue_curves.is_none() {
+        return None;
+    }
+    let last = (CURVE_SIZE - 1) as f32;
+    let straight = || (0..CURVE_SIZE).map(|index| [index as f32 / last; 3]);
+    let neutral_hue = [[1.0, 0.0, 0.0], [1.0, 1.0, 0.0]]
+        .into_iter()
+        .flat_map(|row| std::iter::repeat_n(row, CURVE_SIZE));
+    let mut rows: Vec<[f32; 3]> = match &grade.curves {
+        Some(table) => table.clone(),
+        None => straight().collect(),
+    };
+    match &grade.hue_curves {
+        Some(table) => rows.extend_from_slice(table),
+        None => rows.extend(neutral_hue),
+    }
+    Some(rows)
 }
 
 fn bind(

@@ -57,3 +57,28 @@ fn creative_vignette(rgb: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
     }
     return mix(rgb, vec3<f32>(1.0), vignette.x * edge);
 }
+
+// Gamma-encoded color from hue in turns, saturation and lightness.
+fn hsl_color(color: vec3<f32>) -> vec3<f32> {
+    let chroma = (1.0 - abs(2.0 * color.z - 1.0)) * color.y;
+    let sector = vec3<f32>(0.0, 2.0 / 3.0, 1.0 / 3.0);
+    let ramp = clamp(abs(fract(vec3<f32>(color.x) + sector) * 6.0 - 3.0) - 1.0, vec3<f32>(0.0), vec3<f32>(1.0));
+    return color.z + chroma * (ramp - 0.5);
+}
+
+// Lumetri's Hue Saturation Curves, read from the rows below the RGB curves.
+fn hue_curves(rgb: vec3<f32>) -> vec3<f32> {
+    let size = vec2<f32>(textureDimensions(curves));
+    var color = hsl(rgb);
+    let along = vec3<f32>(color.x, color.z, color.y) * ((size.x - 1.0) / size.x) + vec3<f32>(0.5 / size.x);
+    let by_hue = textureSampleLevel(curves, grade_sampler, vec2<f32>(along.x, 1.5 / size.y), 0.0).rgb;
+    let by_luma = textureSampleLevel(curves, grade_sampler, vec2<f32>(along.y, 2.5 / size.y), 0.0).r;
+    let by_saturation = textureSampleLevel(curves, grade_sampler, vec2<f32>(along.z, 2.5 / size.y), 0.0).g;
+    // Greys have no hue to pick them out, so brightening by hue fades in with
+    // saturation; scaling saturation and turning hue leave greys alone anyway.
+    let hued = smoothstep(0.0, 0.25, color.y);
+    color.x = fract(color.x + by_hue.y);
+    color.z = clamp(color.z + by_hue.z * hued, 0.0, 1.0);
+    color.y = clamp(color.y * by_hue.x * by_luma * by_saturation, 0.0, 1.0);
+    return to_linear(hsl_color(color));
+}
