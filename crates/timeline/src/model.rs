@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{FrameRate, Gain, MediaItem, Pan, SourceId, Ticks, Timebase};
+use crate::{FrameRate, Gain, Look, MediaItem, Pan, SourceId, Ticks, Timebase, Transition};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct ClipId(pub u64);
@@ -63,9 +63,38 @@ pub struct Clip {
     /// Level of an audio clip; ignored for video.
     #[serde(default)]
     pub gain: Gain,
+    #[serde(default)]
+    pub look: Look,
+    #[serde(default)]
+    pub transition_in: Option<Transition>,
+    /// Only used when no clip follows directly; a cut is owned by the incoming clip.
+    #[serde(default)]
+    pub transition_out: Option<Transition>,
 }
 
 impl Clip {
+    /// An unlinked clip at unity gain with the default look and no transitions.
+    pub fn new(
+        id: ClipId,
+        source: SourceId,
+        start: Ticks,
+        duration: Ticks,
+        source_in: Ticks,
+    ) -> Self {
+        Self {
+            id,
+            source,
+            start,
+            duration,
+            source_in,
+            link: None,
+            gain: Gain::UNITY,
+            look: Look::default(),
+            transition_in: None,
+            transition_out: None,
+        }
+    }
+
     pub fn end(&self) -> Ticks {
         self.start + self.duration
     }

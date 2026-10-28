@@ -1,5 +1,5 @@
 use crate::edit::ops::{self, Relinks};
-use crate::{Clip, ClipId, Edit, Gain, LinkId, Sequence, SourceId, Ticks, TimelineError, TrackRef};
+use crate::{Clip, ClipId, Edit, LinkId, Sequence, SourceId, Ticks, TimelineError, TrackRef};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlaceMode {
@@ -68,13 +68,14 @@ impl Edit for PlaceClip {
         let link = (targets.len() > 1).then(|| LinkId(sequence.ids.next()));
         for track in targets {
             let clip = Clip {
-                id: ClipId(sequence.ids.next()),
-                source: self.source,
-                start: self.at,
-                duration: self.duration,
-                source_in: self.source_in,
                 link,
-                gain: Gain::UNITY,
+                ..Clip::new(
+                    ClipId(sequence.ids.next()),
+                    self.source,
+                    self.at,
+                    self.duration,
+                    self.source_in,
+                )
             };
             ops::insert(sequence, track, clip)?;
         }

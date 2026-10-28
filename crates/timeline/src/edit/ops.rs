@@ -67,12 +67,15 @@ pub(crate) fn split(
             duration: left.end() - at,
             source_in: left.source_time(at),
             link,
+            // The cut becomes a plain cut; the transitions stay at the outer ends.
+            transition_in: None,
             ..left
         };
         let Some(track) = sequence.track_mut(track_ref) else {
             continue;
         };
         track.clips[index].duration = at - track.clips[index].start;
+        track.clips[index].transition_out = None;
         track.clips.insert(index + 1, right);
         cuts += 1;
     }
