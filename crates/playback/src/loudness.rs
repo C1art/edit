@@ -122,6 +122,7 @@ pub fn clip_alone(sequence: &Sequence, clip: ClipId) -> Option<Piece> {
         for kept in &mut track.clips {
             kept.gain = Gain::UNITY;
             kept.volume = Param::default();
+            kept.pan = Param::default();
             kept.audio_effects.clear();
             kept.disabled = false;
             kept.transition_in = None;

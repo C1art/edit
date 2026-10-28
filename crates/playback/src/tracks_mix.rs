@@ -1,7 +1,7 @@
 use audio::SampleRate;
 use timeline::{
-    audio_fade, audio_span, clip_level, track_automation, AudioEffect, ClipId, Gain, MediaItem,
-    Sequence, SourceId, Submix, Ticks,
+    audio_fade, audio_span, clip_balance, clip_level, track_automation, AudioEffect, ClipId, Gain,
+    MediaItem, Sequence, SourceId, Submix, Ticks,
 };
 use timeline::{Timebase, Track};
 
@@ -203,7 +203,9 @@ impl TracksMix {
                 for (frame, pair) in (from..to).zip(pairs) {
                     let position = Ticks(frame).rescale(self.rate, timebase);
                     let level = audio_fade(track, index, position) * clip_level(clip, position);
-                    pair.iter_mut().for_each(|sample| *sample *= level);
+                    let [left, right] = clip_balance(clip, position);
+                    pair[0] *= level * left;
+                    pair[1] *= level * right;
                 }
                 mixdown::add_scaled(
                     clip_mix,
