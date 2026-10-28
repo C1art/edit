@@ -8,6 +8,7 @@ pub enum Format {
     Hevc,
     ProRes422,
     ProRes422Hq,
+    ProRes4444,
     Aac,
     Mp3,
     Wav,
@@ -15,11 +16,12 @@ pub enum Format {
 }
 
 impl Format {
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::H264,
         Self::Hevc,
         Self::ProRes422,
         Self::ProRes422Hq,
+        Self::ProRes4444,
         Self::Aac,
         Self::Mp3,
         Self::Wav,
@@ -32,6 +34,7 @@ impl Format {
             Self::Hevc => "HEVC (H.265)",
             Self::ProRes422 => "Apple ProRes 422",
             Self::ProRes422Hq => "Apple ProRes 422 HQ",
+            Self::ProRes4444 => "Apple ProRes 4444 with Alpha",
             Self::Aac => "AAC Audio",
             Self::Mp3 => "MP3",
             Self::Wav => "Waveform Audio",
@@ -42,7 +45,7 @@ impl Format {
     pub fn extension(self) -> &'static str {
         match self {
             Self::H264 | Self::Hevc => "mp4",
-            Self::ProRes422 | Self::ProRes422Hq => "mov",
+            Self::ProRes422 | Self::ProRes422Hq | Self::ProRes4444 => "mov",
             Self::Aac => "m4a",
             Self::Mp3 => "mp3",
             Self::Wav => "wav",
@@ -56,6 +59,7 @@ impl Format {
             Self::Hevc => Some(VideoCodec::Hevc),
             Self::ProRes422 => Some(VideoCodec::ProRes422),
             Self::ProRes422Hq => Some(VideoCodec::ProRes422Hq),
+            Self::ProRes4444 => Some(VideoCodec::ProRes4444),
             Self::Aac | Self::Mp3 | Self::Wav | Self::Flac => None,
         }
     }
@@ -64,7 +68,7 @@ impl Format {
         match self {
             Self::H264 | Self::Hevc | Self::Aac => AudioCodec::Aac,
             // Mastering formats carry uncompressed sound, as cameras and Premiere do.
-            Self::ProRes422 | Self::ProRes422Hq => AudioCodec::Pcm24,
+            Self::ProRes422 | Self::ProRes422Hq | Self::ProRes4444 => AudioCodec::Pcm24,
             Self::Mp3 => AudioCodec::Mp3,
             Self::Wav => AudioCodec::Pcm16,
             Self::Flac => AudioCodec::Flac,
@@ -121,7 +125,7 @@ const fn format_preset(name: &'static str, format: Format) -> Preset {
     }
 }
 
-pub const PRESETS: [Preset; 11] = [
+pub const PRESETS: [Preset; 12] = [
     Preset {
         name: "Match Source - High Bitrate",
         format: MATCH_SOURCE,
@@ -139,6 +143,7 @@ pub const PRESETS: [Preset; 11] = [
     },
     format_preset("Apple ProRes 422", Format::ProRes422),
     format_preset("Apple ProRes 422 HQ", Format::ProRes422Hq),
+    format_preset("Apple ProRes 4444 with Alpha", Format::ProRes4444),
     format_preset("AAC Audio 320 kbps", Format::Aac),
     format_preset("MP3 320 kbps", Format::Mp3),
     format_preset("Waveform Audio 48 kHz 16-bit", Format::Wav),
