@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{AudioEffect, Clip, Gain, Pan, Param, SubmixId, Ticks};
@@ -47,5 +49,21 @@ impl Track {
 
     pub fn end(&self) -> Ticks {
         self.clips.last().map_or(Ticks::ZERO, Clip::end)
+    }
+
+    /// The empty stretch around `position` with a clip after it, which closing pulls
+    /// later clips into.
+    pub fn gap_at(&self, position: Ticks) -> Option<Range<Ticks>> {
+        if self.clip_at(position).is_some() {
+            return None;
+        }
+        let index = self.clips.partition_point(|clip| clip.start <= position);
+        let end = self.clips.get(index)?.start;
+        let start = self.clips[..index]
+            .iter()
+            .map(Clip::end)
+            .max()
+            .unwrap_or(Ticks::ZERO);
+        Some(start..end)
     }
 }

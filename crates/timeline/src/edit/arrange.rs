@@ -116,26 +116,12 @@ impl Edit for CloseGap {
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
-        let track = sequence
+        let gap = sequence
             .track(self.track)
-            .ok_or(TimelineError::TrackNotFound(self.track))?;
-        if track.clip_at(self.at).is_some() {
-            return Err(TimelineError::NothingToEdit);
-        }
-        let gap_start = track
-            .clips
-            .iter()
-            .map(|clip| clip.end())
-            .filter(|&end| end <= self.at)
-            .max()
-            .unwrap_or(Ticks::ZERO);
-        let gap_end = track
-            .clips
-            .iter()
-            .map(|clip| clip.start)
-            .find(|&start| start > self.at)
+            .ok_or(TimelineError::TrackNotFound(self.track))?
+            .gap_at(self.at)
             .ok_or(TimelineError::NothingToEdit)?;
-        close_gaps(sequence, &[gap_start..gap_end]);
+        close_gaps(sequence, &[gap]);
         Ok(())
     }
 }
