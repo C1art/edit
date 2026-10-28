@@ -23,7 +23,7 @@ pub(super) fn controls(editor: &mut Editor, ui: &mut egui::Ui, track: TrackRef, 
                     ui.weak("Out: set on the next clip's In");
                     continue;
                 }
-                if let Some(transition) = transition_row(ui, sequence, label, current) {
+                if let Some(transition) = transition_row(ui, sequence, track.kind, label, current) {
                     edits.push(SetTransition {
                         clip: clip.id,
                         edge,
@@ -41,23 +41,28 @@ pub(super) fn controls(editor: &mut Editor, ui: &mut egui::Ui, track: TrackRef, 
 fn transition_row(
     ui: &mut egui::Ui,
     sequence: &Sequence,
+    track: TrackKind,
     label: &str,
     current: Option<Transition>,
 ) -> Option<Option<Transition>> {
     let (rate, timebase) = (sequence.format.frame_rate, sequence.timebase);
+    let (kinds, name): (&[TransitionKind], fn(TransitionKind) -> &'static str) = match track {
+        TrackKind::Video => (&TransitionKind::VIDEO, TransitionKind::name),
+        TrackKind::Audio => (&TransitionKind::AUDIO, TransitionKind::audio_name),
+    };
     let mut chosen = current;
     ui.horizontal(|ui| {
         ui.add_sized([30.0, 18.0], egui::Label::new(label));
-        let selected = current.map_or("None", |transition| transition.kind.name());
+        let selected = current.map_or("None", |transition| name(transition.kind));
         egui::ComboBox::from_id_salt(label)
             .selected_text(selected)
             .show_ui(ui, |ui| {
                 if ui.selectable_label(current.is_none(), "None").clicked() {
                     chosen = None;
                 }
-                for kind in TransitionKind::ALL {
+                for &kind in kinds {
                     let on = current.is_some_and(|transition| transition.kind == kind);
-                    if ui.selectable_label(on, kind.name()).clicked() {
+                    if ui.selectable_label(on, name(kind)).clicked() {
                         chosen = Some(Transition {
                             kind,
                             ..current.unwrap_or_else(|| default_transition(sequence))
