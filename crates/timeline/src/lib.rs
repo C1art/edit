@@ -28,4 +28,4 @@ pub use model::{
 pub use plan::{track_layers_at, PlannedLayer};
 pub use time::{Ticks, Timebase};
 pub use timecode::{FrameRate, Timecode};
-pub use transition::{Transition, TransitionKind};
+pub use transition::{nearest_transition_edge, Transition, TransitionKind};

@@ -20,7 +20,11 @@ impl Edit for SetClipLook {
         {
             return Err(TimelineError::NothingToEdit);
         }
-        ops::clip_mut(sequence, self.clip)?.look = self.look.clone();
+        let clip = ops::clip_mut(sequence, self.clip)?;
+        if clip.look == self.look {
+            return Err(TimelineError::NothingToEdit);
+        }
+        clip.look = self.look.clone();
         Ok(())
     }
 }

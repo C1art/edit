@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::Ticks;
+use crate::{ClipId, Edge, Ticks, Track};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TransitionKind {
@@ -29,4 +29,59 @@ pub struct Transition {
     pub kind: TransitionKind,
     /// In the sequence timebase.
     pub duration: Ticks,
+}
+
+/// The clip end nearest `position` that can hold a transition: the head of a clip that
+/// follows another directly owns their cut, and any other start or end is its own.
+pub fn nearest_transition_edge(track: &Track, position: Ticks) -> Option<(ClipId, Edge)> {
+    let clips = &track.clips;
+    let heads = clips.iter().map(|clip| (clip.start, clip.id, Edge::Head));
+    let tails = clips
+        .iter()
+        .enumerate()
+        .filter(|(index, clip)| {
+            clips
+                .get(index + 1)
+                .is_none_or(|next| next.start != clip.end())
+        })
+        .map(|(_, clip)| (clip.end(), clip.id, Edge::Tail));
+    heads
+        .chain(tails)
+        .min_by_key(|(time, ..)| (*time - position).0.abs())
+        .map(|(_, clip, edge)| (clip, edge))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Clip, SourceId};
+
+    #[test]
+    fn nearest_edge_gives_a_shared_cut_to_the_incoming_clip() {
+        let clip = |id, start| {
+            Clip::new(
+                ClipId(id),
+                SourceId(1),
+                Ticks(start),
+                Ticks(100),
+                Ticks::ZERO,
+            )
+        };
+        let track = Track {
+            clips: vec![clip(1, 0), clip(2, 100), clip(3, 300)],
+            ..Track::default()
+        };
+        assert_eq!(
+            nearest_transition_edge(&track, Ticks(90)),
+            Some((ClipId(2), Edge::Head))
+        );
+        assert_eq!(
+            nearest_transition_edge(&track, Ticks(210)),
+            Some((ClipId(2), Edge::Tail))
+        );
+        assert_eq!(
+            nearest_transition_edge(&track, Ticks(390)),
+            Some((ClipId(3), Edge::Tail))
+        );
+    }
 }
