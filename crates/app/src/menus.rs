@@ -149,6 +149,9 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             if ui.add(enable).clicked() {
                 editor.toggle_enabled();
             }
+            if ui.button("Add Frame Hold").clicked() {
+                editor.add_frame_hold();
+            }
             ui.separator();
             if ui.button("Nest").clicked() {
                 editor.nest_selection();

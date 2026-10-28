@@ -1,6 +1,6 @@
 use timeline::{
-    AddTrack, Clipboard, Lift, PasteClips, PlaceMode, Razor, RazorTarget, RippleDelete,
-    SetClipsEnabled, Timecode, TrackKind,
+    AddFrameHold, AddTrack, Clipboard, Lift, PasteClips, PlaceMode, Razor, RazorTarget,
+    RippleDelete, SetClipsEnabled, Timecode, TrackKind,
 };
 
 use crate::editor::Editor;
@@ -116,6 +116,26 @@ impl Editor {
     }
 
     /// Disables the selected clips, or enables them when all are already disabled.
+    /// Freezes the selected video clips, or else the unlocked ones under the playhead,
+    /// on the frame at the playhead.
+    pub(crate) fn add_frame_hold(&mut self) {
+        let at = self.playhead();
+        let mut clips = self.view.selection.clone();
+        if clips.is_empty() {
+            clips = self
+                .timeline
+                .sequence()
+                .tracks()
+                .filter(|(track, contents)| track.kind == TrackKind::Video && !contents.locked)
+                .filter_map(|(_, contents)| contents.clip_at(at))
+                .map(|clip| clip.id)
+                .collect();
+        }
+        if !self.apply(AddFrameHold { clips, at }) {
+            self.notice("Put the playhead over a video clip to hold its frame");
+        }
+    }
+
     pub(crate) fn toggle_enabled(&mut self) {
         let sequence = self.timeline.sequence();
         let selected: Vec<_> = self
