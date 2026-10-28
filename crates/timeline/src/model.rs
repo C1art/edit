@@ -62,6 +62,12 @@ pub struct Clip {
     pub source_in: Ticks,
     #[serde(default)]
     pub speed: Speed,
+    /// Plays its source range backwards, from `source_out` down to `source_in`.
+    #[serde(default)]
+    pub reverse: bool,
+    /// Off normal speed, stretches audio in time without changing its pitch.
+    #[serde(default)]
+    pub maintain_pitch: bool,
     #[serde(default)]
     pub link: Option<LinkId>,
     /// Left out of playback and export but kept on the timeline.
@@ -95,6 +101,8 @@ impl Clip {
             duration,
             source_in,
             speed: Speed::NORMAL,
+            reverse: false,
+            maintain_pitch: false,
             link: None,
             disabled: false,
             gain: Gain::UNITY,
@@ -121,14 +129,44 @@ impl Clip {
         self.start <= position && position < self.end()
     }
 
-    /// The source time playing at sequence `position`.
+    /// The source time playing at sequence `position`. A reversed clip counts back from
+    /// its end, so `source_in` is what its last tick shows.
     pub fn source_time(&self, position: Ticks) -> Ticks {
-        self.source_in + self.speed.source_span(position - self.start)
+        if self.reverse {
+            self.source_in + self.speed.source_span(self.end() - position) - Ticks(1)
+        } else {
+            self.source_in + self.speed.source_span(position - self.start)
+        }
     }
 
     /// The sequence position where source time `source` plays.
     pub fn position_of(&self, source: Ticks) -> Ticks {
-        self.start + self.speed.sequence_span(source - self.source_in)
+        if self.reverse {
+            self.end() - self.speed.sequence_span(source + Ticks(1) - self.source_in)
+        } else {
+            self.start + self.speed.sequence_span(source - self.source_in)
+        }
+    }
+
+    /// Moves the head `delta` later in the sequence (earlier when negative), keeping the
+    /// tail and the source showing there. The caller moves `start`.
+    pub(crate) fn trim_head(&mut self, delta: Ticks) {
+        if !self.reverse {
+            self.source_in = self.source_in + self.speed.source_span(delta);
+        }
+        self.duration = self.duration - delta;
+    }
+
+    /// Moves the tail `delta` later in the sequence, keeping the head and the source
+    /// showing there.
+    pub(crate) fn trim_tail(&mut self, delta: Ticks) {
+        if self.reverse {
+            let source_out = self.source_out();
+            self.duration = self.duration + delta;
+            self.source_in = source_out - self.speed.source_span(self.duration);
+        } else {
+            self.duration = self.duration + delta;
+        }
     }
 }
 

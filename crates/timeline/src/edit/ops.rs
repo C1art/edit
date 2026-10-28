@@ -55,26 +55,26 @@ pub(crate) fn split(
             continue;
         };
         let left = track.clips[index].clone();
+        let (left_start, left_end) = (left.start, left.end());
         let link = left.link.map(|link| {
             *relinks
                 .0
                 .entry(link)
                 .or_insert_with(|| LinkId(sequence.ids.next()))
         });
-        let right = Clip {
+        let mut right = Clip {
             id: ClipId(sequence.ids.next()),
-            start: at,
-            duration: left.end() - at,
-            source_in: left.source_time(at),
             link,
             // The cut becomes a plain cut; the transitions stay at the outer ends.
             transition_in: None,
             ..left
         };
+        right.start = at;
+        right.trim_head(at - left_start);
         let Some(track) = sequence.track_mut(track_ref) else {
             continue;
         };
-        track.clips[index].duration = at - track.clips[index].start;
+        track.clips[index].trim_tail(at - left_end);
         track.clips[index].transition_out = None;
         track.clips.insert(index + 1, right);
         cuts += 1;

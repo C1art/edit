@@ -48,14 +48,10 @@ impl Edit for Trim {
             match (self.edge, self.mode) {
                 (Edge::Head, TrimMode::Normal) => {
                     clip.start = clip.start + d;
-                    clip.source_in = clip.source_in + clip.speed.source_span(d);
-                    clip.duration = clip.duration - d;
+                    clip.trim_head(d);
                 }
-                (Edge::Head, TrimMode::Ripple) => {
-                    clip.source_in = clip.source_in + clip.speed.source_span(d);
-                    clip.duration = clip.duration - d;
-                }
-                (Edge::Tail, _) => clip.duration = clip.duration + d,
+                (Edge::Head, TrimMode::Ripple) => clip.trim_head(d),
+                (Edge::Tail, _) => clip.trim_tail(d),
             }
         }
         if self.mode == TrimMode::Ripple {
@@ -111,12 +107,11 @@ impl Edit for Roll {
         for &track_ref in &self.tracks {
             for clip in &mut ops::track_mut(sequence, track_ref)?.clips {
                 if clip.end() == self.at {
-                    clip.duration = clip.duration + self.delta;
+                    clip.trim_tail(self.delta);
                     rolled = true;
                 } else if clip.start == self.at {
                     clip.start = clip.start + self.delta;
-                    clip.source_in = clip.source_in + clip.speed.source_span(self.delta);
-                    clip.duration = clip.duration - self.delta;
+                    clip.trim_head(self.delta);
                     rolled = true;
                 }
             }
@@ -182,11 +177,10 @@ impl Edit for Slide {
                 } else if ids.contains(&neighbor.id) {
                     continue;
                 } else if neighbor.end() == start {
-                    neighbor.duration = neighbor.duration + d;
+                    neighbor.trim_tail(d);
                 } else if neighbor.start == end {
                     neighbor.start = neighbor.start + d;
-                    neighbor.source_in = neighbor.source_in + neighbor.speed.source_span(d);
-                    neighbor.duration = neighbor.duration - d;
+                    neighbor.trim_head(d);
                 }
             }
         }

@@ -2,14 +2,17 @@ use crate::edit::ops;
 use crate::edit::trim::ripple;
 use crate::{ClipId, Edge, Edit, Sequence, Speed, Ticks, TimelineError, TrackRef};
 
-/// Plays clips at `speed` from the same in point, so their duration changes. Without
-/// `ripple`, a clip that grows stops at the next clip on its track.
+/// Plays clips at `speed` from the same in point, so their duration changes; reversing
+/// plays the same source range backwards. Without `ripple`, a clip that grows stops at
+/// the next clip on its track.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SetClipSpeed {
     pub clips: Vec<ClipId>,
     pub speed: Speed,
     /// Moves everything after the clips by the change in their length.
     pub ripple: bool,
+    pub reverse: bool,
+    pub maintain_pitch: bool,
 }
 
 impl Edit for SetClipSpeed {
@@ -47,6 +50,8 @@ impl Edit for SetClipSpeed {
             let clip = ops::clip_mut(sequence, id)?;
             clip.speed = self.speed;
             clip.duration = duration;
+            clip.reverse = self.reverse;
+            clip.maintain_pitch = self.maintain_pitch;
         }
         if let (true, Some(shift)) = (self.ripple, shift) {
             ripple(sequence, &edit_points, shift, &ids);
