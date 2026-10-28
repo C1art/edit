@@ -19,22 +19,33 @@ struct ConverterKey {
 }
 
 /// Converts decoded audio of any layout and sample format to interleaved stereo `f32` at
-/// the source rate. Rate conversion is left to the audio crate's resampler.
+/// the source rate, or to `f32` in the source's own channels. Rate conversion is left to
+/// the audio crate's resampler.
 #[derive(Default)]
 pub(crate) struct SampleConverter {
     context: Option<(NonNull<sys::SwrContext>, ConverterKey)>,
+    keep_channels: bool,
 }
 
 // SAFETY: the swresample context is exclusively owned and only used through `&mut self`.
 unsafe impl Send for SampleConverter {}
 
 impl SampleConverter {
-    /// Returns the sample rate and the interleaved stereo samples.
+    /// Keeps each of the source's channels apart from the next frame on, rather than
+    /// mixing them to stereo.
+    pub(crate) fn set_keep_channels(&mut self, keep: bool) {
+        if self.keep_channels != keep {
+            self.keep_channels = keep;
+            self.free();
+        }
+    }
+
+    /// Returns the sample rate, the channel count and the interleaved samples.
     pub(crate) fn convert(
         &mut self,
         decoder: &Decoder,
         frame: &Frame,
-    ) -> Result<(u32, Vec<f32>), MediaError> {
+    ) -> Result<(u32, u16, Vec<f32>), MediaError> {
         let raw = frame.raw();
         let layout = &raw.ch_layout;
         let key = ConverterKey {
@@ -48,14 +59,20 @@ impl SampleConverter {
         };
         let context = self.context_for(key, layout)?;
         let sample_rate = u32::try_from(key.sample_rate).map_err(|_| MediaError::InvalidFrame)?;
+        let channels = if self.keep_channels {
+            u16::try_from(key.channels).map_err(|_| MediaError::InvalidFrame)?
+        } else {
+            OUTPUT_CHANNELS
+        };
 
         // SAFETY: the context is initialized; this only queries its buffered sample count.
         let capacity =
             check(unsafe { sys::swr_get_out_samples(context.as_ptr(), raw.nb_samples) })?;
         let capacity_frames = usize::try_from(capacity).map_err(|_| MediaError::InvalidFrame)?;
-        let mut samples = vec![0f32; capacity_frames * usize::from(OUTPUT_CHANNELS)];
+        let mut samples = vec![0f32; capacity_frames * usize::from(channels)];
         let mut output = samples.as_mut_ptr().cast::<u8>();
-        // SAFETY: `output` points to room for `capacity` interleaved stereo f32 frames, and
+        // SAFETY: `output` points to room for `capacity` interleaved f32 frames of the
+        // context's output channels, and
         // `extended_data` holds the frame's `nb_samples` input samples in the context's format.
         let converted = check(unsafe {
             sys::swr_convert(
@@ -66,8 +83,8 @@ impl SampleConverter {
                 raw.nb_samples,
             )
         })?;
-        samples.truncate(usize::try_from(converted).unwrap_or(0) * usize::from(OUTPUT_CHANNELS));
-        Ok((sample_rate, samples))
+        samples.truncate(usize::try_from(converted).unwrap_or(0) * usize::from(channels));
+        Ok((sample_rate, channels, samples))
     }
 
     fn context_for(
@@ -83,10 +100,20 @@ impl SampleConverter {
         self.free();
 
         let mut output_layout = MaybeUninit::<sys::AVChannelLayout>::zeroed();
-        // SAFETY: av_channel_layout_default fully initializes the layout; a native-order
-        // layout owns no heap memory, but it is uninitialized below all the same.
+        // SAFETY: av_channel_layout_default fully initializes the layout, and copying into
+        // a zeroed layout is allowed; a custom-order copy owns memory, freed below.
         let mut output_layout = unsafe {
-            sys::av_channel_layout_default(output_layout.as_mut_ptr(), i32::from(OUTPUT_CHANNELS));
+            if self.keep_channels {
+                check(sys::av_channel_layout_copy(
+                    output_layout.as_mut_ptr(),
+                    input_layout,
+                ))?;
+            } else {
+                sys::av_channel_layout_default(
+                    output_layout.as_mut_ptr(),
+                    i32::from(OUTPUT_CHANNELS),
+                );
+            }
             output_layout.assume_init()
         };
         let mut raw = ptr::null_mut();

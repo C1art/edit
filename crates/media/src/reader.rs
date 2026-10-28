@@ -1,7 +1,8 @@
 use std::path::Path;
 
-use timeline::{FrameRate, PixelAspect, Ticks, Timebase};
+use timeline::{ChannelMap, FrameRate, PixelAspect, Ticks, Timebase};
 
+use crate::channel_map::mapped;
 use crate::ffi::{
     Decoder, Frame, InputContext, Packet, Received, SampleConverter, Scaler, OUTPUT_CHANNELS,
 };
@@ -90,6 +91,7 @@ pub struct MediaReader {
     trim: SeekTrim,
     state: ReadState,
     info: SourceInfo,
+    channel_map: Option<ChannelMap>,
 }
 
 impl MediaReader {
@@ -147,6 +149,7 @@ impl MediaReader {
             trim: SeekTrim::new(timebase),
             state: ReadState::Reading,
             info,
+            channel_map: None,
         })
     }
 
@@ -160,6 +163,15 @@ impl MediaReader {
         match &mut self.video {
             Some(video) => video.converter.set_output_size(size),
             None => Ok(()),
+        }
+    }
+
+    /// Plays the source channels `map` names on each side from the next decoded sound
+    /// on; `None` mixes them all to stereo again.
+    pub fn set_channel_map(&mut self, map: Option<ChannelMap>) {
+        self.channel_map = map;
+        if let Some(audio) = &mut self.audio {
+            audio.converter.set_keep_channels(map.is_some());
         }
     }
 
@@ -247,9 +259,13 @@ impl MediaReader {
             audio.decoder.send_packet(packet)?;
             while let Received::Frame = audio.decoder.receive_frame(&mut self.frame)? {
                 let pts = clock.pts(&self.frame, audio.timebase, audio.next_pts);
-                let (sample_rate, samples) =
+                let (sample_rate, channels, samples) =
                     audio.converter.convert(&audio.decoder, &self.frame)?;
                 self.frame.unref();
+                let samples = match self.channel_map {
+                    Some(map) => mapped(&samples, channels, map),
+                    None => samples,
+                };
                 let buffer = AudioBuffer {
                     pts,
                     sample_rate,

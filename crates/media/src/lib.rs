@@ -1,4 +1,5 @@
 mod block_match;
+mod channel_map;
 mod codec;
 mod error;
 mod ffi;
