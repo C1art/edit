@@ -15,10 +15,23 @@ struct Placement {
     balance: vec4<f32>,
     // Fractions of the canvas hidden from the left, top, right and bottom.
     mask: vec4<f32>,
+    // Key color (linear), then tolerance; keying is off when the tolerance is negative.
+    key: vec4<f32>,
+    // Key softness, sharpen amount, invert amount, tint amount.
+    amounts: vec4<f32>,
+    // Tint black (linear), then vignette amount.
+    tint_black: vec4<f32>,
+    // Tint white (linear).
+    tint_white: vec4<f32>,
+    // Vignette midpoint and feather.
+    vignette: vec4<f32>,
 };
 
 const MID_GREY: f32 = 0.18;
 const LUMA: vec3<f32> = vec3<f32>(0.2126, 0.7152, 0.0722);
+const GAMMA: f32 = 2.2;
+// The largest chroma distance between saturated colors is about this.
+const CHROMA_RANGE: f32 = 0.5;
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
@@ -65,11 +78,74 @@ fn correct(rgb_in: vec3<f32>) -> vec3<f32> {
     return mix(vec3<f32>(dot(rgb, LUMA)), rgb, balance.z);
 }
 
+fn to_gamma(rgb: vec3<f32>) -> vec3<f32> {
+    return pow(max(rgb, vec3<f32>(0.0)), vec3<f32>(1.0 / GAMMA));
+}
+
+fn to_linear(rgb: vec3<f32>) -> vec3<f32> {
+    return pow(max(rgb, vec3<f32>(0.0)), vec3<f32>(GAMMA));
+}
+
+// BT.709 Cb and Cr of gamma-encoded color, so keying matches what the eye separates.
+fn chroma(rgb: vec3<f32>) -> vec2<f32> {
+    let c = to_gamma(rgb);
+    return vec2<f32>(dot(c, vec3<f32>(-0.1146, -0.3854, 0.5)), dot(c, vec3<f32>(0.5, -0.4542, -0.0458)));
+}
+
+fn key_alpha(rgb: vec3<f32>) -> f32 {
+    let key = placement.key;
+    if key.w < 0.0 {
+        return 1.0;
+    }
+    let distance = length(chroma(rgb) - chroma(key.rgb));
+    let tolerance = key.w * CHROMA_RANGE;
+    let softness = max(placement.amounts.x * CHROMA_RANGE, 0.0001);
+    return smoothstep(tolerance, tolerance + softness, distance);
+}
+
+// Unsharp masking against the four neighbors. Sampling at level 0 is allowed off
+// uniform control flow, which the branch needs.
+fn sharpen(rgb: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
+    let amount = placement.amounts.y;
+    if amount <= 0.0 {
+        return rgb;
+    }
+    let texel = 1.0 / vec2<f32>(textureDimensions(source));
+    let around = textureSampleLevel(source, source_sampler, uv + vec2<f32>(texel.x, 0.0), 0.0).rgb
+        + textureSampleLevel(source, source_sampler, uv - vec2<f32>(texel.x, 0.0), 0.0).rgb
+        + textureSampleLevel(source, source_sampler, uv + vec2<f32>(0.0, texel.y), 0.0).rgb
+        + textureSampleLevel(source, source_sampler, uv - vec2<f32>(0.0, texel.y), 0.0).rgb;
+    return max(rgb + amount * (rgb - around * 0.25), vec3<f32>(0.0));
+}
+
+fn stylize(rgb_in: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
+    let amounts = placement.amounts;
+    let mapped = mix(placement.tint_black.rgb, placement.tint_white.rgb, dot(rgb_in, LUMA));
+    var rgb = mix(rgb_in, mapped, amounts.w);
+    rgb = mix(rgb, to_linear(vec3<f32>(1.0) - to_gamma(rgb)), amounts.z);
+    // 0 at the center, 1 in the corners.
+    let distance = length(uv - vec2<f32>(0.5)) * sqrt(2.0);
+    let midpoint = placement.vignette.x;
+    let edge = smoothstep(midpoint, midpoint + max(placement.vignette.y, 0.01), distance);
+    let amount = placement.tint_black.w;
+    if amount < 0.0 {
+        rgb *= 1.0 + amount * edge;
+    } else {
+        rgb = mix(rgb, vec3<f32>(1.0), amount * edge);
+    }
+    return rgb;
+}
+
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let color = textureSample(source, source_sampler, in.uv);
     let mask = placement.mask;
     let shown = all(in.canvas >= mask.xy) && all(in.canvas <= vec2<f32>(1.0) - mask.zw);
-    let rgb = mix(correct(color.rgb), vec3<f32>(1.0), placement.balance.w);
-    return vec4<f32>(rgb, color.a * placement.axis_y_opacity.z * f32(shown));
+    let keyed = key_alpha(color.rgb);
+    // Desaturating the key's edge suppresses the screen's color spilling onto it.
+    let unspilled = mix(vec3<f32>(dot(color.rgb, LUMA)), color.rgb, keyed);
+    let sharp = sharpen(unspilled, in.uv);
+    var rgb = stylize(correct(sharp), in.uv);
+    rgb = mix(rgb, vec3<f32>(1.0), placement.balance.w);
+    return vec4<f32>(rgb, color.a * keyed * placement.axis_y_opacity.z * f32(shown));
 }

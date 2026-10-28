@@ -1,3 +1,5 @@
+use crate::pixel::PixelEffects;
+
 /// How a layer is drawn: everything except the picture itself.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LayerLook {
@@ -18,6 +20,7 @@ pub struct LayerLook {
     pub mask: [f32; 4],
     /// 0 to 1: how far the picture is washed out to white.
     pub wash: f32,
+    pub effects: PixelEffects,
 }
 
 /// Color correction in linear light, every field neutral at zero except saturation.
@@ -62,6 +65,7 @@ impl LayerLook {
         color: ColorAdjust::IDENTITY,
         mask: [0.0; 4],
         wash: 0.0,
+        effects: PixelEffects::NONE,
     };
 }
 
@@ -78,6 +82,7 @@ pub(crate) struct Placement {
     pub(crate) color: ColorAdjust,
     pub(crate) mask: [f32; 4],
     pub(crate) wash: f32,
+    pub(crate) effects: PixelEffects,
 }
 
 impl Placement {
@@ -90,6 +95,7 @@ impl Placement {
         color: ColorAdjust::IDENTITY,
         mask: [0.0; 4],
         wash: 0.0,
+        effects: PixelEffects::NONE,
     };
 
     /// Fits the layer to the canvas keeping its aspect ratio, then applies the look.
@@ -100,16 +106,18 @@ impl Placement {
         let (sin, cos) = look.rotation_degrees.to_radians().sin_cos();
         // Rotating in pixel space, where +y is down, turns positive angles clockwise.
         let rotate = |x: f32, y: f32| [x * cos - y * sin, x * sin + y * cos];
+        let [flip_x, flip_y] = look.effects.flip.map(|flip| if flip { -1.0 } else { 1.0 });
         let to_ndc = |[x, y]: [f32; 2]| [x * 2.0 / cw, -y * 2.0 / ch];
         Self {
             center: to_ndc(look.offset),
-            axis_x: to_ndc(rotate(width, 0.0)),
-            axis_y: to_ndc(rotate(0.0, height)),
+            axis_x: to_ndc(rotate(width * flip_x, 0.0)),
+            axis_y: to_ndc(rotate(0.0, height * flip_y)),
             crop: look.crop.map(|side| side.clamp(0.0, 1.0)),
             opacity: look.opacity.clamp(0.0, 1.0),
             color: look.color,
             mask: look.mask.map(|side| side.clamp(0.0, 1.0)),
             wash: look.wash.clamp(0.0, 1.0),
+            effects: look.effects,
         }
     }
 
@@ -129,6 +137,7 @@ impl Placement {
             ])
             .chain([color.temperature, color.tint, color.saturation, self.wash])
             .chain(self.mask)
+            .chain(self.effects.uniform())
             .flat_map(f32::to_le_bytes)
             .collect()
     }
