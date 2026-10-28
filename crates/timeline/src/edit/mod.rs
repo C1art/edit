@@ -18,7 +18,7 @@ mod tests;
 pub use arrange::{CloseGap, Lift, MoveClips, RippleDelete};
 pub use enable::SetClipsEnabled;
 pub use generate::{AddGenerated, SetGenerator};
-pub use levels::{SetClipGain, SetMasterGain, SetTrackMix};
+pub use levels::{SetClipGain, SetClipVolume, SetMasterGain, SetTrackMix};
 pub use look::{SetClipLook, SetTransition};
 pub use marker::{AddMarker, RemoveMarker, UpdateMarker};
 pub use nest::{AddNest, InNest, NestClips};

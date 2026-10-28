@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    FrameRate, Gain, Look, Marker, MediaItem, Pan, SourceId, Speed, Ticks, Timebase, Transition,
+    FrameRate, Gain, Look, Marker, MediaItem, Pan, Param, SourceId, Speed, Ticks, Timebase,
+    Transition,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -76,6 +77,9 @@ pub struct Clip {
     /// Level of an audio clip; ignored for video.
     #[serde(default)]
     pub gain: Gain,
+    /// Level of an audio clip in decibels on top of its gain, keyframed over source time.
+    #[serde(default)]
+    pub volume: Param,
     #[serde(default)]
     pub look: Look,
     #[serde(default)]
@@ -106,6 +110,7 @@ impl Clip {
             link: None,
             disabled: false,
             gain: Gain::UNITY,
+            volume: Param::default(),
             look: Look::default(),
             transition_in: None,
             transition_out: None,

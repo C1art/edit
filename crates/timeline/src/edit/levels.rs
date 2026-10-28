@@ -1,5 +1,5 @@
 use crate::edit::ops;
-use crate::{ClipId, Edit, Gain, Pan, Sequence, TimelineError, TrackKind, TrackRef};
+use crate::{ClipId, Edit, Gain, Pan, Param, Sequence, TimelineError, TrackKind, TrackRef};
 
 /// Sets the gain of the audio clips among `clips` and the clips linked to them.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,6 +29,34 @@ impl Edit for SetClipGain {
         for id in audio {
             ops::clip_mut(sequence, id)?.gain = self.gain;
         }
+        Ok(())
+    }
+}
+
+/// Replaces an audio clip's volume level and its keyframes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetClipVolume {
+    pub clip: ClipId,
+    pub volume: Param,
+}
+
+impl Edit for SetClipVolume {
+    fn name(&self) -> &'static str {
+        "Volume"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        if sequence
+            .clip(self.clip)
+            .is_some_and(|(track, _)| track.kind != TrackKind::Audio)
+        {
+            return Err(TimelineError::NothingToEdit);
+        }
+        let clip = ops::clip_mut(sequence, self.clip)?;
+        if clip.volume == self.volume {
+            return Err(TimelineError::NothingToEdit);
+        }
+        clip.volume = self.volume.clone();
         Ok(())
     }
 }

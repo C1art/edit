@@ -1,7 +1,7 @@
 use std::f32::consts::FRAC_PI_2;
 
 use crate::plan::{cut_window, fraction};
-use crate::{Clip, Ticks, Track};
+use crate::{Clip, Gain, Ticks, Track};
 
 /// Where clip `index` of `track` is heard: its own span, widened by the part of a
 /// crossfade that plays it past either edge.
@@ -21,6 +21,12 @@ pub fn audio_span(track: &Track, index: usize) -> (Ticks, Ticks) {
         }
     }
     (start, end)
+}
+
+/// The amplitude of clip's gain and volume at `position`.
+pub fn clip_level(clip: &Clip, position: Ticks) -> f32 {
+    let volume = Gain::from_db(clip.volume.value_at(clip.source_time(position)));
+    clip.gain.amplitude() * volume.amplitude()
 }
 
 /// The amplitude transitions give clip `index` at `position`. Fades follow a
@@ -116,5 +122,17 @@ mod tests {
         }
         assert_eq!(audio_fade(&track, 1, Ticks(80)), 0.0);
         assert_eq!(audio_fade(&track, 0, Ticks(79)), 1.0);
+    }
+
+    #[test]
+    fn volume_keyframes_follow_source_time_on_top_of_gain() {
+        let mut clip = Clip::new(ClipId(1), SourceId(1), Ticks(100), Ticks(100), Ticks(50));
+        clip.gain = Gain::from_db(-6.0);
+        clip.volume.toggle_animation(Ticks(50));
+        clip.volume.set_at(Ticks(150), -20.0);
+        let db = |position| 20.0 * clip_level(&clip, Ticks(position)).log10();
+        assert!((db(100) + 6.0).abs() < 0.01);
+        assert!((db(150) + 16.0).abs() < 0.01);
+        assert!((db(250) + 26.0).abs() < 0.01);
     }
 }
