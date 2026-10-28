@@ -2,6 +2,8 @@ mod slots;
 
 use std::sync::Arc;
 
+use timeline::MatteChannel;
+
 use crate::backdrop::{Backdrop, Drawn};
 use crate::blit::{self, Blit, DISPLAY_FORMAT};
 use crate::grade::Grade;
@@ -38,6 +40,13 @@ pub enum Picture<'a> {
     /// Layers composited bottom first onto a transparent canvas of their own, so the
     /// look applies to them as one picture, as to a nested sequence.
     Group(Vec<LayerImage<'a>>),
+    /// `fill` composited as a group, shown only where the group `matte` lets it.
+    Matted {
+        fill: Vec<LayerImage<'a>>,
+        matte: Vec<LayerImage<'a>>,
+        channel: MatteChannel,
+        reverse: bool,
+    },
 }
 
 /// GPU work that must run before the layers that use it are drawn.
@@ -47,6 +56,15 @@ enum Step {
     Group {
         index: usize,
         members: Vec<usize>,
+    },
+    /// Draws the slots in `fill` into the group slot `index`, then keeps the part of
+    /// them the group slot `matte` shows.
+    Matte {
+        index: usize,
+        fill: Vec<usize>,
+        matte: usize,
+        channel: MatteChannel,
+        reverse: bool,
     },
 }
 
@@ -185,6 +203,29 @@ impl Compositor {
                         wgpu::Color::TRANSPARENT,
                     );
                 }
+                Step::Matte {
+                    index,
+                    fill,
+                    matte,
+                    channel,
+                    reverse,
+                } => {
+                    let group = &self.slots[*index];
+                    targets.backdrop.draw_layers(
+                        &mut encoder,
+                        &self.blit,
+                        (&group.texture, &group.view),
+                        &self.placed(fill),
+                        wgpu::Color::TRANSPARENT,
+                    );
+                    blit::draw(
+                        &mut encoder,
+                        &group.view,
+                        self.blit.matte(*channel, *reverse),
+                        &[[self.slots[*matte].placed(), &self.blit.grade.none]],
+                        wgpu::LoadOp::Load,
+                    );
+                }
             }
         }
         targets.backdrop.draw_layers(
@@ -243,6 +284,10 @@ impl Compositor {
                     }
                 }
                 Picture::Group(members) => self.check_layers(members)?,
+                Picture::Matted { fill, matte, .. } => {
+                    self.check_layers(fill)?;
+                    self.check_layers(matte)?;
+                }
             }
         }
         Ok(())
@@ -269,10 +314,29 @@ impl Compositor {
                     self.upload(index, rgba);
                     index
                 }
-                Picture::Group(members) => {
-                    let members = self.prepare(members, canvas, next, steps);
+                Picture::Group(members) => self.group(members, canvas, next, steps),
+                Picture::Matted {
+                    fill,
+                    matte,
+                    channel,
+                    reverse,
+                } => {
+                    let fill = self.prepare(fill, canvas, next, steps);
+                    let matte = self.group(matte, canvas, next, steps);
+                    let unchanged = LayerImage {
+                        picture: Picture::Group(Vec::new()),
+                        look: LayerLook::IDENTITY,
+                        grade: None,
+                    };
+                    self.place(matte, &unchanged, canvas);
                     let index = self.claim(next, canvas, SlotKind::Group);
-                    steps.push(Step::Group { index, members });
+                    steps.push(Step::Matte {
+                        index,
+                        fill,
+                        matte,
+                        channel: *channel,
+                        reverse: *reverse,
+                    });
                     index
                 }
             };
@@ -283,6 +347,20 @@ impl Compositor {
             placed.push(index);
         }
         placed
+    }
+
+    /// Prepares `members` to be drawn into a canvas-sized group slot, returned.
+    fn group(
+        &mut self,
+        members: &[LayerImage<'_>],
+        canvas: (u32, u32),
+        next: &mut usize,
+        steps: &mut Vec<Step>,
+    ) -> usize {
+        let members = self.prepare(members, canvas, next, steps);
+        let index = self.claim(next, canvas, SlotKind::Group);
+        steps.push(Step::Group { index, members });
+        index
     }
 
     fn check_size(&self, width: u32, height: u32) -> Result<(), RenderError> {

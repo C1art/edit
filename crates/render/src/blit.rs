@@ -1,3 +1,5 @@
+use timeline::MatteChannel;
+
 use crate::grade::GradeLayout;
 use crate::placement::Placement;
 use crate::WORKING_FORMAT;
@@ -20,6 +22,8 @@ pub(crate) struct Blit {
     pub(crate) backdrop_layout: wgpu::BindGroupLayout,
     /// Draws a layer over the working texture by its blend mode.
     pub(crate) blended: wgpu::RenderPipeline,
+    /// Keeps the part of a fill its track matte shows, by channel then reversed.
+    mattes: [[wgpu::RenderPipeline; 2]; 2],
     /// Copies the working texture to the display texture.
     pub(crate) to_display: wgpu::RenderPipeline,
     /// One direction of a Gaussian blur into a working-format texture.
@@ -33,7 +37,8 @@ impl Blit {
             source: wgpu::ShaderSource::Wgsl(
                 concat!(
                     include_str!("../shaders/blit.wgsl"),
-                    include_str!("../shaders/blend.wgsl")
+                    include_str!("../shaders/blend.wgsl"),
+                    include_str!("../shaders/matte.wgsl")
                 )
                 .into(),
             ),
@@ -128,6 +133,30 @@ impl Blit {
             })
         };
         let over = Some(wgpu::BlendState::ALPHA_BLENDING);
+        let matte = |fragment, reverse| {
+            let keep = wgpu::BlendComponent {
+                src_factor: wgpu::BlendFactor::Zero,
+                dst_factor: if reverse {
+                    wgpu::BlendFactor::OneMinusSrcAlpha
+                } else {
+                    wgpu::BlendFactor::SrcAlpha
+                },
+                operation: wgpu::BlendOperation::Add,
+            };
+            let blend = wgpu::BlendState {
+                color: keep,
+                alpha: keep,
+            };
+            pipeline(
+                &blit_shader,
+                &blit_layout,
+                WORKING_FORMAT,
+                Some(blend),
+                fragment,
+            )
+        };
+        let mattes = ["fs_matte_alpha", "fs_matte_luma"]
+            .map(|entry| [false, true].map(|reverse| matte(entry, reverse)));
         Self {
             to_working: pipeline(&blit_shader, &blit_layout, WORKING_FORMAT, over, "fs_main"),
             blended: pipeline(
@@ -138,6 +167,7 @@ impl Blit {
                 "fs_blend",
             ),
             backdrop_layout,
+            mattes,
             to_display: pipeline(&blit_shader, &blit_layout, DISPLAY_FORMAT, None, "fs_main"),
             blur: pipeline(&blur_shader, &blur_layout, WORKING_FORMAT, None, "fs_main"),
             sampler: device.create_sampler(&wgpu::SamplerDescriptor {
@@ -149,6 +179,10 @@ impl Blit {
             layout,
             grade,
         }
+    }
+
+    pub(crate) fn matte(&self, channel: MatteChannel, reverse: bool) -> &wgpu::RenderPipeline {
+        &self.mattes[channel as usize][usize::from(reverse)]
     }
 
     pub(crate) fn placement_buffer(device: &wgpu::Device) -> wgpu::Buffer {
