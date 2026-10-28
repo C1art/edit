@@ -2,24 +2,14 @@ use egui::{Key, Modifiers};
 use timeline::{Edge, Generator, Marks, PlaceMode, Title, TrackKind};
 
 use crate::editor::Editor;
-use crate::keymap::{take_press, Command, KeymapWindow};
+use crate::keymap::{take_press, Command, KeymapWindow, DIGIT_KEYS};
 use crate::monitors::Focus;
 use crate::placing;
 use crate::project_files::{AfterDiscard, PathPurpose};
 use crate::transport;
 
 /// Switch to cameras one to nine in the multi-camera view.
-const ANGLE_KEYS: [Key; crate::multicam::KEYED_ANGLES] = [
-    Key::Num1,
-    Key::Num2,
-    Key::Num3,
-    Key::Num4,
-    Key::Num5,
-    Key::Num6,
-    Key::Num7,
-    Key::Num8,
-    Key::Num9,
-];
+const ANGLE_KEYS: [Key; crate::multicam::KEYED_ANGLES] = DIGIT_KEYS;
 
 /// Editor-wide keys. Skipped while a text field has focus so typing isn't hijacked, and
 /// while a key is being recorded for a shortcut.
@@ -162,6 +152,8 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         }
         Command::MulticamView => editor.toggle_multicam_view(),
         Command::ComparisonView => editor.toggle_comparison_view(),
+        Command::Workspace(slot) => editor.switch_workspace(usize::from(slot)),
+        Command::ResetWorkspace => editor.reset_workspace(),
         Command::RenderInToOut => editor.render_in_to_out(),
         Command::DeleteRenderFiles => editor.delete_render_files(),
         Command::MarkIn | Command::MarkOut | Command::ClearInOut => mark(editor, command),

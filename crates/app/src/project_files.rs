@@ -302,6 +302,9 @@ impl Editor {
                 StoreEvent::SettingRead(Setting::Presets, Ok(Some(text))) => {
                     self.load_presets(&text);
                 }
+                StoreEvent::SettingRead(Setting::Workspaces, Ok(Some(text))) => {
+                    self.load_workspaces(&text);
+                }
                 StoreEvent::SettingRead(_, Ok(None)) => {}
                 StoreEvent::SettingRead(setting, Err(error)) => {
                     self.notice(format!(

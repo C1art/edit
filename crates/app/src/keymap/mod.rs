@@ -6,8 +6,20 @@ use std::fmt;
 
 use egui::{Event, Key, Modifiers};
 
-pub use command::Command;
+pub use command::{Command, WORKSPACE_SLOTS};
 pub use window::{window, KeymapWindow};
+
+pub const DIGIT_KEYS: [Key; 9] = [
+    Key::Num1,
+    Key::Num2,
+    Key::Num3,
+    Key::Num4,
+    Key::Num5,
+    Key::Num6,
+    Key::Num7,
+    Key::Num8,
+    Key::Num9,
+];
 
 /// A key with the modifiers held, Ctrl standing for Command on a Mac.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

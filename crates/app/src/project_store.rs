@@ -51,6 +51,7 @@ pub enum StoreEvent {
 pub enum Setting {
     Keymap,
     Presets,
+    Workspaces,
 }
 
 impl Setting {
@@ -58,6 +59,7 @@ impl Setting {
         app_folder().join(match self {
             Self::Keymap => "Keyboard Shortcuts.txt",
             Self::Presets => "Effect Presets.json",
+            Self::Workspaces => "Workspaces.txt",
         })
     }
 
@@ -66,6 +68,7 @@ impl Setting {
         match self {
             Self::Keymap => "shortcuts",
             Self::Presets => "effect presets",
+            Self::Workspaces => "workspaces",
         }
     }
 }

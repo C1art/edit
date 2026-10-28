@@ -16,16 +16,49 @@ pub(crate) enum MediaTab {
     Effects,
 }
 
+impl MediaTab {
+    pub(crate) const ALL: [Self; 4] = [Self::Project, Self::Markers, Self::Effects, Self::History];
+
+    /// How the tab is written in the workspaces file, and its title.
+    pub(crate) fn words(self) -> (&'static str, &'static str) {
+        match self {
+            Self::Project => ("project", "Project"),
+            Self::Markers => ("markers", "Markers"),
+            Self::History => ("history", "History"),
+            Self::Effects => ("effects", "Effects"),
+        }
+    }
+}
+
+impl SideTab {
+    pub(crate) const ALL: [Self; 6] = [
+        Self::EffectControls,
+        Self::AudioMixer,
+        Self::ClipMixer,
+        Self::EssentialSound,
+        Self::Scopes,
+        Self::Captions,
+    ];
+
+    /// How the tab is written in the workspaces file, and its title.
+    pub(crate) fn words(self) -> (&'static str, &'static str) {
+        match self {
+            Self::EffectControls => ("effect_controls", "Effect Controls"),
+            Self::AudioMixer => ("audio_mixer", "Audio Mixer"),
+            Self::ClipMixer => ("clip_mixer", "Audio Clip Mixer"),
+            Self::EssentialSound => ("essential_sound", "Essential Sound"),
+            Self::Scopes => ("scopes", "Scopes"),
+            Self::Captions => ("captions", "Captions"),
+        }
+    }
+}
+
 impl Editor {
     pub(crate) fn media_panel(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            for (tab, name) in [
-                (MediaTab::Project, "Project"),
-                (MediaTab::Markers, "Markers"),
-                (MediaTab::Effects, "Effects"),
-                (MediaTab::History, "History"),
-            ] {
-                ui.selectable_value(&mut self.media_tab, tab, RichText::new(name).heading());
+        ui.horizontal_wrapped(|ui| {
+            for tab in MediaTab::ALL {
+                let title = RichText::new(tab.words().1).heading();
+                ui.selectable_value(&mut self.media_tab, tab, title);
             }
         });
         ui.separator();
@@ -58,16 +91,9 @@ impl Editor {
 
     pub(crate) fn side_panel(&mut self, ui: &mut egui::Ui) {
         ui.horizontal_wrapped(|ui| {
-            let tabs = [
-                (SideTab::EffectControls, "Effect Controls"),
-                (SideTab::AudioMixer, "Audio Mixer"),
-                (SideTab::ClipMixer, "Audio Clip Mixer"),
-                (SideTab::EssentialSound, "Essential Sound"),
-                (SideTab::Scopes, "Scopes"),
-                (SideTab::Captions, "Captions"),
-            ];
-            for (tab, name) in tabs {
-                ui.selectable_value(&mut self.side_tab, tab, RichText::new(name).heading());
+            for tab in SideTab::ALL {
+                let title = RichText::new(tab.words().1).heading();
+                ui.selectable_value(&mut self.side_tab, tab, title);
             }
         });
         ui.separator();

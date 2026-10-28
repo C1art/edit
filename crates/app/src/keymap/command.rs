@@ -107,10 +107,28 @@ pub enum Command {
     PlayInToOut,
     PlayAround,
     ToggleLoop,
+    /// Switches to the workspace in this place of the Workspaces menu, from zero.
+    Workspace(u8),
+    ResetWorkspace,
 }
 
+/// Workspaces after these have no command of their own.
+pub const WORKSPACE_SLOTS: u8 = 9;
+
+const WORKSPACE_WORDS: [(&str, &str); WORKSPACE_SLOTS as usize] = [
+    ("workspace_1", "Workspace 1"),
+    ("workspace_2", "Workspace 2"),
+    ("workspace_3", "Workspace 3"),
+    ("workspace_4", "Workspace 4"),
+    ("workspace_5", "Workspace 5"),
+    ("workspace_6", "Workspace 6"),
+    ("workspace_7", "Workspace 7"),
+    ("workspace_8", "Workspace 8"),
+    ("workspace_9", "Workspace 9"),
+];
+
 impl Command {
-    pub const ALL: [Self; 103] = [
+    pub const ALL: [Self; 113] = [
         Self::NewProject,
         Self::OpenProject,
         Self::Save,
@@ -214,6 +232,16 @@ impl Command {
         Self::PlayInToOut,
         Self::PlayAround,
         Self::ToggleLoop,
+        Self::Workspace(0),
+        Self::Workspace(1),
+        Self::Workspace(2),
+        Self::Workspace(3),
+        Self::Workspace(4),
+        Self::Workspace(5),
+        Self::Workspace(6),
+        Self::Workspace(7),
+        Self::Workspace(8),
+        Self::ResetWorkspace,
     ];
 
     /// How the command is written in the shortcuts file, which must never change or saved
@@ -340,6 +368,11 @@ impl Command {
             Self::PlayInToOut => ("play_in_to_out", "Play In to Out"),
             Self::PlayAround => ("play_around", "Play Around"),
             Self::ToggleLoop => ("toggle_loop", "Loop Playback"),
+            Self::Workspace(slot) => WORKSPACE_WORDS
+                .get(usize::from(slot))
+                .copied()
+                .unwrap_or(("workspace", "Workspace")),
+            Self::ResetWorkspace => ("reset_workspace", "Reset to Saved Layout"),
         }
     }
 
@@ -410,6 +443,7 @@ impl Command {
             PlayStop | ShuttleLeft | ShuttleStop | ShuttleRight | StepBack | StepForward
             | StepBackFive | StepForwardFive | GoToStart | GoToEnd | PreviousEdit | NextEdit
             | PlayInToOut | PlayAround | ToggleLoop => "Playback",
+            Workspace(_) | ResetWorkspace => "Window",
         }
     }
 

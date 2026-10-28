@@ -1,6 +1,6 @@
 use egui::Key;
 
-use super::{Chord, Command};
+use super::{Chord, Command, DIGIT_KEYS};
 
 impl Command {
     /// Premiere Pro's default keys for Windows.
@@ -116,6 +116,11 @@ impl Command {
             Self::PlayInToOut => vec![ctrl_shift(Key::Space)],
             Self::PlayAround => vec![shift(Key::K)],
             Self::ToggleLoop => vec![ctrl_shift(Key::L)],
+            Self::Workspace(slot) => DIGIT_KEYS
+                .get(usize::from(slot))
+                .map(|&key| vec![alt_shift(key)])
+                .unwrap_or_default(),
+            Self::ResetWorkspace => vec![alt_shift(Key::Num0)],
         }
     }
 }

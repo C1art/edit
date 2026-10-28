@@ -346,6 +346,8 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             );
             ui.checkbox(&mut editor.clip_art.show_waveforms, "Show Audio Waveforms");
         });
+        crate::workspaces::window_menu(editor, ui);
+        crate::workspaces::workspace_bar(editor, ui);
     });
 }
 

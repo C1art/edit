@@ -59,6 +59,7 @@ mod timeline_view;
 mod transport;
 mod trim_monitor;
 mod viewer;
+mod workspaces;
 
 use std::path::PathBuf;
 

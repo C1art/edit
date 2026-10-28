@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use audio::AudioOutput;
 use eframe::egui_wgpu::RenderState;
-use egui::{CentralPanel, Panel};
 use timeline::{
     Clipboard, Edit, Marker, Sequence, SetProxy, SetSequenceFormat, SourceId, Ticks, Timebase,
     Timeline, TimelineError, VideoFormat,
@@ -17,7 +16,7 @@ use crate::export::ExportDialog;
 use crate::import::Importer;
 use crate::media_pool;
 use crate::mixer::Mixer;
-use crate::monitors::{self, Focus};
+use crate::monitors::Focus;
 use crate::nesting::Level;
 use crate::panels::MediaTab;
 use crate::project_files::{is_project, is_subrip, is_xml, AfterDiscard, PathPrompt};
@@ -112,6 +111,8 @@ pub struct Editor {
     pub(crate) keymap_window: Option<crate::keymap::KeymapWindow>,
     pub(crate) presets: Vec<timeline::EffectPreset>,
     pub(crate) preset_dialog: Option<crate::effect_presets::PresetDialog>,
+    pub(crate) workspaces: crate::workspaces::Workspaces,
+    pub(crate) naming_workspace: Option<crate::workspaces::NamingWorkspace>,
 }
 
 impl Editor {
@@ -154,6 +155,7 @@ impl Editor {
         if let Some(store) = &mut store {
             store.read_setting(Setting::Keymap);
             store.read_setting(Setting::Presets);
+            store.read_setting(Setting::Workspaces);
         }
         let program = Viewer::new(
             Arc::new(timeline.sequence().clone()),
@@ -227,6 +229,8 @@ impl Editor {
             keymap: Default::default(),
             keymap_window: None,
             presets: Vec::new(),
+            workspaces: crate::workspaces::Workspaces::default(),
+            naming_workspace: None,
             preset_dialog: None,
         };
         for path in initial {
@@ -430,20 +434,7 @@ impl eframe::App for Editor {
         self.sync_program();
         self.update_viewers(&ctx);
 
-        Panel::top("menu_bar").show(ui, |ui| crate::menus::menu_bar(self, ui));
-        Panel::left("media_pool")
-            .resizable(true)
-            .default_size(260.0)
-            .show(ui, |ui| self.media_panel(ui));
-        Panel::right("side_panel")
-            .resizable(true)
-            .default_size(290.0)
-            .show(ui, |ui| self.side_panel(ui));
-        Panel::bottom("timeline")
-            .resizable(true)
-            .default_size(340.0)
-            .show(ui, |ui| self.timeline_panel(ui));
-        CentralPanel::default().show(ui, |ui| monitors::ui(self, ui));
+        self.lay_out_panels(ui);
 
         crate::project_files::path_dialog(self, &ctx);
         crate::project_files::discard_dialog(self, &ctx);
@@ -460,6 +451,7 @@ impl eframe::App for Editor {
         crate::export_queue::window(self, &ctx);
         crate::keymap::window(self, &ctx);
         crate::effect_presets::dialog(self, &ctx);
+        crate::workspaces::dialog(self, &ctx);
         crate::link_media::dialog(self, &ctx);
         crate::render_previews::window(self, &ctx);
         crate::project_manager::window(self, &ctx);
