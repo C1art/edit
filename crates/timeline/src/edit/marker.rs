@@ -1,5 +1,7 @@
 use crate::edit::ops;
-use crate::{ClipId, Edit, Marker, MarkerColor, MarkerId, Sequence, Ticks, TimelineError};
+use crate::{
+    ClipId, Edit, Marker, MarkerColor, MarkerId, MarkerKind, Sequence, Ticks, TimelineError,
+};
 
 /// Whose markers an edit changes. A clip's markers are timed in its source.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -43,9 +45,11 @@ impl Edit for AddMarker {
         let marker = Marker {
             id,
             at: self.at,
+            duration: Ticks::ZERO,
             name: String::new(),
             comment: String::new(),
             color: MarkerColor::default(),
+            kind: MarkerKind::default(),
         };
         let index = markers.partition_point(|m| m.at < self.at);
         markers.insert(index, marker);
@@ -90,6 +94,9 @@ impl Edit for UpdateMarker {
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
         if self.marker.at < Ticks::ZERO {
             return Err(TimelineError::BeforeSequenceStart);
+        }
+        if self.marker.duration < Ticks::ZERO {
+            return Err(TimelineError::NothingToEdit);
         }
         let markers = markers_mut(sequence, self.owner)?;
         let index = markers

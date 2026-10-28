@@ -91,7 +91,7 @@ pub use history::{preview, Edit, EditCommand, Timeline};
 pub use label::Label;
 pub use links::LinkedSelection;
 pub use look::{Crop, Look, Motion};
-pub use marker::{Marker, MarkerColor, MarkerId};
+pub use marker::{chapters, Chapter, Marker, MarkerColor, MarkerId, MarkerKind};
 pub use marks::Marks;
 pub use mask::{Mask, MaskShape};
 pub use mask_path::{
