@@ -1,5 +1,6 @@
 use timeline::BlendMode;
 
+use crate::creative::Creative;
 use crate::mask::{self, LayerMask, MAX_MASKS};
 #[cfg(test)]
 use crate::mask::{Outline, MAX_OUTLINE_POINTS};
@@ -65,6 +66,7 @@ pub struct ColorAdjust {
     pub vibrance: f32,
     /// 0 to 1: how much of a creative look LUT applies.
     pub look_intensity: f32,
+    pub creative: Creative,
     pub secondary: Option<SecondaryAdjust>,
 }
 
@@ -82,6 +84,7 @@ impl ColorAdjust {
         saturation: 1.0,
         vibrance: 0.0,
         look_intensity: 1.0,
+        creative: Creative::NONE,
         secondary: None,
     };
 }
@@ -236,6 +239,7 @@ impl Placement {
             .chain(self.effects.recolor.uniform())
             .chain(self.effects.key_uniform())
             .chain(self.effects.adjust.uniform())
+            .chain(color.creative.uniform())
             .flat_map(f32::to_le_bytes)
             .collect()
     }
@@ -283,11 +287,11 @@ mod tests {
         // Twenty vec4s, three of them added by the wipes, lead the shader's struct. The
         // masks follow: the header, three vec4s each, then their outlines at two points
         // a vec4; then the picture style's thirteen, the reshape's six, the recolor's twelve,
-        // the key's two and the adjustments' three.
+        // the key's two, the adjustments' three and Lumetri Creative's three.
         let outlines = MAX_MASKS * MAX_OUTLINE_POINTS / 2;
         assert_eq!(
             bytes.len(),
-            (23 + 1 + 3 * MAX_MASKS + outlines + 13 + 6 + 12 + 2 + 3) * 16
+            (23 + 1 + 3 * MAX_MASKS + outlines + 13 + 6 + 12 + 2 + 3 + 3) * 16
         );
         assert!(bytes.len() as u64 <= crate::blit::UNIFORM_BYTES);
     }

@@ -115,6 +115,12 @@ struct Placement {
     adjust_balance: vec4<f32>,
     adjust_levels: vec4<f32>,
     adjust_alpha: vec4<f32>,
+    // Lumetri's shadow tint toward blue and red, Faded Film and the tint balance; the
+    // highlight tint; then the vignette's amount, midpoint, roundness and feather (see
+    // lumetri.wgsl).
+    creative_shadow: vec4<f32>,
+    creative_highlight: vec4<f32>,
+    creative_vignette: vec4<f32>,
 };
 
 const OUTLINE_VEC4S: u32 = 32u;
@@ -263,6 +269,7 @@ fn creative_grade(rgb_in: vec3<f32>) -> vec3<f32> {
     if grade.y >= 2.0 {
         rgb = mix(rgb, lookup(look_lut, grade.y, rgb), grade.z);
     }
+    rgb = creative_tone(rgb);
     if grade.w > 0.5 {
         let size = f32(textureDimensions(curves).x);
         let u = srgb_encode(rgb) * ((size - 1.0) / size) + vec3<f32>(0.5 / size);
@@ -273,68 +280,6 @@ fn creative_grade(rgb_in: vec3<f32>) -> vec3<f32> {
         ));
     }
     return rgb;
-}
-
-// Hue in turns, saturation and lightness of gamma-encoded color, as a color picker
-// shows them.
-fn hsl(rgb: vec3<f32>) -> vec3<f32> {
-    let c = clamp(to_gamma(rgb), vec3<f32>(0.0), vec3<f32>(1.0));
-    let high = max(max(c.r, c.g), c.b);
-    let low = min(min(c.r, c.g), c.b);
-    let lightness = (high + low) * 0.5;
-    let spread = high - low;
-    if spread < 1e-5 {
-        return vec3<f32>(0.0, 0.0, lightness);
-    }
-    let saturation = spread / max(1.0 - abs(2.0 * lightness - 1.0), 1e-5);
-    var hue: f32;
-    if high == c.r {
-        hue = (c.g - c.b) / spread;
-    } else if high == c.g {
-        hue = (c.b - c.r) / spread + 2.0;
-    } else {
-        hue = (c.r - c.g) / spread + 4.0;
-    }
-    return vec3<f32>(fract(hue / 6.0), min(saturation, 1.0), lightness);
-}
-
-// 1 inside low..high, easing to 0 over `soft` beyond either end.
-fn within(value: f32, low: f32, high: f32, soft: f32) -> f32 {
-    return smoothstep(low - soft, low, value) * (1.0 - smoothstep(high, high + soft, value));
-}
-
-fn secondary_key(rgb: vec3<f32>) -> f32 {
-    let key = placement.secondary_key;
-    let ranges = placement.secondary_ranges;
-    let soft = max(key.z, 1e-3);
-    let color = hsl(rgb);
-    let hue_distance = abs(fract(color.x - key.x + 0.5) - 0.5);
-    // Grey has no hue, so the saturation range alone decides whether it is keyed.
-    let hue = 1.0 - smoothstep(key.y, key.y + soft * 0.5, hue_distance);
-    let matte = hue * within(color.y, ranges.x, ranges.y, soft) * within(color.z, ranges.z, ranges.w, soft);
-    return mix(matte, 1.0 - matte, placement.secondary_wheel.w);
-}
-
-// The keyed colors' own white balance, contrast, wheel and saturation, blended in by
-// the key.
-fn secondary(rgb_in: vec3<f32>) -> vec3<f32> {
-    let mode = placement.secondary_key.w;
-    if mode < 0.5 {
-        return rgb_in;
-    }
-    let keyed = secondary_key(rgb_in);
-    if mode > 1.5 {
-        return mix(vec3<f32>(MID_GREY), rgb_in, keyed);
-    }
-    let balance = placement.secondary_balance;
-    let w = placement.secondary_wheel;
-    let white = vec3<f32>(1.0 + 0.3 * balance.x, 1.0 - 0.3 * balance.y, 1.0 - 0.3 * balance.x);
-    let hue = vec3<f32>(1.5748 * w.y, -0.1873 * w.x - 0.4681 * w.y, 1.8556 * w.x);
-    var rgb = rgb_in * white * exp2(hue * WHEEL_STOPS + vec3<f32>(w.z * LEVEL_STOPS));
-    let pivot = vec3<f32>(MID_GREY);
-    rgb = pivot * pow(max(rgb, vec3<f32>(0.0)) / pivot, vec3<f32>(1.0 + balance.z));
-    rgb = saturate_color(rgb, balance.w, 0.0);
-    return mix(rgb_in, rgb, keyed);
 }
 
 fn to_gamma(rgb: vec3<f32>) -> vec3<f32> {
@@ -360,92 +305,7 @@ fn stylize(rgb_in: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
     } else {
         rgb = mix(rgb, vec3<f32>(1.0), amount * edge);
     }
-    return rgb;
-}
-
-// Signed distance outside an ellipse, close enough near its outline for a feather.
-fn ellipse_distance(p: vec2<f32>, radii: vec2<f32>) -> f32 {
-    let scaled = length(p / radii);
-    let gradient = length(p / (radii * radii));
-    if gradient < 1e-6 {
-        return -min(radii.x, radii.y);
-    }
-    return scaled * (scaled - 1.0) / gradient;
-}
-
-fn box_distance(p: vec2<f32>, half_size: vec2<f32>) -> f32 {
-    let q = abs(p) - half_size;
-    return length(max(q, vec2<f32>(0.0))) + min(max(q.x, q.y), 0.0);
-}
-
-fn outline_point(mask: u32, index: u32) -> vec2<f32> {
-    let pair = placement.outlines[mask * OUTLINE_VEC4S + index / 2u];
-    return select(pair.xy, pair.zw, index % 2u == 1u);
-}
-
-// Signed distance outside a mask's path outline in pixels, its sign from the crossings
-// of a ray along +x.
-fn path_distance(uv: vec2<f32>, mask: u32, count: u32, picture: vec2<f32>) -> f32 {
-    let p = uv * picture;
-    var nearest = 1e20;
-    var side = 1.0;
-    var previous = outline_point(mask, count - 1u) * picture;
-    for (var i = 0u; i < count; i++) {
-        let vertex = outline_point(mask, i) * picture;
-        let edge = previous - vertex;
-        let to_p = p - vertex;
-        let along = clamp(dot(to_p, edge) / max(dot(edge, edge), 1e-6), 0.0, 1.0);
-        let gap = to_p - edge * along;
-        nearest = min(nearest, dot(gap, gap));
-        let crossing = vec3<bool>(
-            (p.y >= vertex.y),
-            (p.y < previous.y),
-            (edge.x * to_p.y > edge.y * to_p.x),
-        );
-        if all(crossing) || !any(crossing) {
-            side = -side;
-        }
-        previous = vertex;
-    }
-    return side * sqrt(nearest);
-}
-
-// How much of the picture at `uv` the masks keep. Masks add: each covers what the
-// others leave by its own opacity.
-fn mask_coverage(uv: vec2<f32>) -> f32 {
-    let count = u32(placement.mask_space.z);
-    if count == 0u {
-        return 1.0;
-    }
-    let picture = placement.mask_space.xy;
-    var uncovered = 1.0;
-    for (var i = 0u; i < count; i++) {
-        let shape = placement.masks[i * 3u];
-        let edge = placement.masks[i * 3u + 1u];
-        let kind = placement.masks[i * 3u + 2u];
-        let offset = (uv - shape.xy) * picture;
-        // Turning back by the mask's clockwise rotation, with +y down.
-        let sin_cos = vec2<f32>(sin(edge.x), cos(edge.x));
-        let p = vec2<f32>(
-            sin_cos.y * offset.x + sin_cos.x * offset.y,
-            -sin_cos.x * offset.x + sin_cos.y * offset.y,
-        );
-        let half_size = max(shape.zw * picture * 0.5, vec2<f32>(1e-3));
-        var distance = ellipse_distance(p, half_size);
-        if kind.x > 1.5 {
-            distance = path_distance(uv, i, u32(kind.z), picture);
-        } else if kind.x > 0.5 {
-            distance = box_distance(p, half_size);
-        }
-        // A pixel's softness at least, so a hard edge doesn't alias.
-        let feather = max(edge.y, 1.0);
-        var inside = 1.0 - smoothstep(-0.5 * feather, 0.5 * feather, distance - edge.z);
-        if kind.y > 0.5 {
-            inside = 1.0 - inside;
-        }
-        uncovered *= 1.0 - inside * edge.w;
-    }
-    return 1.0 - uncovered;
+    return creative_vignette(rgb, uv);
 }
 
 @fragment
