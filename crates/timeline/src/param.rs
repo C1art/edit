@@ -1,79 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::keyframe::{HandleSide, Handles, Interpolation, Keyframe};
 use crate::Ticks;
-
-/// A value a parameter passes through at one source time of its clip, so keyframes
-/// stay on the same picture when the clip is trimmed, split or moved.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct Keyframe {
-    /// In the clip's source time, in the sequence timebase.
-    pub time: Ticks,
-    pub hundredths: i32,
-    #[serde(default, skip_serializing_if = "Interpolation::is_linear")]
-    pub interpolation: Interpolation,
-}
-
-impl Keyframe {
-    pub const fn new(time: Ticks, hundredths: i32) -> Self {
-        Self {
-            time,
-            hundredths,
-            interpolation: Interpolation::Linear,
-        }
-    }
-
-    pub fn value(&self) -> f32 {
-        self.hundredths as f32 / 100.0
-    }
-}
-
-/// How the value moves through a keyframe. Easing slows the change arriving at the
-/// keyframe (in), leaving it (out) or both; a hold keeps the value until the next one;
-/// auto Bezier curves smoothly through it, toward its neighbours.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum Interpolation {
-    #[default]
-    Linear,
-    Hold,
-    EaseIn,
-    EaseOut,
-    Ease,
-    AutoBezier,
-}
-
-impl Interpolation {
-    pub const ALL: [Self; 6] = [
-        Self::Linear,
-        Self::AutoBezier,
-        Self::Hold,
-        Self::EaseIn,
-        Self::EaseOut,
-        Self::Ease,
-    ];
-
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Linear => "Linear",
-            Self::Hold => "Hold",
-            Self::EaseIn => "Ease In",
-            Self::EaseOut => "Ease Out",
-            Self::Ease => "Ease In and Out",
-            Self::AutoBezier => "Auto Bezier",
-        }
-    }
-
-    fn is_linear(&self) -> bool {
-        *self == Self::Linear
-    }
-
-    fn eases_in(self) -> bool {
-        matches!(self, Self::EaseIn | Self::Ease)
-    }
-
-    fn eases_out(self) -> bool {
-        matches!(self, Self::EaseOut | Self::Ease)
-    }
-}
 
 /// An adjustable clip property, held in hundredths of its display unit so the model
 /// stays `Eq` and round-trips exactly. With keyframes it is animated, moving between
@@ -123,13 +51,28 @@ impl Param {
                 let span = (next.time - before.time).0 as f64;
                 let (from, to) = (f64::from(before.hundredths), f64::from(next.hundredths));
                 let straight = (to - from) / span;
-                let slope = |index: usize, eased: bool| match self.keys[index].interpolation {
-                    _ if eased => 0.0,
-                    Interpolation::AutoBezier => self.smooth_slope(index).unwrap_or(straight),
-                    _ => straight,
+                let slope = |index: usize, eased: bool, side: HandleSide| {
+                    let key = self.keys[index];
+                    match (key.interpolation, key.handles) {
+                        _ if eased => 0.0,
+                        (interpolation, Some(handles)) if interpolation.has_handles() => {
+                            handles.slope(side)
+                        }
+                        (interpolation, _)
+                            if interpolation == Interpolation::AutoBezier
+                                || interpolation.has_handles() =>
+                        {
+                            self.smooth_slope(index).unwrap_or(straight)
+                        }
+                        _ => straight,
+                    }
                 };
-                let leaving = slope(after - 1, before.interpolation.eases_out());
-                let arriving = slope(after, next.interpolation.eases_in());
+                let leaving = slope(
+                    after - 1,
+                    before.interpolation.eases_out(),
+                    HandleSide::Outgoing,
+                );
+                let arriving = slope(after, next.interpolation.eases_in(), HandleSide::Incoming);
                 hermite(
                     (time - before.time).0 as f64 / span,
                     [from, to],
@@ -254,10 +197,56 @@ impl Param {
             .map(|key| key.interpolation)
     }
 
-    /// Returns whether there was a keyframe at `time` to change.
+    /// Returns whether there was a keyframe at `time` to change. Bezier handles start
+    /// along the curve's smooth path through the keyframe and join when made continuous.
     pub fn set_interpolation(&mut self, time: Ticks, interpolation: Interpolation) -> bool {
+        let Some(index) = self.keys.iter().position(|key| key.time == time) else {
+            return false;
+        };
+        let handles = match (interpolation, self.keys[index].handles) {
+            (Interpolation::Bezier, Some(handles)) => Some(handles),
+            (Interpolation::ContinuousBezier, Some(handles)) => Some(Handles::level(
+                (handles.slope(HandleSide::Incoming) + handles.slope(HandleSide::Outgoing)) / 2.0,
+            )),
+            (interpolation, _) if interpolation.has_handles() => {
+                Some(Handles::level(self.natural_slope(index)))
+            }
+            _ => None,
+        };
+        let key = &mut self.keys[index];
+        key.interpolation = interpolation;
+        key.handles = handles;
+        true
+    }
+
+    /// Sets the slope, in hundredths per tick, of one handle of the Bezier keyframe at
+    /// `time`, or both when it is continuous. Returns whether there was one to change.
+    pub fn set_handle(&mut self, time: Ticks, side: HandleSide, slope: f64) -> bool {
         let key = self.keys.iter_mut().find(|key| key.time == time);
-        key.map(|key| key.interpolation = interpolation).is_some()
+        let Some(key) = key.filter(|key| key.interpolation.has_handles()) else {
+            return false;
+        };
+        let handles = key.handles.get_or_insert_with(Handles::default);
+        match key.interpolation {
+            Interpolation::ContinuousBezier => *handles = Handles::level(slope),
+            _ => handles.set(side, slope),
+        }
+        true
+    }
+
+    /// The slope an untouched Bezier keyframe passes through with: the auto Bezier slope
+    /// between neighbours, toward the only neighbour at either end.
+    fn natural_slope(&self, index: usize) -> f64 {
+        self.smooth_slope(index).unwrap_or_else(|| {
+            let key = self.keys[index];
+            let neighbour = index
+                .checked_sub(1)
+                .and_then(|previous| self.keys.get(previous))
+                .or_else(|| self.keys.get(index + 1));
+            neighbour.map_or(0.0, |other| {
+                f64::from(other.hundredths - key.hundredths) / (other.time - key.time).0 as f64
+            })
+        })
     }
 
     pub fn previous_key(&self, time: Ticks) -> Option<Ticks> {
@@ -397,5 +386,45 @@ mod tests {
         let around = [190, 199, 200, 201, 210].map(|time| param.value_at(Ticks(time)));
         assert!(around.iter().all(|value| *value <= 200.0), "{around:?}");
         assert!(around[1] > 199.9 && around[3] > 199.9, "{around:?}");
+    }
+
+    #[test]
+    fn bezier_handles_set_each_side_and_continuous_handles_stay_in_line() {
+        let mut param = Param::from_value(0.0);
+        param.toggle_animation(Ticks(0));
+        param.set_at(Ticks(1000), 100.0);
+        param.set_at(Ticks(2000), 100.0);
+        let key = Ticks(1000);
+        let slope = |param: &Param, from: i64| {
+            param.value_at(Ticks(from + 1)) - param.value_at(Ticks(from))
+        };
+        // A Bezier key starts on the auto Bezier path, so nothing moves yet.
+        param.set_interpolation(key, Interpolation::AutoBezier);
+        let smooth = [500, 1500].map(|time| param.value_at(Ticks(time)));
+        assert!(param.set_interpolation(key, Interpolation::Bezier));
+        assert_eq!([500, 1500].map(|time| param.value_at(Ticks(time))), smooth);
+
+        // Arriving level and leaving rising, a tenth of a unit a tick.
+        assert!(param.set_handle(key, HandleSide::Incoming, 0.0));
+        assert!(param.set_handle(key, HandleSide::Outgoing, 10.0));
+        let (into, out) = (slope(&param, 999), slope(&param, 1000));
+        assert!(
+            into.abs() < 0.002 && (out - 0.1).abs() < 0.002,
+            "{into} {out}"
+        );
+
+        // Continuous joins the sides at their average and moves both together.
+        param.set_interpolation(key, Interpolation::ContinuousBezier);
+        assert!((slope(&param, 1000) - 0.05).abs() < 0.002);
+        param.set_handle(key, HandleSide::Incoming, -5.0);
+        let slopes = [999, 1000].map(|from| slope(&param, from));
+        assert!(
+            slopes.iter().all(|slope| (slope + 0.05).abs() < 0.002),
+            "{slopes:?}"
+        );
+
+        param.set_interpolation(key, Interpolation::Linear);
+        assert_eq!(param.keys[1].handles, None);
+        assert!(!param.set_handle(key, HandleSide::Incoming, 0.0));
     }
 }
