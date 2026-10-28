@@ -2,6 +2,7 @@ use timeline::BlendMode;
 
 use crate::mask::{self, LayerMask, MAX_MASKS};
 use crate::pixel::PixelEffects;
+use crate::secondary::SecondaryAdjust;
 
 /// How a layer is drawn: everything except the picture itself.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -57,6 +58,7 @@ pub struct ColorAdjust {
     pub vibrance: f32,
     /// 0 to 1: how much of a creative look LUT applies.
     pub look_intensity: f32,
+    pub secondary: Option<SecondaryAdjust>,
 }
 
 impl ColorAdjust {
@@ -73,6 +75,7 @@ impl ColorAdjust {
         saturation: 1.0,
         vibrance: 0.0,
         look_intensity: 1.0,
+        secondary: None,
     };
 }
 
@@ -195,6 +198,7 @@ impl Placement {
                     .flat_map(|[blue, red, level]| [blue, red, level, 0.0]),
             )
             .chain(self.grade)
+            .chain(SecondaryAdjust::uniform(color.secondary.as_ref()))
             .chain(mask::uniform(&self.opacity_masks, self.fitted))
             .flat_map(f32::to_le_bytes)
             .collect()
@@ -240,7 +244,7 @@ mod tests {
         };
         let bytes = Placement::new((1920, 1080), (1920, 1080), &look).to_bytes();
         // The shader's struct ends with the masks: the header, then twelve vec4s.
-        assert_eq!(bytes.len(), (16 + 1 + 3 * MAX_MASKS) * 16);
+        assert_eq!(bytes.len(), (20 + 1 + 3 * MAX_MASKS) * 16);
         assert!(bytes.len() as u64 <= crate::blit::UNIFORM_BYTES);
     }
 
