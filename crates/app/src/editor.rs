@@ -33,6 +33,7 @@ const MAX_NOTICES: usize = 8;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum MediaTab {
     Project,
+    Markers,
     History,
 }
 
@@ -59,6 +60,7 @@ pub struct Editor {
     media_tab: MediaTab,
     /// The history step last scrolled into view, so the list follows new edits only.
     pub(crate) history_scrolled: Option<usize>,
+    pub(crate) marker_filter: crate::markers_panel::MarkerFilter,
     pub(crate) gain_dialog: Option<crate::gain_dialog::GainDialog>,
     pub(crate) loudness: Option<crate::loudness_window::LoudnessWindow>,
     pub(crate) speed_prompt: Option<crate::speed_dialog::SpeedPrompt>,
@@ -144,6 +146,7 @@ impl Editor {
             side_tab: SideTab::default(),
             media_tab: MediaTab::Project,
             history_scrolled: None,
+            marker_filter: Default::default(),
             gain_dialog: None,
             loudness: None,
             speed_prompt: None,
@@ -326,6 +329,7 @@ impl Editor {
         ui.horizontal(|ui| {
             for (tab, name) in [
                 (MediaTab::Project, "Project"),
+                (MediaTab::Markers, "Markers"),
                 (MediaTab::History, "History"),
             ] {
                 ui.selectable_value(&mut self.media_tab, tab, RichText::new(name).heading());
@@ -343,6 +347,7 @@ impl Editor {
                     self.pool_action(action);
                 }
             }
+            MediaTab::Markers => crate::markers_panel::ui(self, ui),
             MediaTab::History => crate::history_panel::ui(self, ui),
         }
         if !self.notices.is_empty() {

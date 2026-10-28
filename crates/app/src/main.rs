@@ -11,6 +11,7 @@ mod history_panel;
 mod import;
 mod loudness_window;
 mod marker_dialog;
+mod markers_panel;
 mod media_pool;
 mod menus;
 mod mixer;
