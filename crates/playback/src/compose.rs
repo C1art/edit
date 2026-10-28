@@ -1,5 +1,5 @@
 use render::LayerLook;
-use timeline::{track_layers_at, ClipId, Look, Sequence, SourceId, Ticks, TrackRef};
+use timeline::{track_layers_at, ClipId, Look, Param, Sequence, SourceId, Ticks, TrackRef};
 
 use crate::clip_decoders::ClipDecoders;
 use crate::track_video::TrackVideo;
@@ -39,7 +39,7 @@ pub(crate) fn layers_at(
                 Ok(Some(frame)) => layers.push(Layer {
                     track: TrackRef::video(index),
                     frame,
-                    look: layer_look(&plan.clip.look, plan.fade),
+                    look: layer_look(&plan.clip.look, plan.clip.source_time(pts), plan.fade),
                 }),
                 Ok(None) => {}
                 Err(error) => {
@@ -55,15 +55,17 @@ pub(crate) fn layers_at(
     layers
 }
 
-fn layer_look(look: &Look, fade: f32) -> LayerLook {
-    let percent = |param: &timeline::Param| param.value() / 100.0;
+/// The look at source time `time`, where its keyframes are.
+fn layer_look(look: &Look, time: Ticks, fade: f32) -> LayerLook {
+    let value = |param: &Param| param.value_at(time);
+    let percent = |param: &Param| param.value_at(time) / 100.0;
     let crop = &look.crop;
     LayerLook {
-        offset: look.motion.position.each_ref().map(|axis| axis.value()),
+        offset: look.motion.position.each_ref().map(value),
         scale: percent(&look.motion.scale),
-        rotation_degrees: look.motion.rotation.value(),
+        rotation_degrees: value(&look.motion.rotation),
         crop: [&crop.left, &crop.top, &crop.right, &crop.bottom].map(percent),
         opacity: percent(&look.opacity) * fade,
-        blur: look.blurriness() / BLURRINESS_PER_SIGMA,
+        blur: look.blurriness_at(time) / BLURRINESS_PER_SIGMA,
     }
 }
