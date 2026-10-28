@@ -1,4 +1,4 @@
-use std::ffi::CString;
+use std::ffi::{c_char, CStr, CString};
 use std::path::Path;
 use std::ptr::{self, NonNull};
 
@@ -88,6 +88,24 @@ impl InputContext {
         Some((width, height))
     }
 
+    /// The container's descriptive name, as "QuickTime / MOV".
+    pub(crate) fn container(&self) -> String {
+        // SAFETY: the context is open, so `iformat` points to a static demuxer whose
+        // names are static strings or null.
+        let names = unsafe {
+            let format = &*self.0.as_ref().iformat;
+            text(format.long_name).or_else(|| text(format.name))
+        };
+        names.unwrap_or_default()
+    }
+
+    /// Bits per second over the whole file, when the container knows it.
+    pub(crate) fn bit_rate(&self) -> Option<u64> {
+        // SAFETY: the context is open.
+        let rate = unsafe { self.0.as_ref() }.bit_rate;
+        u64::try_from(rate).ok().filter(|&rate| rate > 0)
+    }
+
     /// In `AV_TIME_BASE` units.
     pub(crate) fn start_time(&self) -> Option<i64> {
         // SAFETY: the context is open.
@@ -131,12 +149,26 @@ impl InputContext {
                 // by the context and not mutated while `&self` is held.
                 let (stream, codecpar) = unsafe { (&*stream, &*(*stream).codecpar) };
                 let timebase = rational_timebase(stream.time_base)?;
+                let kind = stream_kind(codecpar.codec_type);
+                let audio = kind == StreamKind::Audio;
+                // SAFETY: avcodec_get_name returns a static string for any id, never null.
+                let codec = unsafe { text(sys::avcodec_get_name(codecpar.codec_id)) };
                 Some(StreamInfo {
                     index,
-                    kind: stream_kind(codecpar.codec_type),
+                    kind,
                     timebase,
                     duration: (stream.duration != sys::AV_NOPTS_VALUE)
                         .then_some(Ticks(stream.duration)),
+                    codec: codec.unwrap_or_default(),
+                    bit_rate: u64::try_from(codecpar.bit_rate)
+                        .ok()
+                        .filter(|&rate| rate > 0),
+                    sample_rate: u32::try_from(codecpar.sample_rate)
+                        .ok()
+                        .filter(|&rate| audio && rate > 0),
+                    channels: u32::try_from(codecpar.ch_layout.nb_channels)
+                        .ok()
+                        .filter(|&channels| audio && channels > 0),
                 })
             })
             .collect()
@@ -149,6 +181,18 @@ impl Drop for InputContext {
         // SAFETY: the context came from avformat_open_input and is closed exactly once here.
         unsafe { sys::avformat_close_input(&mut raw) };
     }
+}
+
+/// # Safety
+/// `raw` is null or a NUL-terminated string that outlives the call.
+unsafe fn text(raw: *const c_char) -> Option<String> {
+    if raw.is_null() {
+        return None;
+    }
+    // SAFETY: `raw` is not null, and the caller promises it is a NUL-terminated string
+    // that outlives the call.
+    let text = unsafe { CStr::from_ptr(raw) };
+    Some(text.to_string_lossy().into_owned())
 }
 
 fn rational_timebase(rational: sys::AVRational) -> Option<Timebase> {
