@@ -1,6 +1,6 @@
 use render::{
-    ColorAdjust, LayerLook, LayerMask, LayerWipe, Outline, PageFold, PixelEffects, SecondaryAdjust,
-    Warp, MAX_MASKS, MAX_OUTLINE_POINTS,
+    ColorAdjust, Creative, CreativeVignette, LayerLook, LayerMask, LayerWipe, Outline, PageFold,
+    PixelEffects, SecondaryAdjust, Warp, MAX_MASKS, MAX_OUTLINE_POINTS,
 };
 use timeline::{
     ColorCorrection, HslSecondary, Look, Mask, MaskShape, MediaItem, Param, Reveal, Ticks, Timebase,
@@ -10,6 +10,8 @@ use crate::pixel_effects::{linear, pixel_effects, transform_opacity};
 
 /// Gaussian blur's "blurriness" reaches about two standard deviations.
 const BLURRINESS_PER_SIGMA: f32 = 2.0;
+/// The Sharpen effect's default amount, as a share.
+const SHARPEN_DEFAULT: f32 = 0.5;
 
 /// `look` for a picture of `media`, drawn with the pixel shape and alpha it's
 /// interpreted with.
@@ -35,6 +37,9 @@ pub(crate) fn layer_look(
     // Zooming about the canvas center scales the picture's offset from it too.
     let offset =
         [0, 1].map(|axis| (position[axis] + reveal.shift[axis] * canvas[axis]) * reveal.zoom);
+    let mut effects = pixel_effects(&look.effects, time, timebase);
+    // Lumetri's sharpen at 100 is the Sharpen effect's default.
+    effects.sharpen += SHARPEN_DEFAULT * percent(&look.color.sharpen).max(0.0);
     LayerLook {
         offset,
         scale: look
@@ -59,11 +64,7 @@ pub(crate) fn layer_look(
             })
         }),
         wash: reveal.wash,
-        effects: smeared(
-            turned(pixel_effects(&look.effects, time, timebase), reveal, canvas),
-            reveal,
-            canvas,
-        ),
+        effects: smeared(turned(effects, reveal, canvas), reveal, canvas),
         blend: reveal.blend.unwrap_or(look.blend),
         pixel_aspect: 1.0,
     }
@@ -132,7 +133,25 @@ fn color_adjust(color: &ColorCorrection, time: Ticks) -> ColorAdjust {
         saturation: unit(&color.saturation),
         vibrance: unit(&color.vibrance),
         look_intensity: unit(&color.look_intensity),
+        creative: creative(color, time),
         secondary: secondary_adjust(&color.secondary, time),
+    }
+}
+
+fn creative(color: &ColorCorrection, time: Ticks) -> Creative {
+    let unit = |param: &Param| param.value_at(time) / 100.0;
+    let vignette = &color.vignette;
+    Creative {
+        faded_film: unit(&color.faded_film).clamp(0.0, 1.0),
+        shadow_tint: color.shadow_tint.each_ref().map(unit),
+        highlight_tint: color.highlight_tint.each_ref().map(unit),
+        tint_balance: unit(&color.tint_balance).clamp(-1.0, 1.0),
+        vignette: CreativeVignette {
+            amount: (vignette.amount.value_at(time) / 5.0).clamp(-1.0, 1.0),
+            midpoint: unit(&vignette.midpoint).clamp(0.0, 1.0),
+            roundness: unit(&vignette.roundness).clamp(-1.0, 1.0),
+            feather: unit(&vignette.feather).clamp(0.0, 1.0),
+        },
     }
 }
 
