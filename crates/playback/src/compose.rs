@@ -5,6 +5,7 @@ use timeline::{
 };
 
 use crate::clip_decoders::ClipDecoders;
+use crate::generated::caption_frame;
 use crate::pixel_effects::pixel_effects;
 use crate::track_video::TrackVideo;
 use crate::{Layer, LayerPicture, PlaybackError};
@@ -15,8 +16,9 @@ const BLURRINESS_PER_SIGMA: f32 = 2.0;
 /// The decoders of one video track.
 pub(crate) type TrackDecoders = ClipDecoders<TrackVideo>;
 
-/// Decodes the pictures of every visible video track at `pts`, bottom layer first.
-/// Media that can't be read is reported once in `warnings` and left out.
+/// Decodes the pictures of every visible video track at `pts`, bottom layer first,
+/// with the caption showing then on top. Media that can't be read is reported once in
+/// `warnings` and left out.
 pub(crate) fn layers_at(
     sequence: &Sequence,
     pts: Ticks,
@@ -25,7 +27,19 @@ pub(crate) fn layers_at(
     warnings: &mut Vec<PlaybackError>,
 ) -> Vec<Layer> {
     let mut reported = Reported { warned, warnings };
-    video_layers(sequence, &sequence.video, pts, tracks, &mut reported)
+    let mut layers = video_layers(sequence, &sequence.video, pts, tracks, &mut reported);
+    let captions = &sequence.captions;
+    if let Some(caption) = captions.at(pts).filter(|_| !captions.hidden) {
+        let format = sequence.format;
+        let frame = caption_frame(&caption.text, captions.style, format.width, format.height);
+        layers.push(Layer {
+            // Above every track, as a caption track sits in Premiere.
+            track: TrackRef::video(sequence.video.len()),
+            picture: LayerPicture::Frame(frame),
+            look: LayerLook::IDENTITY,
+        });
+    }
+    layers
 }
 
 /// Media already reported as unreadable, and the reports to send.

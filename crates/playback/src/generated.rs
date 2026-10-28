@@ -5,16 +5,29 @@ use egui::epaint::text::{FontDefinitions, Fonts, LayoutJob, TextFormat, TextOpti
 use egui::epaint::{Color32, FontColorTransferFunction, FontFamily, FontId};
 use egui::{Align, Rect};
 use media::VideoFrame;
-use timeline::{Generator, Rgb, TextAlign, Ticks, Title, TitleFont};
+use timeline::{CaptionStyle, Generator, Rgb, TextAlign, Ticks, Title, TitleFont};
 
 /// Titles never wrap closer than this to the canvas edges, as broadcast title safe.
 const TITLE_SAFE: f32 = 0.9;
 /// Font atlases only grow, so a long session of title edits starts a fresh one here.
 const ATLAS_REFILL: f32 = 0.8;
 const SHADOW_OPACITY: f32 = 0.7;
+/// Captions sit this fraction of the canvas height above its bottom, inside title safe.
+const CAPTION_MARGIN: f32 = 0.08;
+
+/// The caption last drawn, and what it was drawn from, since one shows for many frames.
+type CaptionCache = Option<((String, CaptionStyle, u32, u32), Arc<VideoFrame>)>;
 
 thread_local! {
     static FONTS: RefCell<Option<Fonts>> = const { RefCell::new(None) };
+    static CAPTION: RefCell<CaptionCache> = const { RefCell::new(None) };
+}
+
+/// Where laid out text goes on the canvas.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Anchor {
+    Center,
+    Bottom,
 }
 
 /// The picture `generator` draws on a `width` by `height` canvas, with straight alpha.
@@ -22,7 +35,7 @@ pub fn generated_frame(generator: &Generator, width: u32, height: u32) -> Arc<Vi
     let mut canvas = Canvas::new(width, height);
     match generator {
         Generator::ColorMatte { color } => canvas.fill(*color),
-        Generator::Title(title) => draw_title(&mut canvas, title),
+        Generator::Title(title) => draw_title(&mut canvas, title, Anchor::Center),
         Generator::AdjustmentLayer => {}
     }
     Arc::new(VideoFrame {
@@ -33,8 +46,43 @@ pub fn generated_frame(generator: &Generator, width: u32, height: u32) -> Arc<Vi
     })
 }
 
-fn draw_title(canvas: &mut Canvas, title: &Title) {
-    let Some(text) = Coverage::of_title(title, canvas.width, canvas.height) else {
+/// `text` drawn in `style` near the bottom of a `width` by `height` canvas.
+pub(crate) fn caption_frame(
+    text: &str,
+    style: CaptionStyle,
+    width: u32,
+    height: u32,
+) -> Arc<VideoFrame> {
+    CAPTION.with_borrow_mut(|cache| {
+        if let Some((key, frame)) = cache.as_ref() {
+            if key.0 == text && (key.1, key.2, key.3) == (style, width, height) {
+                return Arc::clone(frame);
+            }
+        }
+        let title = Title {
+            text: text.to_owned(),
+            size: style.size,
+            color: style.color,
+            align: TextAlign::Center,
+            font: TitleFont::Sans,
+            shadow: style.background.is_none(),
+            background: style.background,
+        };
+        let mut canvas = Canvas::new(width, height);
+        draw_title(&mut canvas, &title, Anchor::Bottom);
+        let frame = Arc::new(VideoFrame {
+            pts: Ticks::ZERO,
+            width,
+            height,
+            pixels: canvas.into_pixels(),
+        });
+        *cache = Some(((text.to_owned(), style, width, height), Arc::clone(&frame)));
+        frame
+    })
+}
+
+fn draw_title(canvas: &mut Canvas, title: &Title, anchor: Anchor) {
+    let Some(text) = Coverage::of_title(title, canvas.width, canvas.height, anchor) else {
         return;
     };
     let size = title.size as f32;
@@ -133,7 +181,7 @@ struct Coverage {
 }
 
 impl Coverage {
-    fn of_title(title: &Title, width: u32, height: u32) -> Option<Self> {
+    fn of_title(title: &Title, width: u32, height: u32, anchor: Anchor) -> Option<Self> {
         if title.text.trim().is_empty() || title.size == 0 {
             return None;
         }
@@ -165,7 +213,11 @@ impl Coverage {
             };
             // The galley's rows sit around x = 0 as aligned; center the whole block.
             let rect = galley.rect;
-            let origin = egui::vec2(width as f32, height as f32) / 2.0 - rect.center().to_vec2();
+            let canvas = egui::vec2(width as f32, height as f32);
+            let mut origin = canvas / 2.0 - rect.center().to_vec2();
+            if anchor == Anchor::Bottom {
+                origin.y = canvas.y * (1.0 - CAPTION_MARGIN) - rect.bottom();
+            }
             coverage.bounds = bounds(rect.translate(origin));
             let atlas = fonts.texture_atlas().image();
             for row in &galley.rows {
