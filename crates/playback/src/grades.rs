@@ -3,14 +3,14 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use render::{Grade, Lut3d, CURVE_SIZE};
-use timeline::{ColorCorrection, Curves};
+use timeline::{ColorCorrection, Curves, HueCurves};
 
 use crate::PlaybackError;
 
 /// Grades kept for reuse, about as many as clips with curves or LUTs on screen at once.
 const KEPT_GRADES: usize = 16;
 
-type GradeKey = (Curves, Option<PathBuf>, Option<PathBuf>);
+type GradeKey = (Curves, HueCurves, Option<PathBuf>, Option<PathBuf>);
 
 thread_local! {
     /// Every LUT asked for, or `None` where it couldn't be read, which was reported once.
@@ -27,11 +27,13 @@ pub(crate) fn grade_for(
     warnings: &mut Vec<PlaybackError>,
 ) -> Option<Arc<Grade>> {
     let curved = !color.curves.is_identity();
-    if !curved && color.input_lut.is_none() && color.look.is_none() {
+    let hue_curved = !color.hue_curves.is_neutral();
+    if !curved && !hue_curved && color.input_lut.is_none() && color.look.is_none() {
         return None;
     }
     let key = (
         color.curves.clone(),
+        color.hue_curves.clone(),
         color.input_lut.clone(),
         color.look.clone(),
     );
@@ -47,6 +49,7 @@ pub(crate) fn grade_for(
             input: lut(&color.input_lut),
             look: lut(&color.look),
             curves: curved.then(|| color.curves.table(CURVE_SIZE)),
+            hue_curves: hue_curved.then(|| color.hue_curves.table(CURVE_SIZE)),
         });
         if grades.len() >= KEPT_GRADES {
             grades.remove(0);
