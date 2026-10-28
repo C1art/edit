@@ -25,6 +25,7 @@ pub const PREVIOUS_MARKER: KeyboardShortcut =
     KeyboardShortcut::new(Modifiers::COMMAND.plus(Modifiers::SHIFT), Key::M);
 pub const CLEAR_MARKER: KeyboardShortcut =
     KeyboardShortcut::new(Modifiers::COMMAND.plus(Modifiers::ALT), Key::M);
+pub const SPEED_DURATION: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::R);
 pub const IMPORT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::I);
 pub const EXPORT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::M);
 pub const UNDO: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::Z);
@@ -66,6 +67,7 @@ enum Action {
     ZoomToFit,
     CancelDrag,
     ClipGain,
+    SpeedDuration,
 }
 
 /// Editor-wide keys. Skipped while a text field has focus so typing isn't hijacked.
@@ -112,6 +114,7 @@ fn pressed(ctx: &egui::Context) -> Option<Action> {
             (IMPORT, Action::Import),
             (EXPORT, Action::Export),
             (ADD_EDIT, Action::AddEdit),
+            (SPEED_DURATION, Action::SpeedDuration),
             (TRANSITION, Action::Transition(TrackKind::Video)),
             (
                 KeyboardShortcut::new(Modifiers::SHIFT, Key::Delete),
@@ -172,6 +175,7 @@ fn run(editor: &mut Editor, action: Action) {
         Action::Redo => editor.redo(),
         Action::Copy => editor.copy(),
         Action::AddMarker => editor.add_marker(),
+        Action::SpeedDuration => editor.speed_duration(),
         Action::JumpToMarker { forward } => editor.jump_to_marker(forward),
         Action::ClearMarker => {
             if let Some(id) = editor.marker_at_playhead() {

@@ -137,7 +137,12 @@ pub fn clips(
                     painter.rect_filled(label, 3.0, fill.gamma_multiply(0.85));
                 }
                 TrackKind::Audio if art.show_waveforms => {
-                    let color = fill.lerp_to_gamma(Color32::WHITE, 0.55);
+                    // Selection lightens the clip, so its bars go dark to stay visible.
+                    let color = if selected {
+                        base.gamma_multiply(0.6)
+                    } else {
+                        fill.lerp_to_gamma(Color32::WHITE, 0.55)
+                    };
                     clip_art::waveform(painter, &area, scale, art, color);
                 }
                 _ => {}
@@ -164,10 +169,15 @@ pub fn clips(
         } else {
             String::new()
         };
+        let speed = if clip.speed.is_normal() {
+            String::new()
+        } else {
+            format!(" [{}]", crate::speed_dialog::percent_text(clip.speed))
+        };
         painter.with_clip_rect(rect.shrink(2.0)).text(
             rect.left_top() + egui::vec2(5.0, 4.0),
             Align2::LEFT_TOP,
-            format!("{name}{link}{gain}"),
+            format!("{name}{speed}{link}{gain}"),
             FontId::proportional(11.0),
             Color32::WHITE,
         );
@@ -178,7 +188,7 @@ pub fn clips(
 fn keyframe_marks(painter: &Painter, rect: Rect, scale: &TimeScale, clip: &Clip) {
     let y = rect.bottom() - 6.0;
     for time in clip.look.key_times() {
-        let position = clip.start + (time - clip.source_in);
+        let position = clip.position_of(time);
         if !clip.covers(position) {
             continue;
         }

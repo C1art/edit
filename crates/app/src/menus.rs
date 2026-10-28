@@ -112,6 +112,12 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             {
                 placing::edit_from_source(editor, PlaceMode::Overwrite);
             }
+            ui.separator();
+            let speed = Button::new("Speed/Duration…")
+                .shortcut_text(shortcut(ui, shortcuts::SPEED_DURATION));
+            if ui.add(speed).clicked() {
+                editor.speed_duration();
+            }
         });
         ui.menu_button("Markers", |ui| {
             crate::marker_dialog::menu(editor, ui);

@@ -138,6 +138,14 @@ impl TimelineView {
                     mode,
                 })
             }
+            (Tool::RateStretch, Hit::Edge { clip, edge, .. }) => {
+                self.selection = sequence.with_links(&[clip]);
+                Some(Gesture::Stretch {
+                    clips: vec![clip],
+                    edge,
+                })
+            }
+            (Tool::RateStretch, Hit::Body { .. }) => None,
             (Tool::Roll, Hit::Edge { clip, at, .. }) => {
                 let mut tracks: Vec<TrackRef> = sequence
                     .with_links(&[clip])

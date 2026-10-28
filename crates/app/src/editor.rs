@@ -47,6 +47,7 @@ pub struct Editor {
     side_tab: SideTab,
     /// The gain in dB being typed into the clip gain dialog, while it is showing.
     pub(crate) gain_prompt: Option<f32>,
+    pub(crate) speed_prompt: Option<crate::speed_dialog::SpeedPrompt>,
     pub(crate) clipboard: Option<Clipboard>,
     /// A copy of the marker being edited, while the marker dialog is showing.
     pub(crate) marker_dialog: Option<Marker>,
@@ -124,6 +125,7 @@ impl Editor {
             effects: EffectControls::default(),
             side_tab: SideTab::default(),
             gain_prompt: None,
+            speed_prompt: None,
             clipboard: None,
             marker_dialog: None,
             path_prompt: None,
@@ -464,6 +466,7 @@ impl eframe::App for Editor {
         crate::project_files::discard_dialog(self, &ctx);
         crate::marker_dialog::dialog(self, &ctx);
         crate::menus::gain_dialog(self, &ctx);
+        crate::speed_dialog::dialog(self, &ctx);
         crate::export::dialog(self, &ctx);
     }
 }

@@ -39,7 +39,7 @@ pub fn thumbnails(
     let frame = format.frame_rate.frame_start(1, timebase).0.max(1);
     // Times snap to a power-of-two count of frames, so the same pictures are reused while
     // scrolling and only zooming past a power of two asks for new ones.
-    let tile_frames = (scale.span(tile_width).0 + frame - 1) / frame;
+    let tile_frames = (clip.speed.source_span(scale.span(tile_width)).0 + frame - 1) / frame;
     let step = i64::try_from(
         u64::try_from(tile_frames.max(1))
             .unwrap_or(1)
@@ -59,7 +59,9 @@ pub fn thumbnails(
     let uv = Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
     for tile in first_tile..last_tile {
         let left = rect.left() + tile as f32 * tile_width;
-        let at = clip.source_in.0 + scale.span(left - rect.left()).0;
+        let at = clip
+            .source_time(clip.start + scale.span(left - rect.left()))
+            .0;
         let at = Ticks((at.max(0) / step * step).min(last));
         if let Some(texture) = art.picture(path, at, timebase) {
             let tile_rect = Rect::from_min_size(
@@ -95,11 +97,11 @@ pub fn waveform(
     }
     let (middle, half) = (bars.center().y, bars.height() / 2.0);
     let gain = clip.gain.amplitude();
-    let column = scale.span(1.0);
+    let column = clip.speed.source_span(scale.span(1.0));
     let mut mesh = Mesh::default();
     let mut x = visible.left().floor();
     while x < visible.right() {
-        let start = clip.source_in + scale.span(x - rect.left());
+        let start = clip.source_time(clip.start + scale.span(x - rect.left()));
         let level = peaks.max_in(start, start + column, timebase) * gain;
         let height = (decibel_scale(level) * half).max(0.5);
         mesh.add_colored_rect(

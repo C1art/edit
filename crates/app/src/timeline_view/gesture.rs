@@ -1,6 +1,6 @@
 use timeline::{
-    clamp_delta, preview, ClipId, Edge, MoveClips, Roll, Sequence, Slide, Slip, Ticks, Timeline,
-    TimelineError, TrackKind, TrackRef, Trim, TrimMode,
+    clamp_delta, preview, ClipId, Edge, MoveClips, RateStretch, Roll, Sequence, Slide, Slip, Ticks,
+    Timeline, TimelineError, TrackKind, TrackRef, Trim, TrimMode,
 };
 
 /// What a drag in the timeline is doing, fixed when the drag starts.
@@ -19,6 +19,10 @@ pub enum Gesture {
         at: Ticks,
         tracks: Vec<TrackRef>,
     },
+    Stretch {
+        clips: Vec<ClipId>,
+        edge: Edge,
+    },
     Slip {
         clips: Vec<ClipId>,
     },
@@ -33,6 +37,7 @@ pub enum PendingEdit {
     Move(MoveClips),
     Trim(Trim),
     Roll(Roll),
+    Stretch(RateStretch),
     Slip(Slip),
     Slide(Slide),
 }
@@ -43,6 +48,7 @@ impl PendingEdit {
             Self::Move(edit) => preview(sequence, edit),
             Self::Trim(edit) => preview(sequence, edit),
             Self::Roll(edit) => preview(sequence, edit),
+            Self::Stretch(edit) => preview(sequence, edit),
             Self::Slip(edit) => preview(sequence, edit),
             Self::Slide(edit) => preview(sequence, edit),
         }
@@ -53,6 +59,7 @@ impl PendingEdit {
             Self::Move(edit) => timeline.apply(edit),
             Self::Trim(edit) => timeline.apply(edit),
             Self::Roll(edit) => timeline.apply(edit),
+            Self::Stretch(edit) => timeline.apply(edit),
             Self::Slip(edit) => timeline.apply(edit),
             Self::Slide(edit) => timeline.apply(edit),
         }
@@ -69,7 +76,7 @@ impl Gesture {
                 .filter_map(|id| sequence.clip(id))
                 .flat_map(|(_, clip)| [clip.start, clip.end()])
                 .collect(),
-            Self::Trim { clips, edge, .. } => sequence
+            Self::Trim { clips, edge, .. } | Self::Stretch { clips, edge } => sequence
                 .with_links(clips)
                 .into_iter()
                 .filter_map(|id| sequence.clip(id))
@@ -88,6 +95,7 @@ impl Gesture {
         match self {
             Self::Move { clips, .. }
             | Self::Trim { clips, .. }
+            | Self::Stretch { clips, .. }
             | Self::Slip { clips }
             | Self::Slide { clips } => sequence.with_links(clips),
             Self::Roll { .. } => Vec::new(),
@@ -117,6 +125,14 @@ impl Gesture {
                     delta,
                 };
                 PendingEdit::Roll(make(clamp_delta(sequence, delta, make)))
+            }
+            Self::Stretch { clips, edge } => {
+                let make = |delta| RateStretch {
+                    clips: clips.clone(),
+                    edge: *edge,
+                    delta,
+                };
+                PendingEdit::Stretch(make(clamp_delta(sequence, delta, make)))
             }
             Self::Slip { clips } => {
                 // Dragging right reveals earlier source material, as in other editors.

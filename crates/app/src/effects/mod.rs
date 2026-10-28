@@ -59,9 +59,7 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
         })
         .inner;
     if let Some(key) = output.seek {
-        editor.seek_program(
-            clip.start + (key - clip.source_in).clamp(Ticks::ZERO, last - clip.start),
-        );
+        editor.seek_program(clip.position_of(key).clamp(clip.start, last));
     }
     let edit = SetClipLook {
         clip: clip.id,
