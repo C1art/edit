@@ -63,6 +63,9 @@ pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorr
     egui::CollapsingHeader::new("RGB Curves").show(ui, |ui| {
         super::curves::controls(ui, rows, &mut color.curves);
     });
+    egui::CollapsingHeader::new("Hue Saturation Curves").show(ui, |ui| {
+        super::hue_curves::controls(ui, rows, &mut color.hue_curves);
+    });
     ui.label(RichText::new("Color Wheels").weak());
     let mut wheels = [
         ("Shadows", &mut color.shadow_wheel),
