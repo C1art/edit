@@ -1,50 +1,54 @@
 use super::VideoEffect;
 use crate::Param;
 
-impl VideoEffect {
-    pub fn params_mut(&mut self) -> Vec<&mut Param> {
-        match self {
-            Self::GaussianBlur { blurriness } => vec![blurriness],
-            Self::GammaCorrection { gamma: one }
-            | Self::Posterize { levels: one }
-            | Self::PosterizeTime { frame_rate: one }
-            | Self::Noise { amount: one }
-            | Self::FindEdges { blend: one, .. }
-            | Self::LensDistortion { curvature: one } => vec![one],
-            Self::BrightnessContrast {
+// One match serves both borrows: default binding modes make the same patterns bind
+// `&Param` or `&mut Param`, and `$iter` picks the iterator that matches.
+macro_rules! effect_params {
+    ($effect:expr, $iter:ident) => {
+        match $effect {
+            VideoEffect::GaussianBlur { blurriness } => vec![blurriness],
+            VideoEffect::GammaCorrection { gamma: one }
+            | VideoEffect::Posterize { levels: one }
+            | VideoEffect::PosterizeTime { frame_rate: one }
+            | VideoEffect::Noise { amount: one }
+            | VideoEffect::FindEdges { blend: one, .. }
+            | VideoEffect::LensDistortion { curvature: one } => vec![one],
+            VideoEffect::BrightnessContrast {
                 brightness: first,
                 contrast: second,
             }
-            | Self::Mosaic {
+            | VideoEffect::Mosaic {
                 horizontal: first,
                 vertical: second,
             }
-            | Self::Twirl {
+            | VideoEffect::Twirl {
                 angle: first,
                 radius: second,
             }
-            | Self::DirectionalBlur {
+            | VideoEffect::DirectionalBlur {
                 direction: first,
                 length: second,
             } => vec![first, second],
-            Self::Offset {
+            VideoEffect::Offset {
                 shift: [x, y],
                 blend,
             } => vec![x, y, blend],
-            Self::HorizontalFlip
-            | Self::VerticalFlip
-            | Self::BlackAndWhite
-            | Self::TrackMatteKey { .. }
-            | Self::WarpStabilizer(_) => Vec::new(),
-            Self::Tint { amount, .. } | Self::Invert { amount } | Self::Sharpen { amount } => {
+            VideoEffect::HorizontalFlip
+            | VideoEffect::VerticalFlip
+            | VideoEffect::BlackAndWhite
+            | VideoEffect::TrackMatteKey { .. }
+            | VideoEffect::WarpStabilizer(_) => Vec::new(),
+            VideoEffect::Tint { amount, .. }
+            | VideoEffect::Invert { amount }
+            | VideoEffect::Sharpen { amount } => {
                 vec![amount]
             }
-            Self::Vignette {
+            VideoEffect::Vignette {
                 amount,
                 midpoint,
                 feather,
             } => vec![amount, midpoint, feather],
-            Self::UltraKey {
+            VideoEffect::UltraKey {
                 tolerance,
                 softness,
                 pedestal,
@@ -56,54 +60,54 @@ impl VideoEffect {
             } => vec![
                 tolerance, softness, pedestal, contrast, choke, soften, spill,
             ],
-            Self::DropShadow {
+            VideoEffect::DropShadow {
                 opacity,
                 direction,
                 distance,
                 softness,
                 ..
             } => vec![opacity, direction, distance, softness],
-            Self::ColorKey {
+            VideoEffect::ColorKey {
                 tolerance,
                 softness,
                 ..
             } => vec![tolerance, softness],
-            Self::LeaveColor {
+            VideoEffect::LeaveColor {
                 amount,
                 tolerance,
                 softness,
                 ..
             } => vec![amount, tolerance, softness],
-            Self::GradientRamp {
+            VideoEffect::GradientRamp {
                 start: [start_x, start_y],
                 end: [end_x, end_y],
                 blend,
                 ..
             } => vec![start_x, start_y, end_x, end_y, blend],
-            Self::Mirror {
+            VideoEffect::Mirror {
                 center: [x, y],
                 angle,
             } => vec![x, y, angle],
-            Self::CornerPin { corners } => corners.iter_mut().flatten().collect(),
-            Self::WaveWarp {
+            VideoEffect::CornerPin { corners } => corners.$iter().flatten().collect(),
+            VideoEffect::WaveWarp {
                 height,
                 width,
                 direction,
                 speed,
             } => vec![height, width, direction, speed],
-            Self::StrobeLight {
+            VideoEffect::StrobeLight {
                 blend,
                 duration,
                 period,
                 ..
             } => vec![blend, duration, period],
-            Self::Timecode {
+            VideoEffect::Timecode {
                 position: [x, y],
                 size,
                 opacity,
                 ..
             } => vec![x, y, size, opacity],
-            Self::Transform {
+            VideoEffect::Transform {
                 anchor: [anchor_x, anchor_y],
                 position: [x, y],
                 scale: [width, height],
@@ -114,185 +118,56 @@ impl VideoEffect {
             } => vec![
                 anchor_x, anchor_y, x, y, width, height, skew, skew_axis, rotation, opacity,
             ],
-            Self::Basic3D {
+            VideoEffect::Basic3D {
                 swivel,
                 tilt,
                 distance,
             } => vec![swivel, tilt, distance],
-            Self::Spherize {
+            VideoEffect::Spherize {
                 radius,
                 center: [x, y],
             } => vec![radius, x, y],
-            Self::Emboss {
+            VideoEffect::Emboss {
                 direction,
                 relief,
                 contrast,
                 blend,
             } => vec![direction, relief, contrast, blend],
-            Self::TurbulentDisplace {
+            VideoEffect::TurbulentDisplace {
                 amount,
                 size,
                 offset: [x, y],
                 complexity,
                 evolution,
             } => vec![amount, size, x, y, complexity, evolution],
-            Self::ChannelMixer {
+            VideoEffect::ChannelMixer {
                 red, green, blue, ..
             } => red
-                .iter_mut()
-                .chain(green.iter_mut())
-                .chain(blue.iter_mut())
+                .$iter()
+                .chain(green.$iter())
+                .chain(blue.$iter())
                 .collect(),
-            Self::ChangeToColor {
+            VideoEffect::ChangeToColor {
                 tolerance,
                 softness,
                 ..
-            } => tolerance.iter_mut().chain([softness]).collect(),
+            } => tolerance.$iter().chain([softness]).collect(),
+            VideoEffect::Solarize { threshold: one }
+            | VideoEffect::Threshold { level: one }
+            | VideoEffect::Replicate { count: one } => vec![one],
+            VideoEffect::LumaKey { threshold, cutoff } => vec![threshold, cutoff],
+            VideoEffect::AlphaAdjust { opacity, .. } => vec![opacity],
+            VideoEffect::ColorBalanceRgb { gains } => gains.$iter().collect(),
         }
+    };
+}
+
+impl VideoEffect {
+    pub fn params_mut(&mut self) -> Vec<&mut Param> {
+        effect_params!(self, iter_mut)
     }
 
     pub fn params(&self) -> Vec<&Param> {
-        match self {
-            Self::GaussianBlur { blurriness } => vec![blurriness],
-            Self::GammaCorrection { gamma: one }
-            | Self::Posterize { levels: one }
-            | Self::PosterizeTime { frame_rate: one }
-            | Self::Noise { amount: one }
-            | Self::FindEdges { blend: one, .. }
-            | Self::LensDistortion { curvature: one } => vec![one],
-            Self::BrightnessContrast {
-                brightness: first,
-                contrast: second,
-            }
-            | Self::Mosaic {
-                horizontal: first,
-                vertical: second,
-            }
-            | Self::Twirl {
-                angle: first,
-                radius: second,
-            }
-            | Self::DirectionalBlur {
-                direction: first,
-                length: second,
-            } => vec![first, second],
-            Self::Offset {
-                shift: [x, y],
-                blend,
-            } => vec![x, y, blend],
-            Self::HorizontalFlip
-            | Self::VerticalFlip
-            | Self::BlackAndWhite
-            | Self::TrackMatteKey { .. }
-            | Self::WarpStabilizer(_) => Vec::new(),
-            Self::Tint { amount, .. } | Self::Invert { amount } | Self::Sharpen { amount } => {
-                vec![amount]
-            }
-            Self::Vignette {
-                amount,
-                midpoint,
-                feather,
-            } => vec![amount, midpoint, feather],
-            Self::UltraKey {
-                tolerance,
-                softness,
-                pedestal,
-                contrast,
-                choke,
-                soften,
-                spill,
-                ..
-            } => vec![
-                tolerance, softness, pedestal, contrast, choke, soften, spill,
-            ],
-            Self::DropShadow {
-                opacity,
-                direction,
-                distance,
-                softness,
-                ..
-            } => vec![opacity, direction, distance, softness],
-            Self::ColorKey {
-                tolerance,
-                softness,
-                ..
-            } => vec![tolerance, softness],
-            Self::LeaveColor {
-                amount,
-                tolerance,
-                softness,
-                ..
-            } => vec![amount, tolerance, softness],
-            Self::GradientRamp {
-                start: [start_x, start_y],
-                end: [end_x, end_y],
-                blend,
-                ..
-            } => vec![start_x, start_y, end_x, end_y, blend],
-            Self::Mirror {
-                center: [x, y],
-                angle,
-            } => vec![x, y, angle],
-            Self::CornerPin { corners } => corners.iter().flatten().collect(),
-            Self::WaveWarp {
-                height,
-                width,
-                direction,
-                speed,
-            } => vec![height, width, direction, speed],
-            Self::StrobeLight {
-                blend,
-                duration,
-                period,
-                ..
-            } => vec![blend, duration, period],
-            Self::Timecode {
-                position: [x, y],
-                size,
-                opacity,
-                ..
-            } => vec![x, y, size, opacity],
-            Self::Transform {
-                anchor: [anchor_x, anchor_y],
-                position: [x, y],
-                scale: [width, height],
-                skew,
-                skew_axis,
-                rotation,
-                opacity,
-            } => vec![
-                anchor_x, anchor_y, x, y, width, height, skew, skew_axis, rotation, opacity,
-            ],
-            Self::Basic3D {
-                swivel,
-                tilt,
-                distance,
-            } => vec![swivel, tilt, distance],
-            Self::Spherize {
-                radius,
-                center: [x, y],
-            } => vec![radius, x, y],
-            Self::Emboss {
-                direction,
-                relief,
-                contrast,
-                blend,
-            } => vec![direction, relief, contrast, blend],
-            Self::TurbulentDisplace {
-                amount,
-                size,
-                offset: [x, y],
-                complexity,
-                evolution,
-            } => vec![amount, size, x, y, complexity, evolution],
-            Self::ChannelMixer {
-                red, green, blue, ..
-            } => red.iter().chain(green.iter()).chain(blue.iter()).collect(),
-            Self::ChangeToColor {
-                tolerance,
-                softness,
-                ..
-            } => tolerance.iter().chain([softness]).collect(),
-        }
+        effect_params!(self, iter)
     }
 }

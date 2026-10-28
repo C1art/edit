@@ -6,7 +6,7 @@ use crate::{Param, Stabilizer};
 
 impl VideoEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 38] {
+    pub fn catalog() -> [Self; 44] {
         [
             Self::GaussianBlur {
                 blurriness: Param::from_value(10.0),
@@ -183,6 +183,28 @@ impl VideoEffect {
                 tolerance: [5.0, 50.0, 50.0].map(Param::from_value),
                 softness: Param::from_value(50.0),
             },
+            Self::LumaKey {
+                threshold: Param::from_value(25.0),
+                cutoff: Param::default(),
+            },
+            Self::AlphaAdjust {
+                opacity: Param::from_value(100.0),
+                ignore_alpha: false,
+                invert_alpha: false,
+                mask_only: false,
+            },
+            Self::Solarize {
+                threshold: Param::from_value(50.0),
+            },
+            Self::Threshold {
+                level: Param::from_value(128.0),
+            },
+            Self::Replicate {
+                count: Param::from_value(2.0),
+            },
+            Self::ColorBalanceRgb {
+                gains: [100.0; 3].map(Param::from_value),
+            },
         ]
     }
 
@@ -207,10 +229,14 @@ impl VideoEffect {
             }
             Self::GradientRamp { .. } => EffectCategory::Generate,
             Self::DropShadow { .. } | Self::Basic3D { .. } => EffectCategory::Perspective,
-            Self::BlackAndWhite | Self::GammaCorrection { .. } => EffectCategory::ImageControl,
-            Self::UltraKey { .. } | Self::TrackMatteKey { .. } | Self::ColorKey { .. } => {
-                EffectCategory::Keying
+            Self::BlackAndWhite | Self::GammaCorrection { .. } | Self::ColorBalanceRgb { .. } => {
+                EffectCategory::ImageControl
             }
+            Self::UltraKey { .. }
+            | Self::TrackMatteKey { .. }
+            | Self::ColorKey { .. }
+            | Self::LumaKey { .. }
+            | Self::AlphaAdjust { .. } => EffectCategory::Keying,
             Self::Invert { .. }
             | Self::Vignette { .. }
             | Self::Posterize { .. }
@@ -218,7 +244,10 @@ impl VideoEffect {
             | Self::FindEdges { .. }
             | Self::Mosaic { .. }
             | Self::StrobeLight { .. }
-            | Self::Emboss { .. } => EffectCategory::Stylize,
+            | Self::Emboss { .. }
+            | Self::Solarize { .. }
+            | Self::Threshold { .. }
+            | Self::Replicate { .. } => EffectCategory::Stylize,
             Self::PosterizeTime { .. } => EffectCategory::Time,
             Self::Timecode { .. } => EffectCategory::Video,
             Self::HorizontalFlip | Self::VerticalFlip => EffectCategory::Transform,
@@ -265,6 +294,12 @@ impl VideoEffect {
             Self::TurbulentDisplace { .. } => "Turbulent Displace",
             Self::ChannelMixer { .. } => "Channel Mixer",
             Self::ChangeToColor { .. } => "Change to Color",
+            Self::LumaKey { .. } => "Luma Key",
+            Self::AlphaAdjust { .. } => "Alpha Adjust",
+            Self::Solarize { .. } => "Solarize",
+            Self::Threshold { .. } => "Threshold",
+            Self::Replicate { .. } => "Replicate",
+            Self::ColorBalanceRgb { .. } => "Color Balance (RGB)",
         }
     }
 }
