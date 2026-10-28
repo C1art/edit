@@ -11,6 +11,7 @@ mod history;
 mod look;
 mod marker;
 mod marks;
+mod mask;
 mod media;
 mod mix;
 mod model;
@@ -46,6 +47,7 @@ pub use history::{preview, Edit, EditCommand, Timeline};
 pub use look::{Crop, Look, Motion};
 pub use marker::{Marker, MarkerColor, MarkerId};
 pub use marks::Marks;
+pub use mask::{Mask, MaskShape};
 pub use media::{MediaItem, SourceId};
 pub use mix::{Gain, Pan};
 pub use model::{
