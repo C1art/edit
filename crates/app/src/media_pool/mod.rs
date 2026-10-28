@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 mod actions;
 mod rows;
 
@@ -51,6 +53,7 @@ pub fn ui(
     sequence: &Sequence,
     importing: bool,
     proxies: Option<&ProxyMaker>,
+    offline: &HashSet<SourceId>,
 ) -> Option<PoolAction> {
     if sequence.media.is_empty() && sequence.bins.is_empty() && !importing {
         ui.label("Drop files here or use File → Import (Ctrl+I).");
@@ -58,6 +61,7 @@ pub fn ui(
     let mut pool = Pool {
         sequence,
         proxies,
+        offline,
         view,
         action: None,
     };
@@ -104,6 +108,7 @@ pub fn ui(
 struct Pool<'a> {
     sequence: &'a Sequence,
     proxies: Option<&'a ProxyMaker>,
+    offline: &'a HashSet<SourceId>,
     view: &'a mut PoolView,
     action: Option<PoolAction>,
 }
@@ -171,7 +176,8 @@ impl Pool<'_> {
             return;
         }
         let building = self.proxies.and_then(|maker| maker.progress(item.id));
-        let response = item_row(ui, item, self.sequence.timebase, building);
+        let offline = self.offline.contains(&item.id);
+        let response = item_row(ui, item, self.sequence.timebase, building, offline);
         if response.drag_started() {
             response.dnd_set_drag_payload(item.id);
         }
@@ -235,7 +241,12 @@ impl Pool<'_> {
             if item.bin.is_some() && ui.button("Move to Top").clicked() {
                 self.action = Some(PoolAction::Move(entry, None));
             }
-            if item.is_file() && ui.button("Replace Footage…").clicked() {
+            let relink = if offline {
+                "Link Media…"
+            } else {
+                "Replace Footage…"
+            };
+            if item.is_file() && ui.button(relink).clicked() {
                 self.action = Some(PoolAction::Replace(item.id));
             }
             if ui.button("Remove from Project").clicked() {

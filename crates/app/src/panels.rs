@@ -32,8 +32,9 @@ impl Editor {
                 let importing = self.importer.as_ref().is_some_and(Importer::is_busy);
                 let sequence = self.timeline.project();
                 let proxies = self.proxies.as_ref();
+                let offline = &self.clip_art.offline;
                 if let Some(action) =
-                    media_pool::ui(ui, &mut self.pool, sequence, importing, proxies)
+                    media_pool::ui(ui, &mut self.pool, sequence, importing, proxies, offline)
                 {
                     self.pool_action(action);
                 }

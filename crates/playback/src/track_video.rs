@@ -1,11 +1,13 @@
 use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use media::{DecodedFrame, MediaError, MediaReader, Streams, VideoFrame};
 use timeline::{Generator, MediaItem, SourceId, Ticks, Timebase};
 
 use crate::compose::TrackDecoders;
+use crate::generated::offline_frame;
 use crate::{frame_blend, generated_frame, Resolution};
 
 /// Jumps further ahead than this seek instead of decoding through; keyframe intervals
@@ -15,13 +17,14 @@ const MAX_DECODE_AHEAD_SECONDS: i64 = 2;
 /// decode from a keyframe for every frame.
 const BACKWARD_BYTES: usize = 192 << 20;
 const MAX_BACKWARD_FRAMES: usize = 60;
+const RETRY_OPEN: Duration = Duration::from_secs(3);
 
 enum Source {
     None,
     Open(SourceId, PathBuf, Box<MediaReader>),
-    /// Opening failed; not retried until the track moves to other media or another file
-    /// of it, such as its proxy.
-    Failed(SourceId, PathBuf),
+    /// Opening failed; retried after a while, in case the file comes back, or when the
+    /// track moves to other media or another file of it, such as its proxy.
+    Failed(SourceId, PathBuf, Instant),
     /// Drawn once at a canvas size and held for as long as the clip shows.
     Generated(Generator, [u32; 2], Arc<VideoFrame>),
 }
@@ -64,8 +67,8 @@ impl TrackVideo {
         self.behind.clear();
     }
 
-    /// The picture showing at `time` in `media`. Errors are reported once per media
-    /// item; after that the track shows nothing for it.
+    /// The picture showing at `time` in `media`. A file that can't be opened is
+    /// reported once, then shows as offline.
     pub(crate) fn frame_at(
         &mut self,
         media: &MediaItem,
@@ -77,8 +80,9 @@ impl TrackVideo {
             return Ok(Some(self.generated(generator, canvas)));
         }
         let same_media = match &self.source {
-            Source::Open(id, path, _) | Source::Failed(id, path) => {
-                *id == media.id && *path == media.path
+            Source::Open(id, path, _) => *id == media.id && *path == media.path,
+            Source::Failed(id, path, at) => {
+                *id == media.id && *path == media.path && at.elapsed() < RETRY_OPEN
             }
             Source::None | Source::Generated(..) => false,
         };
@@ -88,13 +92,16 @@ impl TrackVideo {
                 match MediaReader::open_streams(&media.path, self.timebase, Streams::Video) {
                     Ok(reader) => Source::Open(media.id, media.path.clone(), Box::new(reader)),
                     Err(error) => {
-                        self.source = Source::Failed(media.id, media.path.clone());
+                        let at = Instant::now();
+                        self.source = Source::Failed(media.id, media.path.clone(), at);
                         return Err(error);
                     }
                 };
         }
-        let Source::Open(_, _, reader) = &mut self.source else {
-            return Ok(None);
+        let reader = match &mut self.source {
+            Source::Open(_, _, reader) => reader,
+            Source::Failed(..) => return Ok(Some(offline_frame(canvas[0], canvas[1]))),
+            Source::None | Source::Generated(..) => return Ok(None),
         };
         if !same_media || resolution != self.resolution {
             let size = media
@@ -188,6 +195,11 @@ impl TrackVideo {
             return Ok(Some(earlier));
         }
         Ok(Some(Arc::new(frame_blend::blend(&earlier, later, weight))))
+    }
+
+    /// The offline picture, when the file followed couldn't be opened.
+    pub(crate) fn offline(&self, canvas: [u32; 2]) -> Option<Arc<VideoFrame>> {
+        matches!(self.source, Source::Failed(..)).then(|| offline_frame(canvas[0], canvas[1]))
     }
 
     fn generated(&mut self, generator: &Generator, canvas: [u32; 2]) -> Arc<VideoFrame> {

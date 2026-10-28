@@ -166,7 +166,7 @@ fn clip_picture(
                         decoding.warned.push(media.id);
                         decoding.warnings.push(PlaybackError::Media(error));
                     }
-                    None
+                    decoder.offline(size).map(LayerPicture::Frame)
                 }
             }
         }

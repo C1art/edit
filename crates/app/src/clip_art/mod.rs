@@ -1,13 +1,13 @@
 mod thumbnails;
 mod waveforms;
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use egui::{ColorImage, TextureHandle, TextureId, TextureOptions};
 use media::{Peaks, VideoFrame};
-use timeline::{Ticks, Timebase};
+use timeline::{SourceId, Ticks, Timebase};
 
 pub use thumbnails::ThumbnailWorker;
 use thumbnails::{Reply, Request};
@@ -43,6 +43,8 @@ pub struct ClipArt {
     frame: u64,
     pub show_waveforms: bool,
     pub show_thumbnails: bool,
+    /// Media whose files are missing, drawn as offline instead.
+    pub offline: HashSet<SourceId>,
 }
 
 impl ClipArt {
@@ -56,6 +58,7 @@ impl ClipArt {
             frame: 0,
             show_waveforms: true,
             show_thumbnails: true,
+            offline: HashSet::new(),
         }
     }
 

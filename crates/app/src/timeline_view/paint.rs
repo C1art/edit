@@ -10,6 +10,7 @@ use crate::clip_art::ClipArt;
 pub const PLAYHEAD: Color32 = Color32::from_rgb(230, 70, 60);
 const VIDEO_CLIP: Color32 = Color32::from_rgb(64, 104, 160);
 const AUDIO_CLIP: Color32 = Color32::from_rgb(58, 128, 92);
+const OFFLINE_CLIP: Color32 = Color32::from_rgb(170, 40, 40);
 const MIN_LABEL_SPACING: f32 = 90.0;
 
 pub fn ruler(painter: &Painter, rect: Rect, scale: &TimeScale, sequence: &Sequence) {
@@ -110,7 +111,12 @@ pub fn clips(
             continue;
         }
         let selected = selection.contains(&clip.id);
-        let base = clip.label.map_or(track_color, label_color);
+        let offline = art.offline.contains(&clip.source);
+        let base = if offline {
+            OFFLINE_CLIP
+        } else {
+            clip.label.map_or(track_color, label_color)
+        };
         let mut fill = if selected {
             base.lerp_to_gamma(Color32::WHITE, 0.25)
         } else {
@@ -120,7 +126,7 @@ pub fn clips(
             fill = fill.gamma_multiply(0.4);
         }
         painter.rect_filled(rect, 3.0, fill);
-        if let Some(item) = sequence.media_item(clip.source) {
+        if let Some(item) = sequence.media_item(clip.source).filter(|_| !offline) {
             let area = ClipArea {
                 rect: rect.shrink(1.0),
                 clip,
@@ -177,6 +183,11 @@ pub fn clips(
         }
         let item = sequence.media_item(clip.source);
         let name = item.map_or("Missing media", |item| item.name.as_str());
+        let name = if offline {
+            format!("{name} [offline]")
+        } else {
+            name.to_owned()
+        };
         let has_both = item.is_some_and(|item| item.video.is_some() && item.has_audio);
         let link = if clip.link.is_none() && has_both {
             " [unlinked]"

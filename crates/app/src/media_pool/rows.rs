@@ -54,6 +54,7 @@ pub(super) fn item_row(
     item: &MediaItem,
     timebase: Timebase,
     building: Option<f32>,
+    offline: bool,
 ) -> egui::Response {
     let rate = item
         .video
@@ -85,7 +86,14 @@ pub(super) fn item_row(
     }
     let inner = ui.group(|ui| {
         ui.set_width(ui.available_width());
-        ui.add(Label::new(RichText::new(&item.name).strong()).truncate());
+        let name = RichText::new(&item.name).strong();
+        if offline {
+            let name = name.color(ui.visuals().error_fg_color);
+            ui.add(Label::new(name).truncate());
+            ui.add(Label::new(RichText::new("Media offline").small()).truncate());
+        } else {
+            ui.add(Label::new(name).truncate());
+        }
         ui.add(Label::new(RichText::new(details.join(" · ")).small()).truncate());
         if let Some(done) = building {
             let bar = egui::ProgressBar::new(done).text(RichText::new("Creating proxy").small());
@@ -98,6 +106,7 @@ pub(super) fn item_row(
         .on_hover_text(match (&item.generator, &item.nest) {
             (Some(generator), _) => generator.kind_name().to_owned(),
             (None, Some(_)) => "Nested sequence; double-click to open".to_owned(),
+            (None, None) if offline => format!("Missing: {}", item.path.display()),
             (None, None) => item.path.display().to_string(),
         })
 }

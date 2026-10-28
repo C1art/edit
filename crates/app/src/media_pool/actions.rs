@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use timeline::{
     AddBin, CreateMulticam, Edit, MakeSubclip, MoveToBin, RelinkMedia, RemoveBin, RemoveMedia,
@@ -71,10 +71,12 @@ impl Editor {
         for Probed { replacing, result } in importer.poll() {
             match (result, replacing) {
                 (Ok(media), Some(source)) => {
-                    if self.apply_to_pool(RelinkMedia { source, media })
-                        && self.source_shows(source)
-                    {
-                        self.open_source(source);
+                    let folder = media.path.parent().map(Path::to_owned);
+                    if self.apply_to_pool(RelinkMedia { source, media }) {
+                        self.relinked(source, folder);
+                        if self.source_shows(source) {
+                            self.open_source(source);
+                        }
                     }
                 }
                 (Ok(import), None) => {

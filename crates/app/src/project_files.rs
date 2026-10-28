@@ -158,6 +158,9 @@ impl Editor {
         self.project_path = path;
         self.after_save = None;
         self.autosave.forget();
+        if let Some(offline) = &mut self.offline {
+            offline.forget();
+        }
         // A new timeline restarts its revisions, so the program viewer is updated directly.
         self.shown_revision = revision;
         self.view.prune_selection(self.timeline.sequence());

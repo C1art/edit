@@ -12,12 +12,15 @@ const SHADOW_OPACITY: f32 = 0.7;
 /// Faux bold thickens the strokes of the built-in light face by this fraction of the size
 /// each way.
 const BOLD_GROWTH: f32 = 1.0 / 40.0;
+/// Premiere's red, so a missing file can't pass for a dark shot.
+const OFFLINE_RED: Rgb = Rgb::new(200, 30, 30);
 
 /// The caption last drawn, and what it was drawn from, since one shows for many frames.
 type CaptionCache = Option<((String, CaptionStyle, u32, u32), Arc<VideoFrame>)>;
 
 thread_local! {
     static CAPTION: RefCell<CaptionCache> = const { RefCell::new(None) };
+    static OFFLINE: RefCell<Option<Arc<VideoFrame>>> = const { RefCell::new(None) };
 }
 
 /// Where laid out text goes on the canvas.
@@ -40,6 +43,39 @@ pub fn generated_frame(generator: &Generator, width: u32, height: u32) -> Arc<Vi
         width,
         height,
         pixels: canvas.into_pixels(),
+    })
+}
+
+/// What a clip whose file can't be opened shows in place of its pictures.
+pub(crate) fn offline_frame(width: u32, height: u32) -> Arc<VideoFrame> {
+    OFFLINE.with_borrow_mut(|cache| {
+        if let Some(frame) = cache
+            .as_ref()
+            .filter(|frame| (frame.width, frame.height) == (width, height))
+        {
+            return Arc::clone(frame);
+        }
+        let title = Title {
+            text: "Media Offline".to_owned(),
+            size: (height / 10).max(8),
+            color: Rgb::WHITE,
+            align: TextAlign::Center,
+            font: TitleFont::Sans,
+            shadow: false,
+            bold: true,
+            ..Title::default()
+        };
+        let mut canvas = Canvas::new(width, height);
+        canvas.fill(OFFLINE_RED);
+        draw_title(&mut canvas, &title, Anchor::Center);
+        let frame = Arc::new(VideoFrame {
+            pts: Ticks::ZERO,
+            width,
+            height,
+            pixels: canvas.into_pixels(),
+        });
+        *cache = Some(Arc::clone(&frame));
+        frame
     })
 }
 

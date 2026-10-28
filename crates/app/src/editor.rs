@@ -36,6 +36,7 @@ pub struct Editor {
     pub(crate) render_state: Option<RenderState>,
     pub(crate) importer: Option<Importer>,
     pub(crate) proxies: Option<ProxyMaker>,
+    pub(crate) offline: Option<crate::offline::OfflineMedia>,
     pub(crate) clip_art: ClipArt,
     /// Whether the monitors play proxies where media has them.
     pub(crate) use_proxies: bool,
@@ -113,6 +114,9 @@ impl Editor {
         let importer = Importer::new(timeline.sequence().timebase)
             .map_err(|error| notices.push(format!("Import disabled: {error}")))
             .ok();
+        let offline = crate::offline::OfflineMedia::new()
+            .map_err(|error| notices.push(format!("Offline media checks disabled: {error}")))
+            .ok();
         let proxies = ProxyMaker::new()
             .map_err(|error| notices.push(format!("Proxies disabled: {error}")))
             .ok();
@@ -145,6 +149,7 @@ impl Editor {
             render_state,
             importer,
             proxies,
+            offline,
             clip_art,
             use_proxies: false,
             safe_margins: false,
@@ -367,6 +372,7 @@ impl eframe::App for Editor {
         self.poll_store();
         self.autosave_tick();
         self.poll_imports();
+        self.poll_offline();
         self.poll_proxies(&ctx);
         self.poll_multicam_sync(&ctx);
         self.poll_scene_edits(&ctx);
@@ -407,6 +413,7 @@ impl eframe::App for Editor {
         crate::export::dialog(self, &ctx);
         crate::export_queue::window(self, &ctx);
         crate::keymap::window(self, &ctx);
+        crate::link_media::dialog(self, &ctx);
     }
 }
 
