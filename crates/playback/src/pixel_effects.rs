@@ -2,7 +2,9 @@ use render::{
     ChangeToColor, ChannelMixer, ChromaKey, ColorKey, LeaveColor, Mirror, PixelEffects,
     PlaneTransform, Ramp, Warp,
 };
-use timeline::{ColorChange, ColorMatch, RampShape, Rgb, Ticks, Timebase, VideoEffect};
+use timeline::{
+    ColorChange, ColorMatch, RampShape, Rgb, Ticks, Timebase, VideoEffect, ULTRA_KEY_REACH,
+};
 
 /// The per-pixel part of an effect stack at source time `time`. The shader runs each
 /// kind of effect once, so repeats of a kind combine, the last one's colors winning.
@@ -295,11 +297,24 @@ pub(crate) fn pixel_effects(
                 color,
                 tolerance,
                 softness,
+                output,
+                pedestal,
+                contrast,
+                choke,
+                soften,
+                spill,
             } => {
+                let share = |param| unit(param).clamp(0.0, 1.0);
                 pixel.key = Some(ChromaKey {
                     color: linear(*color),
-                    tolerance: unit(tolerance).clamp(0.0, 1.0),
-                    softness: unit(softness).clamp(0.0, 1.0),
+                    tolerance: share(tolerance),
+                    softness: share(softness),
+                    pedestal: share(pedestal),
+                    contrast: share(contrast),
+                    choke: share(choke) * ULTRA_KEY_REACH,
+                    soften: share(soften) * ULTRA_KEY_REACH,
+                    spill: share(spill),
+                    output: *output,
                 });
             }
         }
