@@ -1,7 +1,7 @@
 use egui::{Rect, RichText, UiBuilder};
 use timeline::{Sequence, TrackKind, TrackRef, TrackSwitch};
 
-use super::layout::{Row, ROW_HEIGHT};
+use super::layout::Row;
 use super::Targets;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,7 +28,7 @@ pub fn header(
     ui.scope_builder(UiBuilder::new().max_rect(rect), |ui| {
         ui.set_clip_rect(rect.intersect(ui.clip_rect()));
         ui.horizontal_centered(|ui| {
-            ui.set_min_height(ROW_HEIGHT);
+            ui.set_min_height(row.height);
             let targeted = targets.contains(row.track);
             let name = ui
                 .selectable_label(targeted, RichText::new(row.track.to_string()).strong())

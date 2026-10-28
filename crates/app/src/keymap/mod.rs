@@ -325,7 +325,7 @@ mod tests {
             keymap.command(chord("Shift+A")),
             Some(Command::TrackSelectBackwardTool)
         );
-        assert_eq!(keymap.command(chord("Shift+Plus")), Some(Command::ZoomIn));
+        assert_eq!(keymap.command(chord("Shift+Equals")), Some(Command::ZoomIn));
         assert_eq!(keymap.command(chord("Alt+A")), None);
         assert_eq!(keymap.command(chord("Ctrl+Shift+K")), None);
     }

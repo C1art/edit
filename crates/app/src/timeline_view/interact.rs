@@ -23,7 +23,7 @@ impl TimelineView {
         output: &mut TimelineOutput,
     ) {
         let sequence = timeline.sequence();
-        let rows = layout::rows(sequence, top);
+        let rows = layout::rows(sequence, &self.heights, top);
         let (rate, timebase) = (sequence.format.frame_rate, sequence.timebase);
         let frame_time = |x: f32| scale::nearest_frame(scale.time(x), rate, timebase);
         let (shift, command) = response

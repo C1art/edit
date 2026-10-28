@@ -55,6 +55,12 @@ pub enum Command {
     ZoomIn,
     ZoomOut,
     ZoomToFit,
+    IncreaseVideoHeights,
+    DecreaseVideoHeights,
+    IncreaseAudioHeights,
+    DecreaseAudioHeights,
+    ExpandAllTracks,
+    MinimizeAllTracks,
     MulticamView,
     MarkIn,
     MarkOut,
@@ -89,7 +95,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Self; 79] = [
+    pub const ALL: [Self; 85] = [
         Self::NewProject,
         Self::OpenProject,
         Self::Save,
@@ -138,6 +144,12 @@ impl Command {
         Self::ZoomIn,
         Self::ZoomOut,
         Self::ZoomToFit,
+        Self::IncreaseVideoHeights,
+        Self::DecreaseVideoHeights,
+        Self::IncreaseAudioHeights,
+        Self::DecreaseAudioHeights,
+        Self::ExpandAllTracks,
+        Self::MinimizeAllTracks,
         Self::MulticamView,
         Self::MarkIn,
         Self::MarkOut,
@@ -226,6 +238,20 @@ impl Command {
             Self::ZoomIn => ("zoom_in", "Zoom In"),
             Self::ZoomOut => ("zoom_out", "Zoom Out"),
             Self::ZoomToFit => ("zoom_to_fit", "Zoom to Sequence"),
+            Self::IncreaseVideoHeights => {
+                ("increase_video_heights", "Increase Video Track Heights")
+            }
+            Self::DecreaseVideoHeights => {
+                ("decrease_video_heights", "Decrease Video Track Heights")
+            }
+            Self::IncreaseAudioHeights => {
+                ("increase_audio_heights", "Increase Audio Track Heights")
+            }
+            Self::DecreaseAudioHeights => {
+                ("decrease_audio_heights", "Decrease Audio Track Heights")
+            }
+            Self::ExpandAllTracks => ("expand_all_tracks", "Expand All Tracks"),
+            Self::MinimizeAllTracks => ("minimize_all_tracks", "Minimize All Tracks"),
             Self::MulticamView => ("multicam_view", "Multi-Camera View"),
             Self::MarkIn => ("mark_in", "Mark In"),
             Self::MarkOut => ("mark_out", "Mark Out"),
@@ -288,7 +314,9 @@ impl Command {
             | NudgeDown => "Clip",
             AddEdit | ExtendEdit | SelectAtPlayhead | VideoTransition | AudioTransition
             | LiftMarked | ExtractMarked | RippleTrimPrevious | RippleTrimNext | MatchFrame
-            | ToggleSnapping | ZoomIn | ZoomOut | ZoomToFit | MulticamView => "Sequence",
+            | ToggleSnapping | ZoomIn | ZoomOut | ZoomToFit | IncreaseVideoHeights
+            | DecreaseVideoHeights | IncreaseAudioHeights | DecreaseAudioHeights
+            | ExpandAllTracks | MinimizeAllTracks | MulticamView => "Sequence",
             MarkIn | MarkOut | ClearInOut | GoToIn | GoToOut | AddMarker | NextMarker
             | PreviousMarker | ClearMarker => "Markers",
             SelectionTool
@@ -365,6 +393,12 @@ impl Command {
             Self::ZoomIn => vec![plain(Key::Equals), plain(Key::Plus)],
             Self::ZoomOut => vec![plain(Key::Minus)],
             Self::ZoomToFit => vec![plain(Key::Backslash)],
+            Self::IncreaseVideoHeights => vec![ctrl(Key::Equals)],
+            Self::DecreaseVideoHeights => vec![ctrl(Key::Minus)],
+            Self::IncreaseAudioHeights => vec![alt(Key::Equals)],
+            Self::DecreaseAudioHeights => vec![alt(Key::Minus)],
+            Self::ExpandAllTracks => vec![shift(Key::Plus)],
+            Self::MinimizeAllTracks => vec![shift(Key::Minus)],
             Self::MulticamView => vec![shift(Key::Num0)],
             Self::MarkIn => vec![plain(Key::I)],
             Self::MarkOut => vec![plain(Key::O)],

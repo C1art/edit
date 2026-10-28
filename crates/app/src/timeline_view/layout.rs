@@ -2,8 +2,8 @@ use egui::{Pos2, Rect};
 use timeline::{ClipId, Edge, Sequence, Ticks, TrackRef};
 
 use super::scale::TimeScale;
+use super::track_heights::TrackHeights;
 
-pub const ROW_HEIGHT: f32 = 46.0;
 /// Space between the video and audio tracks.
 pub const DIVIDER: f32 = 6.0;
 /// How close to an edge, in points, the pointer must be to grab it.
@@ -13,17 +13,22 @@ const EDGE_GRAB: f32 = 6.0;
 pub struct Row {
     pub track: TrackRef,
     pub top: f32,
+    pub height: f32,
 }
 
 impl Row {
     pub fn y_range(&self) -> egui::Rangef {
-        egui::Rangef::new(self.top, self.top + ROW_HEIGHT)
+        egui::Rangef::new(self.top, self.bottom())
+    }
+
+    pub fn bottom(&self) -> f32 {
+        self.top + self.height
     }
 }
 
 /// Video tracks stacked with V1 at the bottom, then audio tracks with A1 at the top, as
 /// in other editors.
-pub fn rows(sequence: &Sequence, top: f32) -> Vec<Row> {
+pub fn rows(sequence: &Sequence, heights: &TrackHeights, top: f32) -> Vec<Row> {
     let video = (0..sequence.video.len()).rev().map(TrackRef::video);
     let audio = (0..sequence.audio.len()).map(TrackRef::audio);
     let mut y = top;
@@ -33,15 +38,21 @@ pub fn rows(sequence: &Sequence, top: f32) -> Vec<Row> {
             if track == TrackRef::audio(0) {
                 y += DIVIDER;
             }
-            let row = Row { track, top: y };
-            y += ROW_HEIGHT;
+            let row = Row {
+                track,
+                top: y,
+                height: heights.of(track),
+            };
+            y = row.bottom();
             row
         })
         .collect()
 }
 
-pub fn total_height(sequence: &Sequence) -> f32 {
-    (sequence.video.len() + sequence.audio.len()) as f32 * ROW_HEIGHT + DIVIDER
+pub fn total_height(sequence: &Sequence, heights: &TrackHeights) -> f32 {
+    rows(sequence, heights, 0.0)
+        .last()
+        .map_or(DIVIDER, |row| row.bottom())
 }
 
 pub fn row_at(rows: &[Row], y: f32) -> Option<Row> {
@@ -51,7 +62,7 @@ pub fn row_at(rows: &[Row], y: f32) -> Option<Row> {
 pub fn clip_rect(row: &Row, scale: &TimeScale, start: Ticks, end: Ticks) -> Rect {
     Rect::from_x_y_ranges(
         scale.x(start)..=scale.x(end),
-        (row.top + 2.0)..=(row.top + ROW_HEIGHT - 2.0),
+        (row.top + 2.0)..=(row.bottom() - 2.0),
     )
 }
 

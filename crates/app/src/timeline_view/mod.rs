@@ -8,6 +8,7 @@ mod paint;
 mod rubber_band;
 mod scale;
 mod tool;
+mod track_heights;
 mod track_select;
 
 use std::collections::BTreeSet;
@@ -25,6 +26,7 @@ pub use markers::color as marker_color;
 pub use paint::label_color;
 use scale::TimeScale;
 pub use tool::{Direction, Tool};
+pub use track_heights::TrackHeights;
 
 const HEADER_WIDTH: f32 = 250.0;
 const RULER_HEIGHT: f32 = 26.0;
@@ -117,6 +119,7 @@ pub struct TimelineView {
     context_clip: bool,
     /// Audio tracks showing their automation in place of their clips' volume lines.
     automation_shown: BTreeSet<TrackRef>,
+    pub heights: TrackHeights,
 }
 
 impl Default for TimelineView {
@@ -134,6 +137,7 @@ impl Default for TimelineView {
             context_marker: None,
             context_clip: false,
             automation_shown: BTreeSet::new(),
+            heights: TrackHeights::default(),
         }
     }
 }
@@ -231,14 +235,21 @@ impl TimelineView {
         let top = tracks.top() - self.scroll_y;
         self.handle_gestures(&response, timeline, scale, top, playhead, &mut output);
         output.clip_menu = self.context_clip.then(|| response.clone());
-        let drop_guide = handle_drop(&response, timeline.sequence(), scale, top, &mut output);
+        let drop_guide = handle_drop(
+            &response,
+            timeline.sequence(),
+            &self.heights,
+            scale,
+            top,
+            &mut output,
+        );
 
         let sequence = self
             .drag
             .as_ref()
             .and_then(|drag| drag.preview.as_ref())
             .unwrap_or(timeline.sequence());
-        let rows = layout::rows(sequence, top);
+        let rows = layout::rows(sequence, &self.heights, top);
         let painter = ui.painter_at(tracks);
         for row in &rows {
             paint::row_background(
@@ -302,6 +313,7 @@ impl TimelineView {
                 )
             })
             .collect();
+        track_heights::resize_grips(&mut self.heights, &header_ui, &rows, header_column);
         for action in actions {
             match action {
                 HeaderAction::ToggleTarget(track) => self.targets.toggle(track),
@@ -369,7 +381,8 @@ impl TimelineView {
             self.scroll = (self.scroll - scale.span(scroll.x)).max(Ticks::ZERO);
         }
         if scroll.y != 0.0 {
-            let overflow = (layout::total_height(sequence) - tracks.height() + 20.0).max(0.0);
+            let overflow =
+                (layout::total_height(sequence, &self.heights) - tracks.height() + 20.0).max(0.0);
             self.scroll_y = (self.scroll_y - scroll.y).clamp(0.0, overflow);
         }
     }
@@ -388,6 +401,7 @@ impl TimelineView {
 fn handle_drop(
     response: &egui::Response,
     sequence: &Sequence,
+    heights: &TrackHeights,
     scale: TimeScale,
     top: f32,
     output: &mut TimelineOutput,
@@ -398,7 +412,7 @@ fn handle_drop(
         sequence.format.frame_rate,
         sequence.timebase,
     );
-    let rows = layout::rows(sequence, top);
+    let rows = layout::rows(sequence, heights, top);
     if let (Some(source), Some(row)) = (
         response.dnd_release_payload::<SourceId>(),
         layout::row_at(&rows, pos.y),

@@ -77,7 +77,7 @@ pub fn row_background(
     }
     painter.hline(
         rect.x_range(),
-        row.top + super::layout::ROW_HEIGHT,
+        row.bottom(),
         Stroke::new(1.0, visuals.widgets.noninteractive.bg_stroke.color),
     );
 }

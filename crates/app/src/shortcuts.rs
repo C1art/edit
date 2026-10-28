@@ -121,6 +121,23 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         Command::ZoomIn => editor.view.zoom(2.0, None),
         Command::ZoomOut => editor.view.zoom(0.5, None),
         Command::ZoomToFit => editor.view.zoom_to_fit(editor.timeline.sequence()),
+        Command::IncreaseVideoHeights | Command::DecreaseVideoHeights => {
+            let taller = command == Command::IncreaseVideoHeights;
+            let sequence = editor.timeline.sequence();
+            editor.view.heights.step(sequence, TrackKind::Video, taller);
+        }
+        Command::IncreaseAudioHeights | Command::DecreaseAudioHeights => {
+            let taller = command == Command::IncreaseAudioHeights;
+            let sequence = editor.timeline.sequence();
+            editor.view.heights.step(sequence, TrackKind::Audio, taller);
+        }
+        Command::ExpandAllTracks | Command::MinimizeAllTracks => {
+            let expanded = command == Command::ExpandAllTracks;
+            editor
+                .view
+                .heights
+                .all(editor.timeline.sequence(), expanded);
+        }
         Command::MulticamView => editor.toggle_multicam_view(),
         Command::MarkIn | Command::MarkOut | Command::ClearInOut => mark(editor, command),
         Command::GoToIn => editor.go_to_mark(Edge::Head),
