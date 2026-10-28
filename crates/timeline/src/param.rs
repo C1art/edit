@@ -190,6 +190,36 @@ impl Param {
         true
     }
 
+    /// Adds `key`, replacing any keyframe already at its time.
+    pub fn put_key(&mut self, key: Keyframe) {
+        match self.keys.binary_search_by_key(&key.time, |kept| kept.time) {
+            Ok(index) => self.keys[index] = key,
+            Err(index) => self.keys.insert(index, key),
+        }
+    }
+
+    /// Moves the keyframes at `times` together by `by`; returns false, moving none, if
+    /// one would land on a keyframe that stays put or before the source's start.
+    pub fn shift_keys(&mut self, times: &[Ticks], by: Ticks) -> bool {
+        let moving = |key: &Keyframe| times.contains(&key.time);
+        let blocked = self.keys.iter().filter(|key| moving(key)).any(|key| {
+            let to = key.time + by;
+            to < Ticks::ZERO
+                || self
+                    .keys
+                    .iter()
+                    .any(|kept| !moving(kept) && kept.time == to)
+        });
+        if by == Ticks::ZERO || blocked || !self.keys.iter().any(moving) {
+            return false;
+        }
+        for key in self.keys.iter_mut().filter(|key| times.contains(&key.time)) {
+            key.time = key.time + by;
+        }
+        self.keys.sort_by_key(|key| key.time);
+        true
+    }
+
     pub fn interpolation_at(&self, time: Ticks) -> Option<Interpolation> {
         self.keys
             .iter()
@@ -247,6 +277,26 @@ mod tests {
         assert_eq!(param.value_at(Ticks(250)), 75.0);
         param.toggle_key(Ticks(200));
         assert_eq!(param.value_at(Ticks(200)), 100.0);
+    }
+
+    #[test]
+    fn shifted_keys_move_together_unless_one_would_land_on_another() {
+        let mut param = Param::from_value(0.0);
+        for (time, value) in [(0, 0.0), (100, 10.0), (200, 20.0), (300, 30.0)] {
+            param.put_key(Keyframe::new(Ticks(time), to_hundredths(value)));
+        }
+        assert!(!param.shift_keys(&[Ticks(0), Ticks(100)], Ticks(200)));
+        assert!(param.shift_keys(&[Ticks(0), Ticks(100)], Ticks(250)));
+        let keys: Vec<(Ticks, f32)> = param.keys.iter().map(|k| (k.time, k.value())).collect();
+        assert_eq!(
+            keys,
+            [
+                (Ticks(200), 20.0),
+                (Ticks(250), 0.0),
+                (Ticks(300), 30.0),
+                (Ticks(350), 10.0)
+            ]
+        );
     }
 
     #[test]
