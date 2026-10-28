@@ -1,5 +1,6 @@
 use timeline::{
-    ColorMatch, EffectCategory, MatteChannel, RampShape, Rgb, TimecodeSource, VideoEffect,
+    ColorChange, ColorMatch, EffectCategory, MatteChannel, RampShape, Rgb, TimecodeSource,
+    VideoEffect,
 };
 
 use super::look::Rows;
@@ -201,6 +202,57 @@ impl Rows {
                 self.param(ui, "Relief", relief, 1.0..=10.0, "");
                 self.param(ui, "Contrast", contrast, 0.0..=500.0, "%");
                 self.param(ui, "Blend With Original", blend, 0.0..=100.0, "%");
+            }
+            VideoEffect::TurbulentDisplace {
+                amount,
+                size,
+                offset: [x, y],
+                complexity,
+                evolution,
+            } => {
+                self.param(ui, "Amount", amount, -1000.0..=1000.0, "");
+                self.param(ui, "Size", size, 2.0..=1000.0, "");
+                self.param(ui, "Offset X", x, -100.0..=200.0, "%");
+                self.param(ui, "Offset Y", y, -100.0..=200.0, "%");
+                self.param(ui, "Complexity", complexity, 1.0..=10.0, "");
+                self.param(ui, "Evolution", evolution, -3600.0..=3600.0, "°");
+            }
+            VideoEffect::ChannelMixer {
+                red,
+                green,
+                blue,
+                monochrome,
+            } => {
+                let sources = ["Red", "Green", "Blue", "Const"];
+                for (output, row) in [("Red", red), ("Green", green), ("Blue", blue)] {
+                    for (source, share) in sources.iter().zip(row) {
+                        let label = format!("{output}-{source}");
+                        self.param(ui, &label, share, -200.0..=200.0, "");
+                    }
+                }
+                self.choice(ui, "Monochrome", |ui| ui.checkbox(monochrome, "").changed());
+            }
+            VideoEffect::ChangeToColor {
+                from,
+                to,
+                change,
+                tolerance: [hue, lightness, saturation],
+                softness,
+            } => {
+                self.color(ui, "From", from);
+                self.color(ui, "To", to);
+                self.options(
+                    ui,
+                    "Change",
+                    "change_to_color",
+                    change,
+                    ColorChange::ALL,
+                    ColorChange::name,
+                );
+                self.param(ui, "Hue Tolerance", hue, 0.0..=100.0, "%");
+                self.param(ui, "Lightness Tolerance", lightness, 0.0..=100.0, "%");
+                self.param(ui, "Saturation Tolerance", saturation, 0.0..=100.0, "%");
+                self.param(ui, "Softness", softness, 0.0..=100.0, "%");
             }
             VideoEffect::Sharpen { amount } => {
                 self.param(ui, "Amount", amount, 0.0..=500.0, "");

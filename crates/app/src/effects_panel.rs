@@ -10,7 +10,7 @@ use crate::effects::{add_transition, apply_transition, audio_category, AUDIO_CAT
 /// An entry of the Effects panel, carried while it is dragged onto the timeline.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum EffectItem {
-    Video(VideoEffect),
+    Video(Box<VideoEffect>),
     Audio(AudioEffect),
     Transition(TrackKind, TransitionKind),
     Preset(EffectPreset),
@@ -67,7 +67,7 @@ pub(crate) fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
             let items = video
                 .iter()
                 .filter(|effect| effect.category() == category)
-                .map(|effect| EffectItem::Video(effect.clone()));
+                .map(|effect| EffectItem::Video(Box::new(effect.clone())));
             (category.name(), items.collect::<Vec<_>>())
         });
         folder(ui, "Video Effects", searching, &groups, &shown, &mut chosen);
