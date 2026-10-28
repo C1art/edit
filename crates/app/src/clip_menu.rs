@@ -1,5 +1,7 @@
 use egui::{Button, KeyboardShortcut, Ui};
-use timeline::{FrameFit, Label, SetClipLabel};
+use timeline::{
+    ClipId, FrameFit, Label, SetClipLabel, SetTimeInterpolation, TimeInterpolation, TrackKind,
+};
 
 use crate::editor::Editor;
 use crate::shortcuts;
@@ -93,6 +95,7 @@ pub(crate) fn items(editor: &mut Editor, ui: &mut Ui) {
         if ui.button("Set to Fill Frame").clicked() {
             editor.set_to_frame_size(FrameFit::Fill);
         }
+        ui.menu_button("Time Interpolation", |ui| time_interpolation(editor, ui));
     });
     crate::multicam::camera_menu(editor, ui);
     if ui
@@ -105,6 +108,44 @@ pub(crate) fn items(editor: &mut Editor, ui: &mut Ui) {
     ui.separator();
     if ui.button("Nest").clicked() {
         editor.nest_selection();
+    }
+}
+
+/// Radio choices for the selected video clips, checked where they all agree.
+fn time_interpolation(editor: &mut Editor, ui: &mut Ui) {
+    let sequence = editor.timeline.sequence();
+    let clips: Vec<ClipId> = editor
+        .view
+        .selection
+        .iter()
+        .filter(|&&id| {
+            sequence
+                .clip(id)
+                .is_some_and(|(track, _)| track.kind == TrackKind::Video)
+        })
+        .copied()
+        .collect();
+    let mut current = clips
+        .iter()
+        .filter_map(|&id| sequence.clip(id))
+        .map(|(_, clip)| clip.interpolation);
+    let shared = current
+        .next()
+        .filter(|first| current.all(|other| other == *first));
+    for interpolation in TimeInterpolation::ALL {
+        let chosen = ui
+            .add_enabled(
+                !clips.is_empty(),
+                egui::RadioButton::new(shared == Some(interpolation), interpolation.name()),
+            )
+            .clicked();
+        if chosen {
+            editor.apply(SetTimeInterpolation {
+                clips: clips.clone(),
+                interpolation,
+            });
+            ui.close();
+        }
     }
 }
 
