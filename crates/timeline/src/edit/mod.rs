@@ -43,7 +43,7 @@ pub use link::SetLinked;
 pub use look::{SetClipLook, SetTransition};
 pub use marker::{AddMarker, RemoveMarker, UpdateMarker};
 pub use media::{RelinkMedia, RenameMedia};
-pub use multicam::{CreateMulticam, SwitchAngle};
+pub use multicam::{CreateMulticam, FlattenMulticam, SwitchAngle};
 pub use nest::{AddNest, InNest, NestClips};
 pub use paste::{Clipboard, PasteClips};
 pub use place::{PlaceClip, PlaceMode, Razor, RazorTarget};

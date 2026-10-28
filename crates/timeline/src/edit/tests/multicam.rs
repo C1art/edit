@@ -75,3 +75,27 @@ fn switching_camera_while_playing_cuts_the_clip_and_its_sound_and_switches_the_r
     assert!(timeline.undo());
     assert_eq!(spans(&timeline, V1), [(0, 600, 0)]);
 }
+
+#[test]
+fn flattening_shows_the_camera_clips_where_they_play_with_keyframes_on_the_same_picture() {
+    let (mut timeline, cameras) = multicam();
+    let first = timeline.sequence().media[0].id;
+    let clip = clip_on(&timeline, V1, 0);
+    let mut look = crate::Look::default();
+    look.opacity.toggle_animation(Ticks(450));
+    timeline.apply(SetClipLook { clip, look }).unwrap();
+    timeline
+        .apply(FlattenMulticam { clips: vec![clip] })
+        .unwrap();
+    // The first camera only rolled 300 ticks into the multi-camera source.
+    assert_eq!(spans(&timeline, V1), [(300, 600, 0)]);
+    assert_eq!(spans(&timeline, A1), [(300, 600, 0)]);
+    let sequence = timeline.sequence();
+    let video = &sequence.video[0].clips[0];
+    let audio = &sequence.audio[0].clips[0];
+    assert_eq!((video.source, audio.source), (first, first));
+    assert!(video.link.is_some() && video.link == audio.link);
+    assert_eq!(video.look.opacity.keys[0].time, Ticks(150));
+    assert!(sequence.multicam_of(video).is_none());
+    assert!(sequence.media_item(cameras).is_some());
+}

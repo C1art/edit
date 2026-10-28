@@ -91,6 +91,16 @@ impl Default for Look {
 }
 
 impl Look {
+    pub fn params_mut(&mut self) -> impl Iterator<Item = &mut Param> {
+        self.motion
+            .params_mut()
+            .chain([&mut self.opacity])
+            .chain(self.masks.iter_mut().flat_map(Mask::params_mut))
+            .chain(self.crop.params_mut())
+            .chain(self.effects.iter_mut().flat_map(VideoEffect::params_mut))
+            .chain(self.color.params_mut())
+    }
+
     /// The blurriness of all Gaussian blurs together: blurring twice adds the squares.
     pub fn blurriness_at(&self, time: Ticks) -> f32 {
         self.effects
