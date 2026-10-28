@@ -1,7 +1,7 @@
 use audio::SampleRate;
 use timeline::{audio_fade, audio_span, ClipId, Sequence, SourceId, Ticks, Timebase};
 
-use crate::clip_audio::ClipAudio;
+use crate::clip_audio::{ClipAudio, ClipRead};
 use crate::clip_decoders::ClipDecoders;
 use crate::mixdown;
 use crate::track_audio::TrackAudio;
@@ -98,11 +98,15 @@ impl SequenceMix {
                 let clip_mix = &mut self.clip_mix[..length];
                 clip_mix.fill(0.0);
                 let decoder = decoders.for_clip(clip.id, &keep);
-                let (source_in, into_clip) =
-                    (to_frames(clip.source_in), from - to_frames(clip.start));
-                if let Err(error) =
-                    decoder.mix_into(media, source_in, into_clip, clip.speed, clip_mix)
-                {
+                let read = ClipRead {
+                    source_in: to_frames(clip.source_in),
+                    length: to_frames(clip.end()) - to_frames(clip.start),
+                    speed: clip.speed,
+                    reverse: clip.reverse,
+                    maintain_pitch: clip.maintain_pitch,
+                };
+                let into_clip = from - to_frames(clip.start);
+                if let Err(error) = decoder.mix_into(media, &read, into_clip, clip_mix) {
                     if !self.warned.contains(&media.id) {
                         self.warned.push(media.id);
                         warnings.push(error);

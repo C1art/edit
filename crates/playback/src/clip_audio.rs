@@ -2,10 +2,13 @@ use std::ops::Range;
 
 use timeline::{MediaItem, Speed};
 
+use crate::stretch::Wsola;
 use crate::track_audio::TrackAudio;
 use crate::PlaybackError;
 
 const CHANNELS: usize = 2;
+/// Source frames read at once when playing backwards, a second at 48 kHz.
+const BACKWARD_BLOCK: i64 = 48_000;
 
 /// Stereo frames of a file's audio at the output rate.
 pub(crate) trait FrameSource {
@@ -31,13 +34,51 @@ impl FrameSource for TrackAudio {
     }
 }
 
-/// One clip's audio at its speed. Off normal speed the source is read straight through
-/// and interpolated, so its pitch follows the speed as on tape.
+/// Where a clip's audio comes from, in frames at the output rate.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct ClipRead {
+    /// The first source frame of the clip's range, which a reversed clip plays last.
+    pub source_in: i64,
+    /// Output frames in the clip; a reversed clip counts back from its end.
+    pub length: i64,
+    pub speed: Speed,
+    pub reverse: bool,
+    pub maintain_pitch: bool,
+}
+
+impl ClipRead {
+    /// The source position heard `frame` output frames into the clip, as a whole frame
+    /// and the fraction past it.
+    pub(crate) fn position(&self, frame: i64) -> (i64, f32) {
+        let (num, den) = (i128::from(self.speed.num()), i128::from(self.speed.den()));
+        let (travelled, before) = if self.reverse {
+            (i128::from(self.length - frame) * num, 1)
+        } else {
+            (i128::from(frame) * num, 0)
+        };
+        let whole = i128::from(self.source_in) + travelled.div_euclid(den) - before;
+        let fraction = travelled.rem_euclid(den) as f64 / den as f64;
+        (i64::try_from(whole).unwrap_or(i64::MAX), fraction as f32)
+    }
+
+    pub(crate) fn direction(&self) -> i64 {
+        if self.reverse {
+            -1
+        } else {
+            1
+        }
+    }
+}
+
+/// One clip's audio at its speed and direction. Off normal speed the source is
+/// interpolated, so its pitch follows the speed as on tape, unless the clip maintains
+/// pitch.
 pub(crate) struct ClipAudio<S = TrackAudio> {
     source: S,
     /// Source frames from `window_start` on, kept so interpolation reaches across chunks.
     window: Vec<f32>,
     window_start: i64,
+    stretch: Wsola,
 }
 
 impl<S: FrameSource> ClipAudio<S> {
@@ -46,69 +87,88 @@ impl<S: FrameSource> ClipAudio<S> {
             source,
             window: Vec::new(),
             window_start: 0,
+            stretch: Wsola::default(),
         }
     }
 
     pub(crate) fn reset(&mut self) {
         self.source.reset();
         self.window.clear();
+        self.stretch.reset();
     }
 
-    /// Adds `out.len() / 2` frames into `out`, the first `offset` frames into a clip
-    /// that plays from source frame `source_in` at `speed`, all at the output rate.
-    /// Frames before the media starts stay silent.
+    /// Adds `out.len() / 2` frames into `out`, starting `offset` output frames into the
+    /// clip. Frames before the media starts stay silent.
     pub(crate) fn mix_into(
         &mut self,
         media: &MediaItem,
-        source_in: i64,
+        read: &ClipRead,
         offset: i64,
-        speed: Speed,
         out: &mut [f32],
     ) -> Result<(), PlaybackError> {
-        let frames = out.len() / CHANNELS;
-        let (num, den) = (i128::from(speed.num()), i128::from(speed.den()));
-        // The source frame playing at output frame `k`, and the fraction past it in `den`ths.
-        let position = |k: usize| {
-            let travelled = i128::from(offset + k as i64) * num;
-            let whole = i128::from(source_in) + travelled.div_euclid(den);
-            (
-                i64::try_from(whole).unwrap_or(i64::MAX),
-                travelled.rem_euclid(den),
-            )
-        };
-        let Some(skip) = (0..frames).find(|&k| position(k).0 >= 0) else {
+        let frames = (out.len() / CHANNELS) as i64;
+        if frames == 0 {
             return Ok(());
-        };
-        let out = &mut out[skip * CHANNELS..];
-        let first = position(skip).0;
-        if speed.is_normal() {
-            return self.source.read(media, first, out);
         }
-        let last = position(frames - 1).0;
-        self.fill(media, (first - 1).max(0)..last + 3)?;
-        for (k, pair) in (skip..frames).zip(out.as_chunks_mut::<CHANNELS>().0) {
-            let (index, remainder) = position(k);
-            let t = (remainder as f64 / den as f64) as f32;
+        if read.speed.is_normal() && !read.reverse {
+            let first = read.position(offset).0;
+            let skip = (-first).clamp(0, frames);
+            let out = &mut out[usize::try_from(skip).unwrap_or(0) * CHANNELS..];
+            return self.source.read(media, first + skip, out);
+        }
+        if read.maintain_pitch && !read.speed.is_normal() {
+            let needed = Wsola::needed(read, offset..offset + frames);
+            self.fill(media, needed, read.reverse)?;
+            let (window, start) = (&self.window, self.window_start);
+            self.stretch.render(read, offset, out, |frame, channel| {
+                window_sample(window, start, frame, channel)
+            });
+            return Ok(());
+        }
+        let ends = [offset, offset + frames - 1].map(|frame| read.position(frame).0);
+        let (low, high) = (ends[0].min(ends[1]), ends[0].max(ends[1]));
+        if high < 0 {
+            return Ok(());
+        }
+        self.fill(media, (low - 1).max(0)..high + 3, read.reverse)?;
+        for (frame, pair) in (offset..).zip(out.as_chunks_mut::<CHANNELS>().0) {
+            let (index, t) = read.position(frame);
+            if index < 0 {
+                continue;
+            }
             for (channel, sample) in pair.iter_mut().enumerate() {
-                let at = |frame: i64| self.sample(frame, channel);
+                let at =
+                    |frame: i64| window_sample(&self.window, self.window_start, frame, channel);
                 *sample += cubic(at(index - 1), at(index), at(index + 1), at(index + 2), t);
             }
         }
         Ok(())
     }
 
-    /// Clamped to the window, which repeats the edge frames where the media ends.
-    fn sample(&self, frame: i64, channel: usize) -> f32 {
-        let frames = (self.window.len() / CHANNELS) as i64;
-        let index = (frame - self.window_start).clamp(0, (frames - 1).max(0));
-        let index = usize::try_from(index).unwrap_or(0) * CHANNELS + channel;
-        self.window.get(index).copied().unwrap_or(0.0)
-    }
-
-    /// Makes the window hold exactly `needed`, reading on from its end where it can so
-    /// the source keeps decoding forward instead of seeking.
-    fn fill(&mut self, media: &MediaItem, needed: Range<i64>) -> Result<(), PlaybackError> {
+    /// Makes the window hold `needed`. Forwards, it reads on from its end where it can so
+    /// the source keeps decoding instead of seeking; backwards, it reads a block ending
+    /// at `needed` so the requests that follow are already there.
+    fn fill(
+        &mut self,
+        media: &MediaItem,
+        needed: Range<i64>,
+        backward: bool,
+    ) -> Result<(), PlaybackError> {
         let end = |window: &Self| window.window_start + (window.window.len() / CHANNELS) as i64;
+        if backward {
+            let inside = !self.window.is_empty()
+                && needed.start >= self.window_start
+                && needed.end <= end(self);
+            if !inside {
+                let start = (needed.start - BACKWARD_BLOCK).max(0);
+                let frames = usize::try_from(needed.end - start).unwrap_or(0);
+                self.window.clear();
+                self.window.resize(frames * CHANNELS, 0.0);
+                self.window_start = start;
+                self.source.read(media, start, &mut self.window)?;
+            }
+            return Ok(());
+        }
         if needed.start < self.window_start || needed.start > end(self) || self.window.is_empty() {
             self.window.clear();
             self.window_start = needed.start;
@@ -125,6 +185,14 @@ impl<S: FrameSource> ClipAudio<S> {
         self.window_start = needed.start;
         Ok(())
     }
+}
+
+/// Clamped to the window, which repeats the edge frames where the media ends.
+fn window_sample(window: &[f32], start: i64, frame: i64, channel: usize) -> f32 {
+    let frames = (window.len() / CHANNELS) as i64;
+    let index = (frame - start).clamp(0, (frames - 1).max(0));
+    let index = usize::try_from(index).unwrap_or(0) * CHANNELS + channel;
+    window.get(index).copied().unwrap_or(0.0)
 }
 
 /// Catmull-Rom interpolation at `t` between `b` and `c`; exact on straight lines.
@@ -180,6 +248,16 @@ mod tests {
         }
     }
 
+    fn forward(source_in: i64, speed: Speed) -> ClipRead {
+        ClipRead {
+            source_in,
+            length: 1_000,
+            speed,
+            reverse: false,
+            maintain_pitch: false,
+        }
+    }
+
     fn left(out: &[f32]) -> Vec<f32> {
         out.iter().step_by(CHANNELS).copied().collect()
     }
@@ -191,7 +269,7 @@ mod tests {
         let mut chunks = Vec::new();
         for chunk in 0..3 {
             let mut out = vec![0.0; 4 * CHANNELS];
-            clip.mix_into(&media(), 100, chunk * 4, speed, &mut out)
+            clip.mix_into(&media(), &forward(100, speed), chunk * 4, &mut out)
                 .unwrap();
             chunks.extend(left(&out));
         }
@@ -207,10 +285,28 @@ mod tests {
     fn frames_before_the_media_starts_are_silent() {
         let mut clip = ClipAudio::new(Ramp::default());
         let mut out = vec![0.0; 6 * CHANNELS];
-        clip.mix_into(&media(), 0, -4, Speed::new(1, 2).unwrap(), &mut out)
-            .unwrap();
+        let read = forward(0, Speed::new(1, 2).unwrap());
+        clip.mix_into(&media(), &read, -4, &mut out).unwrap();
         let left = left(&out);
         assert_eq!(left[..5], [0.0; 5]);
         assert!(left[5] > 0.0);
+    }
+
+    #[test]
+    fn reversed_audio_plays_the_range_backwards_reading_ahead_in_blocks() {
+        let read = ClipRead {
+            reverse: true,
+            ..forward(100, Speed::NORMAL)
+        };
+        let mut clip = ClipAudio::new(Ramp::default());
+        let mut heard = Vec::new();
+        for chunk in 0..3 {
+            let mut out = vec![0.0; 4 * CHANNELS];
+            clip.mix_into(&media(), &read, chunk * 4, &mut out).unwrap();
+            heard.extend(left(&out));
+        }
+        let expected: Vec<f32> = (0..12).map(|k| 1_099.0 - k as f32).collect();
+        assert_eq!(heard, expected);
+        assert_eq!(clip.source.reads, [0]);
     }
 }

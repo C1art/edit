@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -9,6 +10,10 @@ use crate::generated_frame;
 /// Jumps further ahead than this seek instead of decoding through; keyframe intervals
 /// are usually shorter, so decoding forward is cheaper below it.
 const MAX_DECODE_AHEAD_SECONDS: i64 = 2;
+/// Memory for pictures kept while playing backwards, which would otherwise seek and
+/// decode from a keyframe for every frame.
+const BACKWARD_BYTES: usize = 192 << 20;
+const MAX_BACKWARD_FRAMES: usize = 60;
 
 enum Source {
     None,
@@ -28,6 +33,9 @@ pub(crate) struct TrackVideo {
     current: Option<Arc<VideoFrame>>,
     next: Option<VideoFrame>,
     ended: bool,
+    /// The pictures decoded up to `current`, oldest first, kept while requests go
+    /// backwards.
+    behind: VecDeque<Arc<VideoFrame>>,
 }
 
 impl TrackVideo {
@@ -38,6 +46,7 @@ impl TrackVideo {
             current: None,
             next: None,
             ended: false,
+            behind: VecDeque::new(),
         }
     }
 
@@ -45,6 +54,7 @@ impl TrackVideo {
     pub(crate) fn reset(&mut self) {
         self.current = None;
         self.next = None;
+        self.behind.clear();
     }
 
     /// The picture showing at `time` in `media`. Errors are reported once per media
@@ -81,15 +91,29 @@ impl TrackVideo {
         let decode_ahead = Timebase::new(1, 1).map_or(Ticks::ZERO, |second| {
             Ticks(MAX_DECODE_AHEAD_SECONDS).rescale(second, self.timebase)
         });
-        let continuous = self
-            .current
-            .as_ref()
-            .is_some_and(|current| current.pts <= time && time <= current.pts + decode_ahead);
+        let current = self.current.as_ref().map(|current| current.pts);
+        let backward = current.is_some_and(|current| time < current);
+        if backward {
+            if let Some(frame) = frame_before(&self.behind, time) {
+                return Ok(Some(frame));
+            }
+        } else {
+            self.behind.clear();
+        }
+        let continuous =
+            current.is_some_and(|current| current <= time && time <= current + decode_ahead);
+        let keep = if backward { backward_frames(media) } else { 0 };
         if !continuous {
-            reader.seek(time)?;
+            // Going backwards, start early enough that the frames before `time` are
+            // decoded on the way and kept for the requests that follow.
+            let back = media.video.map_or(Ticks::ZERO, |video| {
+                video.frame_rate.frame_start(keep as i64, self.timebase)
+            });
+            reader.seek((time - back).max(Ticks::ZERO))?;
             self.current = None;
             self.next = None;
             self.ended = false;
+            self.behind.clear();
         }
         loop {
             if self.next.is_none() && !self.ended {
@@ -107,6 +131,12 @@ impl TrackVideo {
                 break;
             }
             self.current = self.next.take().map(Arc::new);
+            if let Some(current) = self.current.as_ref().filter(|_| keep > 0) {
+                if self.behind.len() == keep {
+                    self.behind.pop_front();
+                }
+                self.behind.push_back(Arc::clone(current));
+            }
         }
         Ok(self.current.clone())
     }
@@ -122,4 +152,19 @@ impl TrackVideo {
         self.source = Source::Generated(generator.clone(), canvas, Arc::clone(&frame));
         frame
     }
+}
+
+/// The kept picture showing at `time`, when the kept ones reach back that far.
+fn frame_before(behind: &VecDeque<Arc<VideoFrame>>, time: Ticks) -> Option<Arc<VideoFrame>> {
+    if behind.front().is_none_or(|first| first.pts > time) {
+        return None;
+    }
+    behind.iter().rev().find(|frame| frame.pts <= time).cloned()
+}
+
+fn backward_frames(media: &MediaItem) -> usize {
+    let bytes = media.video.map_or(usize::MAX, |video| {
+        (video.width as usize * video.height as usize * 4).max(1)
+    });
+    (BACKWARD_BYTES / bytes).clamp(2, MAX_BACKWARD_FRAMES)
 }

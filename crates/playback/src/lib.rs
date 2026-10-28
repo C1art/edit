@@ -13,6 +13,7 @@ mod mixdown;
 mod pixel_effects;
 mod player;
 mod sequence_mix;
+mod stretch;
 mod track_audio;
 mod track_video;
 mod video_worker;
