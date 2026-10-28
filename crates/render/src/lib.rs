@@ -25,7 +25,7 @@ pub use lut::Lut3d;
 pub use mask::{LayerMask, Outline, MAX_MASKS, MAX_OUTLINE_POINTS};
 pub use pixel::{ChromaKey, PixelEffects, Vignette};
 pub use placement::{ColorAdjust, LayerLook};
-pub use recolor::{ColorKey, LeaveColor, Ramp, Recolor};
+pub use recolor::{ChangeToColor, ChannelMixer, ColorChange, ColorKey, LeaveColor, Ramp, Recolor};
 pub use reshape::{Mirror, Reshape};
 pub use scope::Scope;
 pub use secondary::SecondaryAdjust;

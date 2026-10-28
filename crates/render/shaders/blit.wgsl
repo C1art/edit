@@ -73,6 +73,10 @@ struct Placement {
     style_sphere: vec4<f32>,
     // Emboss's light direction in radians, relief in pixels, contrast and share.
     style_emboss: vec4<f32>,
+    // Turbulent Displace's reach and noise size in pixels, its layers and its evolution
+    // in turns; then the noise's center as fractions of the picture, and 1 when on.
+    style_turbulence: vec4<f32>,
+    style_turbulence_center: vec4<f32>,
     // Mirror's center, angle and 1 when on; the warps' map back to the picture, its
     // first row ending in 1 when on, and the warped picture's bounds (see reshape.wgsl).
     reshape_mirror: vec4<f32>,
@@ -88,6 +92,16 @@ struct Placement {
     recolor_ramp_points: vec4<f32>,
     recolor_ramp_start: vec4<f32>,
     recolor_ramp_end: vec4<f32>,
+    // Channel Mixer's rows: each channel's shares of red, green and blue, then a constant.
+    recolor_mix_red: vec4<f32>,
+    recolor_mix_green: vec4<f32>,
+    recolor_mix_blue: vec4<f32>,
+    // Change to Color's encoded colors, its hue tolerance (negative when off) and what
+    // it changes; then its lightness and saturation tolerances, its softness, and 1
+    // when Channel Mixer is on.
+    recolor_change_from: vec4<f32>,
+    recolor_change_to: vec4<f32>,
+    recolor_change_detail: vec4<f32>,
 };
 
 const OUTLINE_VEC4S: u32 = 32u;
@@ -486,7 +500,7 @@ fn layer_color(in: VertexOutput) -> vec4<f32> {
     // Desaturating the key's edge suppresses the screen's color spilling onto it.
     let unspilled = mix(vec3<f32>(dot(color.rgb, LUMA)), color.rgb, keyed);
     let sharp = sharpen(unspilled, uv);
-    var rgb = restyle(stylize(secondary(creative_grade(correct(leave_color(sharp)))), pinned), uv);
+    var rgb = restyle(stylize(secondary(creative_grade(correct(change_to_color(mix_channels(leave_color(sharp)))))), pinned), uv);
     rgb = mix(rgb, vec3<f32>(1.0), placement.balance.w);
     let picture = color.a * keyed * f32(in_crop(pinned));
     let shadow = shadow_alpha(pinned);

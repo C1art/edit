@@ -26,13 +26,81 @@ fn wave(uv: vec2<f32>) -> vec2<f32> {
     return uv + across * wave.x * sin(TAU * waves) / picture;
 }
 
+fn lattice(p: vec3<f32>) -> f32 {
+    var q = fract(p * vec3<f32>(0.1031, 0.1030, 0.0973));
+    q += dot(q, q.yzx + 33.33);
+    return fract((q.x + q.y) * q.z) * 2.0 - 1.0;
+}
+
+// Smooth noise from -1 to 1, blending the random values at the lattice's corners.
+fn value_noise(p: vec3<f32>) -> f32 {
+    let cell = floor(p);
+    let f = fract(p);
+    let u = f * f * (3.0 - 2.0 * f);
+    let x00 = mix(lattice(cell), lattice(cell + vec3<f32>(1.0, 0.0, 0.0)), u.x);
+    let x10 = mix(
+        lattice(cell + vec3<f32>(0.0, 1.0, 0.0)),
+        lattice(cell + vec3<f32>(1.0, 1.0, 0.0)),
+        u.x,
+    );
+    let x01 = mix(
+        lattice(cell + vec3<f32>(0.0, 0.0, 1.0)),
+        lattice(cell + vec3<f32>(1.0, 0.0, 1.0)),
+        u.x,
+    );
+    let x11 = mix(
+        lattice(cell + vec3<f32>(0.0, 1.0, 1.0)),
+        lattice(cell + vec3<f32>(1.0, 1.0, 1.0)),
+        u.x,
+    );
+    return mix(mix(x00, x10, u.y), mix(x01, x11, u.y), u.z);
+}
+
+// Noise with a layer of half the size and half the strength for each step of
+// complexity, the last layer fading in with its fraction.
+fn turbulence(p: vec3<f32>, layers: f32) -> f32 {
+    var sum = 0.0;
+    var total = 0.0;
+    var strength = 1.0;
+    var scale = 1.0;
+    for (var layer = 0; layer < 10; layer++) {
+        let share = clamp(layers - f32(layer), 0.0, 1.0);
+        if share <= 0.0 {
+            break;
+        }
+        sum += value_noise(vec3<f32>(p.xy * scale, p.z)) * strength * share;
+        total += strength * share;
+        strength *= 0.5;
+        scale *= 2.0;
+    }
+    return sum / max(total, 1e-4);
+}
+
+// Pushes the picture about along two unrelated turbulent noises.
+fn turbulent(uv: vec2<f32>) -> vec2<f32> {
+    let turbulence_settings = placement.style_turbulence;
+    let center = placement.style_turbulence_center;
+    if center.w < 0.5 {
+        return uv;
+    }
+    let picture = picture_size();
+    let at = (uv - center.xy) * picture / turbulence_settings.y;
+    // Evolution moves through the noise's third dimension.
+    let p = vec3<f32>(at, turbulence_settings.w * 4.0);
+    let push = vec2<f32>(
+        turbulence(p, turbulence_settings.z),
+        turbulence(p + vec3<f32>(71.3, 19.7, 37.1), turbulence_settings.z),
+    );
+    return uv + push * turbulence_settings.x / picture;
+}
+
 // Where the picture at `uv` is read from once waved, lensed, twirled and cut into
 // mosaic blocks. Warps measure in square units, so circles stay round on any picture.
 fn warp(uv_in: vec2<f32>) -> vec2<f32> {
     let picture = picture_size();
     let aspect = picture / max(picture.x, picture.y);
     let half_diagonal = length(aspect * 0.5);
-    var p = (wave(mirrored(uv_in)) - vec2<f32>(0.5)) * aspect;
+    var p = (wave(turbulent(mirrored(uv_in))) - vec2<f32>(0.5)) * aspect;
     // The picture as seen on a ball: points at the rim show as they are, nearer the
     // middle they read from nearer it still, as an arc's length to its height.
     let sphere = placement.style_sphere;

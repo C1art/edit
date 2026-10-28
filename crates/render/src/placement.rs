@@ -261,11 +261,11 @@ mod tests {
         let bytes = Placement::new((1920, 1080), (1920, 1080), &look).to_bytes();
         // Twenty vec4s, three of them added by the wipes, lead the shader's struct. The
         // masks follow: the header, three vec4s each, then their outlines at two points
-        // a vec4; then the picture style's eleven, the reshape's five and the recolor's six.
+        // a vec4; then the picture style's thirteen, the reshape's five and the recolor's twelve.
         let outlines = MAX_MASKS * MAX_OUTLINE_POINTS / 2;
         assert_eq!(
             bytes.len(),
-            (23 + 1 + 3 * MAX_MASKS + outlines + 11 + 5 + 6) * 16
+            (23 + 1 + 3 * MAX_MASKS + outlines + 13 + 5 + 12) * 16
         );
         assert!(bytes.len() as u64 <= crate::blit::UNIFORM_BYTES);
     }

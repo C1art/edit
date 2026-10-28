@@ -5,6 +5,8 @@ pub struct Recolor {
     pub color_key: Option<ColorKey>,
     pub leave_color: Option<LeaveColor>,
     pub ramp: Option<Ramp>,
+    pub channel_mixer: Option<ChannelMixer>,
+    pub change_to_color: Option<ChangeToColor>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -38,16 +40,109 @@ pub struct Ramp {
     pub blend: f32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ChannelMixer {
+    /// Red, green and blue each made from shares of the three, then a constant.
+    pub rows: [[f32; 4]; 3],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ChangeToColor {
+    pub from: [f32; 3],
+    pub to: [f32; 3],
+    pub change: ColorChange,
+    /// 0 to 1 of half a turn of hue, of lightness and of saturation.
+    pub tolerance: [f32; 3],
+    /// Fraction of each tolerance past it that the match fades over.
+    pub softness: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ColorChange {
+    Hue,
+    HueLightness,
+    HueLightnessSaturation,
+    Colorize,
+}
+
 impl Recolor {
     pub const NONE: Self = Self {
         color_key: None,
         leave_color: None,
         ramp: None,
+        channel_mixer: None,
+        change_to_color: None,
     };
 
-    /// The shader's view, as six vec4s; a negative tolerance turns a key off, and a
-    /// ramp is off where none of it shows.
-    pub(crate) fn uniform(&self) -> [f32; 24] {
+    /// The shader's view, as twelve vec4s.
+    pub(crate) fn uniform(&self) -> [f32; 48] {
+        let mut uniform = [0.0; 48];
+        let values = self.keys_and_ramp().into_iter().chain(self.remap());
+        for (slot, value) in uniform.iter_mut().zip(values) {
+            *slot = value;
+        }
+        uniform
+    }
+
+    /// The channel mixer's rows, then Change to Color's colors and tolerances, the
+    /// mixer's on flag last; a negative hue tolerance turns Change to Color off.
+    fn remap(&self) -> [f32; 24] {
+        let flag = |on: bool| if on { 1.0 } else { 0.0 };
+        let identity = [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+        ];
+        let [red, green, blue] = self.channel_mixer.map_or(identity, |mixer| mixer.rows);
+        let change = self.change_to_color.unwrap_or(ChangeToColor {
+            from: [0.0; 3],
+            to: [0.0; 3],
+            change: ColorChange::Hue,
+            tolerance: [-1.0, 0.0, 0.0],
+            softness: 0.0,
+        });
+        let [fr, fg, fb] = change.from;
+        let [tr, tg, tb] = change.to;
+        let [hue, lightness, saturation] = change.tolerance;
+        let mode = match change.change {
+            ColorChange::Hue => 0.0,
+            ColorChange::HueLightness => 1.0,
+            ColorChange::HueLightnessSaturation => 2.0,
+            ColorChange::Colorize => 3.0,
+        };
+        let [r0, r1, r2, r3] = red;
+        let [g0, g1, g2, g3] = green;
+        let [b0, b1, b2, b3] = blue;
+        [
+            r0,
+            r1,
+            r2,
+            r3,
+            g0,
+            g1,
+            g2,
+            g3,
+            b0,
+            b1,
+            b2,
+            b3,
+            fr,
+            fg,
+            fb,
+            hue,
+            tr,
+            tg,
+            tb,
+            mode,
+            lightness,
+            saturation,
+            change.softness.max(0.0),
+            flag(self.channel_mixer.is_some()),
+        ]
+    }
+
+    /// A negative tolerance turns a key off, and a ramp is off where none of it shows.
+    fn keys_and_ramp(&self) -> [f32; 24] {
         let flag = |on: bool| if on { 1.0 } else { 0.0 };
         let [kr, kg, kb, key_tolerance, key_softness] =
             self.color_key.map_or([0.0, 0.0, 0.0, -1.0, 0.0], |key| {

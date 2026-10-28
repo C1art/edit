@@ -65,6 +65,16 @@ pub struct PictureStyle {
     pub emboss_contrast: f32,
     /// 0 to 1: how much the relief replaces the picture.
     pub emboss_mix: f32,
+    /// Pixels of the clip's picture the noise pushes it by at most; at 0 it stays put.
+    pub turbulence_amount: f32,
+    /// Pixels of the clip's picture across one swirl of the noise.
+    pub turbulence_size: f32,
+    /// Fractions of the picture's width and height.
+    pub turbulence_center: [f32; 2],
+    /// Layers of finer noise, 1 to 10.
+    pub turbulence_complexity: f32,
+    /// Turns; changing it changes the noise smoothly.
+    pub turbulence_evolution: f32,
 }
 
 impl PictureStyle {
@@ -100,16 +110,26 @@ impl PictureStyle {
         emboss_relief: 0.0,
         emboss_contrast: 1.0,
         emboss_mix: 0.0,
+        turbulence_amount: 0.0,
+        turbulence_size: 1.0,
+        turbulence_center: [0.5; 2],
+        turbulence_complexity: 1.0,
+        turbulence_evolution: 0.0,
     };
 
-    /// The shader's view, as eleven vec4s.
-    pub(crate) fn uniform(&self) -> [f32; 44] {
+    /// The shader's view, as thirteen vec4s.
+    pub(crate) fn uniform(&self) -> [f32; 52] {
         let inverted = if self.edges_inverted { 1.0 } else { 0.0 };
         let [mosaic_x, mosaic_y] = self.mosaic;
         let [offset_x, offset_y] = self.offset;
         let [shadow_x, shadow_y] = self.shadow_offset;
         let [red, green, blue] = self.shadow_color;
         let sphere = if self.sphere_radius > 0.0 { 1.0 } else { 0.0 };
+        let turbulent = if self.turbulence_amount != 0.0 {
+            1.0
+        } else {
+            0.0
+        };
         [
             self.brightness,
             self.contrast,
@@ -155,6 +175,14 @@ impl PictureStyle {
             self.emboss_relief.max(0.0),
             self.emboss_contrast.max(0.0),
             self.emboss_mix.clamp(0.0, 1.0),
+            self.turbulence_amount,
+            self.turbulence_size.max(1.0),
+            self.turbulence_complexity.clamp(1.0, 10.0),
+            self.turbulence_evolution,
+            self.turbulence_center[0],
+            self.turbulence_center[1],
+            0.0,
+            turbulent,
         ]
     }
 }
