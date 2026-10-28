@@ -40,7 +40,10 @@ pub fn track_layers_at<'a>(
         let window = before + after;
         let (out, into) =
             transition.reveals(fraction(position - start, window), fraction(before, window));
-        let layers = [layer(outgoing, own.and(out)), layer(incoming, into)];
+        let mut layers = [layer(outgoing, own.and(out)), layer(incoming, into)];
+        if transition.kind.moves_outgoing() {
+            layers.reverse();
+        }
         let visible: Vec<_> = layers
             .iter()
             .filter(|layer| layer.reveal.is_visible())
@@ -48,7 +51,7 @@ pub fn track_layers_at<'a>(
             .collect();
         // At a dip's darkest point the incoming clip stays planned, so its decoder is kept.
         if visible.is_empty() {
-            vec![layers[1].clone()]
+            vec![layer(incoming, into)]
         } else {
             visible
         }
@@ -65,7 +68,12 @@ pub fn track_layers_at<'a>(
         (Some(transition), None) => {
             let length = transition.duration.min(current.duration);
             let progress = fraction(position - current.start, length);
-            reveal = reveal.and(transition.reveals(progress, 0.0).1);
+            // A kind that moves the outgoing picture away brings this one back instead.
+            reveal = reveal.and(if transition.kind.moves_outgoing() {
+                transition.reveals(1.0 - progress, 1.0).0
+            } else {
+                transition.reveals(progress, 0.0).1
+            });
         }
         (None, _) => {}
     }
@@ -80,9 +88,10 @@ pub fn track_layers_at<'a>(
             if let (Some(transition), None) = (current.transition_out, next) {
                 let length = transition.duration.min(current.duration);
                 let remaining = fraction(current.end() - position, length).min(1.0);
-                // A split has nothing of its own to show of the incoming picture, so
-                // the clip parts as an outgoing one would; others play in reverse.
-                let out = if transition.kind.splits_outgoing() {
+                // A kind that moves the outgoing picture away has nothing of its own to
+                // show of the incoming one, so the clip leaves as an outgoing one would;
+                // others play in reverse.
+                let out = if transition.kind.moves_outgoing() {
                     transition.reveals(1.0 - remaining, 1.0).0
                 } else {
                     transition.reveals(remaining, 0.0).1
@@ -244,5 +253,26 @@ mod tests {
         };
         assert_eq!(washes(90), [(1, 0.5)]);
         assert_eq!(washes(110), [(2, 0.5)]);
+    }
+
+    #[test]
+    fn a_turning_page_lies_over_the_incoming_clip_and_a_lone_one_turns_back_in() {
+        let mut incoming = clip(2, 100, 100, 0);
+        incoming.transition_in = dissolve(TransitionKind::PageTurn, 40);
+        let mut lone = clip(3, 300, 100, 0);
+        lone.transition_in = dissolve(TransitionKind::PageTurn, 40);
+        let track = Track {
+            clips: vec![clip(1, 0, 100, 0), incoming, lone],
+            ..Track::default()
+        };
+        let sequence = sequence();
+        let folds = |time| -> Vec<(u64, Option<f32>)> {
+            track_layers_at(&sequence, &track, Ticks(time))
+                .iter()
+                .map(|layer| (layer.clip.id.0, layer.reveal.fold.map(|fold| fold.progress)))
+                .collect()
+        };
+        assert_eq!(folds(90), [(2, None), (1, Some(0.25))]);
+        assert_eq!(folds(310), [(3, Some(0.75))]);
     }
 }

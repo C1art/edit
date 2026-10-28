@@ -58,6 +58,10 @@ pub enum TransitionKind {
     /// The incoming picture whips in, pushing the outgoing one out, both blurred by
     /// the speed.
     Whip,
+    /// The outgoing picture folds over from a corner, flat, showing its back mirrored.
+    PageTurn,
+    /// The outgoing picture curls away from a corner, its back pale and shaded.
+    PagePeel,
     /// Audio only: a linear crossfade, which dips in loudness through the middle.
     ConstantGain,
     /// Audio only: a crossfade linear in decibels, quick to fade out and slow to fade in.
@@ -65,7 +69,7 @@ pub enum TransitionKind {
 }
 
 impl TransitionKind {
-    pub const VIDEO: [Self; 34] = [
+    pub const VIDEO: [Self; 36] = [
         Self::CrossDissolve,
         Self::AdditiveDissolve,
         Self::NonAdditiveDissolve,
@@ -100,6 +104,8 @@ impl TransitionKind {
         Self::CenterSplit,
         Self::BandSlide,
         Self::Whip,
+        Self::PageTurn,
+        Self::PagePeel,
     ];
     pub const AUDIO: [Self; 4] = [
         Self::CrossDissolve,
@@ -146,6 +152,8 @@ impl TransitionKind {
             Self::CenterSplit => "Center Split",
             Self::BandSlide => "Band Slide",
             Self::Whip => "Whip",
+            Self::PageTurn => "Page Turn",
+            Self::PagePeel => "Page Peel",
         }
     }
 
@@ -161,6 +169,7 @@ impl TransitionKind {
             | Self::BandSlide
             | Self::Whip => "Slide",
             Self::CrossZoom => "Zoom",
+            Self::PageTurn | Self::PagePeel => "Page Peel",
             _ if self.pattern().is_some() => "Wipe",
             _ => "Dissolve",
         }
@@ -222,7 +231,23 @@ impl TransitionKind {
                 | Self::BandWipe
                 | Self::FlipOver
                 | Self::CubeSpin
+                | Self::PageTurn
+                | Self::PagePeel
         )
+    }
+
+    /// What choosing `side` means: page kinds lift the corner at the side's clockwise
+    /// end.
+    pub fn side_name(self, side: Side) -> &'static str {
+        if !self.folds() {
+            return side.name();
+        }
+        match side {
+            Side::Left => "From Top Left",
+            Side::Top => "From Top Right",
+            Side::Right => "From Bottom Right",
+            Side::Bottom => "From Bottom Left",
+        }
     }
 
     pub fn default_side(self) -> Side {
@@ -238,9 +263,13 @@ impl TransitionKind {
         }
     }
 
-    /// Whether the outgoing picture is cut into pieces that part to show the incoming one.
-    pub fn splits_outgoing(self) -> bool {
-        matches!(self, Self::Split | Self::CenterSplit)
+    /// Whether the outgoing picture moves away to show the incoming one, drawn over it.
+    pub fn moves_outgoing(self) -> bool {
+        matches!(self, Self::Split | Self::CenterSplit) || self.folds()
+    }
+
+    pub fn folds(self) -> bool {
+        matches!(self, Self::PageTurn | Self::PagePeel)
     }
 
     /// Whether audio goes silent at the cut instead of crossfading through it.

@@ -24,6 +24,19 @@ pub struct Reveal {
     pub split: Option<Split>,
     /// Motion blur as far as this shift, each way.
     pub smear: [f32; 2],
+    pub fold: Option<Fold>,
+}
+
+/// A picture folding over a line that sweeps from one corner to the opposite one, the
+/// lifted part laid back over the rest, as a page turns.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Fold {
+    /// The corner it lifts from: -1 or 1 across, then down, from the picture's center.
+    pub corner: [f32; 2],
+    /// 0 flat, 1 lifted clear of the picture.
+    pub progress: f32,
+    /// Whether the page curls, its back pale and shaded, rather than folding flat.
+    pub curl: bool,
 }
 
 /// A picture turned in depth by a transition.
@@ -49,6 +62,7 @@ impl Reveal {
         blend: None,
         split: None,
         smear: [0.0; 2],
+        fold: None,
     };
 
     const HIDDEN: Self = Self {
@@ -77,13 +91,15 @@ impl Reveal {
             blend: self.blend.or(other.blend),
             split: self.split.or(other.split),
             smear: [0, 1].map(|axis| self.smear[axis] + other.smear[axis]),
+            fold: self.fold.or(other.fold),
         }
     }
 }
 
 impl Transition {
     /// The outgoing and incoming pictures `progress` of the way through, where the cut
-    /// falls at `cut`. The incoming picture is drawn over the outgoing one.
+    /// falls at `cut`. The incoming picture is drawn over the outgoing one, unless the
+    /// kind moves the outgoing one away.
     pub fn reveals(self, progress: f32, cut: f32) -> (Reveal, Reveal) {
         let from = self.side();
         if let Some(pattern) = self.kind.pattern() {
@@ -177,6 +193,26 @@ impl Transition {
                 turned(from, progress, true),
                 turned(from, progress - 1.0, true),
             ),
+            TransitionKind::PageTurn | TransitionKind::PagePeel => {
+                let corner = match from {
+                    Side::Left => [-1.0, -1.0],
+                    Side::Top => [1.0, -1.0],
+                    Side::Right => [1.0, 1.0],
+                    Side::Bottom => [-1.0, 1.0],
+                };
+                let fold = Fold {
+                    corner,
+                    progress,
+                    curl: self.kind == TransitionKind::PagePeel,
+                };
+                (
+                    Reveal {
+                        fold: Some(fold),
+                        ..Reveal::FULL
+                    },
+                    Reveal::FULL,
+                )
+            }
             _ => incoming(Reveal::faded(progress)),
         }
     }
