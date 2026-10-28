@@ -117,6 +117,7 @@ impl Edit for ImportMedia {
             video: self.video,
             has_audio: self.has_audio,
             proxy: None,
+            generator: None,
         });
         Ok(())
     }

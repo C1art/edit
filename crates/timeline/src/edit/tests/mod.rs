@@ -430,6 +430,7 @@ fn proxy_replaces_only_the_decoded_path_and_undoes() {
 }
 
 mod enable;
+mod generate;
 mod marker;
 mod paste;
 mod speed;

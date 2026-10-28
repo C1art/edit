@@ -3,6 +3,7 @@ mod color;
 mod edit;
 mod effect;
 mod error;
+mod generator;
 mod history;
 mod look;
 mod marker;
@@ -21,14 +22,15 @@ mod validate;
 pub use audio_plan::{audio_fade, audio_span};
 pub use color::ColorCorrection;
 pub use edit::{
-    clamp_delta, AddMarker, AddTrack, Clipboard, CloseGap, Edge, ImportMedia, Lift, MoveClips,
-    PasteClips, PlaceClip, PlaceMode, RateStretch, Razor, RazorTarget, RemoveMarker, RemoveMedia,
-    RemoveTrack, RippleDelete, Roll, SetClipGain, SetClipLook, SetClipSpeed, SetClipsEnabled,
-    SetMasterGain, SetProxy, SetSequenceFormat, SetTrackMix, SetTrackSwitch, SetTransition, Slide,
-    Slip, TrackSwitch, Trim, TrimMode, UpdateMarker,
+    clamp_delta, AddGenerated, AddMarker, AddTrack, Clipboard, CloseGap, Edge, ImportMedia, Lift,
+    MoveClips, PasteClips, PlaceClip, PlaceMode, RateStretch, Razor, RazorTarget, RemoveMarker,
+    RemoveMedia, RemoveTrack, RippleDelete, Roll, SetClipGain, SetClipLook, SetClipSpeed,
+    SetClipsEnabled, SetGenerator, SetMasterGain, SetProxy, SetSequenceFormat, SetTrackMix,
+    SetTrackSwitch, SetTransition, Slide, Slip, TrackSwitch, Trim, TrimMode, UpdateMarker,
 };
 pub use effect::{Rgb, VideoEffect};
 pub use error::TimelineError;
+pub use generator::{Generator, TextAlign, Title, TitleFont, GENERATED_SECONDS};
 pub use history::{preview, Edit, EditCommand, Timeline};
 pub use look::{Crop, Look, Motion};
 pub use marker::{Marker, MarkerColor, MarkerId};
