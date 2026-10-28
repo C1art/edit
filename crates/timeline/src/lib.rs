@@ -6,6 +6,7 @@ mod look;
 mod media;
 mod mix;
 mod model;
+mod param;
 mod plan;
 mod time;
 mod timecode;
@@ -21,12 +22,13 @@ pub use edit::{
 };
 pub use error::TimelineError;
 pub use history::{preview, Edit, EditCommand, Timeline};
-pub use look::{Crop, Look, Motion, Param, VideoEffect};
+pub use look::{Crop, Look, Motion, VideoEffect};
 pub use media::{MediaItem, SourceId};
 pub use mix::{Gain, Pan};
 pub use model::{
     Clip, ClipId, IdGenerator, LinkId, Sequence, Track, TrackKind, TrackRef, VideoFormat,
 };
+pub use param::{Keyframe, Param};
 pub use plan::{track_layers_at, PlannedLayer};
 pub use time::{Ticks, Timebase};
 pub use timecode::{FrameRate, Timecode};

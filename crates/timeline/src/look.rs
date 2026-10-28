@@ -1,25 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-/// An adjustable clip property, held in hundredths of its display unit so the model
-/// stays `Eq` and round-trips exactly.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct Param {
-    pub hundredths: i32,
-}
-
-impl Param {
-    pub const fn new(hundredths: i32) -> Self {
-        Self { hundredths }
-    }
-
-    pub fn from_value(value: f32) -> Self {
-        Self::new((value * 100.0).round() as i32)
-    }
-
-    pub fn value(&self) -> f32 {
-        self.hundredths as f32 / 100.0
-    }
-}
+use crate::{Param, Ticks};
 
 /// Where the clip's picture sits in the frame, after it is fitted to the frame.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -91,13 +72,40 @@ impl Default for Look {
 
 impl Look {
     /// The blurriness of all Gaussian blurs together: blurring twice adds the squares.
-    pub fn blurriness(&self) -> f32 {
+    pub fn blurriness_at(&self, time: Ticks) -> f32 {
         self.effects
             .iter()
             .map(|effect| match effect {
-                VideoEffect::GaussianBlur { blurriness } => blurriness.value().powi(2),
+                VideoEffect::GaussianBlur { blurriness } => blurriness.value_at(time).powi(2),
             })
             .sum::<f32>()
             .sqrt()
+    }
+}
+
+impl Look {
+    pub fn params(&self) -> impl Iterator<Item = &Param> {
+        let motion = &self.motion;
+        let crop = &self.crop;
+        let effects = self.effects.iter().map(|effect| match effect {
+            VideoEffect::GaussianBlur { blurriness } => blurriness,
+        });
+        motion
+            .position
+            .iter()
+            .chain([&motion.scale, &motion.rotation, &self.opacity])
+            .chain([&crop.left, &crop.top, &crop.right, &crop.bottom])
+            .chain(effects)
+    }
+
+    /// Source times of every keyframe, sorted and deduplicated.
+    pub fn key_times(&self) -> Vec<Ticks> {
+        let mut times: Vec<Ticks> = self
+            .params()
+            .flat_map(|param| param.keys.iter().map(|key| key.time))
+            .collect();
+        times.sort_unstable();
+        times.dedup();
+        times
     }
 }
