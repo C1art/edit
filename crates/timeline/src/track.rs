@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{AudioEffect, Clip, Gain, Pan, Param, Ticks};
+use crate::{AudioEffect, Clip, Gain, Pan, Param, SubmixId, Ticks};
 
 /// Clips are kept sorted by `start` and never overlap.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -28,6 +28,10 @@ pub struct Track {
     /// they carry on through gaps between clips.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<AudioEffect>,
+    /// The submix an audio track is sent to; the master when none, or when the submix
+    /// isn't in the sequence mixing it, as after nesting.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output: Option<SubmixId>,
 }
 
 impl Track {

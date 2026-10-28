@@ -32,6 +32,7 @@ mod secondary;
 mod speed;
 mod srt;
 mod stabilize;
+mod submix;
 mod time;
 mod timecode;
 mod track;
@@ -49,18 +50,18 @@ pub use curves::{Curve, CurvePoint, Curves, CURVE_RANGE};
 pub use ducking::{active_spans, ducked_volume};
 pub use edit::{
     clamp_delta, AddBin, AddEdits, AddFrameHold, AddGenerated, AddMarker, AddNest,
-    AddSpeedKeyframe, AddTrack, Attribute, AutoDuck, ClipSound, Clipboard, CloseGap,
+    AddSpeedKeyframe, AddSubmix, AddTrack, Attribute, AutoDuck, ClipSound, Clipboard, CloseGap,
     CreateMulticam, Edge, ExtractMarked, FlattenMulticam, FrameFit, ImportMedia, InNest,
     InterpretFootage, Lift, LiftMarked, MakeSubclip, MarkerOwner, MoveClips, MoveToBin, NestClips,
     NormalizeClipGains, PasteAttributes, PasteClips, PlaceClip, PlaceMode, RateStretch, Razor,
     RazorTarget, RelinkMedia, RemoveAttributes, RemoveBin, RemoveMarker, RemoveMedia,
-    RemoveSpeedKeyframe, RemoveTimeRemap, RemoveTrack, RenameBin, RenameMedia, RippleDelete,
-    RippleTrimToPlayhead, Roll, SetCaptions, SetClipAudioEffects, SetClipGain, SetClipLabel,
-    SetClipLook, SetClipSpeed, SetClipVolume, SetClipsEnabled, SetClipsSound, SetGenerator,
-    SetLinked, SetMarks, SetMasterGain, SetProxy, SetSegmentSpeed, SetSequenceFormat,
-    SetTimeInterpolation, SetToFrameSize, SetTrackAutomation, SetTrackEffects, SetTrackMix,
-    SetTrackSwitch, SetTransition, Slide, Slip, SwitchAngle, TrackSwitch, Trim, TrimMode,
-    UpdateMarker,
+    RemoveSpeedKeyframe, RemoveSubmix, RemoveTimeRemap, RemoveTrack, RenameBin, RenameMedia,
+    RippleDelete, RippleTrimToPlayhead, Roll, SetCaptions, SetClipAudioEffects, SetClipGain,
+    SetClipLabel, SetClipLook, SetClipSpeed, SetClipVolume, SetClipsEnabled, SetClipsSound,
+    SetGenerator, SetLinked, SetMarks, SetMasterGain, SetProxy, SetSegmentSpeed, SetSequenceFormat,
+    SetSubmix, SetTimeInterpolation, SetToFrameSize, SetTrackAutomation, SetTrackEffects,
+    SetTrackMix, SetTrackOutput, SetTrackSwitch, SetTransition, Slide, Slip, SwitchAngle,
+    TrackSwitch, Trim, TrimMode, UpdateMarker,
 };
 pub use effect::{
     ColorMatch, EffectCategory, MatteChannel, RampShape, Rgb, TimecodeSource, VideoEffect,
@@ -93,6 +94,7 @@ pub use secondary::HslSecondary;
 pub use speed::{Speed, TimeInterpolation};
 pub use srt::{parse_srt, to_srt};
 pub use stabilize::{CameraPath, Framing, Pose, Similarity, StabilizeMethod, Stabilizer};
+pub use submix::{Submix, SubmixId};
 pub use time::{Ticks, Timebase};
 pub use timecode::{FrameRate, Timecode};
 pub use transition::{nearest_transition_edge, Transition, TransitionKind};

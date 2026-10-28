@@ -23,6 +23,7 @@ mod remap;
 mod sound;
 mod speed;
 mod structure;
+mod submix;
 mod trim;
 
 #[cfg(test)]
@@ -58,6 +59,7 @@ pub use structure::{
     AddTrack, ImportMedia, RemoveMedia, RemoveTrack, SetProxy, SetSequenceFormat, SetTrackSwitch,
     TrackSwitch,
 };
+pub use submix::{AddSubmix, RemoveSubmix, SetSubmix, SetTrackOutput};
 pub use trim::{Edge, Roll, Slide, Slip, Trim, TrimMode};
 
 use crate::{preview, Edit, Sequence, Ticks};

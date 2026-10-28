@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     AudioEffect, AudioType, Bin, Captions, FrameRate, Gain, Label, Look, Marker, Marks, MediaItem,
-    Param, SourceId, Speed, Ticks, TimeInterpolation, TimeRemap, Timebase, Transition,
+    Param, SourceId, Speed, Submix, Ticks, TimeInterpolation, TimeRemap, Timebase, Transition,
 };
 
 pub use crate::track::Track;
@@ -303,6 +303,8 @@ pub struct Sequence {
     pub audio: Vec<Track>,
     #[serde(default)]
     pub master: Gain,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub submixes: Vec<Submix>,
     /// Sorted by time.
     #[serde(default)]
     pub markers: Vec<Marker>,
@@ -324,6 +326,7 @@ impl Sequence {
             video: Vec::new(),
             audio: Vec::new(),
             master: Gain::UNITY,
+            submixes: Vec::new(),
             markers: Vec::new(),
             marks: Marks::default(),
             captions: Captions::default(),
