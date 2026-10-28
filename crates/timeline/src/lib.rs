@@ -64,8 +64,8 @@ pub use ducking::{active_spans, ducked_volume};
 pub use edit::{
     clamp_delta, is_through_edit, AddBin, AddEdits, AddFrameHold, AddGenerated, AddMarker, AddNest,
     AddSpeedKeyframe, AddSubmix, AddTrack, ApplyEffect, Attribute, AutoDuck, ClipEffect, ClipSound,
-    Clipboard, CloseGap, CreateMulticam, Edge, ExtractMarked, FlattenMulticam, FrameFit,
-    ImportMedia, InNest, InterpretFootage, IntoSync, JoinThroughEdits, Lift, LiftMarked,
+    Clipboard, CloseGap, CreateMulticam, DuplicateMedia, Edge, ExtractMarked, FlattenMulticam,
+    FrameFit, ImportMedia, InNest, InterpretFootage, IntoSync, JoinThroughEdits, Lift, LiftMarked,
     MakeSubclip, MarkerOwner, MoveClips, MoveMode, MoveToBin, NestClips, NormalizeClipGains,
     PasteAttributes, PasteClips, PlaceClip, PlaceMode, RateStretch, Razor, RazorTarget,
     RelinkMedia, RemoveAttributes, RemoveBin, RemoveMarker, RemoveMedia, RemoveSpeedKeyframe,

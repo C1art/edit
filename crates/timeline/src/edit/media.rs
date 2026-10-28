@@ -105,3 +105,29 @@ impl Edit for MakeSubclip {
         Ok(())
     }
 }
+
+/// Copies a media item, as the Project panel's Duplicate does: a sequence's copy is
+/// edited apart from the original, and clips placed from the original keep using it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DuplicateMedia {
+    pub source: SourceId,
+}
+
+impl Edit for DuplicateMedia {
+    fn name(&self) -> &'static str {
+        "Duplicate"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let index = sequence
+            .media
+            .iter()
+            .position(|item| item.id == self.source)
+            .ok_or(TimelineError::MediaNotFound(self.source))?;
+        let mut copy = sequence.media[index].clone();
+        copy.id = SourceId(sequence.ids.next());
+        copy.name.push_str(" Copy");
+        sequence.media.insert(index + 1, copy);
+        Ok(())
+    }
+}

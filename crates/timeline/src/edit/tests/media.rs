@@ -65,3 +65,15 @@ fn a_subclip_places_its_part_of_the_file_and_cannot_reach_past_it() {
         Err(TimelineError::NonPositiveDuration)
     );
 }
+
+#[test]
+fn a_duplicate_follows_its_original_under_a_new_id_and_undoes() {
+    let (mut timeline, source) = timeline();
+    timeline.apply(DuplicateMedia { source }).unwrap();
+    let media = &timeline.sequence().media;
+    assert_eq!(media.len(), 2);
+    assert_eq!(media[1].name, format!("{} Copy", media[0].name));
+    assert_ne!(media[1].id, source);
+    timeline.undo();
+    assert_eq!(timeline.sequence().media.len(), 1);
+}

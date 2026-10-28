@@ -53,7 +53,7 @@ pub use levels::{
 pub use link::{SetLinked, SetLinkedSelection, Unlinked};
 pub use look::{SetClipLook, SetTransition};
 pub use marker::{AddMarker, MarkerOwner, RemoveMarker, UpdateMarker};
-pub use media::{MakeSubclip, RelinkMedia, RenameMedia};
+pub use media::{DuplicateMedia, MakeSubclip, RelinkMedia, RenameMedia};
 pub use multicam::{CreateMulticam, FlattenMulticam, SwitchAngle};
 pub use nest::{AddNest, InNest, NestClips};
 pub use paste::{Clipboard, PasteClips};
