@@ -3,6 +3,7 @@ use timeline::{Clip, ClipId, Gain, Sequence, Ticks, Timecode, Track, TrackKind};
 
 use super::clip_art::{self, ClipArea};
 use super::layout::{clip_rect, Row};
+use super::rubber_band;
 use super::scale::{label_interval, TimeScale};
 use crate::clip_art::ClipArt;
 
@@ -160,7 +161,10 @@ pub fn clips(
         };
         painter.rect_stroke(rect, 3.0, stroke, StrokeKind::Inside);
         transition_marks(painter, row, scale, track, clip);
-        keyframe_marks(painter, rect, scale, clip);
+        match row.track.kind {
+            TrackKind::Video => keyframe_marks(painter, rect, scale, clip),
+            TrackKind::Audio => rubber_band::paint(painter, rect.shrink(1.0), scale, clip),
+        }
         let item = sequence.media_item(clip.source);
         let name = item.map_or("Missing media", |item| item.name.as_str());
         let has_both = item.is_some_and(|item| item.video.is_some() && item.has_audio);

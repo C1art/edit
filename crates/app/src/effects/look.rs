@@ -1,7 +1,7 @@
 use std::ops::RangeInclusive;
 
 use egui::{DragValue, RichText};
-use timeline::{Look, Param, Rgb, Ticks, VideoEffect};
+use timeline::{Gain, Look, Param, Rgb, Ticks, VideoEffect};
 
 use crate::mixer::{response_state, Change};
 
@@ -15,13 +15,7 @@ pub(super) struct Output {
 
 /// Edits `look` at source time `time`, where animated parameters get their keyframes.
 pub(super) fn controls(ui: &mut egui::Ui, look: &mut Look, time: Ticks) -> Output {
-    let mut rows = Rows {
-        time,
-        output: Output {
-            change: None,
-            seek: None,
-        },
-    };
+    let mut rows = Rows::new(time);
     egui::CollapsingHeader::new("Motion")
         .default_open(true)
         .show(ui, |ui| {
@@ -108,12 +102,34 @@ pub(super) fn controls(ui: &mut egui::Ui, look: &mut Look, time: Ticks) -> Outpu
     rows.output
 }
 
+/// Edits an audio clip's volume at source time `time`.
+pub(super) fn volume_controls(ui: &mut egui::Ui, volume: &mut Param, time: Ticks) -> Output {
+    let mut rows = Rows::new(time);
+    egui::CollapsingHeader::new("Volume")
+        .default_open(true)
+        .show(ui, |ui| {
+            let range = Gain::SILENT.db()..=Gain::MAX.db();
+            rows.param(ui, "Level", volume, range, " dB");
+        });
+    rows.output
+}
+
 struct Rows {
     time: Ticks,
     output: Output,
 }
 
 impl Rows {
+    fn new(time: Ticks) -> Self {
+        Self {
+            time,
+            output: Output {
+                change: None,
+                seek: None,
+            },
+        }
+    }
+
     fn commit(&mut self) {
         self.output.change = Some(Change::Commit);
     }

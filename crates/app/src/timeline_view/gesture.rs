@@ -1,7 +1,10 @@
+use egui::Rangef;
 use timeline::{
-    clamp_delta, preview, ClipId, Edge, MoveClips, RateStretch, Roll, Sequence, Slide, Slip, Ticks,
-    Timeline, TimelineError, TrackKind, TrackRef, Trim, TrimMode,
+    clamp_delta, preview, ClipId, Edge, MoveClips, RateStretch, Roll, Sequence, SetClipVolume,
+    Slide, Slip, Ticks, Timeline, TimelineError, TrackKind, TrackRef, Trim, TrimMode,
 };
+
+use super::rubber_band::{self, BandHit};
 
 /// What a drag in the timeline is doing, fixed when the drag starts.
 #[derive(Debug, Clone)]
@@ -29,6 +32,13 @@ pub enum Gesture {
     Slide {
         clips: Vec<ClipId>,
     },
+    /// Drags an audio clip's volume line or one of its keyframes.
+    Volume {
+        clip: ClipId,
+        grabbed: BandHit,
+        band: Rangef,
+        origin_y: f32,
+    },
 }
 
 /// An edit a gesture would make, previewed while dragging and applied on release.
@@ -40,6 +50,7 @@ pub enum PendingEdit {
     Stretch(RateStretch),
     Slip(Slip),
     Slide(Slide),
+    Volume(SetClipVolume),
 }
 
 impl PendingEdit {
@@ -51,6 +62,7 @@ impl PendingEdit {
             Self::Stretch(edit) => preview(sequence, edit),
             Self::Slip(edit) => preview(sequence, edit),
             Self::Slide(edit) => preview(sequence, edit),
+            Self::Volume(edit) => preview(sequence, edit),
         }
     }
 
@@ -62,6 +74,7 @@ impl PendingEdit {
             Self::Stretch(edit) => timeline.apply(edit),
             Self::Slip(edit) => timeline.apply(edit),
             Self::Slide(edit) => timeline.apply(edit),
+            Self::Volume(edit) => timeline.apply(edit),
         }
     }
 }
@@ -87,6 +100,16 @@ impl Gesture {
                 .collect(),
             Self::Roll { at, .. } => vec![*at],
             Self::Slip { .. } => Vec::new(),
+            Self::Volume {
+                clip,
+                grabbed: BandHit::Key(index),
+                ..
+            } => sequence
+                .clip(*clip)
+                .and_then(|(_, clip)| Some(clip.position_of(clip.volume.keys.get(*index)?.time)))
+                .into_iter()
+                .collect(),
+            Self::Volume { .. } => Vec::new(),
         }
     }
 
@@ -98,13 +121,19 @@ impl Gesture {
             | Self::Stretch { clips, .. }
             | Self::Slip { clips }
             | Self::Slide { clips } => sequence.with_links(clips),
-            Self::Roll { .. } => Vec::new(),
+            Self::Roll { .. } | Self::Volume { .. } => Vec::new(),
         }
     }
 
     /// The edit for a drag of `delta` (already snapped and frame-aligned) that ended over
-    /// `track`, clamped to what the sequence allows.
-    pub fn edit(&self, sequence: &Sequence, delta: Ticks, track: Option<TrackRef>) -> PendingEdit {
+    /// `track` at height `y`, clamped to what the sequence allows.
+    pub fn edit(
+        &self,
+        sequence: &Sequence,
+        delta: Ticks,
+        track: Option<TrackRef>,
+        y: f32,
+    ) -> PendingEdit {
         match self {
             Self::Move { clips, from } => {
                 PendingEdit::Move(clamped_move(sequence, clips, *from, delta, track))
@@ -148,6 +177,23 @@ impl Gesture {
                     delta,
                 };
                 PendingEdit::Slide(make(clamp_delta(sequence, delta, make)))
+            }
+            Self::Volume {
+                clip,
+                grabbed,
+                band,
+                origin_y,
+            } => {
+                let db = rubber_band::db_for_drag(*band, y - origin_y);
+                let volume = sequence
+                    .clip(*clip)
+                    .map_or_else(Default::default, |(_, clip)| {
+                        rubber_band::dragged(clip, *grabbed, delta, db)
+                    });
+                PendingEdit::Volume(SetClipVolume {
+                    clip: *clip,
+                    volume,
+                })
             }
         }
     }

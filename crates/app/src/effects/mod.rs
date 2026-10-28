@@ -6,8 +6,8 @@ use std::sync::Arc;
 
 use egui::RichText;
 use timeline::{
-    preview, Clip, ClipId, Edit, Generator, Look, Sequence, SetClipLook, SetGenerator, SourceId,
-    Ticks, TrackKind, TrackRef,
+    preview, Clip, ClipId, Edit, Generator, Look, Param, Sequence, SetClipLook, SetClipVolume,
+    SetGenerator, SourceId, Ticks, TrackKind, TrackRef,
 };
 
 use crate::editor::Editor;
@@ -23,61 +23,67 @@ pub enum SideTab {
     Scopes,
 }
 
-/// The look being dragged, or the title being typed, shown live and committed on
-/// release.
+/// The look or volume being dragged, or the title being typed, shown live and
+/// committed on release.
 #[derive(Debug, Default)]
 pub struct EffectControls {
     adjusting: Option<(ClipId, Look)>,
+    leveling: Option<(ClipId, Param)>,
     drawing: Option<(SourceId, Generator)>,
 }
 
 pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
     let sequence = editor.timeline.sequence();
-    // Linked video and audio are selected together; the picture has more to adjust.
-    let mut selected: Vec<(TrackRef, &Clip)> = editor
+    // Linked video and audio are selected together and adjusted side by side.
+    let selected: Vec<(TrackRef, &Clip)> = editor
         .view
         .selection
         .iter()
         .filter_map(|&id| sequence.clip(id))
         .collect();
-    selected.sort_by_key(|(track, _)| track.kind);
-    let Some((track, clip)) = selected.first().map(|&(track, clip)| (track, clip.clone())) else {
+    let first = |kind: TrackKind| {
+        selected
+            .iter()
+            .find(|(track, _)| track.kind == kind)
+            .map(|&(track, clip)| (track, clip.clone()))
+    };
+    let (picture, sound) = (first(TrackKind::Video), first(TrackKind::Audio));
+    let Some((track, clip)) = picture.clone().or_else(|| sound.clone()) else {
         ui.label("Select a clip to adjust its motion, opacity, crop, effects and transitions.");
         return;
     };
     ui.label(RichText::new(clip_name(sequence, &clip)).strong());
-    if track.kind == TrackKind::Audio {
+    egui::ScrollArea::vertical().show(ui, |ui| {
+        if let Some((_, clip)) = &picture {
+            picture_controls(editor, ui, clip);
+        }
+        if let Some((_, clip)) = &sound {
+            volume_controls(editor, ui, clip);
+        }
         transitions::controls(editor, ui, track, &clip);
-        return;
-    }
-    // Keyframes go where the playhead is, kept within the clip.
-    let last = clip.end() - Ticks(1);
-    let time = clip.source_time(editor.playhead().clamp(clip.start, last));
+    });
+}
+
+fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
+    let time = keyframe_time(editor, clip);
     let mut look = match &editor.effects.adjusting {
         Some((id, look)) if *id == clip.id => look.clone(),
         _ => clip.look.clone(),
     };
-    let mut drawing = sequence
+    let mut drawing = editor
+        .timeline
+        .sequence()
         .media_item(clip.source)
         .and_then(|item| item.generator.clone())
         .map(|generator| match &editor.effects.drawing {
             Some((id, drawing)) if *id == clip.source => drawing.clone(),
             _ => generator,
         });
-    let mut drawing_change = None;
-    let output = egui::ScrollArea::vertical()
-        .show(ui, |ui| {
-            if let Some(generator) = &mut drawing {
-                drawing_change = generated::controls(ui, generator);
-            }
-            let output = look::controls(ui, &mut look, time);
-            transitions::controls(editor, ui, track, &clip);
-            output
-        })
-        .inner;
-    if let Some(key) = output.seek {
-        editor.seek_program(clip.position_of(key).clamp(clip.start, last));
-    }
+    let drawing_change = drawing
+        .as_mut()
+        .and_then(|generator| generated::controls(ui, generator));
+    let output = look::controls(ui, &mut look, time);
+    seek_to_key(editor, clip, output.seek);
     if let (Some(generator), Some(change)) = (drawing, drawing_change) {
         let edit = SetGenerator {
             source: clip.source,
@@ -108,6 +114,43 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
             editor.apply(edit);
         }
         None => {}
+    }
+}
+
+fn volume_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
+    let time = keyframe_time(editor, clip);
+    let mut volume = match &editor.effects.leveling {
+        Some((id, volume)) if *id == clip.id => volume.clone(),
+        _ => clip.volume.clone(),
+    };
+    let output = look::volume_controls(ui, &mut volume, time);
+    seek_to_key(editor, clip, output.seek);
+    let edit = SetClipVolume {
+        clip: clip.id,
+        volume,
+    };
+    match output.change {
+        Some(Change::Live) => {
+            show_live(editor, &edit);
+            editor.effects.leveling = Some((edit.clip, edit.volume));
+        }
+        Some(Change::Commit) => {
+            editor.effects.leveling = None;
+            editor.apply(edit);
+        }
+        None => {}
+    }
+}
+
+/// The source time keyframes go to: under the playhead, kept within the clip.
+fn keyframe_time(editor: &Editor, clip: &Clip) -> Ticks {
+    clip.source_time(editor.playhead().clamp(clip.start, clip.end() - Ticks(1)))
+}
+
+fn seek_to_key(editor: &mut Editor, clip: &Clip, key: Option<Ticks>) {
+    if let Some(key) = key {
+        let position = clip.position_of(key);
+        editor.seek_program(position.clamp(clip.start, clip.end() - Ticks(1)));
     }
 }
 

@@ -1,7 +1,11 @@
-use timeline::{ClipId, Razor, RazorTarget, Sequence, Ticks, Timeline, TrackRef};
+use egui::{Pos2, Rangef};
+use timeline::{
+    ClipId, Razor, RazorTarget, Sequence, SetClipVolume, Ticks, Timeline, TrackKind, TrackRef,
+};
 
 use super::gesture::Gesture;
-use super::layout::{self, Hit};
+use super::layout::{self, Hit, Row};
+use super::rubber_band::{self, BandHit};
 use super::scale::{self, TimeScale};
 use super::{Drag, TimelineOutput, TimelineView, Tool, SNAP_POINTS};
 
@@ -19,7 +23,9 @@ impl TimelineView {
         let rows = layout::rows(sequence, top);
         let (rate, timebase) = (sequence.format.frame_rate, sequence.timebase);
         let frame_time = |x: f32| scale::nearest_frame(scale.time(x), rate, timebase);
-        let shift = response.ctx.input(|input| input.modifiers.shift);
+        let (shift, command) = response
+            .ctx
+            .input(|input| (input.modifiers.shift, input.modifiers.command));
 
         if response.double_clicked() && self.tool == Tool::Selection {
             if let Some(pos) = response.interact_pointer_pos() {
@@ -42,6 +48,10 @@ impl TimelineView {
                             output.errors.push(error.to_string());
                         }
                     }
+                } else if let Some((clip, grabbed, _)) = band_hit(sequence, &rows, &scale, hit, pos)
+                    .filter(|_| command && self.tool == Tool::Selection)
+                {
+                    toggle_volume_key(timeline, clip, grabbed, output);
                 } else {
                     self.click(sequence, hit, shift);
                 }
@@ -58,7 +68,18 @@ impl TimelineView {
                 .input(|input| input.pointer.press_origin())
                 .unwrap_or(pos);
             let hit = layout::hit(sequence, &rows, &scale, origin);
-            self.drag = self.gesture(sequence, hit).map(|gesture| Drag {
+            let band = band_hit(sequence, &rows, &scale, hit, origin)
+                .filter(|_| self.tool == Tool::Selection);
+            let gesture = match band {
+                Some((clip, grabbed, band)) => Some(Gesture::Volume {
+                    clip,
+                    grabbed,
+                    band,
+                    origin_y: origin.y,
+                }),
+                None => self.gesture(sequence, hit),
+            };
+            self.drag = gesture.map(|gesture| Drag {
                 gesture,
                 origin: frame_time(origin.x),
                 pending: None,
@@ -87,7 +108,7 @@ impl TimelineView {
                     delta = scale::snap(delta, &edges, &targets, scale.span(SNAP_POINTS));
                 }
                 let over = layout::row_at(&rows, pos.y).map(|row| row.track);
-                let pending = drag.gesture.edit(sequence, delta, over);
+                let pending = drag.gesture.edit(sequence, delta, over, pos.y);
                 drag.preview = pending.preview(sequence).ok();
                 drag.pending = Some(pending);
             }
@@ -176,5 +197,55 @@ impl TimelineView {
                 from: track,
             }),
         }
+    }
+}
+
+/// The audio clip whose volume line the pointer is on, what it grabs there and the band
+/// the line moves in.
+fn band_hit(
+    sequence: &Sequence,
+    rows: &[Row],
+    scale: &TimeScale,
+    hit: Hit,
+    pointer: Pos2,
+) -> Option<(ClipId, BandHit, Rangef)> {
+    let Hit::Body { clip, track } = hit else {
+        return None;
+    };
+    if track.kind != TrackKind::Audio {
+        return None;
+    }
+    let row = rows.iter().find(|row| row.track == track)?;
+    let (_, clip) = sequence.clip(clip)?;
+    let rect = layout::clip_rect(row, scale, clip.start, clip.end()).shrink(1.0);
+    let grabbed = rubber_band::hit(rect, scale, clip, pointer)?;
+    Some((clip.id, grabbed, rubber_band::band(rect)))
+}
+
+/// Adds a keyframe where the line was clicked, or removes the one clicked.
+fn toggle_volume_key(
+    timeline: &mut Timeline,
+    clip: ClipId,
+    grabbed: BandHit,
+    output: &mut TimelineOutput,
+) {
+    let Some((_, clip)) = timeline.sequence().clip(clip) else {
+        return;
+    };
+    let mut volume = clip.volume.clone();
+    let time = match grabbed {
+        BandHit::Key(index) => volume.keys.get(index).map(|key| key.time),
+        BandHit::Line(at) => Some(at),
+    };
+    let Some(time) = time else {
+        return;
+    };
+    volume.toggle_key(time);
+    let edit = SetClipVolume {
+        clip: clip.id,
+        volume,
+    };
+    if let Err(error) = timeline.apply(edit) {
+        output.errors.push(error.to_string());
     }
 }

@@ -5,6 +5,7 @@ mod interact;
 mod layout;
 mod markers;
 mod paint;
+mod rubber_band;
 mod scale;
 mod tool;
 
