@@ -1,5 +1,5 @@
 use egui::{Event, Key, KeyboardShortcut, Modifiers};
-use timeline::{PlaceMode, TrackKind};
+use timeline::{Generator, PlaceMode, Title, TrackKind};
 
 use crate::editor::Editor;
 use crate::monitors::Focus;
@@ -27,6 +27,7 @@ pub const CLEAR_MARKER: KeyboardShortcut =
     KeyboardShortcut::new(Modifiers::COMMAND.plus(Modifiers::ALT), Key::M);
 pub const SPEED_DURATION: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::R);
 pub const TOGGLE_ENABLED: KeyboardShortcut = KeyboardShortcut::new(Modifiers::SHIFT, Key::E);
+pub const NEW_TITLE: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::T);
 pub const IMPORT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::I);
 pub const EXPORT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::M);
 pub const UNDO: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::Z);
@@ -70,6 +71,7 @@ enum Action {
     ClipGain,
     SpeedDuration,
     ToggleEnabled,
+    NewTitle,
 }
 
 /// Editor-wide keys. Skipped while a text field has focus so typing isn't hijacked.
@@ -118,6 +120,7 @@ fn pressed(ctx: &egui::Context) -> Option<Action> {
             (ADD_EDIT, Action::AddEdit),
             (SPEED_DURATION, Action::SpeedDuration),
             (TOGGLE_ENABLED, Action::ToggleEnabled),
+            (NEW_TITLE, Action::NewTitle),
             (TRANSITION, Action::Transition(TrackKind::Video)),
             (
                 KeyboardShortcut::new(Modifiers::SHIFT, Key::Delete),
@@ -180,6 +183,9 @@ fn run(editor: &mut Editor, action: Action) {
         Action::AddMarker => editor.add_marker(),
         Action::SpeedDuration => editor.speed_duration(),
         Action::ToggleEnabled => editor.toggle_enabled(),
+        Action::NewTitle => {
+            placing::new_generated(editor, Generator::Title(Title::default()));
+        }
         Action::JumpToMarker { forward } => editor.jump_to_marker(forward),
         Action::ClearMarker => {
             if let Some(id) = editor.marker_at_playhead() {

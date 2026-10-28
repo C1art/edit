@@ -71,7 +71,8 @@ impl SourceMonitor {
     }
 }
 
-/// A sequence that shows `item` from start to end in its own format.
+/// A sequence that shows `item` from start to end in its own format; generated media,
+/// which has no end, shows for as long as an edit places by default.
 fn source_sequence(item: &MediaItem, timebase: Timebase) -> Sequence {
     let mut sequence = Sequence::new(timebase, item.video.unwrap_or_default());
     sequence.media.push(item.clone());
@@ -80,7 +81,7 @@ fn source_sequence(item: &MediaItem, timebase: Timebase) -> Sequence {
             ClipId(id),
             item.id,
             Ticks::ZERO,
-            item.duration,
+            item.default_length(timebase),
             Ticks::ZERO,
         )],
         ..Track::default()

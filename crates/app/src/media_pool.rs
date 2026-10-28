@@ -44,7 +44,7 @@ pub fn ui(
                     if ui.button("Remove from Project").clicked() {
                         action = Some(PoolAction::Remove(item.id));
                     }
-                    if item.video.is_some() {
+                    if item.video.is_some() && item.is_file() {
                         ui.separator();
                         let label = if item.proxy.is_some() {
                             "Recreate Proxy"
@@ -81,7 +81,10 @@ fn item_row(
     let rate = item
         .video
         .map_or(FrameRate::FPS_25, |video| video.frame_rate);
-    let mut details = vec![Timecode::new(item.duration, timebase, rate).to_string()];
+    let mut details = vec![match &item.generator {
+        Some(generator) => generator.kind_name().to_owned(),
+        None => Timecode::new(item.duration, timebase, rate).to_string(),
+    }];
     if let Some(video) = item.video {
         details.push(format!(
             "{}×{} {:.2} fps",
@@ -108,5 +111,8 @@ fn item_row(
     inner
         .response
         .interact(Sense::click_and_drag())
-        .on_hover_text(item.path.display().to_string())
+        .on_hover_text(match &item.generator {
+            Some(generator) => generator.kind_name().to_owned(),
+            None => item.path.display().to_string(),
+        })
 }

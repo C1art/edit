@@ -1,5 +1,5 @@
 use egui::{Button, Key, MenuBar, ViewportCommand};
-use timeline::{Gain, PlaceMode, SetClipGain, TrackKind};
+use timeline::{Gain, Generator, PlaceMode, Rgb, SetClipGain, Title, TrackKind};
 
 use crate::editor::Editor;
 use crate::placing;
@@ -32,6 +32,16 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             if ui.add(import).clicked() {
                 editor.prompt_path(PathPurpose::Import);
             }
+            ui.menu_button("New", |ui| {
+                let title = Button::new("Title").shortcut_text(shortcut(ui, shortcuts::NEW_TITLE));
+                if ui.add(title).clicked() {
+                    placing::new_generated(editor, Generator::Title(Title::default()));
+                }
+                if ui.button("Color Matte").clicked() {
+                    let color = Rgb::new(32, 32, 48);
+                    placing::new_generated(editor, Generator::ColorMatte { color });
+                }
+            });
             let export =
                 Button::new("Export Media…").shortcut_text(shortcut(ui, shortcuts::EXPORT));
             if ui.add(export).clicked() {

@@ -1,10 +1,14 @@
+mod generated;
 mod look;
 mod transitions;
 
 use std::sync::Arc;
 
 use egui::RichText;
-use timeline::{preview, Clip, ClipId, Look, Sequence, SetClipLook, Ticks, TrackKind, TrackRef};
+use timeline::{
+    preview, Clip, ClipId, Edit, Generator, Look, Sequence, SetClipLook, SetGenerator, SourceId,
+    Ticks, TrackKind, TrackRef,
+};
 
 use crate::editor::Editor;
 use crate::mixer::Change;
@@ -19,10 +23,12 @@ pub enum SideTab {
     Scopes,
 }
 
-/// The look being dragged, shown live and committed on release.
+/// The look being dragged, or the title being typed, shown live and committed on
+/// release.
 #[derive(Debug, Default)]
 pub struct EffectControls {
     adjusting: Option<(ClipId, Look)>,
+    drawing: Option<(SourceId, Generator)>,
 }
 
 pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
@@ -51,8 +57,19 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
         Some((id, look)) if *id == clip.id => look.clone(),
         _ => clip.look.clone(),
     };
+    let mut drawing = sequence
+        .media_item(clip.source)
+        .and_then(|item| item.generator.clone())
+        .map(|generator| match &editor.effects.drawing {
+            Some((id, drawing)) if *id == clip.source => drawing.clone(),
+            _ => generator,
+        });
+    let mut drawing_change = None;
     let output = egui::ScrollArea::vertical()
         .show(ui, |ui| {
+            if let Some(generator) = &mut drawing {
+                drawing_change = generated::controls(ui, generator);
+            }
             let output = look::controls(ui, &mut look, time);
             transitions::controls(editor, ui, track, &clip);
             output
@@ -61,17 +78,29 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
     if let Some(key) = output.seek {
         editor.seek_program(clip.position_of(key).clamp(clip.start, last));
     }
+    if let (Some(generator), Some(change)) = (drawing, drawing_change) {
+        let edit = SetGenerator {
+            source: clip.source,
+            generator,
+        };
+        editor.effects.drawing = None;
+        match change {
+            Change::Live => {
+                show_live(editor, &edit);
+                editor.effects.drawing = Some((edit.source, edit.generator));
+            }
+            Change::Commit => {
+                editor.apply(edit);
+            }
+        }
+    }
     let edit = SetClipLook {
         clip: clip.id,
         look,
     };
     match output.change {
         Some(Change::Live) => {
-            if let Ok(sequence) = preview(editor.timeline.sequence(), &edit) {
-                if let Some(program) = &mut editor.program {
-                    program.player.set_sequence(Arc::new(sequence));
-                }
-            }
+            show_live(editor, &edit);
             editor.effects.adjusting = Some((edit.clip, edit.look));
         }
         Some(Change::Commit) => {
@@ -79,6 +108,15 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
             editor.apply(edit);
         }
         None => {}
+    }
+}
+
+/// Shows the program as `edit` would leave it, without adding to the undo history.
+fn show_live(editor: &mut Editor, edit: &impl Edit) {
+    if let Ok(sequence) = preview(editor.timeline.sequence(), edit) {
+        if let Some(program) = &mut editor.program {
+            program.player.set_sequence(Arc::new(sequence));
+        }
     }
 }
 

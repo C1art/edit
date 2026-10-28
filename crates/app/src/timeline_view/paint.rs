@@ -161,13 +161,13 @@ pub fn clips(
         painter.rect_stroke(rect, 3.0, stroke, StrokeKind::Inside);
         transition_marks(painter, row, scale, track, clip);
         keyframe_marks(painter, rect, scale, clip);
-        let name = sequence
-            .media_item(clip.source)
-            .map_or("Missing media", |item| item.name.as_str());
-        let link = if clip.link.is_some() {
-            ""
-        } else {
+        let item = sequence.media_item(clip.source);
+        let name = item.map_or("Missing media", |item| item.name.as_str());
+        let has_both = item.is_some_and(|item| item.video.is_some() && item.has_audio);
+        let link = if clip.link.is_none() && has_both {
             " [unlinked]"
+        } else {
+            ""
         };
         let gain = if row.track.kind == TrackKind::Audio && clip.gain != Gain::UNITY {
             format!(" {:+.1} dB", clip.gain.db())

@@ -1,5 +1,5 @@
 use egui::{Color32, Mesh, Painter, Rect};
-use timeline::{Clip, MediaItem, Ticks, Timebase};
+use timeline::{Clip, Generator, MediaItem, Ticks, Timebase};
 
 use super::scale::TimeScale;
 use crate::clip_art::ClipArt;
@@ -32,6 +32,15 @@ pub fn thumbnails(
         item,
         timebase,
     } = *area;
+    match &item.generator {
+        Some(Generator::ColorMatte { color }) => {
+            let color = Color32::from_rgb(color.r, color.g, color.b);
+            painter.rect_filled(rect, 2.0, color * tint);
+            return;
+        }
+        Some(Generator::Title(_)) => return,
+        None => {}
+    }
     let Some(format) = item.video else {
         return;
     };
