@@ -24,7 +24,7 @@ mod validate;
 
 pub use audio_effect::AudioEffect;
 pub use audio_plan::{audio_fade, audio_span, clip_level};
-pub use color::ColorCorrection;
+pub use color::{ColorCorrection, ColorWheel};
 pub use edit::{
     clamp_delta, AddFrameHold, AddGenerated, AddMarker, AddNest, AddTrack, Clipboard, CloseGap,
     Edge, ExtractMarked, ImportMedia, InNest, Lift, LiftMarked, MoveClips, NestClips, PasteClips,

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use timeline::{
     AudioEffect, Clip, ClipId, Gain, Generator, Interpolation, Keyframe, Marks, MediaItem, Nest,
-    Pan, Rgb, SourceId, TextAlign, Ticks, Timebase, Title, TitleFont, Track, Transition,
+    Pan, Param, Rgb, SourceId, TextAlign, Ticks, Timebase, Title, TitleFont, Track, Transition,
     TransitionKind, VideoEffect, VideoFormat,
 };
 
@@ -72,6 +72,8 @@ fn sample() -> ProjectFile {
         interpolation: Interpolation::EaseOut,
         ..Keyframe::new(Ticks(45_000), -12_345)
     });
+    clip.look.color.midtone_wheel.blue = Param::new(-2_500);
+    clip.look.color.vibrance = Param::new(4_000);
     clip.look.effects.push(VideoEffect::GaussianBlur {
         blurriness: clip.look.opacity.clone(),
     });
