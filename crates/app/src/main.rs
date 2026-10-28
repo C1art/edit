@@ -9,6 +9,8 @@ mod mixer;
 mod monitor;
 mod monitors;
 mod placing;
+mod project_files;
+mod project_store;
 mod proxies;
 mod scopes;
 mod shortcuts;

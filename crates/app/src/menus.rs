@@ -1,10 +1,9 @@
-use std::path::PathBuf;
-
 use egui::{Button, Key, MenuBar, ViewportCommand};
 use timeline::{Gain, PlaceMode, SetClipGain, TrackKind};
 
 use crate::editor::Editor;
 use crate::placing;
+use crate::project_files::{AfterDiscard, PathPurpose};
 use crate::shortcuts;
 use crate::timeline_view::Tool;
 
@@ -12,15 +11,33 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
     MenuBar::new().ui(ui, |ui| {
         let shortcut = |ui: &egui::Ui, shortcut| ui.ctx().format_shortcut(&shortcut);
         ui.menu_button("File", |ui| {
+            let new = Button::new("New Project").shortcut_text(shortcut(ui, shortcuts::NEW));
+            if ui.add(new).clicked() {
+                editor.discard_then(AfterDiscard::NewProject);
+            }
+            let open = Button::new("Open Project…").shortcut_text(shortcut(ui, shortcuts::OPEN));
+            if ui.add(open).clicked() {
+                editor.prompt_path(PathPurpose::OpenProject);
+            }
+            let save = Button::new("Save").shortcut_text(shortcut(ui, shortcuts::SAVE));
+            if ui.add(save).clicked() {
+                editor.save_project();
+            }
+            let save_as = Button::new("Save As…").shortcut_text(shortcut(ui, shortcuts::SAVE_AS));
+            if ui.add(save_as).clicked() {
+                editor.prompt_path(PathPurpose::SaveProject);
+            }
+            ui.separator();
             let import = Button::new("Import…").shortcut_text(shortcut(ui, shortcuts::IMPORT));
             if ui.add(import).clicked() {
-                editor.import_prompt = Some(String::new());
+                editor.prompt_path(PathPurpose::Import);
             }
             let export =
                 Button::new("Export Media…").shortcut_text(shortcut(ui, shortcuts::EXPORT));
             if ui.add(export).clicked() {
                 crate::export::open(editor);
             }
+            ui.separator();
             if ui.button("Quit").clicked() {
                 ui.ctx().send_viewport_cmd(ViewportCommand::Close);
             }
@@ -153,38 +170,6 @@ pub fn timeline_toolbar(editor: &mut Editor, ui: &mut egui::Ui) {
             editor.add_track(TrackKind::Audio);
         }
     });
-}
-
-pub fn import_dialog(editor: &mut Editor, ctx: &egui::Context) {
-    let Some(prompt) = &mut editor.import_prompt else {
-        return;
-    };
-    let mut submitted = None;
-    let mut cancelled = false;
-    egui::Window::new("Import media")
-        .collapsible(false)
-        .resizable(false)
-        .show(ctx, |ui| {
-            ui.label("Path to a video or audio file (or drop files on the window):");
-            let field = ui.add(egui::TextEdit::singleline(prompt).desired_width(480.0));
-            field.request_focus();
-            let entered = field.lost_focus() && ui.input(|input| input.key_pressed(Key::Enter));
-            ui.horizontal(|ui| {
-                if ui.button("Import").clicked() || entered {
-                    submitted = Some(PathBuf::from(prompt.trim().trim_matches('"')));
-                }
-                if ui.button("Cancel").clicked() || ui.input(|input| input.key_pressed(Key::Escape))
-                {
-                    cancelled = true;
-                }
-            });
-        });
-    if let Some(path) = submitted.filter(|path| !path.as_os_str().is_empty()) {
-        editor.import_prompt = None;
-        editor.import(path);
-    } else if cancelled {
-        editor.import_prompt = None;
-    }
 }
 
 pub fn gain_dialog(editor: &mut Editor, ctx: &egui::Context) {

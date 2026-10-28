@@ -4,9 +4,16 @@ use timeline::{PlaceMode, TrackKind};
 use crate::editor::Editor;
 use crate::monitors::Focus;
 use crate::placing;
+use crate::project_files::{AfterDiscard, PathPurpose};
 use crate::timeline_view::Tool;
 use crate::transport;
 
+pub const NEW: KeyboardShortcut =
+    KeyboardShortcut::new(Modifiers::COMMAND.plus(Modifiers::ALT), Key::N);
+pub const OPEN: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::O);
+pub const SAVE: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::S);
+pub const SAVE_AS: KeyboardShortcut =
+    KeyboardShortcut::new(Modifiers::COMMAND.plus(Modifiers::SHIFT), Key::S);
 pub const IMPORT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::I);
 pub const EXPORT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::M);
 pub const UNDO: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::Z);
@@ -20,6 +27,10 @@ pub const AUDIO_TRANSITION: KeyboardShortcut =
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Action {
+    NewProject,
+    OpenProject,
+    Save,
+    SaveAs,
     Import,
     Export,
     Undo,
@@ -66,10 +77,14 @@ fn pressed(ctx: &egui::Context) -> Option<Action> {
     ctx.input_mut(|input| {
         // Shortcuts with more modifiers go first so a plainer one can't claim their key.
         let chords = [
+            (NEW, Action::NewProject),
+            (SAVE_AS, Action::SaveAs),
             (REDO, Action::Redo),
             (REDO_ALT, Action::Redo),
             (AUDIO_TRANSITION, Action::Transition(TrackKind::Audio)),
             (UNDO, Action::Undo),
+            (OPEN, Action::OpenProject),
+            (SAVE, Action::Save),
             (IMPORT, Action::Import),
             (EXPORT, Action::Export),
             (ADD_EDIT, Action::AddEdit),
@@ -109,7 +124,11 @@ fn pressed(ctx: &egui::Context) -> Option<Action> {
 
 fn run(editor: &mut Editor, action: Action) {
     match action {
-        Action::Import => editor.import_prompt = Some(String::new()),
+        Action::NewProject => editor.discard_then(AfterDiscard::NewProject),
+        Action::OpenProject => editor.prompt_path(PathPurpose::OpenProject),
+        Action::Save => editor.save_project(),
+        Action::SaveAs => editor.prompt_path(PathPurpose::SaveProject),
+        Action::Import => editor.prompt_path(PathPurpose::Import),
         Action::Export => crate::export::open(editor),
         Action::Undo => editor.undo(),
         Action::Redo => editor.redo(),

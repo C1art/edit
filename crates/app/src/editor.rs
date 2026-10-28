@@ -15,6 +15,8 @@ use crate::import::Importer;
 use crate::media_pool::{self, PoolAction};
 use crate::mixer::{self, Mixer};
 use crate::monitors::{self, Focus};
+use crate::project_files::{is_project, AfterDiscard, PathPrompt};
+use crate::project_store::ProjectStore;
 use crate::proxies::ProxyMaker;
 use crate::source::SourceMonitor;
 use crate::timeline_view::TimelineView;
@@ -35,7 +37,7 @@ pub struct Editor {
     pub(crate) source: Option<SourceMonitor>,
     pub(crate) program: Option<Viewer>,
     /// The timeline revision the program viewer is playing.
-    shown_revision: u64,
+    pub(crate) shown_revision: u64,
     pub(crate) focus: Focus,
     pub(crate) view: TimelineView,
     pub(crate) mixer: Mixer,
@@ -43,8 +45,19 @@ pub struct Editor {
     side_tab: SideTab,
     /// The gain in dB being typed into the clip gain dialog, while it is showing.
     pub(crate) gain_prompt: Option<f32>,
-    /// The path being typed into the import dialog, while it is showing.
-    pub(crate) import_prompt: Option<String>,
+    pub(crate) path_prompt: Option<PathPrompt>,
+    pub(crate) store: Option<ProjectStore>,
+    /// Where the project was last saved or opened from.
+    pub(crate) project_path: Option<PathBuf>,
+    /// The timeline revision on disk; any other means unsaved changes.
+    pub(crate) saved_revision: u64,
+    pub(crate) confirm_discard: Option<AfterDiscard>,
+    /// Runs once the save in progress succeeds.
+    pub(crate) after_save: Option<AfterDiscard>,
+    /// Set once the user chose to close, so the close request isn't questioned again.
+    pub(crate) quitting: bool,
+    pub(crate) window_title: String,
+    pub(crate) ctx: egui::Context,
     pub(crate) export: Option<ExportDialog>,
     notices: Vec<String>,
 }
@@ -69,6 +82,9 @@ impl Editor {
         let proxies = ProxyMaker::new()
             .map_err(|error| notices.push(format!("Proxies disabled: {error}")))
             .ok();
+        let store = ProjectStore::new()
+            .map_err(|error| notices.push(format!("Saving disabled: {error}")))
+            .ok();
         let program = Viewer::new(
             Arc::new(timeline.sequence().clone()),
             audio.as_ref(),
@@ -78,6 +94,7 @@ impl Editor {
         .ok();
         let mut editor = Self {
             shown_revision: timeline.revision(),
+            saved_revision: timeline.revision(),
             timeline,
             audio,
             render_state,
@@ -93,12 +110,19 @@ impl Editor {
             effects: EffectControls::default(),
             side_tab: SideTab::default(),
             gain_prompt: None,
-            import_prompt: None,
+            path_prompt: None,
+            store,
+            project_path: None,
+            confirm_discard: None,
+            after_save: None,
+            quitting: false,
+            window_title: String::new(),
+            ctx: creation_context.egui_ctx.clone(),
             export: None,
             notices,
         };
         for path in initial {
-            editor.import(path);
+            editor.open_path(path);
         }
         editor
     }
@@ -131,6 +155,15 @@ impl Editor {
             program
                 .player
                 .set_mix(Arc::new(self.timeline.sequence().clone()));
+        }
+    }
+
+    /// Opens a project file or imports anything else.
+    pub(crate) fn open_path(&mut self, path: PathBuf) {
+        if is_project(&path) {
+            self.discard_then(AfterDiscard::Open(path));
+        } else {
+            self.import(path);
         }
     }
 
@@ -370,14 +403,16 @@ impl eframe::App for Editor {
                 .collect()
         });
         for path in dropped {
-            self.import(path);
+            self.open_path(path);
         }
+        self.poll_store();
         self.poll_imports();
         self.poll_proxies(&ctx);
         if self.importer.as_ref().is_some_and(Importer::is_busy) {
             ctx.request_repaint();
         }
         crate::shortcuts::handle(self, &ctx);
+        self.update_window();
         self.sync_program();
         self.update_viewers(&ctx);
 
@@ -396,7 +431,8 @@ impl eframe::App for Editor {
             .show(ui, |ui| self.timeline_panel(ui));
         CentralPanel::default().show(ui, |ui| monitors::ui(self, ui));
 
-        crate::menus::import_dialog(self, &ctx);
+        crate::project_files::path_dialog(self, &ctx);
+        crate::project_files::discard_dialog(self, &ctx);
         crate::menus::gain_dialog(self, &ctx);
         crate::export::dialog(self, &ctx);
     }
