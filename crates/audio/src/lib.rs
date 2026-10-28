@@ -4,7 +4,10 @@ mod output;
 mod remix;
 mod resampler;
 
-pub use dsp::{Biquad, Coefficients, Compressor, CompressorSettings, Delay, LoudnessMeter};
+pub use dsp::{
+    Biquad, Coefficients, Compressor, CompressorSettings, Delay, Gate, Limiter, LoudnessMeter,
+    Reverb,
+};
 pub use error::AudioError;
 pub use output::{AudioOutput, AudioWriter, OutputFormat};
 pub use remix::remix_stereo;

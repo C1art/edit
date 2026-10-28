@@ -40,6 +40,14 @@ impl Coefficients {
     }
 
     /// A bell boosting or cutting by `gain_db` around `frequency`.
+    pub fn notch(rate: SampleRate, frequency: f32, q: f32) -> Self {
+        let (cos, alpha) = Self::angle(rate, frequency, f64::from(q));
+        Self::normalised(
+            [1.0, -2.0 * cos, 1.0],
+            [1.0 + alpha, -2.0 * cos, 1.0 - alpha],
+        )
+    }
+
     pub fn peaking(rate: SampleRate, frequency: f32, q: f32, gain_db: f32) -> Self {
         let (cos, alpha) = Self::angle(rate, frequency, f64::from(q));
         let a = Self::shelf_amplitude(gain_db);
