@@ -9,7 +9,8 @@ mod params;
 
 pub use key::{KeyOutput, MatteChannel, ULTRA_KEY_REACH};
 pub use options::{
-    ColorChange, ColorMatch, EffectCategory, LensType, MagnifyShape, RampShape, TimecodeSource,
+    ClipNameSource, ColorChange, ColorMatch, EffectCategory, LensType, MagnifyShape, RampShape,
+    TimecodeSource,
 };
 
 /// An sRGB color as stored in a project.
@@ -228,6 +229,17 @@ pub enum VideoEffect {
         /// Percent opacity of the box behind the text.
         opacity: Param,
         source: TimecodeSource,
+    },
+    /// Burns the clip's name into the picture, white on a box, as the Timecode effect
+    /// burns the time.
+    ClipName {
+        /// The box's center, in percent of the picture's width and height.
+        position: [Param; 2],
+        /// Text height in percent of the picture's height.
+        size: Param,
+        /// Percent opacity of the box behind the text.
+        opacity: Param,
+        source: ClipNameSource,
     },
     /// Moves, scales, skews and turns the picture about its anchor point, as Motion
     /// does but in its place among the effects.

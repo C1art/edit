@@ -50,6 +50,27 @@ impl TimecodeSource {
     }
 }
 
+/// Which name the Clip Name effect shows.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ClipNameSource {
+    /// The clip's item in the project, as renamed there.
+    #[default]
+    ProjectItem,
+    /// The file the clip plays, as it is named on disk.
+    File,
+}
+
+impl ClipNameSource {
+    pub const ALL: [Self; 2] = [Self::ProjectItem, Self::File];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::ProjectItem => "Project Item Name",
+            Self::File => "File Name",
+        }
+    }
+}
+
 /// How Leave Color tells colors apart.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ColorMatch {

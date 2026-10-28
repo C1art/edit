@@ -1,12 +1,12 @@
 use super::{
-    ColorChange, ColorMatch, EffectCategory, KeyOutput, LensType, MagnifyShape, MatteChannel,
-    RampShape, Rgb, TimecodeSource, VideoEffect,
+    ClipNameSource, ColorChange, ColorMatch, EffectCategory, KeyOutput, LensType, MagnifyShape,
+    MatteChannel, RampShape, Rgb, TimecodeSource, VideoEffect,
 };
 use crate::{Param, Stabilizer};
 
 impl VideoEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 50] {
+    pub fn catalog() -> [Self; 51] {
         [
             Self::GaussianBlur {
                 blurriness: Param::from_value(10.0),
@@ -138,6 +138,12 @@ impl VideoEffect {
                 size: Param::from_value(6.0),
                 opacity: Param::from_value(60.0),
                 source: TimecodeSource::Media,
+            },
+            Self::ClipName {
+                position: [Param::from_value(50.0), Param::from_value(10.0)],
+                size: Param::from_value(6.0),
+                opacity: Param::from_value(60.0),
+                source: ClipNameSource::ProjectItem,
             },
             Self::Transform {
                 anchor: [Param::from_value(50.0), Param::from_value(50.0)],
@@ -303,7 +309,7 @@ impl VideoEffect {
             | Self::Threshold { .. }
             | Self::Replicate { .. } => EffectCategory::Stylize,
             Self::PosterizeTime { .. } => EffectCategory::Time,
-            Self::Timecode { .. } => EffectCategory::Video,
+            Self::Timecode { .. } | Self::ClipName { .. } => EffectCategory::Video,
             Self::HorizontalFlip | Self::VerticalFlip => EffectCategory::Transform,
         }
     }
@@ -341,6 +347,7 @@ impl VideoEffect {
             Self::PosterizeTime { .. } => "Posterize Time",
             Self::StrobeLight { .. } => "Strobe Light",
             Self::Timecode { .. } => "Timecode",
+            Self::ClipName { .. } => "Clip Name",
             Self::Transform { .. } => "Transform",
             Self::Basic3D { .. } => "Basic 3D",
             Self::Spherize { .. } => "Spherize",

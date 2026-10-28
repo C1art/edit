@@ -85,8 +85,8 @@ pub use edit::{
 };
 pub use edl::to_edl;
 pub use effect::{
-    ColorChange, ColorMatch, EffectCategory, KeyOutput, LensType, MagnifyShape, MatteChannel,
-    RampShape, Rgb, TimecodeSource, VideoEffect, ULTRA_KEY_REACH,
+    ClipNameSource, ColorChange, ColorMatch, EffectCategory, KeyOutput, LensType, MagnifyShape,
+    MatteChannel, RampShape, Rgb, TimecodeSource, VideoEffect, ULTRA_KEY_REACH,
 };
 pub use error::TimelineError;
 pub use generator::{

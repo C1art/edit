@@ -106,6 +106,12 @@ macro_rules! effect_params {
                 size,
                 opacity,
                 ..
+            }
+            | VideoEffect::ClipName {
+                position: [x, y],
+                size,
+                opacity,
+                ..
             } => vec![x, y, size, opacity],
             VideoEffect::Transform {
                 anchor: [anchor_x, anchor_y],
