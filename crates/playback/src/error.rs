@@ -5,6 +5,7 @@ pub enum PlaybackError {
     Media(media::MediaError),
     Render(render::RenderError),
     Audio(audio::AudioError),
+    WorkerSpawn(std::io::Error),
 }
 
 impl fmt::Display for PlaybackError {
@@ -13,6 +14,7 @@ impl fmt::Display for PlaybackError {
             Self::Media(error) => write!(f, "media: {error}"),
             Self::Render(error) => write!(f, "render: {error}"),
             Self::Audio(error) => write!(f, "audio: {error}"),
+            Self::WorkerSpawn(error) => write!(f, "cannot start decode thread: {error}"),
         }
     }
 }
@@ -23,6 +25,7 @@ impl std::error::Error for PlaybackError {
             Self::Media(error) => Some(error),
             Self::Render(error) => Some(error),
             Self::Audio(error) => Some(error),
+            Self::WorkerSpawn(error) => Some(error),
         }
     }
 }
