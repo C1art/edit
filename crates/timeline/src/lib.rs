@@ -16,6 +16,7 @@ mod file_url;
 mod generator;
 mod group;
 mod history;
+mod hue_curves;
 mod interpretation;
 mod label;
 mod links;
@@ -95,6 +96,7 @@ pub use generator::{
 };
 pub use group::GroupId;
 pub use history::{preview, Edit, EditCommand, Timeline};
+pub use hue_curves::{HueCurve, HueCurves, HUE_CURVE_NEUTRAL};
 pub use interpretation::{AlphaInterpretation, PixelAspect};
 pub use label::Label;
 pub use links::LinkedSelection;

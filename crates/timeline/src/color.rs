@@ -2,11 +2,11 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Curves, HslSecondary, Param};
+use crate::{Curves, HslSecondary, HueCurves, Param};
 
 /// Color correction in the manner of a grading panel, applied before the clip is
 /// placed: an input LUT, then in linear light white balance, tone, wheels for the
-/// shadows, midtones and highlights and saturation, then a creative look LUT and curves,
+/// shadows, midtones and highlights and saturation, then a creative look LUT, curves and hue curves,
 /// then a secondary correction of the colors a key selects.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(default)]
@@ -52,6 +52,7 @@ pub struct ColorCorrection {
     pub tint_balance: Param,
     pub vignette: ColorVignette,
     pub curves: Curves,
+    pub hue_curves: HueCurves,
     pub secondary: HslSecondary,
 }
 
@@ -118,6 +119,7 @@ impl Default for ColorCorrection {
             tint_balance: Param::default(),
             vignette: ColorVignette::default(),
             curves: Curves::default(),
+            hue_curves: HueCurves::default(),
             secondary: HslSecondary::default(),
         }
     }

@@ -57,29 +57,7 @@ impl Curve {
             .iter()
             .map(|point| [point.input, point.output].map(|value| value as f32 / CURVE_RANGE as f32))
             .collect();
-        let (Some(first), Some(last)) = (points.first(), points.last()) else {
-            return input;
-        };
-        if input <= first[0] || points.len() == 1 {
-            return first[1];
-        }
-        if input >= last[0] {
-            return last[1];
-        }
-        let segment = points
-            .windows(2)
-            .position(|pair| input < pair[1][0])
-            .unwrap_or(points.len() - 2);
-        let tangents = monotone_tangents(&points);
-        let ([x0, y0], [x1, y1]) = (points[segment], points[segment + 1]);
-        let width = x1 - x0;
-        let t = (input - x0) / width;
-        let (t2, t3) = (t * t, t * t * t);
-        let value = (2.0 * t3 - 3.0 * t2 + 1.0) * y0
-            + (t3 - 2.0 * t2 + t) * width * tangents[segment]
-            + (-2.0 * t3 + 3.0 * t2) * y1
-            + (t3 - t2) * width * tangents[segment + 1];
-        value.clamp(0.0, 1.0)
+        smooth_through(&points, input).map_or(input, |value| value.clamp(0.0, 1.0))
     }
 
     /// Adds a point, or moves the one already at `input`, keeping the points sorted.
@@ -114,6 +92,33 @@ impl Curves {
             })
             .collect()
     }
+}
+
+/// The monotone cubic through `points`, sorted by their first coordinate, at `input`,
+/// holding the end levels beyond them; `None` without points.
+pub(crate) fn smooth_through(points: &[[f32; 2]], input: f32) -> Option<f32> {
+    let (first, last) = (points.first()?, points.last()?);
+    if input <= first[0] || points.len() == 1 {
+        return Some(first[1]);
+    }
+    if input >= last[0] {
+        return Some(last[1]);
+    }
+    let segment = points
+        .windows(2)
+        .position(|pair| input < pair[1][0])
+        .unwrap_or(points.len() - 2);
+    let tangents = monotone_tangents(points);
+    let ([x0, y0], [x1, y1]) = (points[segment], points[segment + 1]);
+    let width = x1 - x0;
+    let t = (input - x0) / width;
+    let (t2, t3) = (t * t, t * t * t);
+    Some(
+        (2.0 * t3 - 3.0 * t2 + 1.0) * y0
+            + (t3 - 2.0 * t2 + t) * width * tangents[segment]
+            + (-2.0 * t3 + 3.0 * t2) * y1
+            + (t3 - t2) * width * tangents[segment + 1],
+    )
 }
 
 /// Fritsch–Carlson tangents: the slopes a cubic through each point may take without
