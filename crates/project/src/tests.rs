@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
 use timeline::{
-    AudioEffect, Caption, Clip, ClipId, Gain, Generator, Interpolation, Keyframe, Marks, MediaItem,
-    Nest, Pan, Param, Rgb, SourceId, TextAlign, Ticks, Timebase, Title, TitleFont, Track,
-    Transition, TransitionKind, VideoEffect, VideoFormat,
+    AudioEffect, Caption, Clip, ClipId, CurvePoint, Gain, Generator, Interpolation, Keyframe,
+    Marks, MediaItem, Nest, Pan, Param, Rgb, SourceId, TextAlign, Ticks, Timebase, Title,
+    TitleFont, Track, Transition, TransitionKind, VideoEffect, VideoFormat,
 };
 
 use super::*;
@@ -74,6 +74,11 @@ fn sample() -> ProjectFile {
     });
     clip.look.color.midtone_wheel.blue = Param::new(-2_500);
     clip.look.color.vibrance = Param::new(4_000);
+    clip.look.color.input_lut = Some(PathBuf::from(r"C:\LUTs\S-Log3 to Rec709.cube"));
+    clip.look.color.curves.blue.set(CurvePoint {
+        input: 500,
+        output: 620,
+    });
     clip.look.effects.push(VideoEffect::GaussianBlur {
         blurriness: clip.look.opacity.clone(),
     });
