@@ -2414,6 +2414,7 @@ version = "0.1.0"
 dependencies = [
  "audio",
  "crossbeam",
+ "egui",
  "media",
  "render",
  "timeline",

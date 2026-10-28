@@ -176,6 +176,7 @@ mod tests {
             video: None,
             has_audio: true,
             proxy: None,
+            generator: None,
         }
     }
 

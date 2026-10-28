@@ -2,7 +2,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use media::{DecodedFrame, MediaError, MediaReader, Streams, VideoFrame};
-use timeline::{MediaItem, SourceId, Ticks, Timebase};
+use timeline::{Generator, MediaItem, SourceId, Ticks, Timebase};
+
+use crate::generated_frame;
 
 /// Jumps further ahead than this seek instead of decoding through; keyframe intervals
 /// are usually shorter, so decoding forward is cheaper below it.
@@ -14,6 +16,8 @@ enum Source {
     /// Opening failed; not retried until the track moves to other media or another file
     /// of it, such as its proxy.
     Failed(SourceId, PathBuf),
+    /// Drawn once at a canvas size and held for as long as the clip shows.
+    Generated(Generator, [u32; 2], Arc<VideoFrame>),
 }
 
 /// Decodes the pictures one video track needs, reading forward while playback is
@@ -49,12 +53,16 @@ impl TrackVideo {
         &mut self,
         media: &MediaItem,
         time: Ticks,
+        canvas: [u32; 2],
     ) -> Result<Option<Arc<VideoFrame>>, MediaError> {
+        if let Some(generator) = &media.generator {
+            return Ok(Some(self.generated(generator, canvas)));
+        }
         let same_media = match &self.source {
             Source::Open(id, path, _) | Source::Failed(id, path) => {
                 *id == media.id && *path == media.path
             }
-            Source::None => false,
+            Source::None | Source::Generated(..) => false,
         };
         if !same_media {
             self.reset();
@@ -101,5 +109,17 @@ impl TrackVideo {
             self.current = self.next.take().map(Arc::new);
         }
         Ok(self.current.clone())
+    }
+
+    fn generated(&mut self, generator: &Generator, canvas: [u32; 2]) -> Arc<VideoFrame> {
+        if let Source::Generated(drawn, size, frame) = &self.source {
+            if drawn == generator && *size == canvas {
+                return Arc::clone(frame);
+            }
+        }
+        self.reset();
+        let frame = generated_frame(generator, canvas[0], canvas[1]);
+        self.source = Source::Generated(generator.clone(), canvas, Arc::clone(&frame));
+        frame
     }
 }

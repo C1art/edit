@@ -27,7 +27,8 @@ pub(crate) fn layers_at(
     tracks.resize_with(sequence.video.len(), || {
         ClipDecoders::new(|| TrackVideo::new(sequence.timebase))
     });
-    let canvas = [sequence.format.width, sequence.format.height].map(|side| side as f32);
+    let size = [sequence.format.width, sequence.format.height];
+    let canvas = size.map(|side| side as f32);
     let mut layers = Vec::new();
     for ((index, track), decoders) in sequence.video.iter().enumerate().zip(tracks) {
         if track.muted {
@@ -40,7 +41,7 @@ pub(crate) fn layers_at(
                 continue;
             };
             let decoder = decoders.for_clip(plan.clip.id, &showing);
-            match decoder.frame_at(media, plan.source_time) {
+            match decoder.frame_at(media, plan.source_time, size) {
                 Ok(Some(frame)) => layers.push(Layer {
                     track: TrackRef::video(index),
                     frame,
