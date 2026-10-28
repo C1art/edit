@@ -149,9 +149,18 @@ fn color_adjust(color: &ColorCorrection, time: Ticks) -> ColorAdjust {
         contrast: unit(&color.contrast),
         highlights: unit(&color.highlights),
         shadows: unit(&color.shadows),
+        whites: unit(&color.whites),
+        blacks: unit(&color.blacks),
+        wheels: [
+            &color.shadow_wheel,
+            &color.midtone_wheel,
+            &color.highlight_wheel,
+        ]
+        .map(|wheel| wheel.params().map(unit)),
         temperature: unit(&color.temperature),
         tint: unit(&color.tint),
         saturation: unit(&color.saturation),
+        vibrance: unit(&color.vibrance),
     }
 }
 
