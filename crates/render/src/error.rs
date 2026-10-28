@@ -13,6 +13,9 @@ pub enum RenderError {
         height: u32,
         max: u32,
     },
+    /// Nothing has been composited yet, so there is no frame to read back.
+    NoFrame,
+    Readback(String),
 }
 
 impl fmt::Display for RenderError {
@@ -28,6 +31,8 @@ impl fmt::Display for RenderError {
                 f,
                 "{width}x{height} frame exceeds the GPU's {max} pixel texture limit"
             ),
+            Self::NoFrame => f.write_str("no frame has been composited"),
+            Self::Readback(message) => write!(f, "cannot read the frame back: {message}"),
         }
     }
 }

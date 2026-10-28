@@ -37,17 +37,24 @@ struct Targets {
     height: u32,
     working: wgpu::TextureView,
     working_binding: wgpu::BindGroup,
+    output_texture: wgpu::Texture,
     output: wgpu::TextureView,
 }
 
 /// Uploads source frames, composites them in linear light and presents the result to a
 /// texture the UI can draw.
 pub struct Compositor {
-    device: wgpu::Device,
-    queue: wgpu::Queue,
+    pub(crate) device: wgpu::Device,
+    pub(crate) queue: wgpu::Queue,
     blit: Blit,
     slots: Vec<Slot>,
     targets: Option<Targets>,
+}
+
+impl Compositor {
+    pub(crate) fn output_texture(&self) -> Option<&wgpu::Texture> {
+        self.targets.as_ref().map(|targets| &targets.output_texture)
+    }
 }
 
 impl Compositor {
@@ -190,11 +197,16 @@ impl Compositor {
 
     fn create_targets(&self, width: u32, height: u32) -> Targets {
         let usage = wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING;
-        let view = |label, format| {
-            self.texture(label, (width, height), format, usage)
-                .create_view(&wgpu::TextureViewDescriptor::default())
-        };
-        let working = view("working_frame", WORKING_FORMAT);
+        let working = self
+            .texture("working_frame", (width, height), WORKING_FORMAT, usage)
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        // Copyable so export can read the presented frame back.
+        let output_texture = self.texture(
+            "output_frame",
+            (width, height),
+            DISPLAY_FORMAT,
+            usage | wgpu::TextureUsages::COPY_SRC,
+        );
         let placement = Blit::placement_buffer(&self.device);
         Blit::write_placement(&self.queue, &placement, NdcRect::FULL, 1.0);
         Targets {
@@ -202,7 +214,8 @@ impl Compositor {
             height,
             working_binding: self.blit.bind(&self.device, &working, &placement),
             working,
-            output: view("output_frame", DISPLAY_FORMAT),
+            output: output_texture.create_view(&wgpu::TextureViewDescriptor::default()),
+            output_texture,
         }
     }
 
@@ -226,7 +239,7 @@ impl Compositor {
     }
 }
 
-fn extent(width: u32, height: u32) -> wgpu::Extent3d {
+pub(crate) fn extent(width: u32, height: u32) -> wgpu::Extent3d {
     wgpu::Extent3d {
         width,
         height,
