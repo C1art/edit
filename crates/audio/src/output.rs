@@ -23,6 +23,7 @@ struct Shared {
     /// Identifies the writer allowed to push. Only producers take this lock, never the
     /// callback, so a writer that is shutting down cannot leak stale audio into a new one.
     session: Mutex<u64>,
+    next_session: AtomicU64,
     format: OutputFormat,
 }
 
@@ -54,6 +55,7 @@ impl AudioOutput {
             frames_played: AtomicU64::new(0),
             paused: AtomicBool::new(true),
             session: Mutex::new(0),
+            next_session: AtomicU64::new(1),
             format,
         });
         let callback_shared = Arc::clone(&shared);
@@ -83,14 +85,12 @@ impl AudioOutput {
     /// Hands the output to a new producer: earlier writers stop being able to push, the
     /// queue is emptied and playback is paused.
     pub fn writer(&self) -> AudioWriter {
-        let mut session = lock(&self.shared.session);
-        *session += 1;
-        self.shared.paused.store(true, Ordering::Release);
-        while self.shared.queue.pop().is_some() {}
-        AudioWriter {
+        let writer = AudioWriter {
             shared: Arc::clone(&self.shared),
-            session: *session,
-        }
+            session: self.shared.next_session.fetch_add(1, Ordering::Relaxed),
+        };
+        writer.claim();
+        writer
     }
 }
 
@@ -151,6 +151,20 @@ impl AudioWriter {
             let _ = queue.push(sample);
         }
         take
+    }
+
+    /// Whether this writer (or a clone of it) currently owns the output.
+    pub fn is_active(&self) -> bool {
+        *lock(&self.shared.session) == self.session
+    }
+
+    /// Takes the output back from whichever writer has it: the queue is emptied and
+    /// playback is paused, as for a new writer.
+    pub fn claim(&self) {
+        let mut session = lock(&self.shared.session);
+        *session = self.session;
+        self.shared.paused.store(true, Ordering::Release);
+        while self.shared.queue.pop().is_some() {}
     }
 
     pub fn clear(&self) {
