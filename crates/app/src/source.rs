@@ -3,7 +3,7 @@ use std::sync::Arc;
 use audio::AudioOutput;
 use eframe::egui_wgpu::RenderState;
 use playback::PlaybackError;
-use timeline::{Clip, ClipId, MediaItem, Sequence, SourceId, Ticks, Timebase, Track};
+use timeline::{Clip, ClipId, MediaItem, Sequence, SourceId, Ticks, Track};
 
 use crate::transport::Marks;
 use crate::viewer::Viewer;
@@ -18,13 +18,14 @@ pub struct SourceMonitor {
 }
 
 impl SourceMonitor {
+    /// `pool` holds the media a nested sequence's clips use.
     pub fn open(
         item: &MediaItem,
-        timebase: Timebase,
+        pool: &Sequence,
         audio: Option<&AudioOutput>,
         render_state: Option<&RenderState>,
     ) -> Result<Self, PlaybackError> {
-        let sequence = Arc::new(source_sequence(item, timebase));
+        let sequence = Arc::new(source_sequence(item, pool));
         Ok(Self {
             source: item.id,
             name: item.name.clone(),
@@ -34,11 +35,10 @@ impl SourceMonitor {
     }
 
     /// Picks up changes to the item shown, such as a proxy being attached.
-    pub fn refresh(&mut self, item: &MediaItem) {
+    pub fn refresh(&mut self, item: &MediaItem, pool: &Sequence) {
         let player = &mut self.viewer.player;
-        if player.sequence().media.first() != Some(item) {
-            let timebase = player.sequence().timebase;
-            player.set_sequence(Arc::new(source_sequence(item, timebase)));
+        if player.sequence().media_item(item.id) != Some(item) {
+            player.set_sequence(Arc::new(source_sequence(item, pool)));
         }
     }
 
@@ -73,9 +73,10 @@ impl SourceMonitor {
 
 /// A sequence that shows `item` from start to end in its own format; generated media,
 /// which has no end, shows for as long as an edit places by default.
-fn source_sequence(item: &MediaItem, timebase: Timebase) -> Sequence {
-    let mut sequence = Sequence::new(timebase, item.video.unwrap_or_default());
-    sequence.media.push(item.clone());
+fn source_sequence(item: &MediaItem, pool: &Sequence) -> Sequence {
+    let timebase = pool.timebase;
+    let mut sequence = Sequence::new(timebase, item.video.unwrap_or(pool.format));
+    sequence.media.clone_from(&pool.media);
     let track = |id| Track {
         clips: vec![Clip::new(
             ClipId(id),

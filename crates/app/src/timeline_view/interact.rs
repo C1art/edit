@@ -21,6 +21,14 @@ impl TimelineView {
         let frame_time = |x: f32| scale::nearest_frame(scale.time(x), rate, timebase);
         let shift = response.ctx.input(|input| input.modifiers.shift);
 
+        if response.double_clicked() && self.tool == Tool::Selection {
+            if let Some(pos) = response.interact_pointer_pos() {
+                if let Hit::Body { clip, .. } = layout::hit(sequence, &rows, &scale, pos) {
+                    output.open_clip = Some(clip);
+                    return;
+                }
+            }
+        }
         if response.clicked() {
             if let Some(pos) = response.interact_pointer_pos() {
                 let hit = layout::hit(sequence, &rows, &scale, pos);

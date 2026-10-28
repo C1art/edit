@@ -39,6 +39,7 @@ pub fn thumbnails(
             return;
         }
         Some(Generator::Title(_)) => return,
+        None if item.nest.is_some() => return,
         None => {}
     }
     let Some(format) = item.video else {
@@ -96,6 +97,9 @@ pub fn waveform(
         item,
         timebase,
     } = *area;
+    if !item.is_file() {
+        return;
+    }
     let Some(peaks) = art.peaks(&item.path) else {
         return;
     };

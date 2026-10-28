@@ -80,6 +80,8 @@ pub struct TimelineOutput {
     pub edit_marker: Option<MarkerId>,
     pub clear_marker: Option<MarkerId>,
     pub drop: Option<MediaDrop>,
+    /// A double-clicked clip, whose media to open.
+    pub open_clip: Option<ClipId>,
     pub errors: Vec<String>,
 }
 

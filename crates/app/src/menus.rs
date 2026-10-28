@@ -37,6 +37,9 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                 if ui.add(title).clicked() {
                     placing::new_generated(editor, Generator::Title(Title::default()));
                 }
+                if ui.button("Sequence").clicked() {
+                    editor.new_sequence();
+                }
                 if ui.button("Color Matte").clicked() {
                     let color = Rgb::new(32, 32, 48);
                     placing::new_generated(editor, Generator::ColorMatte { color });
@@ -143,6 +146,10 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             if ui.add(enable).clicked() {
                 editor.toggle_enabled();
             }
+            ui.separator();
+            if ui.button("Nest").clicked() {
+                editor.nest_selection();
+            }
         });
         ui.menu_button("Markers", |ui| {
             crate::marker_dialog::menu(editor, ui);
@@ -194,6 +201,7 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
 }
 
 pub fn timeline_toolbar(editor: &mut Editor, ui: &mut egui::Ui) {
+    crate::nesting::breadcrumbs(editor, ui);
     ui.horizontal(|ui| {
         for tool in Tool::ALL {
             if ui

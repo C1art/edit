@@ -62,7 +62,7 @@ impl Editor {
             path.as_mut_os_string()
                 .push(format!(".{}", project::EXTENSION));
         }
-        let sequence = self.timeline.sequence().clone();
+        let sequence = self.timeline.project().clone();
         let revision = self.timeline.revision();
         match &mut self.store {
             Some(store) => store.save(path, sequence, revision),

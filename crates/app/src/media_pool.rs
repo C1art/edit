@@ -6,6 +6,8 @@ use crate::proxies::ProxyMaker;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PoolAction {
     Open(SourceId),
+    /// Opens a nested sequence in the timeline.
+    OpenNest(SourceId),
     Remove(SourceId),
     CreateProxy(SourceId),
     DetachProxy(SourceId),
@@ -37,9 +39,15 @@ pub fn ui(
                 if response.clicked() {
                     action = Some(PoolAction::Open(item.id));
                 }
+                if response.double_clicked() && item.nest.is_some() {
+                    action = Some(PoolAction::OpenNest(item.id));
+                }
                 response.context_menu(|ui| {
                     if ui.button("Open in Source Monitor").clicked() {
                         action = Some(PoolAction::Open(item.id));
+                    }
+                    if item.nest.is_some() && ui.button("Open in Timeline").clicked() {
+                        action = Some(PoolAction::OpenNest(item.id));
                     }
                     if ui.button("Remove from Project").clicked() {
                         action = Some(PoolAction::Remove(item.id));
@@ -85,6 +93,9 @@ fn item_row(
         Some(generator) => generator.kind_name().to_owned(),
         None => Timecode::new(item.duration, timebase, rate).to_string(),
     }];
+    if item.nest.is_some() {
+        details.insert(0, "Sequence".to_owned());
+    }
     if let Some(video) = item.video {
         details.push(format!(
             "{}×{} {:.2} fps",
@@ -111,8 +122,9 @@ fn item_row(
     inner
         .response
         .interact(Sense::click_and_drag())
-        .on_hover_text(match &item.generator {
-            Some(generator) => generator.kind_name().to_owned(),
-            None => item.path.display().to_string(),
+        .on_hover_text(match (&item.generator, &item.nest) {
+            (Some(generator), _) => generator.kind_name().to_owned(),
+            (None, Some(_)) => "Nested sequence; double-click to open".to_owned(),
+            (None, None) => item.path.display().to_string(),
         })
 }

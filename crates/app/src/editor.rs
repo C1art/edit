@@ -17,6 +17,7 @@ use crate::import::Importer;
 use crate::media_pool::{self, PoolAction};
 use crate::mixer::{self, Mixer};
 use crate::monitors::{self, Focus};
+use crate::nesting::Level;
 use crate::project_files::{is_project, AfterDiscard, PathPrompt};
 use crate::project_store::ProjectStore;
 use crate::proxies::ProxyMaker;
@@ -67,6 +68,8 @@ pub struct Editor {
     pub(crate) window_title: String,
     pub(crate) ctx: egui::Context,
     pub(crate) export: Option<ExportDialog>,
+    /// The sequences left to reach the open nest, outermost first.
+    pub(crate) nest_trail: Vec<Level>,
     notices: Vec<String>,
 }
 
@@ -140,6 +143,7 @@ impl Editor {
             window_title: String::new(),
             ctx: creation_context.egui_ctx.clone(),
             export: None,
+            nest_trail: Vec::new(),
             notices,
         };
         for path in initial {
@@ -203,7 +207,7 @@ impl Editor {
         self.source = None;
         match SourceMonitor::open(
             &item,
-            self.timeline.sequence().timebase,
+            self.timeline.project(),
             self.audio.as_ref(),
             self.render_state.as_ref(),
         ) {
@@ -232,7 +236,8 @@ impl Editor {
     /// An empty sequence takes on the format of the first video placed in it.
     pub(crate) fn match_format(&mut self, source: SourceId) {
         let sequence = self.timeline.sequence();
-        if sequence.duration() > Ticks::ZERO {
+        // A nest shares the project's format, which its contents shouldn't decide.
+        if sequence.duration() > Ticks::ZERO || self.timeline.open_nest().is_some() {
             return;
         }
         let Some(format) = sequence.media_item(source).and_then(|item| item.video) else {
@@ -291,10 +296,12 @@ impl Editor {
             return;
         }
         self.shown_revision = revision;
+        self.prune_nest_trail();
         self.view.prune_selection(self.timeline.sequence());
         if let Some(source) = &mut self.source {
-            if let Some(item) = self.timeline.sequence().media_item(source.source) {
-                source.refresh(item);
+            let pool = self.timeline.project();
+            if let Some(item) = pool.media_item(source.source) {
+                source.refresh(item, pool);
             }
         }
         if let Some(program) = &mut self.program {
@@ -332,6 +339,7 @@ impl Editor {
         let proxies = self.proxies.as_ref();
         match media_pool::ui(ui, &sequence.media, sequence.timebase, importing, proxies) {
             Some(PoolAction::Open(id)) => self.open_source(id),
+            Some(PoolAction::OpenNest(id)) => self.enter_nest(id, Ticks::ZERO),
             Some(PoolAction::Remove(id)) => {
                 if self
                     .source
@@ -340,7 +348,10 @@ impl Editor {
                 {
                     self.source = None;
                 }
-                self.apply(timeline::RemoveMedia { source: id });
+                let remove = timeline::RemoveMedia { source: id };
+                if let Err(error) = self.timeline.apply_to_project(remove) {
+                    self.notice(format!("Cannot remove: {error}"));
+                }
             }
             Some(PoolAction::CreateProxy(id)) => {
                 let path = sequence.media_item(id).map(|item| item.path.clone());
@@ -420,6 +431,9 @@ impl Editor {
         }
         if let Some(drop) = output.drop {
             crate::placing::drop_media(self, drop);
+        }
+        if let Some(clip) = output.open_clip {
+            self.open_clip(clip);
         }
     }
 }

@@ -11,6 +11,7 @@ mod menus;
 mod mixer;
 mod monitor;
 mod monitors;
+mod nesting;
 mod placing;
 mod project_files;
 mod project_store;

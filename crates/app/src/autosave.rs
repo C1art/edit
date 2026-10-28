@@ -61,7 +61,7 @@ impl Editor {
             return;
         };
         let path = autosave_path(self.project_path.as_deref(), self.autosave.slot);
-        store.autosave(path, self.timeline.sequence().clone());
+        store.autosave(path, self.timeline.project().clone());
         self.autosave.saved = Some(revision);
         self.autosave.slot = (self.autosave.slot + 1) % SLOTS;
     }
