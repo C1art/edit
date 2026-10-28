@@ -10,6 +10,8 @@ const CEILING_DB: f32 = 15.0;
 const LABEL_HEIGHT: f32 = 15.0;
 /// How close, in points, the pointer must be to grab the line or a keyframe.
 const GRAB: f32 = 4.0;
+/// Points between samples of an animated line.
+const SAMPLE_SPACING: f32 = 3.0;
 const LINE: Color32 = Color32::from_rgb(250, 210, 60);
 
 /// What the pointer is over on an audio clip's volume line.
@@ -36,8 +38,13 @@ pub fn db_for_drag(band: Rangef, dy: f32) -> f32 {
 }
 
 /// The line through the level at both ends of the clip and every keyframe between, left
-/// to right.
-fn points(clip: &Clip, scale: &TimeScale, band: Rangef) -> Vec<(Pos2, Option<usize>)> {
+/// to right, sampled within `visible` so eased and held segments show their shape.
+fn points(
+    clip: &Clip,
+    scale: &TimeScale,
+    band: Rangef,
+    visible: Rangef,
+) -> Vec<(Pos2, Option<usize>)> {
     let at = |position: Ticks, key| {
         let db = clip.volume.value_at(clip.source_time(position));
         (egui::pos2(scale.x(position), level_y(band, db)), key)
@@ -54,6 +61,15 @@ fn points(clip: &Clip, scale: &TimeScale, band: Rangef) -> Vec<(Pos2, Option<usi
         .collect();
     points.push(at(clip.start, None));
     points.push(at(last, None));
+    if clip.volume.is_animated() {
+        let from = visible.min.max(scale.x(clip.start));
+        let to = visible.max.min(scale.x(last));
+        let samples = ((to - from) / SAMPLE_SPACING).ceil().max(0.0) as usize;
+        points.extend((1..samples).map(|step| {
+            let x = from + step as f32 * SAMPLE_SPACING;
+            at(scale.time(x).clamp(clip.start, last), None)
+        }));
+    }
     points.sort_by(|a, b| a.0.x.total_cmp(&b.0.x));
     if let Some(end) = points.last_mut() {
         end.0.x = scale.x(clip.end());
@@ -62,8 +78,8 @@ fn points(clip: &Clip, scale: &TimeScale, band: Rangef) -> Vec<(Pos2, Option<usi
 }
 
 pub fn paint(painter: &Painter, rect: Rect, scale: &TimeScale, clip: &Clip) {
-    let points = points(clip, scale, band(rect));
     let painter = painter.with_clip_rect(painter.clip_rect().intersect(rect));
+    let points = points(clip, scale, band(rect), painter.clip_rect().x_range());
     let line: Vec<Pos2> = points.iter().map(|(pos, _)| *pos).collect();
     painter.add(egui::Shape::line(line, Stroke::new(1.5, LINE)));
     for (pos, _) in points.iter().filter(|(_, key)| key.is_some()) {
@@ -77,7 +93,8 @@ pub fn paint(painter: &Painter, rect: Rect, scale: &TimeScale, clip: &Clip) {
 }
 
 pub fn hit(rect: Rect, scale: &TimeScale, clip: &Clip, pointer: Pos2) -> Option<BandHit> {
-    let points = points(clip, scale, band(rect));
+    let near = Rangef::new(pointer.x - 2.0 * GRAB, pointer.x + 2.0 * GRAB);
+    let points = points(clip, scale, band(rect), near);
     let key = points
         .iter()
         .filter_map(|&(pos, key)| Some((pos, key?)))

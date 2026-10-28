@@ -1,7 +1,7 @@
 use std::ops::RangeInclusive;
 
 use egui::{DragValue, RichText};
-use timeline::{Look, Param, Rgb, Ticks, VideoEffect};
+use timeline::{Interpolation, Look, Param, Rgb, Ticks, VideoEffect};
 
 use crate::mixer::{response_state, Change};
 
@@ -223,11 +223,24 @@ impl Rows {
             if back.clicked() {
                 self.output.seek = previous;
             }
-            let key = icon_button(ui, Icon::Key, param.has_key_at(time), true)
-                .on_hover_text("Add or remove keyframe");
+            let interpolation = param.interpolation_at(time);
+            let shape = Icon::Key(interpolation.unwrap_or_default());
+            let key = icon_button(ui, shape, interpolation.is_some(), true)
+                .on_hover_text("Add or remove keyframe; right-click to set its interpolation");
             if key.clicked() {
                 param.toggle_key(time);
                 self.commit();
+            }
+            if let Some(current) = interpolation {
+                key.context_menu(|ui| {
+                    for choice in Interpolation::ALL {
+                        if ui.radio(current == choice, choice.name()).clicked() {
+                            param.set_interpolation(time, choice);
+                            self.commit();
+                            ui.close();
+                        }
+                    }
+                });
             }
             let next = param.next_key(time);
             let forward =
@@ -248,7 +261,7 @@ fn drag_speed(range: &RangeInclusive<f32>) -> f32 {
 enum Icon {
     Stopwatch,
     Previous,
-    Key,
+    Key(Interpolation),
     Next,
 }
 
@@ -300,12 +313,22 @@ fn icon_button(ui: &mut egui::Ui, icon: Icon, filled: bool, enabled: bool) -> eg
                 stroke,
             ));
         }
-        Icon::Key => {
+        Icon::Key(Interpolation::Linear) => {
             painter.add(egui::Shape::convex_polygon(
                 at(&[(0.0, -5.0), (5.0, 0.0), (0.0, 5.0), (-5.0, 0.0)]),
                 fill,
                 stroke,
             ));
+        }
+        Icon::Key(Interpolation::Hold) => {
+            painter.add(egui::Shape::convex_polygon(
+                at(&[(-4.0, -4.0), (4.0, -4.0), (4.0, 4.0), (-4.0, 4.0)]),
+                fill,
+                stroke,
+            ));
+        }
+        Icon::Key(_) => {
+            painter.circle(c, 4.5, fill, stroke);
         }
     }
     response
