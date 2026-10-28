@@ -4,20 +4,65 @@ use crate::{ClipId, Edge, Ticks, Track};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TransitionKind {
-    /// Blends the outgoing picture into the incoming one.
+    /// Blends the outgoing picture into the incoming one; a constant-power crossfade
+    /// on audio.
     CrossDissolve,
     /// Fades the outgoing picture to black, then the incoming one up from black.
     DipToBlack,
+    DipToWhite,
+    /// Zooms into the outgoing picture, then out of the incoming one.
+    CrossZoom,
+    /// The incoming picture is uncovered from left to right.
+    Wipe,
+    /// The incoming picture opens out from a vertical line down the middle.
+    BarnDoors,
+    /// The incoming picture opens out from the center.
+    IrisBox,
+    /// The incoming picture slides in from the right over the outgoing one.
+    Slide,
+    /// The incoming picture pushes the outgoing one out to the left.
+    Push,
 }
 
 impl TransitionKind {
-    pub const ALL: [Self; 2] = [Self::CrossDissolve, Self::DipToBlack];
+    pub const VIDEO: [Self; 9] = [
+        Self::CrossDissolve,
+        Self::DipToBlack,
+        Self::DipToWhite,
+        Self::CrossZoom,
+        Self::Wipe,
+        Self::BarnDoors,
+        Self::IrisBox,
+        Self::Slide,
+        Self::Push,
+    ];
+    pub const AUDIO: [Self; 2] = [Self::CrossDissolve, Self::DipToBlack];
 
     pub fn name(self) -> &'static str {
         match self {
             Self::CrossDissolve => "Cross Dissolve",
             Self::DipToBlack => "Dip to Black",
+            Self::DipToWhite => "Dip to White",
+            Self::CrossZoom => "Cross Zoom",
+            Self::Wipe => "Wipe",
+            Self::BarnDoors => "Barn Doors",
+            Self::IrisBox => "Iris Box",
+            Self::Slide => "Slide",
+            Self::Push => "Push",
         }
+    }
+
+    pub fn audio_name(self) -> &'static str {
+        if self.is_dip() {
+            "Dip to Silence"
+        } else {
+            "Constant Power"
+        }
+    }
+
+    /// Whether audio goes silent at the cut instead of crossfading through it.
+    pub fn is_dip(self) -> bool {
+        matches!(self, Self::DipToBlack | Self::DipToWhite)
     }
 }
 

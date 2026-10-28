@@ -10,6 +10,7 @@ mod mix;
 mod model;
 mod param;
 mod plan;
+mod reveal;
 mod speed;
 mod time;
 mod timecode;
@@ -36,6 +37,7 @@ pub use model::{
 };
 pub use param::{Keyframe, Param};
 pub use plan::{track_layers_at, PlannedLayer};
+pub use reveal::Reveal;
 pub use speed::Speed;
 pub use time::{Ticks, Timebase};
 pub use timecode::{FrameRate, Timecode};

@@ -1,4 +1,4 @@
-use crate::{Clip, Sequence, Ticks, Track, Transition, TransitionKind};
+use crate::{Clip, Reveal, Sequence, Ticks, Track, Transition};
 
 /// One picture to draw for a track, before the clip's own look is applied.
 #[derive(Debug, Clone, PartialEq)]
@@ -7,12 +7,11 @@ pub struct PlannedLayer<'a> {
     /// Clamped to the media, so transitions past the edge of the media hold its first
     /// or last picture.
     pub source_time: Ticks,
-    /// Opacity from transitions, multiplying the clip's own.
-    pub fade: f32,
+    pub reveal: Reveal,
 }
 
-/// The pictures `track` shows at `position`, bottom first: two during a cross dissolve,
-/// otherwise at most one.
+/// The pictures `track` shows at `position`, bottom first: two during a transition at
+/// a cut, otherwise at most one.
 pub fn track_layers_at<'a>(
     sequence: &'a Sequence,
     track: &'a Track,
@@ -30,59 +29,63 @@ pub fn track_layers_at<'a>(
     let next = clips
         .get(index + 1)
         .filter(|next| next.start == current.end());
-    let layer = |clip: &'a Clip, fade: f32| PlannedLayer {
+    let layer = |clip: &'a Clip, reveal: Reveal| PlannedLayer {
         clip,
         source_time: source_time(sequence, clip, position),
-        fade,
+        reveal,
+    };
+    let at_cut = |outgoing: &'a Clip, incoming: &'a Clip, transition: Transition, own: Reveal| {
+        let (before, after) = cut_window(outgoing, incoming, transition);
+        let start = incoming.start - before;
+        let window = before + after;
+        let (out, into) = transition
+            .kind
+            .reveals(fraction(position - start, window), fraction(before, window));
+        let layers = [layer(outgoing, own.and(out)), layer(incoming, into)];
+        let visible: Vec<_> = layers
+            .iter()
+            .filter(|layer| layer.reveal.is_visible())
+            .cloned()
+            .collect();
+        // At a dip's darkest point the incoming clip stays planned, so its decoder is kept.
+        if visible.is_empty() {
+            vec![layers[1].clone()]
+        } else {
+            visible
+        }
     };
 
-    let mut fade = 1.0;
+    let mut reveal = Reveal::FULL;
     match (current.transition_in, previous) {
         (Some(transition), Some(previous)) => {
-            let (before, after) = cut_window(previous, current, transition);
+            let (_, after) = cut_window(previous, current, transition);
             if position < current.start + after {
-                let start = current.start - before;
-                match transition.kind {
-                    TransitionKind::CrossDissolve => {
-                        let progress = fraction(position - start, before + after);
-                        return vec![layer(previous, 1.0), layer(current, progress)];
-                    }
-                    TransitionKind::DipToBlack => {
-                        fade *= fraction(position - current.start, after);
-                    }
-                }
+                return at_cut(previous, current, transition, Reveal::FULL);
             }
         }
         (Some(transition), None) => {
             let length = transition.duration.min(current.duration);
-            fade *= fraction(position - current.start, length);
+            let progress = fraction(position - current.start, length);
+            reveal = reveal.and(transition.kind.reveals(progress, 0.0).1);
         }
         (None, _) => {}
     }
     match (next.and_then(|next| next.transition_in), next) {
         (Some(transition), Some(next)) => {
-            let (before, after) = cut_window(current, next, transition);
-            let start = current.end() - before;
-            if position >= start {
-                match transition.kind {
-                    TransitionKind::CrossDissolve => {
-                        let progress = fraction(position - start, before + after);
-                        return vec![layer(current, fade), layer(next, progress)];
-                    }
-                    TransitionKind::DipToBlack => {
-                        fade *= 1.0 - fraction(position - start, before);
-                    }
-                }
+            let (before, _) = cut_window(current, next, transition);
+            if position >= current.end() - before {
+                return at_cut(current, next, transition, reveal);
             }
         }
         _ => {
             if let (Some(transition), None) = (current.transition_out, next) {
                 let length = transition.duration.min(current.duration);
-                fade *= fraction(current.end() - position, length).min(1.0);
+                let remaining = fraction(current.end() - position, length).min(1.0);
+                reveal = reveal.and(transition.kind.reveals(remaining, 0.0).1);
             }
         }
     }
-    vec![layer(current, fade)]
+    vec![layer(current, reveal)]
 }
 
 /// How far a transition at the cut between `outgoing` and `incoming` reaches before and
@@ -117,7 +120,7 @@ fn source_time(sequence: &Sequence, clip: &Clip, position: Ticks) -> Ticks {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ClipId, SourceId, Timebase, VideoFormat};
+    use crate::{ClipId, SourceId, Timebase, TransitionKind, VideoFormat};
 
     fn clip(id: u64, start: i64, duration: i64, source_in: i64) -> Clip {
         Clip::new(
@@ -139,7 +142,7 @@ mod tests {
     fn summary(layers: &[PlannedLayer<'_>]) -> Vec<(u64, i64, f32)> {
         layers
             .iter()
-            .map(|layer| (layer.clip.id.0, layer.source_time.0, layer.fade))
+            .map(|layer| (layer.clip.id.0, layer.source_time.0, layer.reveal.fade))
             .collect()
     }
 
@@ -192,5 +195,34 @@ mod tests {
         let at = |time| summary(&track_layers_at(&sequence, &track, Ticks(time)));
         assert_eq!(at(105), vec![(1, 5, 0.25)]);
         assert_eq!(at(175), vec![(1, 75, 0.5)]);
+    }
+
+    #[test]
+    fn push_moves_both_pictures_and_dip_to_white_washes_one_at_a_time() {
+        let sequence = sequence();
+        let cut = |kind| {
+            let mut incoming = clip(2, 100, 100, 0);
+            incoming.transition_in = dissolve(kind, 40);
+            Track {
+                clips: vec![clip(1, 0, 100, 0), incoming],
+                ..Track::default()
+            }
+        };
+        let push = cut(TransitionKind::Push);
+        let shifts: Vec<f32> = track_layers_at(&sequence, &push, Ticks(90))
+            .iter()
+            .map(|layer| layer.reveal.shift[0])
+            .collect();
+        assert_eq!(shifts, [-0.25, 0.75]);
+
+        let white = cut(TransitionKind::DipToWhite);
+        let washes = |time| -> Vec<(u64, f32)> {
+            track_layers_at(&sequence, &white, Ticks(time))
+                .iter()
+                .map(|layer| (layer.clip.id.0, layer.reveal.wash))
+                .collect()
+        };
+        assert_eq!(washes(90), [(1, 0.5)]);
+        assert_eq!(washes(110), [(2, 0.5)]);
     }
 }

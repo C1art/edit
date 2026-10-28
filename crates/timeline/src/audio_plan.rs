@@ -1,7 +1,7 @@
 use std::f32::consts::FRAC_PI_2;
 
 use crate::plan::{cut_window, fraction};
-use crate::{Clip, Ticks, Track, TransitionKind};
+use crate::{Clip, Ticks, Track};
 
 /// Where clip `index` of `track` is heard: its own span, widened by the part of a
 /// crossfade that plays it past either edge.
@@ -10,13 +10,13 @@ pub fn audio_span(track: &Track, index: usize) -> (Ticks, Ticks) {
     let (previous, next) = neighbors(track, index);
     let mut start = clip.start;
     if let (Some(transition), Some(previous)) = (clip.transition_in, previous) {
-        if transition.kind == TransitionKind::CrossDissolve {
+        if !transition.kind.is_dip() {
             start = start - cut_window(previous, clip, transition).0;
         }
     }
     let mut end = clip.end();
     if let Some((transition, next)) = next.and_then(|next| Some((next.transition_in?, next))) {
-        if transition.kind == TransitionKind::CrossDissolve {
+        if !transition.kind.is_dip() {
             end = end + cut_window(clip, next, transition).1;
         }
     }
@@ -35,11 +35,11 @@ pub fn audio_fade(track: &Track, index: usize, position: Ticks) -> f32 {
         (Some(transition), Some(previous)) => {
             let (before, after) = cut_window(previous, clip, transition);
             gain *= match transition.kind {
-                TransitionKind::CrossDissolve => {
+                kind if !kind.is_dip() => {
                     rise(fraction(position - (clip.start - before), before + after))
                 }
-                TransitionKind::DipToBlack if position < clip.start => 0.0,
-                TransitionKind::DipToBlack => rise(fraction(position - clip.start, after)),
+                _ if position < clip.start => 0.0,
+                _ => rise(fraction(position - clip.start, after)),
             };
         }
         (Some(transition), None) => {
@@ -56,11 +56,9 @@ pub fn audio_fade(track: &Track, index: usize, position: Ticks) -> f32 {
             let (before, after) = cut_window(clip, next, transition);
             let start = clip.end() - before;
             gain *= match transition.kind {
-                TransitionKind::CrossDissolve => {
-                    rise(1.0 - fraction(position - start, before + after))
-                }
-                TransitionKind::DipToBlack if position >= clip.end() => 0.0,
-                TransitionKind::DipToBlack => rise(1.0 - fraction(position - start, before)),
+                kind if !kind.is_dip() => rise(1.0 - fraction(position - start, before + after)),
+                _ if position >= clip.end() => 0.0,
+                _ => rise(1.0 - fraction(position - start, before)),
             };
         }
         (None, None) => {
@@ -88,7 +86,7 @@ fn neighbors(track: &Track, index: usize) -> (Option<&Clip>, Option<&Clip>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ClipId, SourceId, Transition};
+    use crate::{ClipId, SourceId, Transition, TransitionKind};
 
     fn track_with_crossfade(duration: i64) -> Track {
         let mut incoming = Clip::new(ClipId(2), SourceId(1), Ticks(100), Ticks(100), Ticks(0));
