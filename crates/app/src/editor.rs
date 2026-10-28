@@ -9,6 +9,7 @@ use timeline::{
     Timeline, TimelineError, VideoFormat,
 };
 
+use crate::clip_art::{ClipArt, ThumbnailWorker, WaveformWorker};
 use crate::effects::{self, EffectControls, SideTab};
 use crate::export::ExportDialog;
 use crate::import::Importer;
@@ -31,6 +32,7 @@ pub struct Editor {
     pub(crate) render_state: Option<RenderState>,
     pub(crate) importer: Option<Importer>,
     proxies: Option<ProxyMaker>,
+    pub(crate) clip_art: ClipArt,
     /// Whether the monitors play proxies where media has them.
     pub(crate) use_proxies: bool,
     pub(crate) hardware_decoding: bool,
@@ -85,6 +87,14 @@ impl Editor {
         let proxies = ProxyMaker::new()
             .map_err(|error| notices.push(format!("Proxies disabled: {error}")))
             .ok();
+        let clip_art = ClipArt::new(
+            WaveformWorker::new()
+                .map_err(|error| notices.push(format!("Waveforms disabled: {error}")))
+                .ok(),
+            ThumbnailWorker::new()
+                .map_err(|error| notices.push(format!("Thumbnails disabled: {error}")))
+                .ok(),
+        );
         let store = ProjectStore::new()
             .map_err(|error| notices.push(format!("Saving disabled: {error}")))
             .ok();
@@ -103,6 +113,7 @@ impl Editor {
             render_state,
             importer,
             proxies,
+            clip_art,
             use_proxies: false,
             hardware_decoding: true,
             source: None,
@@ -381,7 +392,14 @@ impl Editor {
             .program
             .as_ref()
             .is_some_and(|program| program.player.is_playing());
-        let output = self.view.ui(ui, &mut self.timeline, playhead, playing);
+        self.clip_art.poll(ui.ctx());
+        let output = self.view.ui(
+            ui,
+            &mut self.timeline,
+            &mut self.clip_art,
+            playhead,
+            playing,
+        );
         for error in output.errors {
             self.notice(format!("Cannot edit: {error}"));
         }

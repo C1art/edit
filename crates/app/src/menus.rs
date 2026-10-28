@@ -153,6 +153,11 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             ui.separator();
             ui.checkbox(&mut editor.use_proxies, "Use Proxies")
                 .on_hover_text("Play proxies where media has them; export uses the originals");
+            ui.checkbox(
+                &mut editor.clip_art.show_thumbnails,
+                "Show Video Thumbnails",
+            );
+            ui.checkbox(&mut editor.clip_art.show_waveforms, "Show Audio Waveforms");
         });
     });
 }

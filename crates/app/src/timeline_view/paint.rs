@@ -1,8 +1,10 @@
 use egui::{Align2, Color32, FontId, Painter, Rect, Stroke, StrokeKind};
 use timeline::{Clip, ClipId, Gain, Sequence, Ticks, Timecode, Track, TrackKind};
 
+use super::clip_art::{self, ClipArea};
 use super::layout::{clip_rect, Row};
 use super::scale::{label_interval, TimeScale};
+use crate::clip_art::ClipArt;
 
 pub const PLAYHEAD: Color32 = Color32::from_rgb(230, 70, 60);
 const VIDEO_CLIP: Color32 = Color32::from_rgb(64, 104, 160);
@@ -85,6 +87,7 @@ pub fn clips(
     scale: &TimeScale,
     sequence: &Sequence,
     selection: &[ClipId],
+    art: &mut ClipArt,
 ) {
     let Some(track) = sequence.track(row.track) else {
         return;
@@ -109,6 +112,37 @@ pub fn clips(
             fill = fill.gamma_multiply(0.4);
         }
         painter.rect_filled(rect, 3.0, fill);
+        if let Some(item) = sequence.media_item(clip.source) {
+            let area = ClipArea {
+                rect: rect.shrink(1.0),
+                clip,
+                item,
+                timebase: sequence.timebase,
+            };
+            match row.track.kind {
+                TrackKind::Video if art.show_thumbnails => {
+                    let tint = if track.muted {
+                        Color32::from_gray(100)
+                    } else {
+                        Color32::WHITE
+                    };
+                    clip_art::thumbnails(painter, &area, scale, art, tint);
+                    if selected {
+                        painter.rect_filled(rect, 3.0, Color32::from_white_alpha(40));
+                    }
+                    let label = Rect::from_min_max(
+                        rect.left_top(),
+                        egui::pos2(rect.right(), rect.top() + 16.0),
+                    );
+                    painter.rect_filled(label, 3.0, fill.gamma_multiply(0.85));
+                }
+                TrackKind::Audio if art.show_waveforms => {
+                    let color = fill.lerp_to_gamma(Color32::WHITE, 0.55);
+                    clip_art::waveform(painter, &area, scale, art, color);
+                }
+                _ => {}
+            }
+        }
         let stroke = if selected {
             Stroke::new(2.0, Color32::WHITE)
         } else {

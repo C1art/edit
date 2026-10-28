@@ -1,3 +1,4 @@
+mod clip_art;
 mod gesture;
 mod header;
 mod interact;
@@ -12,6 +13,7 @@ use timeline::{
     ClipId, MarkerId, Sequence, SetTrackSwitch, SourceId, Ticks, Timeline, TrackKind, TrackRef,
 };
 
+use crate::clip_art::ClipArt;
 use gesture::{Gesture, PendingEdit};
 use header::HeaderAction;
 pub use markers::color as marker_color;
@@ -163,6 +165,7 @@ impl TimelineView {
         &mut self,
         ui: &mut egui::Ui,
         timeline: &mut Timeline,
+        art: &mut ClipArt,
         playhead: Ticks,
         playing: bool,
     ) -> TimelineOutput {
@@ -228,7 +231,7 @@ impl TimelineView {
                 sequence,
                 self.targets.contains(row.track),
             );
-            paint::clips(&painter, row, &scale, sequence, &self.selection);
+            paint::clips(&painter, row, &scale, sequence, &self.selection, art);
         }
         if let Some(at) = drop_guide {
             paint::guide(&painter, scale.x(at), tracks.top(), tracks.bottom());

@@ -1,3 +1,4 @@
+mod clip_art;
 mod commands;
 mod editor;
 mod effects;
