@@ -1,4 +1,4 @@
-use crate::{Alignment, Clip, Reveal, Sequence, Ticks, Track, Transition};
+use crate::{Alignment, Clip, Reveal, Sequence, Ticks, Track, Transition, TransitionKind};
 
 /// One picture to draw for a track, before the clip's own look is applied.
 #[derive(Debug, Clone, PartialEq)]
@@ -8,6 +8,9 @@ pub struct PlannedLayer<'a> {
     /// or last picture.
     pub source_time: Ticks,
     pub reveal: Reveal,
+    /// How far a morph cut has warped the outgoing picture into this incoming one,
+    /// which then shows alone in its place when the two can be morphed.
+    pub morph: Option<f32>,
 }
 
 /// The pictures `track` shows at `position`, bottom first: two during a transition at
@@ -33,14 +36,19 @@ pub fn track_layers_at<'a>(
         clip,
         source_time: source_time(sequence, clip, position),
         reveal,
+        morph: None,
     };
     let at_cut = |outgoing: &'a Clip, incoming: &'a Clip, transition: Transition, own: Reveal| {
         let (before, after) = cut_window(outgoing, incoming, transition);
         let start = incoming.start - before;
         let window = before + after;
-        let (out, into) =
-            transition.reveals(fraction(position - start, window), fraction(before, window));
-        let mut layers = [layer(outgoing, own.and(out)), layer(incoming, into)];
+        let progress = fraction(position - start, window);
+        let (out, into) = transition.reveals(progress, fraction(before, window));
+        let morphed = PlannedLayer {
+            morph: (transition.kind == TransitionKind::MorphCut).then_some(progress),
+            ..layer(incoming, into)
+        };
+        let mut layers = [layer(outgoing, own.and(out)), morphed];
         if transition.kind.moves_outgoing() {
             layers.reverse();
         }
@@ -176,6 +184,23 @@ mod tests {
         // Past its out point the outgoing clip keeps reading its media.
         assert_eq!(at(110), vec![(1, 110, 1.0), (2, 510, 0.75)]);
         assert_eq!(at(120), vec![(2, 520, 1.0)]);
+    }
+
+    #[test]
+    fn a_morph_cut_tells_the_incoming_clip_how_far_it_has_morphed() {
+        let mut incoming = clip(2, 100, 100, 500);
+        incoming.transition_in = dissolve(TransitionKind::MorphCut, 40);
+        let track = Track {
+            clips: vec![clip(1, 0, 100, 0), incoming],
+            ..Track::default()
+        };
+        let sequence = sequence();
+        let morphs = |time| {
+            let layers = track_layers_at(&sequence, &track, Ticks(time));
+            layers.iter().map(|layer| layer.morph).collect::<Vec<_>>()
+        };
+        assert_eq!(morphs(90), vec![None, Some(0.25)]);
+        assert_eq!(morphs(120), vec![None]);
     }
 
     #[test]

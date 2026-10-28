@@ -62,6 +62,9 @@ pub enum TransitionKind {
     PageTurn,
     /// The outgoing picture curls away from a corner, its back pale and shaded.
     PagePeel,
+    /// Bridges a jump cut by warping each picture toward the other along the motion
+    /// between them as it dissolves, so a talking head seems to move rather than jump.
+    MorphCut,
     /// Audio only: a linear crossfade, which dips in loudness through the middle.
     ConstantGain,
     /// Audio only: a crossfade linear in decibels, quick to fade out and slow to fade in.
@@ -69,10 +72,11 @@ pub enum TransitionKind {
 }
 
 impl TransitionKind {
-    pub const VIDEO: [Self; 36] = [
+    pub const VIDEO: [Self; 37] = [
         Self::CrossDissolve,
         Self::AdditiveDissolve,
         Self::NonAdditiveDissolve,
+        Self::MorphCut,
         Self::DipToBlack,
         Self::DipToWhite,
         Self::CrossZoom,
@@ -154,6 +158,7 @@ impl TransitionKind {
             Self::Whip => "Whip",
             Self::PageTurn => "Page Turn",
             Self::PagePeel => "Page Peel",
+            Self::MorphCut => "Morph Cut",
         }
     }
 
