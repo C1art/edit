@@ -1,5 +1,5 @@
 use egui::{ComboBox, DragValue, Key};
-use timeline::{FrameRate, InterpretFootage, SourceId};
+use timeline::{AlphaInterpretation, FrameRate, InterpretFootage, PixelAspect, SourceId};
 
 use crate::editor::Editor;
 
@@ -17,14 +17,19 @@ const COMMON_RATES: [(&str, u32, u32); 10] = [
     ("120", 120, 1),
 ];
 
-/// The frame rate an item's pictures play at, chosen in Premiere's Interpret Footage
-/// dialog: the file's own, or one assumed in its place.
+/// How an item's pictures are read, chosen in Premiere's Interpret Footage dialog: the
+/// frame rate and pixel shape the file gives or ones assumed in their place, and what
+/// its alpha channel means.
 pub(crate) struct InterpretDialog {
     source: SourceId,
     name: String,
     native: FrameRate,
     assume: bool,
     rate: FrameRate,
+    native_aspect: PixelAspect,
+    conform: bool,
+    aspect: PixelAspect,
+    alpha: AlphaInterpretation,
 }
 
 impl Editor {
@@ -42,6 +47,10 @@ impl Editor {
             native: video.frame_rate,
             assume: item.interpreted_rate.is_some(),
             rate: item.interpreted_rate.unwrap_or(video.frame_rate),
+            native_aspect: video.pixel_aspect,
+            conform: item.interpreted_aspect.is_some(),
+            aspect: item.pixel_aspect(),
+            alpha: item.alpha,
         });
     }
 }
@@ -57,6 +66,8 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
         .resizable(false)
         .show(ctx, |ui| {
             ui.strong(&dialog.name);
+            ui.separator();
+            ui.label("Frame Rate");
             let native = format!(
                 "Use frame rate from file: {} fps",
                 fps(dialog.native.approx_fps())
@@ -67,6 +78,23 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                 ui.add_enabled_ui(dialog.assume, |ui| rate_picker(ui, &mut dialog.rate));
             });
             ui.weak("Clips keep their frames, so they lengthen or shorten, and the sound follows.");
+            ui.separator();
+            ui.label("Pixel Aspect Ratio");
+            let native = format!(
+                "Use pixel aspect ratio from file: {}",
+                aspect_name(dialog.native_aspect)
+            );
+            ui.radio_value(&mut dialog.conform, false, native);
+            ui.horizontal(|ui| {
+                ui.radio_value(&mut dialog.conform, true, "Conform to:");
+                ui.add_enabled_ui(dialog.conform, |ui| aspect_picker(ui, &mut dialog.aspect));
+            });
+            ui.separator();
+            ui.label("Alpha Channel");
+            for alpha in AlphaInterpretation::ALL {
+                ui.radio_value(&mut dialog.alpha, alpha, alpha.name());
+            }
+            ui.separator();
             ui.horizontal(|ui| {
                 done = ui.button("OK").clicked() || ui.input(|input| input.key_pressed(Key::Enter));
                 cancelled = ui.button("Cancel").clicked()
@@ -83,6 +111,8 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
         editor.interpret_footage(InterpretFootage {
             source: dialog.source,
             rate: dialog.assume.then_some(dialog.rate),
+            aspect: dialog.conform.then_some(dialog.aspect),
+            alpha: dialog.alpha,
         });
     }
 }
@@ -108,6 +138,26 @@ pub(crate) fn rate_picker(ui: &mut egui::Ui, rate: &mut FrameRate) {
             *rate = chosen;
         }
     }
+}
+
+fn aspect_name(aspect: PixelAspect) -> String {
+    PixelAspect::PRESETS
+        .iter()
+        .find(|&&(_, preset)| preset == aspect)
+        .map_or_else(
+            || format!("{:.4}", aspect.ratio()),
+            |(name, _)| (*name).to_owned(),
+        )
+}
+
+fn aspect_picker(ui: &mut egui::Ui, aspect: &mut PixelAspect) {
+    ComboBox::from_id_salt("conformed pixel aspect")
+        .selected_text(aspect_name(*aspect))
+        .show_ui(ui, |ui| {
+            for (name, preset) in PixelAspect::PRESETS {
+                ui.selectable_value(aspect, preset, name);
+            }
+        });
 }
 
 /// Up to three decimals, without trailing zeros.

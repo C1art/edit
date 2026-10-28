@@ -28,7 +28,7 @@ impl PictureFrame {
         let canvas = Vec2::new(format.width as f32, format.height as f32);
         let source = sequence
             .media_item(clip.source)?
-            .video
+            .played_format()
             .map_or(canvas, |video| {
                 Vec2::new(video.width as f32, video.height as f32)
             });

@@ -106,7 +106,7 @@ pub(super) fn tile(
         ((at * SCRUB_STEPS as f32) as i64).min(SCRUB_STEPS - 1)
     });
     let at = Ticks(range.start.0 + (range.end.0 - range.start.0) * step / SCRUB_STEPS);
-    let texture = match item.video {
+    let texture = match item.played_format() {
         Some(video) if item.is_file() && !offline => {
             let path = item.proxy.as_deref().unwrap_or(&item.path);
             art.picture(path, at, timebase)

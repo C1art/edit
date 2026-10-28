@@ -74,6 +74,7 @@ pub(crate) fn probe(path: &std::path::Path, timebase: Timebase) -> Result<Import
             width: video.width,
             height: video.height,
             frame_rate: video.frame_rate.unwrap_or(FALLBACK_RATE),
+            pixel_aspect: video.pixel_aspect,
         }),
         has_audio: info.has_audio,
     })

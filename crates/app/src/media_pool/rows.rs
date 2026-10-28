@@ -66,16 +66,22 @@ pub(super) fn item_row(
     if item.subclip.is_some() {
         details.insert(0, "Subclip".to_owned());
     }
-    if let Some(video) = item.played_format() {
-        let interpreted = if item.interpreted_rate.is_some() {
+    if let (Some(stored), Some(video)) = (item.video, item.played_format()) {
+        let interpreted = if item.is_interpreted() {
             " (interpreted)"
         } else {
             ""
         };
+        let aspect = item.pixel_aspect();
+        let pixels = if aspect.is_square() {
+            String::new()
+        } else {
+            format!(" ({:.4})", aspect.ratio())
+        };
         details.push(format!(
-            "{}×{} {:.2} fps{interpreted}",
-            video.width,
-            video.height,
+            "{}×{}{pixels} {:.2} fps{interpreted}",
+            stored.width,
+            stored.height,
             video.frame_rate.approx_fps()
         ));
     }

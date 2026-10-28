@@ -203,9 +203,16 @@ fn file_section(editor: &mut Editor, ui: &mut egui::Ui, media: &MediaItem) {
                 if let Some(video) = media.video {
                     row("Frame Size", format!("{} × {}", video.width, video.height));
                     row("Frame Rate", fps(video.frame_rate));
+                    row(
+                        "Pixel Aspect",
+                        format!("{:.4}", media.pixel_aspect().ratio()),
+                    );
                 }
                 if let Some(assumed) = media.interpreted_rate {
                     row("Interpreted As", fps(assumed));
+                }
+                if !media.alpha.is_straight() {
+                    row("Alpha", media.alpha.name().to_owned());
                 }
                 row("Duration", duration(media.duration, timebase, rate));
                 if let Some(range) = &media.subclip {
