@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AudioEffect, Bin, Captions, FrameRate, Gain, Look, Marker, Marks, MediaItem, Pan, Param,
+    AudioEffect, Bin, Captions, FrameRate, Gain, Label, Look, Marker, Marks, MediaItem, Pan, Param,
     SourceId, Speed, Ticks, Timebase, Transition,
 };
 
@@ -93,6 +93,9 @@ pub struct Clip {
     /// Only used when no clip follows directly; a cut is owned by the incoming clip.
     #[serde(default)]
     pub transition_out: Option<Transition>,
+    /// Shown instead of the track's color on the timeline.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<Label>,
 }
 
 impl Clip {
@@ -122,6 +125,7 @@ impl Clip {
             look: Look::default(),
             transition_in: None,
             transition_out: None,
+            label: None,
         }
     }
 

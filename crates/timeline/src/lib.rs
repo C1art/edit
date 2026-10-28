@@ -10,6 +10,7 @@ mod effect;
 mod error;
 mod generator;
 mod history;
+mod label;
 mod look;
 mod marker;
 mod marks;
@@ -41,15 +42,16 @@ pub use edit::{
     MoveClips, MoveToBin, NestClips, NormalizeClipGains, PasteAttributes, PasteClips, PlaceClip,
     PlaceMode, RateStretch, Razor, RazorTarget, RelinkMedia, RemoveAttributes, RemoveBin,
     RemoveMarker, RemoveMedia, RemoveTrack, RenameBin, RenameMedia, RippleDelete,
-    RippleTrimToPlayhead, Roll, SetCaptions, SetClipAudioEffects, SetClipGain, SetClipLook,
-    SetClipSpeed, SetClipVolume, SetClipsEnabled, SetGenerator, SetLinked, SetMarks, SetMasterGain,
-    SetProxy, SetSequenceFormat, SetToFrameSize, SetTrackAutomation, SetTrackMix, SetTrackSwitch,
-    SetTransition, Slide, Slip, TrackSwitch, Trim, TrimMode, UpdateMarker,
+    RippleTrimToPlayhead, Roll, SetCaptions, SetClipAudioEffects, SetClipGain, SetClipLabel,
+    SetClipLook, SetClipSpeed, SetClipVolume, SetClipsEnabled, SetGenerator, SetLinked, SetMarks,
+    SetMasterGain, SetProxy, SetSequenceFormat, SetToFrameSize, SetTrackAutomation, SetTrackMix,
+    SetTrackSwitch, SetTransition, Slide, Slip, TrackSwitch, Trim, TrimMode, UpdateMarker,
 };
 pub use effect::{MatteChannel, Rgb, VideoEffect};
 pub use error::TimelineError;
 pub use generator::{Generator, TextAlign, Title, TitleFont, GENERATED_SECONDS};
 pub use history::{preview, Edit, EditCommand, Timeline};
+pub use label::Label;
 pub use look::{Crop, Look, Motion};
 pub use marker::{Marker, MarkerColor, MarkerId};
 pub use marks::Marks;
