@@ -7,11 +7,13 @@ const GAIN_DB: std::ops::RangeInclusive<f32> = -24.0..=24.0;
 const HEARING_HZ: std::ops::RangeInclusive<f32> = 20.0..=20_000.0;
 
 /// The add menu's groups, as Premiere's Effects panel files them.
-const CATEGORIES: [&str; 5] = [
+const CATEGORIES: [&str; 7] = [
     "Amplitude and Compression",
     "Filter and EQ",
+    "Modulation",
     "Delay and Echo",
     "Reverb",
+    "Time and Pitch",
     "Channels",
 ];
 
@@ -20,20 +22,23 @@ fn category(effect: &AudioEffect) -> &'static str {
         AudioEffect::Amplify { .. }
         | AudioEffect::Compressor { .. }
         | AudioEffect::HardLimiter { .. }
-        | AudioEffect::NoiseGate { .. } => CATEGORIES[0],
+        | AudioEffect::NoiseGate { .. }
+        | AudioEffect::DeEsser { .. } => CATEGORIES[0],
         AudioEffect::Bass { .. }
         | AudioEffect::Treble { .. }
         | AudioEffect::Equalizer { .. }
         | AudioEffect::HighPass { .. }
         | AudioEffect::LowPass { .. }
         | AudioEffect::Notch { .. } => CATEGORIES[1],
-        AudioEffect::Delay { .. } => CATEGORIES[2],
-        AudioEffect::Reverb { .. } => CATEGORIES[3],
+        AudioEffect::Chorus { .. } | AudioEffect::Flanger { .. } => CATEGORIES[2],
+        AudioEffect::Delay { .. } => CATEGORIES[3],
+        AudioEffect::Reverb { .. } => CATEGORIES[4],
+        AudioEffect::PitchShifter { .. } => CATEGORIES[5],
         AudioEffect::Balance { .. }
         | AudioEffect::FillLeftWithRight
         | AudioEffect::FillRightWithLeft
         | AudioEffect::SwapChannels
-        | AudioEffect::Invert => CATEGORIES[4],
+        | AudioEffect::Invert => CATEGORIES[6],
     }
 }
 
@@ -124,6 +129,35 @@ fn effect_rows(ui: &mut egui::Ui, rows: &mut Rows, effect: &mut AudioEffect) {
         AudioEffect::Reverb { size, damping, mix } => {
             rows.param(ui, "Room Size", size, 0.0..=100.0, "%");
             rows.param(ui, "Damping", damping, 0.0..=100.0, "%");
+            rows.param(ui, "Mix", mix, 0.0..=100.0, "%");
+        }
+        AudioEffect::DeEsser {
+            threshold,
+            reduction,
+            frequency,
+        } => {
+            rows.param(ui, "Threshold", threshold, -60.0..=0.0, " dB");
+            rows.param(ui, "Reduction", reduction, 0.0..=24.0, " dB");
+            rows.param(ui, "Frequency", frequency, 2_000.0..=12_000.0, " Hz");
+        }
+        AudioEffect::Chorus { rate, depth, mix } => {
+            rows.param(ui, "Rate", rate, 0.05..=10.0, " Hz");
+            rows.param(ui, "Depth", depth, 0.0..=20.0, " ms");
+            rows.param(ui, "Mix", mix, 0.0..=100.0, "%");
+        }
+        AudioEffect::Flanger {
+            rate,
+            depth,
+            feedback,
+            mix,
+        } => {
+            rows.param(ui, "Rate", rate, 0.05..=5.0, " Hz");
+            rows.param(ui, "Depth", depth, 0.0..=10.0, " ms");
+            rows.param(ui, "Feedback", feedback, -95.0..=95.0, "%");
+            rows.param(ui, "Mix", mix, 0.0..=100.0, "%");
+        }
+        AudioEffect::PitchShifter { semitones, mix } => {
+            rows.param(ui, "Semitones", semitones, -24.0..=24.0, "");
             rows.param(ui, "Mix", mix, 0.0..=100.0, "%");
         }
         AudioEffect::FillLeftWithRight
