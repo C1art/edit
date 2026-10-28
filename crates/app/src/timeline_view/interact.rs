@@ -1,10 +1,10 @@
 use egui::{Pos2, Rangef};
 use timeline::{
-    ClipId, MarkerOwner, Razor, RazorTarget, Sequence, SetClipVolume, SetTrackAutomation, Ticks,
-    Timeline, TrackKind, TrackRef,
+    ClipId, LinkedSelection, MarkerOwner, Razor, RazorTarget, Sequence, SetClipVolume,
+    SetTrackAutomation, Ticks, Timeline, TrackKind, TrackRef,
 };
 
-use super::gesture::Gesture;
+use super::gesture::{self, Gesture};
 use super::layout::{self, Hit, Row};
 use super::markers;
 use super::rubber_band::{self, BandHit, BandOwner, Envelope};
@@ -26,9 +26,10 @@ impl TimelineView {
         let rows = layout::rows(sequence, &self.heights, top);
         let (rate, timebase) = (sequence.format.frame_rate, sequence.timebase);
         let frame_time = |x: f32| scale::nearest_frame(scale.time(x), rate, timebase);
-        let (shift, command) = response
-            .ctx
-            .input(|input| (input.modifiers.shift, input.modifiers.command));
+        let (shift, command, alt) = response.ctx.input(|input| {
+            let modifiers = input.modifiers;
+            (modifiers.shift, modifiers.command, modifiers.alt)
+        });
 
         if response.double_clicked() && self.tool == Tool::Selection {
             if let Some(pos) = response.interact_pointer_pos() {
@@ -81,7 +82,7 @@ impl TimelineView {
                 {
                     toggle_volume_key(timeline, owner, grabbed, output);
                 } else {
-                    self.click(sequence, hit, shift);
+                    self.click(sequence, hit, shift, alt);
                     self.select_gap(sequence, hit, scale.time(pos.x));
                 }
             }
@@ -97,10 +98,25 @@ impl TimelineView {
                 .input(|input| input.pointer.press_origin())
                 .unwrap_or(pos);
             let hit = layout::hit(sequence, &rows, &scale, origin);
+            let links = if alt {
+                LinkedSelection::Apart
+            } else {
+                LinkedSelection::Together
+            };
+            let unlinked;
+            let sequence = match links {
+                LinkedSelection::Together => sequence,
+                LinkedSelection::Apart => {
+                    unlinked = gesture::apart(sequence);
+                    &unlinked
+                }
+            };
             if let Tool::TrackSelect(direction) = self.tool {
                 let only = shift.then(|| hit_track(hit)).flatten();
                 self.selection =
                     track_select::pick(sequence, frame_time(origin.x), direction, only);
+            } else if let (true, Hit::Body { clip, .. } | Hit::Edge { clip, .. }) = (alt, hit) {
+                self.selection = vec![clip];
             }
             let band = self
                 .band_hit(sequence, &rows, &scale, hit, origin)
@@ -116,6 +132,7 @@ impl TimelineView {
             };
             self.drag = gesture.map(|gesture| Drag {
                 gesture,
+                links,
                 origin: frame_time(origin.x),
                 pending: None,
                 preview: None,
@@ -124,6 +141,14 @@ impl TimelineView {
 
         let Some(drag) = &mut self.drag else {
             return;
+        };
+        let unlinked;
+        let sequence = match drag.links {
+            LinkedSelection::Together => sequence,
+            LinkedSelection::Apart => {
+                unlinked = gesture::apart(sequence);
+                &unlinked
+            }
         };
         if response.dragged() {
             if let Some(pos) = response.interact_pointer_pos() {
@@ -152,8 +177,12 @@ impl TimelineView {
             }
         }
         if response.drag_stopped() {
-            if let Some(pending) = self.drag.take().and_then(|drag| drag.pending) {
-                match pending.apply(timeline) {
+            let pending = self
+                .drag
+                .take()
+                .and_then(|drag| Some((drag.pending?, drag.links)));
+            if let Some((pending, links)) = pending {
+                match pending.apply(timeline, links) {
                     Ok(()) | Err(timeline::TimelineError::NothingToEdit) => {}
                     Err(error) => output.errors.push(error.to_string()),
                 }
@@ -209,7 +238,8 @@ impl TimelineView {
         };
     }
 
-    fn click(&mut self, sequence: &Sequence, hit: Hit, shift: bool) {
+    /// Alt picks the clip alone, without its group or linked partners.
+    fn click(&mut self, sequence: &Sequence, hit: Hit, shift: bool, alt: bool) {
         let clip = match hit {
             Hit::Body { clip, .. } | Hit::Edge { clip, .. } => clip,
             Hit::Empty { .. } => {
@@ -219,7 +249,11 @@ impl TimelineView {
                 return;
             }
         };
-        let group = sequence.with_groups(&[clip]);
+        let group = if alt {
+            vec![clip]
+        } else {
+            sequence.with_groups(&[clip])
+        };
         if shift {
             if self.selection.contains(&clip) {
                 self.selection.retain(|id| !group.contains(id));

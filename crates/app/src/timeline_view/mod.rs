@@ -15,8 +15,8 @@ use std::collections::BTreeSet;
 
 use egui::{Rect, Sense};
 use timeline::{
-    AddTrack, ClipId, MarkerId, MarkerOwner, RemoveTrack, RenameTrack, Sequence, SetTrackSwitch,
-    SourceId, Ticks, Timeline, TrackKind, TrackRef,
+    AddTrack, ClipId, LinkedSelection, MarkerId, MarkerOwner, RemoveTrack, RenameTrack, Sequence,
+    SetTrackSwitch, SourceId, Ticks, Timeline, TrackKind, TrackRef,
 };
 
 use crate::clip_art::ClipArt;
@@ -99,6 +99,8 @@ pub struct TimelineOutput {
 
 struct Drag {
     gesture: Gesture,
+    /// `Apart` when the drag began with Alt held, so it leaves linked partners be.
+    links: LinkedSelection,
     origin: Ticks,
     pending: Option<PendingEdit>,
     preview: Option<Sequence>,

@@ -1,8 +1,8 @@
 use egui::Rangef;
 use timeline::{
-    clamp_delta, preview, ClipId, Edge, MoveClips, RateStretch, Roll, Sequence, SetClipVolume,
-    SetTrackAutomation, Slide, Slip, Ticks, Timeline, TimelineError, TrackKind, TrackRef, Trim,
-    TrimMode,
+    clamp_delta, preview, ClipId, Edge, Edit, LinkedSelection, MoveClips, RateStretch, Roll,
+    Sequence, SetClipVolume, SetTrackAutomation, Slide, Slip, Ticks, Timeline, TimelineError,
+    TrackKind, TrackRef, Trim, TrimMode, Unlinked,
 };
 
 use super::rubber_band::{self, BandHit, BandOwner, Envelope};
@@ -69,18 +69,41 @@ impl PendingEdit {
         }
     }
 
-    pub fn apply(self, timeline: &mut Timeline) -> Result<(), TimelineError> {
+    /// Applies the edit; `Apart` keeps it to the clips it names, linked or not.
+    pub fn apply(
+        self,
+        timeline: &mut Timeline,
+        links: LinkedSelection,
+    ) -> Result<(), TimelineError> {
+        fn run(
+            timeline: &mut Timeline,
+            edit: impl Edit,
+            links: LinkedSelection,
+        ) -> Result<(), TimelineError> {
+            match links {
+                LinkedSelection::Together => timeline.apply(edit),
+                LinkedSelection::Apart => timeline.apply(Unlinked(edit)),
+            }
+        }
         match self {
-            Self::Move(edit) => timeline.apply(edit),
-            Self::Trim(edit) => timeline.apply(edit),
-            Self::Roll(edit) => timeline.apply(edit),
-            Self::Stretch(edit) => timeline.apply(edit),
-            Self::Slip(edit) => timeline.apply(edit),
-            Self::Slide(edit) => timeline.apply(edit),
-            Self::Volume(edit) => timeline.apply(edit),
-            Self::Automation(edit) => timeline.apply(edit),
+            Self::Move(edit) => run(timeline, edit, links),
+            Self::Trim(edit) => run(timeline, edit, links),
+            Self::Roll(edit) => run(timeline, edit, links),
+            Self::Stretch(edit) => run(timeline, edit, links),
+            Self::Slip(edit) => run(timeline, edit, links),
+            Self::Slide(edit) => run(timeline, edit, links),
+            Self::Volume(edit) => run(timeline, edit, links),
+            Self::Automation(edit) => run(timeline, edit, links),
         }
     }
+}
+
+/// `sequence` with linked selection off, for working out an Alt-drag that moves or trims
+/// one side of a linked pair.
+pub fn apart(sequence: &Sequence) -> Sequence {
+    let mut apart = sequence.clone();
+    apart.linked_selection = LinkedSelection::Apart;
+    apart
 }
 
 impl Gesture {
