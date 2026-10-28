@@ -24,7 +24,7 @@ use header::HeaderAction;
 pub use markers::color as marker_color;
 pub use paint::label_color;
 use scale::TimeScale;
-pub use tool::Tool;
+pub use tool::{Direction, Tool};
 
 const HEADER_WIDTH: f32 = 250.0;
 const RULER_HEIGHT: f32 = 26.0;

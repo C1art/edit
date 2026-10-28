@@ -2,38 +2,41 @@ use egui::{Button, MenuBar, ViewportCommand};
 use timeline::{Edge, Generator, PlaceMode, Rgb, Title, TrackKind};
 
 use crate::editor::Editor;
+use crate::keymap::Command;
 use crate::placing;
 use crate::project_files::{AfterDiscard, PathPurpose};
-use crate::shortcuts;
 use crate::timeline_view::Tool;
 
 pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
     MenuBar::new().ui(ui, |ui| {
-        let shortcut = |ui: &egui::Ui, shortcut| ui.ctx().format_shortcut(&shortcut);
         ui.menu_button("File", |ui| {
-            let new = Button::new("New Project").shortcut_text(shortcut(ui, shortcuts::NEW));
+            let new =
+                Button::new("New Project").shortcut_text(editor.keymap.label(Command::NewProject));
             if ui.add(new).clicked() {
                 editor.discard_then(AfterDiscard::NewProject);
             }
-            let open = Button::new("Open Project…").shortcut_text(shortcut(ui, shortcuts::OPEN));
+            let open = Button::new("Open Project…")
+                .shortcut_text(editor.keymap.label(Command::OpenProject));
             if ui.add(open).clicked() {
                 editor.prompt_path(PathPurpose::OpenProject);
             }
-            let save = Button::new("Save").shortcut_text(shortcut(ui, shortcuts::SAVE));
+            let save = Button::new("Save").shortcut_text(editor.keymap.label(Command::Save));
             if ui.add(save).clicked() {
                 editor.save_project();
             }
-            let save_as = Button::new("Save As…").shortcut_text(shortcut(ui, shortcuts::SAVE_AS));
+            let save_as =
+                Button::new("Save As…").shortcut_text(editor.keymap.label(Command::SaveAs));
             if ui.add(save_as).clicked() {
                 editor.prompt_path(PathPurpose::SaveProject);
             }
             ui.separator();
-            let import = Button::new("Import…").shortcut_text(shortcut(ui, shortcuts::IMPORT));
+            let import = Button::new("Import…").shortcut_text(editor.keymap.label(Command::Import));
             if ui.add(import).clicked() {
                 editor.prompt_path(PathPurpose::Import);
             }
             ui.menu_button("New", |ui| {
-                let title = Button::new("Title").shortcut_text(shortcut(ui, shortcuts::NEW_TITLE));
+                let title =
+                    Button::new("Title").shortcut_text(editor.keymap.label(Command::NewTitle));
                 if ui.add(title).clicked() {
                     placing::new_generated(editor, Generator::Title(Title::default()));
                 }
@@ -48,16 +51,16 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                     placing::new_generated(editor, Generator::AdjustmentLayer);
                 }
             });
-            let export =
-                Button::new("Export Media…").shortcut_text(shortcut(ui, shortcuts::EXPORT));
+            let export = Button::new("Export Media…")
+                .shortcut_text(editor.keymap.label(Command::ExportMedia));
             if ui.add(export).clicked() {
                 crate::export::open(editor);
             }
             if ui.button("Export Queue…").clicked() {
                 editor.export_queue.open = true;
             }
-            let frame =
-                Button::new("Export Frame…").shortcut_text(shortcut(ui, shortcuts::EXPORT_FRAME));
+            let frame = Button::new("Export Frame…")
+                .shortcut_text(editor.keymap.label(Command::ExportFrame));
             if ui.add(frame).clicked() {
                 editor.prompt_path(PathPurpose::ExportFrame);
             }
@@ -71,7 +74,7 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                 .timeline
                 .undo_name()
                 .map_or("Undo".to_owned(), |name| format!("Undo {name}"));
-            let undo = Button::new(undo).shortcut_text(shortcut(ui, shortcuts::UNDO));
+            let undo = Button::new(undo).shortcut_text(editor.keymap.label(Command::Undo));
             if ui
                 .add_enabled(editor.timeline.undo_name().is_some(), undo)
                 .clicked()
@@ -82,7 +85,7 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                 .timeline
                 .redo_name()
                 .map_or("Redo".to_owned(), |name| format!("Redo {name}"));
-            let redo = Button::new(redo).shortcut_text(shortcut(ui, shortcuts::REDO));
+            let redo = Button::new(redo).shortcut_text(editor.keymap.label(Command::Redo));
             if ui
                 .add_enabled(editor.timeline.redo_name().is_some(), redo)
                 .clicked()
@@ -91,26 +94,26 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             }
             ui.separator();
             let selected = !editor.view.selection.is_empty();
-            let cut = Button::new("Cut").shortcut_text(shortcut(ui, shortcuts::CUT));
+            let cut = Button::new("Cut").shortcut_text(editor.keymap.label(Command::Cut));
             if ui.add_enabled(selected, cut).clicked() {
                 editor.cut();
             }
-            let copy = Button::new("Copy").shortcut_text(shortcut(ui, shortcuts::COPY));
+            let copy = Button::new("Copy").shortcut_text(editor.keymap.label(Command::Copy));
             if ui.add_enabled(selected, copy).clicked() {
                 editor.copy();
             }
             let can_paste = editor.clipboard.is_some();
-            let paste = Button::new("Paste").shortcut_text(shortcut(ui, shortcuts::PASTE));
+            let paste = Button::new("Paste").shortcut_text(editor.keymap.label(Command::Paste));
             if ui.add_enabled(can_paste, paste).clicked() {
                 editor.paste(PlaceMode::Overwrite);
             }
-            let paste_insert =
-                Button::new("Paste Insert").shortcut_text(shortcut(ui, shortcuts::PASTE_INSERT));
+            let paste_insert = Button::new("Paste Insert")
+                .shortcut_text(editor.keymap.label(Command::PasteInsert));
             if ui.add_enabled(can_paste, paste_insert).clicked() {
                 editor.paste(PlaceMode::Insert);
             }
             let paste_attributes = Button::new("Paste Attributes…")
-                .shortcut_text(shortcut(ui, shortcuts::PASTE_ATTRIBUTES));
+                .shortcut_text(editor.keymap.label(Command::PasteAttributes));
             if ui.add_enabled(can_paste, paste_attributes).clicked() {
                 editor.paste_attributes();
             }
@@ -143,19 +146,29 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                     );
                 });
             });
+            let shortcuts = Button::new("Keyboard Shortcuts…")
+                .shortcut_text(editor.keymap.label(Command::KeyboardShortcuts));
+            if ui.add(shortcuts).clicked() {
+                editor.keymap_window = Some(crate::keymap::KeymapWindow::default());
+            }
         });
         ui.menu_button("Clip", |ui| {
-            if ui.add(Button::new("Insert").shortcut_text(",")).clicked() {
+            if ui
+                .add(Button::new("Insert").shortcut_text(editor.keymap.label(Command::Insert)))
+                .clicked()
+            {
                 placing::edit_from_source(editor, PlaceMode::Insert);
             }
             if ui
-                .add(Button::new("Overwrite").shortcut_text("."))
+                .add(
+                    Button::new("Overwrite").shortcut_text(editor.keymap.label(Command::Overwrite)),
+                )
                 .clicked()
             {
                 placing::edit_from_source(editor, PlaceMode::Overwrite);
             }
-            let subclip =
-                Button::new("Make Subclip").shortcut_text(shortcut(ui, shortcuts::MAKE_SUBCLIP));
+            let subclip = Button::new("Make Subclip")
+                .shortcut_text(editor.keymap.label(Command::MakeSubclip));
             if ui.add(subclip).clicked() {
                 editor.make_subclip();
             }
@@ -165,39 +178,44 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
         ui.menu_button("Markers", |ui| {
             crate::marker_dialog::menu(editor, ui);
             ui.separator();
-            let go_to_in = Button::new("Go to In").shortcut_text(shortcut(ui, shortcuts::GO_TO_IN));
+            let go_to_in =
+                Button::new("Go to In").shortcut_text(editor.keymap.label(Command::GoToIn));
             if ui.add(go_to_in).clicked() {
                 editor.go_to_mark(Edge::Head);
             }
             let go_to_out =
-                Button::new("Go to Out").shortcut_text(shortcut(ui, shortcuts::GO_TO_OUT));
+                Button::new("Go to Out").shortcut_text(editor.keymap.label(Command::GoToOut));
             if ui.add(go_to_out).clicked() {
                 editor.go_to_mark(Edge::Tail);
             }
         });
         ui.menu_button("Sequence", |ui| {
-            let add_edit = Button::new("Add Edit").shortcut_text(shortcut(ui, shortcuts::ADD_EDIT));
+            let add_edit =
+                Button::new("Add Edit").shortcut_text(editor.keymap.label(Command::AddEdit));
             if ui.add(add_edit).clicked() {
                 editor.add_edit();
             }
             let transition = Button::new("Apply Video Transition")
-                .shortcut_text(shortcut(ui, shortcuts::TRANSITION));
+                .shortcut_text(editor.keymap.label(Command::VideoTransition));
             if ui.add(transition).clicked() {
                 crate::effects::apply_default_transition(editor, TrackKind::Video);
             }
             let crossfade = Button::new("Apply Audio Transition")
-                .shortcut_text(shortcut(ui, shortcuts::AUDIO_TRANSITION));
+                .shortcut_text(editor.keymap.label(Command::AudioTransition));
             if ui.add(crossfade).clicked() {
                 crate::effects::apply_default_transition(editor, TrackKind::Audio);
             }
             if ui
-                .add(Button::new("Lift").shortcut_text("Delete"))
+                .add(Button::new("Lift").shortcut_text(editor.keymap.label(Command::Clear)))
                 .clicked()
             {
                 editor.lift();
             }
             if ui
-                .add(Button::new("Ripple Delete").shortcut_text("Shift+Delete"))
+                .add(
+                    Button::new("Ripple Delete")
+                        .shortcut_text(editor.keymap.label(Command::RippleDelete)),
+                )
                 .clicked()
             {
                 editor.ripple_delete();
@@ -218,39 +236,56 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                 editor.prompt_path(PathPurpose::ExportCaptions);
             }
             ui.separator();
-            if ui.add(Button::new("Mark In").shortcut_text("I")).clicked() {
+            if ui
+                .add(Button::new("Mark In").shortcut_text(editor.keymap.label(Command::MarkIn)))
+                .clicked()
+            {
                 editor.mark_sequence_in();
             }
-            if ui.add(Button::new("Mark Out").shortcut_text("O")).clicked() {
+            if ui
+                .add(Button::new("Mark Out").shortcut_text(editor.keymap.label(Command::MarkOut)))
+                .clicked()
+            {
                 editor.mark_sequence_out();
             }
             let clear = Button::new("Clear In and Out")
-                .shortcut_text(shortcut(ui, shortcuts::CLEAR_IN_OUT));
+                .shortcut_text(editor.keymap.label(Command::ClearInOut));
             if ui.add(clear).clicked() {
                 editor.clear_sequence_marks();
             }
             if ui
-                .add(Button::new("Lift In to Out").shortcut_text(";"))
+                .add(
+                    Button::new("Lift In to Out")
+                        .shortcut_text(editor.keymap.label(Command::LiftMarked)),
+                )
                 .clicked()
             {
                 editor.lift_marked();
             }
             if ui
-                .add(Button::new("Extract In to Out").shortcut_text("'"))
+                .add(
+                    Button::new("Extract In to Out")
+                        .shortcut_text(editor.keymap.label(Command::ExtractMarked)),
+                )
                 .clicked()
             {
                 editor.extract_marked();
             }
-            let previous = Button::new("Ripple Trim Previous Edit to Playhead").shortcut_text("Q");
+            let previous = Button::new("Ripple Trim Previous Edit to Playhead")
+                .shortcut_text(editor.keymap.label(Command::RippleTrimPrevious));
             if ui.add(previous).clicked() {
                 editor.ripple_trim_to_playhead(Edge::Head);
             }
-            let next = Button::new("Ripple Trim Next Edit to Playhead").shortcut_text("W");
+            let next = Button::new("Ripple Trim Next Edit to Playhead")
+                .shortcut_text(editor.keymap.label(Command::RippleTrimNext));
             if ui.add(next).clicked() {
                 editor.ripple_trim_to_playhead(Edge::Tail);
             }
             if ui
-                .add(Button::new("Match Frame").shortcut_text("F"))
+                .add(
+                    Button::new("Match Frame")
+                        .shortcut_text(editor.keymap.label(Command::MatchFrame)),
+                )
                 .clicked()
             {
                 editor.match_frame();

@@ -208,6 +208,24 @@ impl Editor {
                 StoreEvent::CaptionsWritten(path, Err(error)) => {
                     self.notice(format!("Cannot export {}: {error}", path.display()));
                 }
+                StoreEvent::KeymapRead(_, Ok(text)) => {
+                    if let Some(text) = text {
+                        self.keymap = crate::keymap::Keymap::from_text(&text);
+                    }
+                }
+                StoreEvent::KeymapRead(path, Err(error)) => {
+                    self.notice(format!(
+                        "Cannot read shortcuts from {}: {error}",
+                        path.display()
+                    ));
+                }
+                StoreEvent::KeymapWritten(_, Ok(())) => {}
+                StoreEvent::KeymapWritten(path, Err(error)) => {
+                    self.notice(format!(
+                        "Cannot save shortcuts to {}: {error}",
+                        path.display()
+                    ));
+                }
                 StoreEvent::Autosaved(_, Ok(())) => {}
                 StoreEvent::Autosaved(path, Err(error)) => {
                     self.notice(format!("Cannot autosave to {}: {error}", path.display()));

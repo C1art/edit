@@ -1,4 +1,4 @@
-use egui::{Button, Color32, Key, Modifiers, Rect, Sense, Stroke};
+use egui::{Button, Color32, Rect, Sense, Stroke};
 use playback::Player;
 use timeline::{Marks, Ticks, Timecode};
 
@@ -106,28 +106,6 @@ pub enum TransportKey {
     End,
     PreviousEdit,
     NextEdit,
-}
-
-pub fn pressed_key(ctx: &egui::Context) -> Option<TransportKey> {
-    ctx.input_mut(|input| {
-        let mut take = |modifiers, key| input.consume_key(modifiers, key);
-        [
-            (Modifiers::NONE, Key::Space, TransportKey::Toggle),
-            (Modifiers::NONE, Key::K, TransportKey::Pause),
-            (Modifiers::NONE, Key::J, TransportKey::Reverse),
-            (Modifiers::NONE, Key::L, TransportKey::Forward),
-            (Modifiers::SHIFT, Key::ArrowLeft, TransportKey::Step(-5)),
-            (Modifiers::SHIFT, Key::ArrowRight, TransportKey::Step(5)),
-            (Modifiers::NONE, Key::ArrowLeft, TransportKey::Step(-1)),
-            (Modifiers::NONE, Key::ArrowRight, TransportKey::Step(1)),
-            (Modifiers::NONE, Key::Home, TransportKey::Start),
-            (Modifiers::NONE, Key::End, TransportKey::End),
-            (Modifiers::NONE, Key::ArrowUp, TransportKey::PreviousEdit),
-            (Modifiers::NONE, Key::ArrowDown, TransportKey::NextEdit),
-        ]
-        .into_iter()
-        .find_map(|(modifiers, key, action)| take(modifiers, key).then_some(action))
-    })
 }
 
 pub fn handle_key(player: &mut Player, key: TransportKey) {

@@ -1,5 +1,3 @@
-use egui::{Key, Modifiers};
-
 /// Which way along the timeline a track select tool picks clips.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direction {
@@ -32,23 +30,6 @@ impl Tool {
         Self::Slip,
         Self::Slide,
     ];
-
-    pub fn shortcut(self) -> (Modifiers, Key) {
-        let key = match self {
-            Self::Selection => Key::V,
-            Self::TrackSelect(_) => Key::A,
-            Self::Ripple => Key::B,
-            Self::Roll => Key::N,
-            Self::RateStretch => Key::R,
-            Self::Razor => Key::C,
-            Self::Slip => Key::Y,
-            Self::Slide => Key::U,
-        };
-        match self {
-            Self::TrackSelect(Direction::Backward) => (Modifiers::SHIFT, key),
-            _ => (Modifiers::NONE, key),
-        }
-    }
 
     pub fn label(self) -> &'static str {
         match self {

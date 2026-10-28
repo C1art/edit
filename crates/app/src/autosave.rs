@@ -70,10 +70,7 @@ impl Editor {
 fn autosave_path(project: Option<&Path>, slot: usize) -> PathBuf {
     let folder = match project.and_then(Path::parent) {
         Some(folder) => folder.join("Auto-Save"),
-        None => std::env::var_os("APPDATA")
-            .map_or_else(std::env::temp_dir, PathBuf::from)
-            .join("Edit")
-            .join("Auto-Save"),
+        None => crate::project_store::app_folder().join("Auto-Save"),
     };
     let stem = project
         .and_then(Path::file_stem)

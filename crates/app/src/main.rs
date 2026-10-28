@@ -14,6 +14,7 @@ mod export_queue;
 mod gain_dialog;
 mod history_panel;
 mod import;
+mod keymap;
 mod loudness_window;
 mod marker_dialog;
 mod markers_panel;

@@ -168,20 +168,19 @@ enum Choice {
 }
 
 pub fn menu(editor: &mut Editor, ui: &mut egui::Ui) {
-    use crate::shortcuts;
-    let ctx = ui.ctx().clone();
-    let shortcut = |chord| ctx.format_shortcut(&chord);
-    let add = egui::Button::new("Add Marker").shortcut_text(shortcut(shortcuts::ADD_MARKER));
+    use crate::keymap::Command;
+    let add =
+        egui::Button::new("Add Marker").shortcut_text(editor.keymap.label(Command::AddMarker));
     if ui.add(add).clicked() {
         editor.add_marker();
     }
-    let next =
-        egui::Button::new("Go to Next Marker").shortcut_text(shortcut(shortcuts::NEXT_MARKER));
+    let next = egui::Button::new("Go to Next Marker")
+        .shortcut_text(editor.keymap.label(Command::NextMarker));
     if ui.add(next).clicked() {
         editor.jump_to_marker(true);
     }
     let previous = egui::Button::new("Go to Previous Marker")
-        .shortcut_text(shortcut(shortcuts::PREVIOUS_MARKER));
+        .shortcut_text(editor.keymap.label(Command::PreviousMarker));
     if ui.add(previous).clicked() {
         editor.jump_to_marker(false);
     }
@@ -194,7 +193,8 @@ pub fn menu(editor: &mut Editor, ui: &mut egui::Ui) {
             editor.edit_marker(id);
         }
     }
-    let clear = egui::Button::new("Clear Marker").shortcut_text(shortcut(shortcuts::CLEAR_MARKER));
+    let clear =
+        egui::Button::new("Clear Marker").shortcut_text(editor.keymap.label(Command::ClearMarker));
     if ui.add_enabled(here.is_some(), clear).clicked() {
         if let Some(id) = here {
             editor.clear_marker(id);

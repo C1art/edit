@@ -92,6 +92,8 @@ pub struct Editor {
     /// The sequences left to reach the open nest, outermost first.
     pub(crate) nest_trail: Vec<Level>,
     pub(crate) notices: Vec<String>,
+    pub(crate) keymap: crate::keymap::Keymap,
+    pub(crate) keymap_window: Option<crate::keymap::KeymapWindow>,
 }
 
 impl Editor {
@@ -122,9 +124,12 @@ impl Editor {
                 .map_err(|error| notices.push(format!("Thumbnails disabled: {error}")))
                 .ok(),
         );
-        let store = ProjectStore::new()
+        let mut store = ProjectStore::new()
             .map_err(|error| notices.push(format!("Saving disabled: {error}")))
             .ok();
+        if let Some(store) = &mut store {
+            store.read_keymap(keymap_path());
+        }
         let program = Viewer::new(
             Arc::new(timeline.sequence().clone()),
             audio.as_ref(),
@@ -182,11 +187,19 @@ impl Editor {
             export_queue: Default::default(),
             nest_trail: Vec::new(),
             notices,
+            keymap: Default::default(),
+            keymap_window: None,
         };
         for path in initial {
             editor.open_path(path);
         }
         editor
+    }
+
+    pub(crate) fn save_keymap(&mut self) {
+        if let Some(store) = &mut self.store {
+            store.write_keymap(keymap_path(), self.keymap.to_text());
+        }
     }
 
     pub(crate) fn notice(&mut self, notice: impl Into<String>) {
@@ -393,5 +406,10 @@ impl eframe::App for Editor {
         crate::speed_dialog::dialog(self, &ctx);
         crate::export::dialog(self, &ctx);
         crate::export_queue::window(self, &ctx);
+        crate::keymap::window(self, &ctx);
     }
+}
+
+fn keymap_path() -> PathBuf {
+    crate::project_store::app_folder().join("Keyboard Shortcuts.txt")
 }

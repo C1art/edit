@@ -22,6 +22,8 @@ enum Request {
         captions: Vec<Caption>,
         timebase: Timebase,
     },
+    ReadKeymap(PathBuf),
+    WriteKeymap(PathBuf, String),
 }
 
 pub enum StoreEvent {
@@ -31,6 +33,16 @@ pub enum StoreEvent {
     Autosaved(PathBuf, Result<(), String>),
     CaptionsRead(PathBuf, Result<Vec<Caption>, String>),
     CaptionsWritten(PathBuf, Result<(), String>),
+    /// The shortcuts file's text, or none where there is no file yet.
+    KeymapRead(PathBuf, Result<Option<String>, String>),
+    KeymapWritten(PathBuf, Result<(), String>),
+}
+
+/// Where the editor keeps files of its own: `%APPDATA%\Edit`.
+pub fn app_folder() -> PathBuf {
+    std::env::var_os("APPDATA")
+        .map_or_else(std::env::temp_dir, PathBuf::from)
+        .join("Edit")
 }
 
 /// Reads and writes project files on a worker thread so the UI never touches the disk.
@@ -101,6 +113,14 @@ impl ProjectStore {
         });
     }
 
+    pub fn read_keymap(&mut self, path: PathBuf) {
+        self.send(Request::ReadKeymap(path));
+    }
+
+    pub fn write_keymap(&mut self, path: PathBuf, text: String) {
+        self.send(Request::WriteKeymap(path, text));
+    }
+
     fn send(&mut self, request: Request) {
         if self.requests.send(request).is_ok() {
             self.pending += 1;
@@ -163,6 +183,22 @@ fn handle(request: Request) -> StoreEvent {
             let result = std::fs::write(&path, to_srt(&captions, timebase))
                 .map_err(|error| error.to_string());
             StoreEvent::CaptionsWritten(path, result)
+        }
+        Request::ReadKeymap(path) => {
+            let result = match std::fs::read_to_string(&path) {
+                Ok(text) => Ok(Some(text)),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+                Err(error) => Err(error.to_string()),
+            };
+            StoreEvent::KeymapRead(path, result)
+        }
+        Request::WriteKeymap(path, text) => {
+            let result = path
+                .parent()
+                .map_or(Ok(()), std::fs::create_dir_all)
+                .and_then(|()| std::fs::write(&path, text))
+                .map_err(|error| error.to_string());
+            StoreEvent::KeymapWritten(path, result)
         }
     }
 }

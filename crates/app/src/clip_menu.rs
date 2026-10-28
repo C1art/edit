@@ -1,32 +1,28 @@
-use egui::{Button, KeyboardShortcut, Ui};
+use egui::{Button, Ui};
 use timeline::{
     ClipId, FrameFit, Label, SetClipLabel, SetTimeInterpolation, TimeInterpolation, TrackKind,
 };
 
 use crate::editor::Editor;
-use crate::shortcuts;
+use crate::keymap::Command;
 use crate::timeline_view::label_color;
-
-fn shortcut(ui: &Ui, shortcut: KeyboardShortcut) -> String {
-    ui.ctx().format_shortcut(&shortcut)
-}
 
 /// What a right-click on a timeline clip offers for the selection.
 pub(crate) fn context(editor: &mut Editor, ui: &mut Ui) {
     if ui
-        .add(Button::new("Cut").shortcut_text(shortcut(ui, shortcuts::CUT)))
+        .add(Button::new("Cut").shortcut_text(editor.keymap.label(Command::Cut)))
         .clicked()
     {
         editor.cut();
     }
     if ui
-        .add(Button::new("Copy").shortcut_text(shortcut(ui, shortcuts::COPY)))
+        .add(Button::new("Copy").shortcut_text(editor.keymap.label(Command::Copy)))
         .clicked()
     {
         editor.copy();
     }
-    let paste_attributes =
-        Button::new("Paste Attributes…").shortcut_text(shortcut(ui, shortcuts::PASTE_ATTRIBUTES));
+    let paste_attributes = Button::new("Paste Attributes…")
+        .shortcut_text(editor.keymap.label(Command::PasteAttributes));
     if ui
         .add_enabled(editor.clipboard.is_some(), paste_attributes)
         .clicked()
@@ -38,13 +34,13 @@ pub(crate) fn context(editor: &mut Editor, ui: &mut Ui) {
     }
     ui.separator();
     if ui
-        .add(Button::new("Clear").shortcut_text("Delete"))
+        .add(Button::new("Clear").shortcut_text(editor.keymap.label(Command::Clear)))
         .clicked()
     {
         editor.lift();
     }
     if ui
-        .add(Button::new("Ripple Delete").shortcut_text("Shift+Delete"))
+        .add(Button::new("Ripple Delete").shortcut_text(editor.keymap.label(Command::RippleDelete)))
         .clicked()
     {
         editor.ripple_delete();
@@ -56,11 +52,11 @@ pub(crate) fn context(editor: &mut Editor, ui: &mut Ui) {
 /// The Clip menu's commands on the selection.
 pub(crate) fn items(editor: &mut Editor, ui: &mut Ui) {
     let speed =
-        Button::new("Speed/Duration…").shortcut_text(shortcut(ui, shortcuts::SPEED_DURATION));
+        Button::new("Speed/Duration…").shortcut_text(editor.keymap.label(Command::SpeedDuration));
     if ui.add(speed).clicked() {
         editor.speed_duration();
     }
-    let enable = Button::new("Enable").shortcut_text(shortcut(ui, shortcuts::TOGGLE_ENABLED));
+    let enable = Button::new("Enable").shortcut_text(editor.keymap.label(Command::ToggleEnabled));
     if ui.add(enable).clicked() {
         editor.toggle_enabled();
     }
@@ -69,11 +65,11 @@ pub(crate) fn items(editor: &mut Editor, ui: &mut Ui) {
     } else {
         "Link"
     };
-    let link = Button::new(link).shortcut_text(shortcut(ui, shortcuts::TOGGLE_LINK));
+    let link = Button::new(link).shortcut_text(editor.keymap.label(Command::ToggleLink));
     if ui.add(link).clicked() {
         editor.toggle_link();
     }
-    let gain = Button::new("Audio Gain…").shortcut_text("G");
+    let gain = Button::new("Audio Gain…").shortcut_text(editor.keymap.label(Command::AudioGain));
     if ui.add(gain).clicked() {
         editor.prompt_clip_gain();
     }
