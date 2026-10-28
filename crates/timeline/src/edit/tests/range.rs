@@ -36,3 +36,35 @@ fn extract_closes_the_marked_range_on_unlocked_tracks_and_lift_leaves_a_gap() {
     timeline.apply(LiftMarked).unwrap();
     assert_eq!(spans(&timeline, V1), [(0, 100, 0), (100, 350, 300)]);
 }
+
+#[test]
+fn ripple_trim_to_playhead_closes_up_to_the_nearest_cut_on_any_track() {
+    let (mut timeline, source) = timeline();
+    timeline
+        .apply(place(source, 0, 0, 600, PlaceMode::Overwrite))
+        .unwrap();
+    timeline
+        .apply(Razor {
+            at: Ticks(200),
+            target: RazorTarget::Tracks(vec![A1]),
+        })
+        .unwrap();
+
+    // The cut on A1 at 200 is nearer than V1's start.
+    timeline
+        .apply(RippleTrimToPlayhead {
+            at: Ticks(250),
+            edge: Edge::Head,
+        })
+        .unwrap();
+    assert_eq!(spans(&timeline, V1), [(0, 200, 0), (200, 550, 250)]);
+    assert_eq!(spans(&timeline, A1), [(0, 200, 0), (200, 550, 250)]);
+
+    timeline
+        .apply(RippleTrimToPlayhead {
+            at: Ticks(500),
+            edge: Edge::Tail,
+        })
+        .unwrap();
+    assert_eq!(spans(&timeline, V1), [(0, 200, 0), (200, 500, 250)]);
+}

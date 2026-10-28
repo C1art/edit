@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use crate::edit::ops::{self, Relinks};
-use crate::{Edit, Marks, Sequence, Ticks, TimelineError};
+use crate::{Clip, Edge, Edit, Marks, Sequence, Ticks, TimelineError};
 
 /// Replaces the sequence's in and out marks.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,8 +42,8 @@ impl Edit for LiftMarked {
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
-        clear_marked(sequence)?;
-        Ok(())
+        let range = marked(sequence)?;
+        clear(sequence, range)
     }
 }
 
@@ -58,25 +58,77 @@ impl Edit for ExtractMarked {
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
-        let range = clear_marked(sequence)?;
-        let tracks = ops::unlocked_tracks(sequence);
-        ops::shift(sequence, &tracks, range.end, range.start - range.end, &[]);
+        let range = marked(sequence)?;
+        extract(sequence, range)?;
         sequence.marks = Marks::default();
         Ok(())
     }
 }
 
-fn clear_marked(sequence: &mut Sequence) -> Result<Range<Ticks>, TimelineError> {
-    if !sequence.marks.is_set() {
-        return Err(TimelineError::NothingToEdit);
+/// Removes the span between `at` and the nearest cut before it (`Edge::Head`) or after
+/// it (`Edge::Tail`) among the clips under `at` on unlocked tracks, and closes it up.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RippleTrimToPlayhead {
+    pub at: Ticks,
+    pub edge: Edge,
+}
+
+impl Edit for RippleTrimToPlayhead {
+    fn name(&self) -> &'static str {
+        match self.edge {
+            Edge::Head => "Ripple Trim Previous Edit to Playhead",
+            Edge::Tail => "Ripple Trim Next Edit to Playhead",
+        }
     }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let span = self.span(sequence).ok_or(TimelineError::NothingToEdit)?;
+        extract(sequence, span)
+    }
+}
+
+impl RippleTrimToPlayhead {
+    /// The span the trim removes.
+    pub fn span(&self, sequence: &Sequence) -> Option<Range<Ticks>> {
+        let under: Vec<&Clip> = ops::unlocked_tracks(sequence)
+            .into_iter()
+            .filter_map(|track| sequence.track(track)?.clip_at(self.at))
+            .filter(|clip| clip.start < self.at)
+            .collect();
+        match self.edge {
+            Edge::Head => under
+                .iter()
+                .map(|clip| clip.start)
+                .max()
+                .map(|cut| cut..self.at),
+            Edge::Tail => under
+                .iter()
+                .map(|clip| clip.end())
+                .min()
+                .map(|cut| self.at..cut),
+        }
+    }
+}
+
+fn marked(sequence: &Sequence) -> Result<Range<Ticks>, TimelineError> {
     let range = sequence.marks.range(sequence.duration());
-    if range.is_empty() {
+    if !sequence.marks.is_set() || range.is_empty() {
         return Err(TimelineError::NothingToEdit);
     }
+    Ok(range)
+}
+
+fn clear(sequence: &mut Sequence, range: Range<Ticks>) -> Result<(), TimelineError> {
     let mut relinks = Relinks::default();
     for track in ops::unlocked_tracks(sequence) {
         ops::clear(sequence, track, range.clone(), &mut relinks)?;
     }
-    Ok(range)
+    Ok(())
+}
+
+fn extract(sequence: &mut Sequence, range: Range<Ticks>) -> Result<(), TimelineError> {
+    clear(sequence, range.clone())?;
+    let tracks = ops::unlocked_tracks(sequence);
+    ops::shift(sequence, &tracks, range.end, range.start - range.end, &[]);
+    Ok(())
 }
