@@ -4,7 +4,7 @@
 struct Params {
     // Source width and height, columns in use, levels.
     size_columns_levels: vec4<u32>,
-    // 0 luma waveform, 1 RGB parade, 2 vectorscope.
+    // 0 luma waveform, 1 RGB parade, 2 vectorscope, 3 histogram.
     scope: vec4<u32>,
 };
 
@@ -49,6 +49,11 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
             let cb = (encoded.b - luma) / 1.8556 + 0.5;
             let cr = (encoded.r - luma) / 1.5748 + 0.5;
             atomicAdd(&counts[level_of(cr, levels) * levels + level_of(cb, levels)], 1u);
+        }
+        case 3u: {
+            for (var channel = 0u; channel < 3u; channel++) {
+                atomicAdd(&counts[channel * levels + level_of(encoded[channel], levels)], 1u);
+            }
         }
         default: {
             let column = id.x * columns / size.x;

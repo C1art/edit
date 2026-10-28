@@ -3,7 +3,7 @@
 struct Params {
     // Source width and height, columns in use, levels.
     size_columns_levels: vec4<u32>,
-    // 0 luma waveform, 1 RGB parade, 2 vectorscope.
+    // 0 luma waveform, 1 RGB parade, 2 vectorscope, 3 histogram.
     scope: vec4<u32>,
 };
 
@@ -72,6 +72,18 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                 vec3<f32>(1.0),
             );
             return vec4<f32>(mix(vec3<f32>(1.0), hue, 0.6) * glow(count, even_share), 1.0);
+        }
+        case 3u: {
+            // Logarithmic, so a few large flat areas don't flatten every other level.
+            let full = log2(1.0 + pixels);
+            var rgb = vec3<f32>(0.0);
+            for (var channel = 0u; channel < 3u; channel++) {
+                let reach = log2(1.0 + f32(counts[channel * levels + level])) / full;
+                if in.uv.x < reach {
+                    rgb += PARADE[channel] * 0.6;
+                }
+            }
+            return vec4<f32>(min(rgb, vec3<f32>(1.0)), 1.0);
         }
         default: {
             let column = min(u32(in.uv.x * f32(columns)), columns - 1u);

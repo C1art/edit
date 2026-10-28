@@ -20,6 +20,8 @@ pub enum Scope {
     RgbParade,
     /// Chroma as Cb across and Cr up, centered on neutral.
     Vectorscope,
+    /// How many pixels sit at each red, green and blue level: levels up, counts across.
+    Histogram,
 }
 
 impl Scope {
@@ -28,6 +30,7 @@ impl Scope {
             Self::LumaWaveform => 0,
             Self::RgbParade => 1,
             Self::Vectorscope => 2,
+            Self::Histogram => 3,
         }
     }
 }
