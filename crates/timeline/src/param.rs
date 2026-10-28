@@ -170,6 +170,22 @@ impl Param {
         }
     }
 
+    /// Retimes the keyframe at `from` to `to`, passing others if need be; `false` when
+    /// there is none at `from` or another already at `to`.
+    pub fn move_key(&mut self, from: Ticks, to: Ticks) -> bool {
+        if from == to || self.has_key_at(to) {
+            return false;
+        }
+        let Some(index) = self.keys.iter().position(|key| key.time == from) else {
+            return false;
+        };
+        let mut key = self.keys.remove(index);
+        key.time = to;
+        let index = self.keys.partition_point(|other| other.time < to);
+        self.keys.insert(index, key);
+        true
+    }
+
     pub fn interpolation_at(&self, time: Ticks) -> Option<Interpolation> {
         self.keys
             .iter()
@@ -227,6 +243,19 @@ mod tests {
         assert_eq!(param.value_at(Ticks(250)), 75.0);
         param.toggle_key(Ticks(200));
         assert_eq!(param.value_at(Ticks(200)), 100.0);
+    }
+
+    #[test]
+    fn a_key_moved_past_another_keeps_the_keys_in_order() {
+        let mut param = Param::from_value(0.0);
+        param.toggle_animation(Ticks(0));
+        param.set_at(Ticks(100), 10.0);
+        param.set_at(Ticks(200), 20.0);
+        assert!(param.move_key(Ticks(0), Ticks(300)));
+        let times: Vec<Ticks> = param.keys.iter().map(|key| key.time).collect();
+        assert_eq!(times, [Ticks(100), Ticks(200), Ticks(300)]);
+        assert_eq!(param.value_at(Ticks(300)), 0.0);
+        assert!(!param.move_key(Ticks(100), Ticks(200)));
     }
 
     #[test]
