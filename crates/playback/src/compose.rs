@@ -7,7 +7,7 @@ use render::{
 use timeline::{
     track_layers_at, BlendMode, ClipId, ColorCorrection, Generator, HslSecondary, Look, Mask,
     MaskShape, MatteChannel, MediaItem, Param, PlannedLayer, Reveal, Sequence, SourceId, Ticks,
-    Timebase, Track, TrackRef, VideoEffect,
+    TimeInterpolation, Timebase, Track, TrackRef, VideoEffect,
 };
 
 use crate::clip_decoders::ClipDecoders;
@@ -151,7 +151,14 @@ fn clip_picture(
         }
         None => {
             let size = [sequence.format.width, sequence.format.height];
-            match decoder.frame_at(media, plan.source_time, size, decoding.resolution) {
+            let (time, resolution) = (plan.source_time, decoding.resolution);
+            let frame = match plan.clip.interpolation {
+                TimeInterpolation::FrameSampling => decoder.frame_at(media, time, size, resolution),
+                TimeInterpolation::FrameBlending => {
+                    decoder.blended_frame_at(media, time, size, resolution)
+                }
+            };
+            match frame {
                 Ok(frame) => frame.map(LayerPicture::Frame),
                 Err(error) => {
                     decoder.reset();

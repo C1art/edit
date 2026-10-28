@@ -9,6 +9,7 @@ mod composed;
 mod envelope;
 mod error;
 mod export;
+mod frame_blend;
 mod frame_picker;
 mod generated;
 mod grades;

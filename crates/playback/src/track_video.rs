@@ -6,7 +6,7 @@ use media::{DecodedFrame, MediaError, MediaReader, Streams, VideoFrame};
 use timeline::{Generator, MediaItem, SourceId, Ticks, Timebase};
 
 use crate::compose::TrackDecoders;
-use crate::{generated_frame, Resolution};
+use crate::{frame_blend, generated_frame, Resolution};
 
 /// Jumps further ahead than this seek instead of decoding through; keyframe intervals
 /// are usually shorter, so decoding forward is cheaper below it.
@@ -158,6 +158,36 @@ impl TrackVideo {
             }
         }
         Ok(self.current.clone())
+    }
+
+    /// Like `frame_at`, but faded toward the following frame by how far `time` lies
+    /// past the showing one.
+    pub(crate) fn blended_frame_at(
+        &mut self,
+        media: &MediaItem,
+        time: Ticks,
+        canvas: [u32; 2],
+        resolution: Resolution,
+    ) -> Result<Option<Arc<VideoFrame>>, MediaError> {
+        let Some(earlier) = self.frame_at(media, time, canvas, resolution)? else {
+            return Ok(None);
+        };
+        // Pictures kept for going backwards aren't followed by `next`.
+        let decoded_last = self
+            .current
+            .as_ref()
+            .is_some_and(|current| Arc::ptr_eq(current, &earlier));
+        let later = self.next.as_ref().filter(|later| {
+            decoded_last && later.pts > earlier.pts && later.pixels.len() == earlier.pixels.len()
+        });
+        let Some(later) = later else {
+            return Ok(Some(earlier));
+        };
+        let weight = frame_blend::weight(earlier.pts, later.pts, time);
+        if weight == 0 {
+            return Ok(Some(earlier));
+        }
+        Ok(Some(Arc::new(frame_blend::blend(&earlier, later, weight))))
     }
 
     fn generated(&mut self, generator: &Generator, canvas: [u32; 2]) -> Arc<VideoFrame> {
