@@ -216,7 +216,7 @@ fn encoded(color: Rgb) -> [f32; 3] {
     [color.r, color.g, color.b].map(|channel| f32::from(channel) / 255.0)
 }
 
-fn linear(color: Rgb) -> [f32; 3] {
+pub(crate) fn linear(color: Rgb) -> [f32; 3] {
     [color.r, color.g, color.b].map(|channel| {
         let encoded = f32::from(channel) / 255.0;
         if encoded <= 0.04045 {

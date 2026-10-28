@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use render::{
-    ColorAdjust, Grade, LayerLook, LayerMask, Outline, SecondaryAdjust, MAX_MASKS,
+    ColorAdjust, Grade, LayerLook, LayerMask, LayerWipe, Outline, SecondaryAdjust, MAX_MASKS,
     MAX_OUTLINE_POINTS,
 };
 use timeline::{
@@ -13,7 +13,7 @@ use timeline::{
 use crate::clip_decoders::ClipDecoders;
 use crate::generated::caption_frame;
 use crate::grades::grade_for;
-use crate::pixel_effects::pixel_effects;
+use crate::pixel_effects::{linear, pixel_effects};
 use crate::time_effects::{posterized, with_timecode};
 use crate::track_video::TrackVideo;
 use crate::{Layer, LayerPicture, PlaybackError, Resolution};
@@ -314,7 +314,16 @@ fn layer_look(
         opacity_masks: opacity_masks(&look.masks, time),
         blur: look.blurriness_at(time) / BLURRINESS_PER_SIGMA,
         color: color_adjust(&look.color, time),
-        mask: reveal.mask,
+        wipes: reveal.wipes.map(|wipe| {
+            wipe.map(|wipe| LayerWipe {
+                pattern: wipe.pattern,
+                from: wipe.from,
+                progress: wipe.progress,
+                sweep: wipe.sweep,
+                border: f32::from(wipe.border.width) / canvas[1],
+                border_color: linear(wipe.border.color),
+            })
+        }),
         wash: reveal.wash,
         effects: pixel_effects(&look.effects, time, timebase),
         blend: look.blend,
