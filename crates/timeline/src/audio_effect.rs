@@ -108,6 +108,18 @@ pub enum AudioEffect {
         semitones: Param,
         mix: Param,
     },
+    /// Lowers steady background noise, such as hiss, fans and room tone, by up to
+    /// `amount` percent; it learns the noise from the quietest moments as it plays.
+    DeNoise {
+        amount: Param,
+    },
+    /// Removes mains hum at `frequency` hertz, usually 50 or 60, and its first `harmonics`
+    /// multiples counting itself, each cut by `reduction` decibels.
+    DeHum {
+        frequency: Param,
+        harmonics: Param,
+        reduction: Param,
+    },
     /// Plays the right side on both.
     FillLeftWithRight,
     /// Plays the left side on both.
@@ -155,6 +167,12 @@ impl AudioEffect {
                 mix,
             } => vec![rate, depth, feedback, mix],
             Self::PitchShifter { semitones, mix } => vec![semitones, mix],
+            Self::DeNoise { amount } => vec![amount],
+            Self::DeHum {
+                frequency,
+                harmonics,
+                reduction,
+            } => vec![frequency, harmonics, reduction],
             Self::FillLeftWithRight
             | Self::FillRightWithLeft
             | Self::SwapChannels
@@ -176,7 +194,7 @@ impl AudioEffect {
     }
 
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 21] {
+    pub fn catalog() -> [Self; 23] {
         [
             Self::Amplify {
                 gain: Param::default(),
@@ -253,6 +271,14 @@ impl AudioEffect {
                 semitones: Param::default(),
                 mix: Param::from_value(100.0),
             },
+            Self::DeNoise {
+                amount: Param::from_value(40.0),
+            },
+            Self::DeHum {
+                frequency: Param::from_value(60.0),
+                harmonics: Param::from_value(4.0),
+                reduction: Param::from_value(30.0),
+            },
             Self::FillLeftWithRight,
             Self::FillRightWithLeft,
             Self::SwapChannels,
@@ -283,6 +309,8 @@ impl AudioEffect {
             Self::Chorus { .. } => "Chorus",
             Self::Flanger { .. } => "Flanger",
             Self::PitchShifter { .. } => "Pitch Shifter",
+            Self::DeNoise { .. } => "DeNoise",
+            Self::DeHum { .. } => "DeHum",
         }
     }
 }

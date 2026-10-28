@@ -1,8 +1,8 @@
 use std::mem::{discriminant, Discriminant};
 
 use audio::{
-    Biquad, Coefficients, Compressor, CompressorSettings, DeEsser, Delay, Gate, Limiter,
-    ModulatedDelay, PitchShifter, Reverb, SampleRate, Sweep,
+    Biquad, Coefficients, Compressor, CompressorSettings, DeEsser, DeHum, DeNoise, Delay, Gate,
+    Limiter, ModulatedDelay, PitchShifter, Reverb, SampleRate, Sweep,
 };
 use timeline::{AudioEffect, ClipId, Ticks};
 
@@ -31,6 +31,8 @@ enum Unit {
     DeEsser(DeEsser),
     Sweep(Box<ModulatedDelay>),
     Pitch(Box<PitchShifter>),
+    DeNoise(Box<DeNoise>),
+    DeHum(Box<DeHum>),
     /// For effects that keep nothing from one sample to the next.
     Stateless,
 }
@@ -67,6 +69,8 @@ impl EffectChain {
                 Unit::DeEsser(deesser) => deesser.reset(),
                 Unit::Sweep(sweep) => sweep.reset(),
                 Unit::Pitch(shifter) => shifter.reset(),
+                Unit::DeNoise(denoise) => denoise.reset(),
+                Unit::DeHum(dehum) => dehum.reset(),
                 Unit::Stateless => {}
             }
         }
@@ -290,6 +294,23 @@ impl EffectChain {
                         mix.value_at(time) / 100.0,
                         samples,
                     ),
+                (AudioEffect::DeNoise { amount }, Unit::DeNoise(denoise)) => {
+                    denoise.process(amount.value_at(time) / 100.0, samples);
+                }
+                (
+                    AudioEffect::DeHum {
+                        frequency,
+                        harmonics,
+                        reduction,
+                    },
+                    Unit::DeHum(dehum),
+                ) => dehum.process(
+                    frequency.value_at(time),
+                    harmonics.value_at(time).round().max(1.0) as usize,
+                    reduction.value_at(time),
+                    rate,
+                    samples,
+                ),
                 _ => {}
             }
         }
@@ -329,6 +350,8 @@ impl EffectChain {
                 Unit::Sweep(Box::new(ModulatedDelay::new(self.rate)))
             }
             AudioEffect::PitchShifter { .. } => Unit::Pitch(Box::new(PitchShifter::new(self.rate))),
+            AudioEffect::DeNoise { .. } => Unit::DeNoise(Box::new(DeNoise::new(self.rate))),
+            AudioEffect::DeHum { .. } => Unit::DeHum(Box::default()),
             AudioEffect::Amplify { .. }
             | AudioEffect::Balance { .. }
             | AudioEffect::FillLeftWithRight

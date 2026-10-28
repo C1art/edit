@@ -7,7 +7,7 @@ const GAIN_DB: std::ops::RangeInclusive<f32> = -24.0..=24.0;
 const HEARING_HZ: std::ops::RangeInclusive<f32> = 20.0..=20_000.0;
 
 /// The add menu's groups, as Premiere's Effects panel files them.
-const CATEGORIES: [&str; 7] = [
+const CATEGORIES: [&str; 8] = [
     "Amplitude and Compression",
     "Filter and EQ",
     "Modulation",
@@ -15,6 +15,7 @@ const CATEGORIES: [&str; 7] = [
     "Reverb",
     "Time and Pitch",
     "Channels",
+    "Noise Reduction/Restoration",
 ];
 
 fn category(effect: &AudioEffect) -> &'static str {
@@ -39,6 +40,7 @@ fn category(effect: &AudioEffect) -> &'static str {
         | AudioEffect::FillRightWithLeft
         | AudioEffect::SwapChannels
         | AudioEffect::Invert => CATEGORIES[6],
+        AudioEffect::DeNoise { .. } | AudioEffect::DeHum { .. } => CATEGORIES[7],
     }
 }
 
@@ -159,6 +161,19 @@ fn effect_rows(ui: &mut egui::Ui, rows: &mut Rows, effect: &mut AudioEffect) {
         AudioEffect::PitchShifter { semitones, mix } => {
             rows.param(ui, "Semitones", semitones, -24.0..=24.0, "");
             rows.param(ui, "Mix", mix, 0.0..=100.0, "%");
+        }
+        AudioEffect::DeNoise { amount } => {
+            rows.param(ui, "Amount", amount, 0.0..=100.0, "%");
+        }
+        AudioEffect::DeHum {
+            frequency,
+            harmonics,
+            reduction,
+        } => {
+            rows.param(ui, "Frequency", frequency, 40.0..=70.0, " Hz");
+            let most = audio::MAX_HARMONICS as f32;
+            rows.param(ui, "Harmonics", harmonics, 1.0..=most, "");
+            rows.param(ui, "Reduction", reduction, 0.0..=60.0, " dB");
         }
         AudioEffect::FillLeftWithRight
         | AudioEffect::FillRightWithLeft
