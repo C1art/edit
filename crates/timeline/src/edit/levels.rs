@@ -35,6 +35,35 @@ impl Edit for SetClipGain {
     }
 }
 
+/// Sets each listed audio clip's gain on its own, as normalizing clips to a common
+/// peak or loudness does.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NormalizeClipGains {
+    pub gains: Vec<(ClipId, Gain)>,
+}
+
+impl Edit for NormalizeClipGains {
+    fn name(&self) -> &'static str {
+        "Normalize"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        if self.gains.is_empty() {
+            return Err(TimelineError::NothingToEdit);
+        }
+        for &(id, gain) in &self.gains {
+            if sequence
+                .clip(id)
+                .is_some_and(|(track, _)| track.kind != TrackKind::Audio)
+            {
+                return Err(TimelineError::NothingToEdit);
+            }
+            ops::clip_mut(sequence, id)?.gain = gain;
+        }
+        Ok(())
+    }
+}
+
 /// Replaces an audio clip's volume level and its keyframes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SetClipVolume {

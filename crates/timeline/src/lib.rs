@@ -33,12 +33,13 @@ pub use color::{ColorCorrection, ColorWheel};
 pub use curves::{Curve, CurvePoint, Curves, CURVE_RANGE};
 pub use edit::{
     clamp_delta, AddFrameHold, AddGenerated, AddMarker, AddNest, AddTrack, Clipboard, CloseGap,
-    Edge, ExtractMarked, ImportMedia, InNest, Lift, LiftMarked, MoveClips, NestClips, PasteClips,
-    PlaceClip, PlaceMode, RateStretch, Razor, RazorTarget, RelinkMedia, RemoveMarker, RemoveMedia,
-    RemoveTrack, RenameMedia, RippleDelete, RippleTrimToPlayhead, Roll, SetCaptions,
-    SetClipAudioEffects, SetClipGain, SetClipLook, SetClipSpeed, SetClipVolume, SetClipsEnabled,
-    SetGenerator, SetMarks, SetMasterGain, SetProxy, SetSequenceFormat, SetTrackMix,
-    SetTrackSwitch, SetTransition, Slide, Slip, TrackSwitch, Trim, TrimMode, UpdateMarker,
+    Edge, ExtractMarked, ImportMedia, InNest, Lift, LiftMarked, MoveClips, NestClips,
+    NormalizeClipGains, PasteClips, PlaceClip, PlaceMode, RateStretch, Razor, RazorTarget,
+    RelinkMedia, RemoveMarker, RemoveMedia, RemoveTrack, RenameMedia, RippleDelete,
+    RippleTrimToPlayhead, Roll, SetCaptions, SetClipAudioEffects, SetClipGain, SetClipLook,
+    SetClipSpeed, SetClipVolume, SetClipsEnabled, SetGenerator, SetMarks, SetMasterGain, SetProxy,
+    SetSequenceFormat, SetTrackMix, SetTrackSwitch, SetTransition, Slide, Slip, TrackSwitch, Trim,
+    TrimMode, UpdateMarker,
 };
 pub use effect::{Rgb, VideoEffect};
 pub use error::TimelineError;

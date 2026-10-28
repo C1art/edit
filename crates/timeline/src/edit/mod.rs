@@ -24,7 +24,9 @@ pub use caption::SetCaptions;
 pub use enable::SetClipsEnabled;
 pub use generate::{AddGenerated, SetGenerator};
 pub use hold::AddFrameHold;
-pub use levels::{SetClipAudioEffects, SetClipGain, SetClipVolume, SetMasterGain, SetTrackMix};
+pub use levels::{
+    NormalizeClipGains, SetClipAudioEffects, SetClipGain, SetClipVolume, SetMasterGain, SetTrackMix,
+};
 pub use look::{SetClipLook, SetTransition};
 pub use marker::{AddMarker, RemoveMarker, UpdateMarker};
 pub use media::{RelinkMedia, RenameMedia};
