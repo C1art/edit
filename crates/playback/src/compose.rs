@@ -139,7 +139,12 @@ fn clip_picture(
     match &media.nest {
         Some(nest) => {
             let (time, nested) = (plan.source_time, &mut decoder.nested);
-            let inner = video_layers(sequence, &nest.video, time, nested, decoding);
+            let tracks = if nest.multicam {
+                nest.video.get(plan.clip.angle..=plan.clip.angle)?
+            } else {
+                &nest.video[..]
+            };
+            let inner = video_layers(sequence, tracks, time, nested, decoding);
             (!inner.is_empty()).then_some(LayerPicture::Nest(inner))
         }
         None => {
