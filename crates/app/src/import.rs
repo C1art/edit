@@ -3,7 +3,7 @@ use std::thread;
 
 use crossbeam::channel::{self, Receiver, Sender};
 use media::{MediaError, MediaReader};
-use timeline::{FrameRate, ImportMedia, SourceId, Timebase, VideoFormat};
+use timeline::{held_length, FrameRate, ImportMedia, SourceId, Timebase, VideoFormat};
 
 /// Rate assumed for video whose container declares none.
 const FALLBACK_RATE: FrameRate = FrameRate::FPS_25;
@@ -69,7 +69,11 @@ pub(crate) fn probe(path: &std::path::Path, timebase: Timebase) -> Result<Import
     Ok(ImportMedia {
         name,
         path: path.to_owned(),
-        duration: info.duration.ok_or(MediaError::UnknownDuration)?,
+        duration: match info.duration {
+            _ if info.still => held_length(timebase),
+            Some(duration) => duration,
+            None => return Err(MediaError::UnknownDuration),
+        },
         video: info.video.as_ref().map(|video| VideoFormat {
             width: video.width,
             height: video.height,
@@ -77,5 +81,6 @@ pub(crate) fn probe(path: &std::path::Path, timebase: Timebase) -> Result<Import
             pixel_aspect: video.pixel_aspect,
         }),
         has_audio: info.has_audio,
+        still: info.still,
     })
 }

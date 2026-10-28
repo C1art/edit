@@ -66,6 +66,9 @@ pub(super) fn item_row(
     if item.subclip.is_some() {
         details.insert(0, "Subclip".to_owned());
     }
+    if item.still {
+        details.insert(0, "Still".to_owned());
+    }
     if let (Some(stored), Some(video)) = (item.video, item.played_format()) {
         let interpreted = if item.is_interpreted() {
             " (interpreted)"

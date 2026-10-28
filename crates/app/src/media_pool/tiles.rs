@@ -76,6 +76,7 @@ fn kind_name(item: &MediaItem) -> &'static str {
     match (&item.nest, &item.generator, &item.video) {
         (Some(_), ..) => "Sequence",
         (None, Some(generator), _) => generator.kind_name(),
+        (None, None, Some(_)) if item.still => "Still",
         (None, None, Some(_)) => "Video",
         (None, None, None) => "Audio",
     }
