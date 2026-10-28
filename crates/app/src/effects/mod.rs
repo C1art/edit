@@ -78,7 +78,16 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
         ui.label("Select a clip to adjust its motion, opacity, crop, effects and transitions.");
         return;
     };
-    ui.label(RichText::new(clip_name(sequence, &clip)).strong());
+    let name = clip_name(sequence, &clip).to_owned();
+    ui.horizontal(|ui| {
+        ui.label(RichText::new(name).strong());
+        let save = ui
+            .small_button("Save Preset…")
+            .on_hover_text("Keep this clip's effects to apply to others from the Effects panel");
+        if save.clicked() {
+            editor.name_new_preset(clip.id);
+        }
+    });
     egui::ScrollArea::vertical().show(ui, |ui| {
         if let Some((_, clip)) = &picture {
             picture_controls(editor, ui, clip);

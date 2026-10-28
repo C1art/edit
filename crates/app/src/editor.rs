@@ -21,7 +21,7 @@ use crate::monitors::{self, Focus};
 use crate::nesting::Level;
 use crate::panels::MediaTab;
 use crate::project_files::{is_project, is_subrip, is_xml, AfterDiscard, PathPrompt};
-use crate::project_store::ProjectStore;
+use crate::project_store::{ProjectStore, Setting};
 use crate::proxies::ProxyMaker;
 use crate::source::SourceMonitor;
 use crate::timeline_view::TimelineView;
@@ -107,6 +107,8 @@ pub struct Editor {
     pub(crate) notices: Vec<String>,
     pub(crate) keymap: crate::keymap::Keymap,
     pub(crate) keymap_window: Option<crate::keymap::KeymapWindow>,
+    pub(crate) presets: Vec<timeline::EffectPreset>,
+    pub(crate) preset_dialog: Option<crate::effect_presets::PresetDialog>,
 }
 
 impl Editor {
@@ -147,7 +149,8 @@ impl Editor {
             .map_err(|error| notices.push(format!("Saving disabled: {error}")))
             .ok();
         if let Some(store) = &mut store {
-            store.read_keymap(keymap_path());
+            store.read_setting(Setting::Keymap);
+            store.read_setting(Setting::Presets);
         }
         let program = Viewer::new(
             Arc::new(timeline.sequence().clone()),
@@ -218,6 +221,8 @@ impl Editor {
             notices,
             keymap: Default::default(),
             keymap_window: None,
+            presets: Vec::new(),
+            preset_dialog: None,
         };
         for path in initial {
             editor.open_path(path);
@@ -227,7 +232,7 @@ impl Editor {
 
     pub(crate) fn save_keymap(&mut self) {
         if let Some(store) = &mut self.store {
-            store.write_keymap(keymap_path(), self.keymap.to_text());
+            store.write_setting(Setting::Keymap, self.keymap.to_text());
         }
     }
 
@@ -448,12 +453,9 @@ impl eframe::App for Editor {
         crate::export::dialog(self, &ctx);
         crate::export_queue::window(self, &ctx);
         crate::keymap::window(self, &ctx);
+        crate::effect_presets::dialog(self, &ctx);
         crate::link_media::dialog(self, &ctx);
         crate::render_previews::window(self, &ctx);
         crate::project_manager::window(self, &ctx);
     }
-}
-
-fn keymap_path() -> PathBuf {
-    crate::project_store::app_folder().join("Keyboard Shortcuts.txt")
 }

@@ -7,6 +7,7 @@ mod clip_moves;
 mod commands;
 mod duck_dialog;
 mod editor;
+mod effect_presets;
 mod effects;
 mod effects_panel;
 mod essential_sound;

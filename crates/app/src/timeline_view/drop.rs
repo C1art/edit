@@ -59,7 +59,7 @@ pub(super) fn handle_drop(
             at: time,
         });
     }
-    if track.kind != item.track_kind() {
+    if item.track_kind().is_some_and(|kind| kind != track.kind) {
         return None;
     }
     let clips = sequence.track(track)?;
@@ -73,7 +73,7 @@ pub(super) fn handle_drop(
             };
             Some(DropHint::At(at))
         }
-        EffectItem::Video(_) | EffectItem::Audio(_) => {
+        EffectItem::Video(_) | EffectItem::Audio(_) | EffectItem::Preset(_) => {
             clips.clip_at(time).map(|clip| DropHint::On(track, clip.id))
         }
     }

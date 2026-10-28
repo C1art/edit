@@ -1,7 +1,7 @@
 use egui::{CollapsingHeader, Sense, TextEdit};
 use timeline::{
-    ApplyEffect, AudioEffect, ClipEffect, ClipId, EffectCategory, Ticks, TrackKind, TrackRef,
-    TransitionKind, VideoEffect,
+    ApplyEffect, AudioEffect, ClipEffect, ClipId, EffectCategory, EffectPreset, Ticks, TrackKind,
+    TrackRef, TransitionKind, VideoEffect,
 };
 
 use crate::editor::Editor;
@@ -13,19 +13,23 @@ pub(crate) enum EffectItem {
     Video(VideoEffect),
     Audio(AudioEffect),
     Transition(TrackKind, TransitionKind),
+    Preset(EffectPreset),
 }
 
 impl EffectItem {
-    pub(crate) fn track_kind(&self) -> TrackKind {
+    /// The kind of track the item goes on, unless it suits both.
+    pub(crate) fn track_kind(&self) -> Option<TrackKind> {
         match self {
-            Self::Video(_) => TrackKind::Video,
-            Self::Audio(_) => TrackKind::Audio,
-            Self::Transition(kind, _) => *kind,
+            Self::Video(_) => Some(TrackKind::Video),
+            Self::Audio(_) => Some(TrackKind::Audio),
+            Self::Transition(kind, _) => Some(*kind),
+            Self::Preset(_) => None,
         }
     }
 
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         match self {
+            Self::Preset(preset) => &preset.name,
             Self::Video(effect) => effect.name(),
             Self::Audio(effect) => effect.name(),
             Self::Transition(TrackKind::Video, kind) => kind.name(),
@@ -54,7 +58,10 @@ pub(crate) fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
     let searching = !search.is_empty();
     let shown = |item: &EffectItem| item.name().to_lowercase().contains(&search);
     let mut chosen = None;
+    let mut preset_action = None;
     egui::ScrollArea::vertical().show(ui, |ui| {
+        let presets = &editor.presets;
+        preset_action = presets_folder(ui, presets, searching, &shown, &mut chosen);
         let video = VideoEffect::catalog();
         let groups = EffectCategory::ALL.map(|category| {
             let items = video
@@ -101,6 +108,61 @@ pub(crate) fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
     if let Some(item) = chosen {
         apply_to_selection(editor, item);
     }
+    match preset_action {
+        Some(PresetAction::Rename(index)) => editor.rename_preset(index),
+        Some(PresetAction::Delete(index)) => editor.delete_preset(index),
+        None => {}
+    }
+}
+
+enum PresetAction {
+    Rename(usize),
+    Delete(usize),
+}
+
+/// The saved presets, which can be renamed or deleted from their context menus.
+fn presets_folder(
+    ui: &mut egui::Ui,
+    presets: &[EffectPreset],
+    searching: bool,
+    shown: &dyn Fn(&EffectItem) -> bool,
+    chosen: &mut Option<EffectItem>,
+) -> Option<PresetAction> {
+    let items = presets
+        .iter()
+        .map(|preset| EffectItem::Preset(preset.clone()))
+        .enumerate();
+    let matching: Vec<_> = items.filter(|(_, item)| shown(item)).collect();
+    if searching && matching.is_empty() {
+        return None;
+    }
+    let mut action = None;
+    CollapsingHeader::new("Presets")
+        .open(searching.then_some(true))
+        .show(ui, |ui| {
+            if presets.is_empty() {
+                ui.weak("Keep a clip's effects with Save Preset… in Effect Controls");
+            }
+            for (index, item) in &matching {
+                let response = entry(ui, item, chosen).on_hover_text(contents(&presets[*index]));
+                response.context_menu(|ui| {
+                    if ui.button("Rename…").clicked() {
+                        action = Some(PresetAction::Rename(*index));
+                    }
+                    if ui.button("Delete").clicked() {
+                        action = Some(PresetAction::Delete(*index));
+                    }
+                });
+            }
+        });
+    action
+}
+
+/// The effects a preset holds, one to a line.
+fn contents(preset: &EffectPreset) -> String {
+    let video = preset.video.iter().map(VideoEffect::name);
+    let audio = preset.audio.iter().map(AudioEffect::name);
+    video.chain(audio).collect::<Vec<_>>().join("\n")
 }
 
 /// One top-level folder of `groups`, each an optional subfolder name and its entries.
@@ -138,28 +200,35 @@ fn folder(
 
 fn entries(ui: &mut egui::Ui, items: &[&EffectItem], chosen: &mut Option<EffectItem>) {
     for &item in items {
-        let label = egui::Label::new(item.name())
-            .selectable(false)
-            .sense(Sense::click_and_drag());
-        let response = ui.add(label);
-        if response.drag_started() {
-            response.dnd_set_drag_payload(item.clone());
-        }
-        if response.double_clicked() {
-            *chosen = Some(item.clone());
-        }
-        if response.dragged() {
-            ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
-        } else if response.hovered() {
-            ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
-        }
+        entry(ui, item, chosen);
     }
+}
+
+/// An item that can be dragged out, or double-clicked to choose it.
+fn entry(ui: &mut egui::Ui, item: &EffectItem, chosen: &mut Option<EffectItem>) -> egui::Response {
+    let label = egui::Label::new(item.name())
+        .selectable(false)
+        .sense(Sense::click_and_drag());
+    let response = ui.add(label);
+    if response.drag_started() {
+        response.dnd_set_drag_payload(item.clone());
+    }
+    if response.double_clicked() {
+        *chosen = Some(item.clone());
+    }
+    if response.dragged() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+    } else if response.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
+    }
+    response
 }
 
 fn apply_to_selection(editor: &mut Editor, item: EffectItem) {
     let effect = match item {
         EffectItem::Video(effect) => ClipEffect::Video(effect),
         EffectItem::Audio(effect) => ClipEffect::Audio(effect),
+        EffectItem::Preset(preset) => ClipEffect::Preset(preset),
         EffectItem::Transition(kind, transition) => {
             apply_transition(editor, kind, transition);
             return;
@@ -176,8 +245,12 @@ fn apply_to_selection(editor: &mut Editor, item: EffectItem) {
 /// Applies an effect released over a clip to it, or to the whole selection when that
 /// holds it; and a transition to the nearest cut or clip end.
 pub(crate) fn drop_effect(editor: &mut Editor, drop: EffectDrop) {
-    if drop.track.kind != drop.item.track_kind() {
-        let kind = match drop.item.track_kind() {
+    if let Some(kind) = drop
+        .item
+        .track_kind()
+        .filter(|&kind| kind != drop.track.kind)
+    {
+        let kind = match kind {
             TrackKind::Video => "video",
             TrackKind::Audio => "audio",
         };
@@ -187,6 +260,7 @@ pub(crate) fn drop_effect(editor: &mut Editor, drop: EffectDrop) {
     let effect = match drop.item {
         EffectItem::Video(effect) => ClipEffect::Video(effect),
         EffectItem::Audio(effect) => ClipEffect::Audio(effect),
+        EffectItem::Preset(preset) => ClipEffect::Preset(preset),
         EffectItem::Transition(_, kind) => {
             add_transition(editor, drop.track, drop.at, kind);
             return;

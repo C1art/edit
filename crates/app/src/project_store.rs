@@ -24,8 +24,8 @@ enum Request {
         captions: Vec<Caption>,
         timebase: Timebase,
     },
-    ReadKeymap(PathBuf),
-    WriteKeymap(PathBuf, String),
+    ReadSetting(Setting),
+    WriteSetting(Setting, String),
     /// A Final Cut Pro XML file to read a sequence from.
     ReadInterchange(PathBuf),
     /// A sequence written for another editor, such as an EDL.
@@ -39,11 +39,35 @@ pub enum StoreEvent {
     Autosaved(PathBuf, Result<(), String>),
     CaptionsRead(PathBuf, Result<Vec<Caption>, String>),
     CaptionsWritten(PathBuf, Result<(), String>),
-    /// The shortcuts file's text, or none where there is no file yet.
-    KeymapRead(PathBuf, Result<Option<String>, String>),
-    KeymapWritten(PathBuf, Result<(), String>),
+    /// The settings file's text, or none where there is no file yet.
+    SettingRead(Setting, Result<Option<String>, String>),
+    SettingWritten(Setting, Result<(), String>),
     InterchangeRead(PathBuf, Result<Box<ImportXmeml>, String>),
     InterchangeWritten(PathBuf, Result<(), String>),
+}
+
+/// A file of the user's own settings, kept across projects.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Setting {
+    Keymap,
+    Presets,
+}
+
+impl Setting {
+    pub fn path(self) -> PathBuf {
+        app_folder().join(match self {
+            Self::Keymap => "Keyboard Shortcuts.txt",
+            Self::Presets => "Effect Presets.json",
+        })
+    }
+
+    /// What the file holds, for messages about it.
+    pub fn noun(self) -> &'static str {
+        match self {
+            Self::Keymap => "shortcuts",
+            Self::Presets => "effect presets",
+        }
+    }
 }
 
 /// Where the editor keeps files of its own: `%APPDATA%\Edit`.
@@ -129,12 +153,12 @@ impl ProjectStore {
         self.send(Request::WriteInterchange(path, text));
     }
 
-    pub fn read_keymap(&mut self, path: PathBuf) {
-        self.send(Request::ReadKeymap(path));
+    pub fn read_setting(&mut self, setting: Setting) {
+        self.send(Request::ReadSetting(setting));
     }
 
-    pub fn write_keymap(&mut self, path: PathBuf, text: String) {
-        self.send(Request::WriteKeymap(path, text));
+    pub fn write_setting(&mut self, setting: Setting, text: String) {
+        self.send(Request::WriteSetting(setting, text));
     }
 
     fn send(&mut self, request: Request) {
@@ -200,21 +224,22 @@ fn handle(request: Request) -> StoreEvent {
                 .map_err(|error| error.to_string());
             StoreEvent::CaptionsWritten(path, result)
         }
-        Request::ReadKeymap(path) => {
-            let result = match std::fs::read_to_string(&path) {
+        Request::ReadSetting(setting) => {
+            let result = match std::fs::read_to_string(setting.path()) {
                 Ok(text) => Ok(Some(text)),
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
                 Err(error) => Err(error.to_string()),
             };
-            StoreEvent::KeymapRead(path, result)
+            StoreEvent::SettingRead(setting, result)
         }
-        Request::WriteKeymap(path, text) => {
+        Request::WriteSetting(setting, text) => {
+            let path = setting.path();
             let result = path
                 .parent()
                 .map_or(Ok(()), std::fs::create_dir_all)
                 .and_then(|()| std::fs::write(&path, text))
                 .map_err(|error| error.to_string());
-            StoreEvent::KeymapWritten(path, result)
+            StoreEvent::SettingWritten(setting, result)
         }
         Request::ReadInterchange(path) => {
             let result = std::fs::read_to_string(&path)

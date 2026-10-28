@@ -7,7 +7,7 @@ use timeline::{
 
 use crate::editor::Editor;
 use crate::effects::LutSlot;
-use crate::project_store::StoreEvent;
+use crate::project_store::{Setting, StoreEvent};
 
 /// What a typed path is for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -296,22 +296,26 @@ impl Editor {
                 StoreEvent::InterchangeWritten(path, Err(error)) => {
                     self.notice(format!("Cannot export {}: {error}", path.display()));
                 }
-                StoreEvent::KeymapRead(_, Ok(text)) => {
-                    if let Some(text) = text {
-                        self.keymap = crate::keymap::Keymap::from_text(&text);
-                    }
+                StoreEvent::SettingRead(Setting::Keymap, Ok(Some(text))) => {
+                    self.keymap = crate::keymap::Keymap::from_text(&text);
                 }
-                StoreEvent::KeymapRead(path, Err(error)) => {
+                StoreEvent::SettingRead(Setting::Presets, Ok(Some(text))) => {
+                    self.load_presets(&text);
+                }
+                StoreEvent::SettingRead(_, Ok(None)) => {}
+                StoreEvent::SettingRead(setting, Err(error)) => {
                     self.notice(format!(
-                        "Cannot read shortcuts from {}: {error}",
-                        path.display()
+                        "Cannot read {} from {}: {error}",
+                        setting.noun(),
+                        setting.path().display()
                     ));
                 }
-                StoreEvent::KeymapWritten(_, Ok(())) => {}
-                StoreEvent::KeymapWritten(path, Err(error)) => {
+                StoreEvent::SettingWritten(_, Ok(())) => {}
+                StoreEvent::SettingWritten(setting, Err(error)) => {
                     self.notice(format!(
-                        "Cannot save shortcuts to {}: {error}",
-                        path.display()
+                        "Cannot save {} to {}: {error}",
+                        setting.noun(),
+                        setting.path().display()
                     ));
                 }
                 StoreEvent::Autosaved(_, Ok(())) => {}
