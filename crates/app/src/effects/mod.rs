@@ -9,6 +9,7 @@ mod look;
 mod mask_overlay;
 mod masks;
 mod motion_overlay;
+mod optics;
 mod picture_frame;
 mod remap;
 mod secondary;

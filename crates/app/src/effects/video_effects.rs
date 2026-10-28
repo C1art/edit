@@ -275,6 +275,7 @@ impl Rows {
             | VideoEffect::Grid { .. }
             | VideoEffect::Circle { .. }
             | VideoEffect::FourColorGradient { .. } => self.generate(ui, effect),
+            VideoEffect::LensFlare { .. } | VideoEffect::Magnify { .. } => self.optics(ui, effect),
             VideoEffect::LeaveColor {
                 color,
                 amount,
