@@ -44,6 +44,7 @@ impl PreviewPictures {
                 bin: None,
                 subclip: None,
                 interpreted_rate: None,
+                log: Default::default(),
             });
             let clip = Clip::new(
                 ClipId(index),

@@ -260,6 +260,7 @@ mod tests {
             nest: None,
             subclip: None,
             interpreted_rate: None,
+            log: Default::default(),
         }
     }
 
