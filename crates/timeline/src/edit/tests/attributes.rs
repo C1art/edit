@@ -80,7 +80,7 @@ fn a_preset_keys_its_effects_as_far_into_the_clip_it_lands_on() {
     let gain = Param::from_value(6.0);
     let amplify = ApplyEffect {
         clips: vec![clip_on(&timeline, A1, 0)],
-        effect: ClipEffect::Audio(AudioEffect::Amplify { gain }),
+        effect: ClipEffect::Audio(Box::new(AudioEffect::Amplify { gain })),
     };
     timeline.apply(amplify).unwrap();
     let saved = clip_on(&timeline, V1, 0);

@@ -120,6 +120,30 @@ pub enum AudioEffect {
         harmonics: Param,
         reduction: Param,
     },
+    /// Raises or lowers each side on its own, by `left` and `right` decibels.
+    ChannelVolume {
+        left: Param,
+        right: Param,
+    },
+    /// Ten bells an octave apart from 31 Hz to 16 kHz, each boosting or cutting by its
+    /// gain in decibels.
+    GraphicEqualizer {
+        bands: [Param; 10],
+    },
+    /// Compresses the lows under `low_crossover` hertz, the mids up to `high_crossover`
+    /// and the highs above it each on its own, against its own threshold in decibels,
+    /// as the Dynamics Compressor does, then lifts the sum by `makeup` decibels.
+    MultibandCompressor {
+        low_crossover: Param,
+        high_crossover: Param,
+        low_threshold: Param,
+        mid_threshold: Param,
+        high_threshold: Param,
+        ratio: Param,
+        attack: Param,
+        release: Param,
+        makeup: Param,
+    },
     /// Plays the right side on both.
     FillLeftWithRight,
     /// Plays the left side on both.
@@ -173,6 +197,29 @@ impl AudioEffect {
                 harmonics,
                 reduction,
             } => vec![frequency, harmonics, reduction],
+            Self::ChannelVolume { left, right } => vec![left, right],
+            Self::GraphicEqualizer { bands } => bands.iter_mut().collect(),
+            Self::MultibandCompressor {
+                low_crossover,
+                high_crossover,
+                low_threshold,
+                mid_threshold,
+                high_threshold,
+                ratio,
+                attack,
+                release,
+                makeup,
+            } => vec![
+                low_crossover,
+                high_crossover,
+                low_threshold,
+                mid_threshold,
+                high_threshold,
+                ratio,
+                attack,
+                release,
+                makeup,
+            ],
             Self::FillLeftWithRight
             | Self::FillRightWithLeft
             | Self::SwapChannels
@@ -194,7 +241,7 @@ impl AudioEffect {
     }
 
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 23] {
+    pub fn catalog() -> [Self; 26] {
         [
             Self::Amplify {
                 gain: Param::default(),
@@ -279,6 +326,24 @@ impl AudioEffect {
                 harmonics: Param::from_value(4.0),
                 reduction: Param::from_value(30.0),
             },
+            Self::ChannelVolume {
+                left: Param::default(),
+                right: Param::default(),
+            },
+            Self::GraphicEqualizer {
+                bands: Default::default(),
+            },
+            Self::MultibandCompressor {
+                low_crossover: Param::from_value(200.0),
+                high_crossover: Param::from_value(2_000.0),
+                low_threshold: Param::from_value(-20.0),
+                mid_threshold: Param::from_value(-20.0),
+                high_threshold: Param::from_value(-20.0),
+                ratio: Param::from_value(3.0),
+                attack: Param::from_value(10.0),
+                release: Param::from_value(150.0),
+                makeup: Param::default(),
+            },
             Self::FillLeftWithRight,
             Self::FillRightWithLeft,
             Self::SwapChannels,
@@ -311,6 +376,9 @@ impl AudioEffect {
             Self::PitchShifter { .. } => "Pitch Shifter",
             Self::DeNoise { .. } => "DeNoise",
             Self::DeHum { .. } => "DeHum",
+            Self::ChannelVolume { .. } => "Channel Volume",
+            Self::GraphicEqualizer { .. } => "Graphic Equalizer (10 Bands)",
+            Self::MultibandCompressor { .. } => "Multiband Compressor",
         }
     }
 }

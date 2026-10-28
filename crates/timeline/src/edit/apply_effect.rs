@@ -7,7 +7,7 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClipEffect {
     Video(Box<VideoEffect>),
-    Audio(AudioEffect),
+    Audio(Box<AudioEffect>),
     Preset(EffectPreset),
 }
 
@@ -35,7 +35,7 @@ impl Edit for ApplyEffect {
                     clip.look.effects.push(VideoEffect::clone(effect));
                 }
                 (ClipEffect::Audio(effect), TrackKind::Audio) => {
-                    clip.audio_effects.push(effect.clone());
+                    clip.audio_effects.push(AudioEffect::clone(effect));
                 }
                 (ClipEffect::Preset(preset), kind) => preset.apply(kind, clip),
                 _ => {}
