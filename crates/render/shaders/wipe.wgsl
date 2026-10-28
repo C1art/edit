@@ -5,6 +5,12 @@ const WIPE_BANDS: f32 = 8.0;
 const WIPE_BLADES: f32 = 8.0;
 const WIPE_SQUARES_DOWN: f32 = 8.0;
 const WIPE_BLOCKS_DOWN: f32 = 12.0;
+const WIPE_SPIRAL_DOWN: f32 = 6.0;
+const WIPE_ZIGZAG_DOWN: f32 = 8.0;
+// How much chance moves a random wipe's blocks from their place in the sweep.
+const WIPE_SCATTER: f32 = 0.35;
+// Splatter blotches across the canvas height.
+const WIPE_SPLATTER_SCALE: f32 = 4.0;
 // Order steps across one pixel beyond this are a pattern's seams, not its edge.
 const WIPE_MAX_STEP: f32 = 0.02;
 
@@ -42,16 +48,82 @@ fn wipe_order(pattern: u32, pixel: vec2<f32>, size: vec2<f32>) -> f32 {
             return (fract(pixel.x / square) + odd) * 0.5;
         }
         case 12u: { return max(pixel.x / size.x, pixel.y / size.y); }
+        case 13u: { return wipe_hash(floor(pixel / (size.y / WIPE_BLOCKS_DOWN))); }
         case 14u: {
             let across = pixel.x / size.x;
             let odd = fract(floor(pixel.y / size.y * WIPE_BANDS) * 0.5) > 0.25;
             return select(across, 1.0 - across, odd);
         }
+        case 15u: {
+            let square = size.y / WIPE_SQUARES_DOWN;
+            return fract(pixel.x / square + fract(floor(pixel.y / square) * 0.5));
+        }
+        case 16u: { return wipe_spiral(pixel, size); }
+        case 17u: {
+            let square = size.y / WIPE_ZIGZAG_DOWN;
+            let cells = vec2<f32>(ceil(size.x / square), WIPE_ZIGZAG_DOWN);
+            let cell = min(floor(pixel / square), cells - 1.0);
+            let down = pixel.y / square - cell.y;
+            // Entering from the top, this runs the first row left to right.
+            let up = fract(cell.x * 0.5) < 0.25;
+            let along = select(cell.y + down, cells.y - cell.y - down, up);
+            return (cell.x * cells.y + along) / (cells.x * cells.y);
+        }
+        case 18u: {
+            let block = size.y / WIPE_BLOCKS_DOWN;
+            let index = floor(pixel / block);
+            return mix(index.x * block / size.x, wipe_hash(index), WIPE_SCATTER);
+        }
         default: {
-            let index = floor(pixel / (size.y / WIPE_BLOCKS_DOWN));
-            return fract(sin(dot(index, vec2<f32>(12.9898, 78.233))) * 43758.5453);
+            let point = pixel / size.y * WIPE_SPLATTER_SCALE;
+            let noise = 0.6 * wipe_noise(point) + 0.3 * wipe_noise(point * 2.3 + 17.0)
+                + 0.1 * wipe_noise(point * 5.1 + 41.0);
+            // Value noise gathers around the middle; spread it out to fill the sweep.
+            return clamp((noise - 0.25) * 2.0, 0.0, 1.0);
         }
     }
+}
+
+fn wipe_hash(index: vec2<f32>) -> f32 {
+    return fract(sin(dot(index, vec2<f32>(12.9898, 78.233))) * 43758.5453);
+}
+
+fn wipe_noise(point: vec2<f32>) -> f32 {
+    let cell = floor(point);
+    let within = fract(point);
+    let smooth_within = within * within * (3.0 - 2.0 * within);
+    let top = mix(wipe_hash(cell), wipe_hash(cell + vec2<f32>(1.0, 0.0)), smooth_within.x);
+    let bottom = mix(
+        wipe_hash(cell + vec2<f32>(0.0, 1.0)),
+        wipe_hash(cell + vec2<f32>(1.0, 1.0)),
+        smooth_within.x,
+    );
+    return mix(top, bottom, smooth_within.y);
+}
+
+// Cells taken clockwise around the outermost ring from the top left, then each ring
+// inside it, each cell swept the way the spiral runs through it.
+fn wipe_spiral(pixel: vec2<f32>, size: vec2<f32>) -> f32 {
+    let cells = vec2<f32>(ceil(size.x / size.y * WIPE_SPIRAL_DOWN), WIPE_SPIRAL_DOWN);
+    let scaled = pixel / size * cells;
+    let cell = min(floor(scaled), cells - 1.0);
+    let within = scaled - cell;
+    let ring = min(min(cell.x, cell.y), min(cells.x - 1.0 - cell.x, cells.y - 1.0 - cell.y));
+    let inner = cells - 2.0 * ring;
+    let outside = cells.x * cells.y - inner.x * inner.y;
+    let at = cell - ring;
+    let last = inner - 1.0;
+    var along: f32;
+    if at.y == 0.0 {
+        along = at.x + within.x;
+    } else if at.x == last.x {
+        along = last.x + at.y + within.y;
+    } else if at.y == last.y {
+        along = last.x + last.y + (last.x - at.x) + 1.0 - within.x;
+    } else {
+        along = 2.0 * last.x + last.y + (last.y - at.y) + 1.0 - within.y;
+    }
+    return (outside + along) / (cells.x * cells.y);
 }
 
 // `pixel` on a canvas of `size` turned so that `side` (left, top, right, bottom) is on
