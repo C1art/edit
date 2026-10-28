@@ -118,7 +118,7 @@ impl Sequence {
     pub(crate) fn fit_nest(&mut self, id: SourceId) {
         let used = self
             .all_clips()
-            .filter(|clip| clip.source == id)
+            .filter(|clip| clip.source == id || clip.unrendered == Some(id))
             .map(Clip::source_out)
             .max()
             .unwrap_or(Ticks::ZERO);

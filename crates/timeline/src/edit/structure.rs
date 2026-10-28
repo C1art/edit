@@ -171,7 +171,9 @@ impl Edit for RemoveMedia {
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
-        let in_use = sequence.all_clips().any(|clip| clip.source == self.source);
+        let in_use = sequence
+            .all_clips()
+            .any(|clip| clip.source == self.source || clip.unrendered == Some(self.source));
         if in_use {
             return Err(TimelineError::MediaInUse(self.source));
         }

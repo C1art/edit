@@ -124,6 +124,10 @@ pub struct Clip {
     /// rate, on top of `speed`.
     #[serde(default, skip_serializing_if = "is_normal_speed")]
     pub conform: Speed,
+    /// The nest or graphic the clip showed before Render and Replace put a file of its
+    /// pictures in its place, at the same source times.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unrendered: Option<SourceId>,
 }
 
 fn is_normal_speed(speed: &Speed) -> bool {
@@ -170,6 +174,7 @@ impl Clip {
             markers: Vec::new(),
             interpolation: TimeInterpolation::FrameSampling,
             conform: Speed::NORMAL,
+            unrendered: None,
         }
     }
 

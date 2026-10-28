@@ -515,6 +515,7 @@ mod paste;
 mod range;
 mod rearrange;
 mod remap;
+mod render_replace;
 mod replace;
 mod speed;
 mod submix;
