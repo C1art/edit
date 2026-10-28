@@ -17,7 +17,7 @@ mod style;
 mod wipe;
 
 pub use blit::DISPLAY_FORMAT;
-pub use compositor::{Compositor, LayerImage, Picture, Presented};
+pub use compositor::{Background, Compositor, LayerImage, Picture, Presented};
 pub use error::RenderError;
 pub use grade::{Grade, CURVE_SIZE};
 pub use lut::Lut3d;

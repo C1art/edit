@@ -80,6 +80,15 @@ struct Targets {
     ui_output: wgpu::TextureView,
 }
 
+/// What shows where no layer covers the frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Background {
+    #[default]
+    Black,
+    /// Kept clear, so the presented frame carries the layers' coverage as its alpha.
+    Transparent,
+}
+
 /// Uploads source frames, composites them in linear light and presents the result to a
 /// texture the UI can draw.
 pub struct Compositor {
@@ -89,6 +98,7 @@ pub struct Compositor {
     slots: Vec<Slot>,
     targets: Option<Targets>,
     scope: Option<ScopeTrace>,
+    background: Background,
 }
 
 impl Compositor {
@@ -106,6 +116,7 @@ impl Compositor {
             slots: Vec::new(),
             targets: None,
             scope: None,
+            background: Background::Black,
         }
     }
 
@@ -156,7 +167,11 @@ impl Compositor {
         self.scope.as_ref().map(|trace| &trace.ui_view)
     }
 
-    /// Draws `layers` bottom first over black, each fitted to `canvas` and then moved,
+    pub fn set_background(&mut self, background: Background) {
+        self.background = background;
+    }
+
+    /// Draws `layers` bottom first over the background, each fitted to `canvas` and then moved,
     /// scaled, turned, cropped, blurred and faded by its look.
     pub fn composite(
         &mut self,
@@ -234,7 +249,10 @@ impl Compositor {
             &self.blit,
             (&targets.working_texture, &targets.working),
             &self.placed(&top),
-            wgpu::Color::BLACK,
+            match self.background {
+                Background::Black => wgpu::Color::BLACK,
+                Background::Transparent => wgpu::Color::TRANSPARENT,
+            },
         );
         blit::draw(
             &mut encoder,
@@ -380,7 +398,7 @@ impl Compositor {
             WORKING_FORMAT,
             usage | wgpu::TextureUsages::COPY_SRC,
         );
-        let working = working_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let working_view = working_texture.create_view(&wgpu::TextureViewDescriptor::default());
         // Copyable so export can read the presented frame back.
         let output_texture = self.texture(
             "output_frame",
@@ -389,12 +407,18 @@ impl Compositor {
             usage | wgpu::TextureUsages::COPY_SRC,
         );
         let placement = Blit::placement_buffer(&self.device);
-        Blit::write_placement(&self.queue, &placement, Placement::FULL);
+        // Layers blend into the working frame with their colors multiplied by their
+        // alpha. Over black that alpha stays whole and dividing it out changes nothing.
+        let working = Placement {
+            premultiplied: true,
+            ..Placement::FULL
+        };
+        Blit::write_placement(&self.queue, &placement, working);
         Targets {
             width,
             height,
-            working_binding: self.blit.bind(&self.device, &working, &placement),
-            working,
+            working_binding: self.blit.bind(&self.device, &working_view, &placement),
+            working: working_view,
             working_texture,
             backdrop: Backdrop::new(&self.device, &self.blit, (width, height)),
             output: output_texture.create_view(&wgpu::TextureViewDescriptor::default()),
