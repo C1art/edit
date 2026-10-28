@@ -152,6 +152,24 @@ impl Timeline {
         self.redo_stack.last().map(|command| command.name())
     }
 
+    /// The names of the edits in effect, oldest first.
+    pub fn done(&self) -> impl Iterator<Item = &'static str> + '_ {
+        self.undo_stack.iter().map(|command| command.name())
+    }
+
+    /// The names of the edits undone, in the order redo would bring them back.
+    pub fn undone(&self) -> impl Iterator<Item = &'static str> + '_ {
+        self.redo_stack.iter().rev().map(|command| command.name())
+    }
+
+    /// Undoes or redoes until the first `step` edits are in effect, as a history list
+    /// jumps to a state. A redo that fails stops there.
+    pub fn go_to(&mut self, step: usize) -> Result<(), TimelineError> {
+        while self.undo_stack.len() > step && self.undo() {}
+        while self.undo_stack.len() < step && self.redo()? {}
+        Ok(())
+    }
+
     /// Returns `false` when there is nothing to undo.
     pub fn undo(&mut self) -> bool {
         let Some(mut command) = self.undo_stack.pop() else {

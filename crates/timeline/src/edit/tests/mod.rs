@@ -373,6 +373,32 @@ fn undo_and_redo_restore_each_state_exactly() {
 }
 
 #[test]
+fn going_to_a_step_undoes_or_redoes_everything_between() {
+    let (mut timeline, source) = timeline();
+    let opened = timeline.sequence().clone();
+    timeline
+        .apply(place(source, 0, 0, 300, PlaceMode::Overwrite))
+        .unwrap();
+    timeline
+        .apply(place(source, 100, 0, 50, PlaceMode::Insert))
+        .unwrap();
+    let inserted = timeline.sequence().clone();
+
+    timeline.go_to(1).unwrap();
+    assert_eq!(timeline.sequence(), &opened);
+    assert_eq!(
+        timeline.undone().collect::<Vec<_>>(),
+        ["Overwrite", "Insert"]
+    );
+    timeline.go_to(3).unwrap();
+    assert_eq!(timeline.sequence(), &inserted);
+    assert_eq!(
+        timeline.done().collect::<Vec<_>>(),
+        ["Import", "Overwrite", "Insert"]
+    );
+}
+
+#[test]
 fn failed_edit_leaves_sequence_and_history_untouched() {
     let (mut timeline, source) = timeline();
     let before = timeline.sequence().clone();
