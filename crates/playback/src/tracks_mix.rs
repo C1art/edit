@@ -1,7 +1,7 @@
 use audio::SampleRate;
 use timeline::{
-    audio_fade, audio_span, clip_level, track_automation, ClipId, Gain, MediaItem, Sequence,
-    SourceId, Submix, Ticks,
+    audio_fade, audio_span, clip_level, track_automation, AudioEffect, ClipId, Gain, MediaItem,
+    Sequence, SourceId, Submix, Ticks,
 };
 use timeline::{Timebase, Track};
 
@@ -25,6 +25,7 @@ pub(crate) struct TracksMix {
     /// What the tracks sent to each submix add up to, and its inserts.
     submix_mix: Vec<Vec<f32>>,
     submix_inserts: Vec<EffectChain>,
+    master_inserts: EffectChain,
     track_mix: Vec<f32>,
     clip_mix: Vec<f32>,
     /// Media already reported as unreadable.
@@ -48,6 +49,7 @@ impl Voice {
 pub(crate) struct Bus<'a> {
     pub(crate) tracks: &'a [Track],
     pub(crate) submixes: &'a [Submix],
+    pub(crate) master_effects: &'a [AudioEffect],
     pub(crate) master: Gain,
 }
 
@@ -56,6 +58,7 @@ impl<'a> Bus<'a> {
         Self {
             tracks: &sequence.audio,
             submixes: &sequence.submixes,
+            master_effects: &sequence.master_effects,
             master: sequence.master,
         }
     }
@@ -77,6 +80,7 @@ impl TracksMix {
             inserts: Vec::new(),
             submix_mix: Vec::new(),
             submix_inserts: Vec::new(),
+            master_inserts: EffectChain::new(sample_rate),
             track_mix: Vec::new(),
             clip_mix: Vec::new(),
             warned: Vec::new(),
@@ -96,6 +100,7 @@ impl TracksMix {
         self.inserts
             .iter_mut()
             .chain(&mut self.submix_inserts)
+            .chain(std::iter::once(&mut self.master_inserts))
             .for_each(EffectChain::reset);
     }
 
@@ -112,6 +117,7 @@ impl TracksMix {
         let Bus {
             tracks,
             submixes,
+            master_effects,
             master,
         } = bus;
         let timebase = pool.timebase;
@@ -248,6 +254,9 @@ impl TracksMix {
                 mixdown::add_scaled(mix, [left * volume, right * volume], out)
             })
             .collect();
+        if !master_effects.is_empty() {
+            self.master_inserts.process(None, master_effects, at, out);
+        }
         MixLevels {
             tracks: track_levels,
             submixes: submix_levels,
@@ -299,10 +308,10 @@ impl FrameSource for MediaAudio {
             })
         });
         nested.out.resize(out.len(), 0.0);
-        // A nest has no submixes, so its tracks sent to one go to its master.
         let bus = Bus {
             tracks: &nest.audio,
-            submixes: &[],
+            submixes: &nest.submixes,
+            master_effects: &nest.master_effects,
             master: nest.master,
         };
         let warnings = &mut nested.warnings;

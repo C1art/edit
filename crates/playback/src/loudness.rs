@@ -103,14 +103,16 @@ fn measure(pieces: &[Piece], events: &Sender<LoudnessEvent>, cancel: &AtomicBool
     let _ = events.send(LoudnessEvent::Measured(results));
 }
 
-/// `sequence` with only `clip` left, heard at unity with no volume, effects or
-/// transitions, so measuring it measures the source as the clip's gain scales it.
+/// `sequence` with only `clip` left, heard at unity with no volume, effects (its own or
+/// the mix's) or transitions, so measuring it measures the source as the clip's gain
+/// scales it.
 pub fn clip_alone(sequence: &Sequence, clip: ClipId) -> Option<Piece> {
     let (_, found) = sequence.clip(clip)?;
     let range = found.start..found.end();
     let mut alone = sequence.clone();
     alone.video.iter_mut().for_each(|track| track.clips.clear());
     alone.master = Gain::UNITY;
+    alone.master_effects.clear();
     for track in &mut alone.audio {
         track.clips.retain(|kept| kept.id == clip);
         *track = Track {
