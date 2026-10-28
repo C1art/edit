@@ -49,6 +49,8 @@ pub struct ColorAdjust {
     pub saturation: f32,
     /// -1 to 1.
     pub vibrance: f32,
+    /// 0 to 1: how much of a creative look LUT applies.
+    pub look_intensity: f32,
 }
 
 impl ColorAdjust {
@@ -64,6 +66,7 @@ impl ColorAdjust {
         tint: 0.0,
         saturation: 1.0,
         vibrance: 0.0,
+        look_intensity: 1.0,
     };
 }
 
@@ -98,6 +101,8 @@ pub(crate) struct Placement {
     pub(crate) effects: PixelEffects,
     /// Whether the picture's colors are already multiplied by its alpha.
     pub(crate) premultiplied: bool,
+    /// What the shader reads of the layer's lookups.
+    pub(crate) grade: [f32; 4],
 }
 
 impl Placement {
@@ -112,6 +117,7 @@ impl Placement {
         wash: 0.0,
         effects: PixelEffects::NONE,
         premultiplied: false,
+        grade: [0.0; 4],
     };
 
     /// Fits the layer to the canvas keeping its aspect ratio, then applies the look.
@@ -135,6 +141,7 @@ impl Placement {
             wash: look.wash.clamp(0.0, 1.0),
             effects: look.effects,
             premultiplied: false,
+            grade: [0.0; 4],
         }
     }
 
@@ -163,6 +170,7 @@ impl Placement {
                     .into_iter()
                     .flat_map(|[blue, red, level]| [blue, red, level, 0.0]),
             )
+            .chain(self.grade)
             .flat_map(f32::to_le_bytes)
             .collect()
     }

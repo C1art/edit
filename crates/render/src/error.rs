@@ -16,6 +16,10 @@ pub enum RenderError {
     /// Nothing has been composited yet, so there is no frame to read back.
     NoFrame,
     Readback(String),
+    InvalidLut {
+        line: usize,
+        reason: &'static str,
+    },
 }
 
 impl fmt::Display for RenderError {
@@ -33,6 +37,7 @@ impl fmt::Display for RenderError {
             ),
             Self::NoFrame => f.write_str("no frame has been composited"),
             Self::Readback(message) => write!(f, "cannot read the frame back: {message}"),
+            Self::InvalidLut { line, reason } => write!(f, "LUT line {line}: {reason}"),
         }
     }
 }

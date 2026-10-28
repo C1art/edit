@@ -1,15 +1,18 @@
+use crate::grade::GradeLayout;
 use crate::placement::Placement;
 use crate::WORKING_FORMAT;
 
 /// The UI samples the output as an ordinary sRGB texture.
 pub const DISPLAY_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
-/// Five `vec4<f32>`: the placement and color of a blit, or the parameters of a blur.
-pub(crate) const UNIFORM_BYTES: u64 = 240;
+/// Sixteen `vec4<f32>`: the placement and color of a blit, or the parameters of a blur.
+pub(crate) const UNIFORM_BYTES: u64 = 256;
 
 /// The textured-rectangle pipelines and the layout their bindings share.
 pub(crate) struct Blit {
     pub(crate) layout: wgpu::BindGroupLayout,
+    /// The second bind group of layer and display blits; blurs have none.
+    pub(crate) grade: GradeLayout,
     sampler: wgpu::Sampler,
     /// Blends layers over the working texture.
     pub(crate) to_working: wgpu::RenderPipeline,
@@ -55,15 +58,21 @@ impl Blit {
                 },
             ],
         });
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        let grade = GradeLayout::new(device);
+        let blit_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("blit_pipeline_layout"),
+            bind_group_layouts: &[Some(&layout), Some(&grade.layout)],
+            immediate_size: 0,
+        });
+        let blur_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("blur_pipeline_layout"),
             bind_group_layouts: &[Some(&layout)],
             immediate_size: 0,
         });
-        let pipeline = |shader: &wgpu::ShaderModule, format, blend| {
+        let pipeline = |shader: &wgpu::ShaderModule, pipeline_layout, format, blend| {
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("blit_pipeline"),
-                layout: Some(&pipeline_layout),
+                layout: Some(pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: shader,
                     entry_point: Some("vs_main"),
@@ -90,11 +99,12 @@ impl Blit {
         Self {
             to_working: pipeline(
                 &blit_shader,
+                &blit_layout,
                 WORKING_FORMAT,
                 Some(wgpu::BlendState::ALPHA_BLENDING),
             ),
-            to_display: pipeline(&blit_shader, DISPLAY_FORMAT, None),
-            blur: pipeline(&blur_shader, WORKING_FORMAT, None),
+            to_display: pipeline(&blit_shader, &blit_layout, DISPLAY_FORMAT, None),
+            blur: pipeline(&blur_shader, &blur_layout, WORKING_FORMAT, None),
             sampler: device.create_sampler(&wgpu::SamplerDescriptor {
                 label: Some("blit_sampler"),
                 mag_filter: wgpu::FilterMode::Linear,
@@ -102,6 +112,7 @@ impl Blit {
                 ..Default::default()
             }),
             layout,
+            grade,
         }
     }
 
@@ -149,11 +160,13 @@ impl Blit {
     }
 }
 
-pub(crate) fn draw(
+/// Draws one quad per entry of `bindings`, each entry holding the bind groups of the
+/// pipeline's layout in order.
+pub(crate) fn draw<const GROUPS: usize>(
     encoder: &mut wgpu::CommandEncoder,
     target: &wgpu::TextureView,
     pipeline: &wgpu::RenderPipeline,
-    bindings: &[&wgpu::BindGroup],
+    bindings: &[[&wgpu::BindGroup; GROUPS]],
     clear: wgpu::Color,
 ) {
     let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -173,8 +186,10 @@ pub(crate) fn draw(
         multiview_mask: None,
     });
     pass.set_pipeline(pipeline);
-    for binding in bindings {
-        pass.set_bind_group(0, *binding, &[]);
+    for groups in bindings {
+        for (index, group) in (0..).zip(groups) {
+            pass.set_bind_group(index, *group, &[]);
+        }
         pass.draw(0..6, 0..1);
     }
 }

@@ -192,7 +192,7 @@ impl ScopeTrace {
             encoder,
             &self.view,
             &self.draw,
-            &[&self.draw_binding],
+            &[[&self.draw_binding]],
             wgpu::Color::BLACK,
         );
     }

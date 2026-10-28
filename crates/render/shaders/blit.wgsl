@@ -29,6 +29,9 @@ struct Placement {
     finish: vec4<f32>,
     // Shadow, midtone and highlight wheels: push toward blue and red, then level.
     wheels: array<vec4<f32>, 3>,
+    // Input and look LUT sizes (0 when absent), the look's intensity, then 1 when
+    // curves apply.
+    grade: vec4<f32>,
 };
 
 const MID_GREY: f32 = 0.18;
@@ -52,6 +55,12 @@ struct VertexOutput {
 @group(0) @binding(0) var source: texture_2d<f32>;
 @group(0) @binding(1) var source_sampler: sampler;
 @group(0) @binding(2) var<uniform> placement: Placement;
+// Lookups in gamma-encoded values: curves as a row of outputs per channel, then the
+// input and look LUTs as cubes indexed by red, green and blue.
+@group(1) @binding(0) var curves: texture_2d<f32>;
+@group(1) @binding(1) var input_lut: texture_3d<f32>;
+@group(1) @binding(2) var look_lut: texture_3d<f32>;
+@group(1) @binding(3) var grade_sampler: sampler;
 
 @vertex
 fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
@@ -124,6 +133,47 @@ fn saturate_color(rgb: vec3<f32>, saturation: f32, vibrance: f32) -> vec3<f32> {
     return max(mix(grey, rgb, amount), vec3<f32>(0.0));
 }
 
+// The sRGB curve exactly, so a LUT sees the code values the source was decoded from.
+fn srgb_encode(rgb: vec3<f32>) -> vec3<f32> {
+    let c = clamp(rgb, vec3<f32>(0.0), vec3<f32>(1.0));
+    return select(1.055 * pow(c, vec3<f32>(1.0 / 2.4)) - 0.055, c * 12.92, c <= vec3<f32>(0.0031308));
+}
+
+fn srgb_decode(c: vec3<f32>) -> vec3<f32> {
+    return select(pow((c + 0.055) / 1.055, vec3<f32>(2.4)), c / 12.92, c <= vec3<f32>(0.04045));
+}
+
+// Texel centers span the cube, so 0 and 1 land exactly on its first and last entries.
+fn lookup(lut: texture_3d<f32>, size: f32, rgb: vec3<f32>) -> vec3<f32> {
+    let coord = srgb_encode(rgb) * ((size - 1.0) / size) + vec3<f32>(0.5 / size);
+    return srgb_decode(max(textureSampleLevel(lut, grade_sampler, coord, 0.0).rgb, vec3<f32>(0.0)));
+}
+
+fn input_grade(rgb: vec3<f32>) -> vec3<f32> {
+    if placement.grade.x < 2.0 {
+        return rgb;
+    }
+    return lookup(input_lut, placement.grade.x, rgb);
+}
+
+fn creative_grade(rgb_in: vec3<f32>) -> vec3<f32> {
+    let grade = placement.grade;
+    var rgb = rgb_in;
+    if grade.y >= 2.0 {
+        rgb = mix(rgb, lookup(look_lut, grade.y, rgb), grade.z);
+    }
+    if grade.w > 0.5 {
+        let size = f32(textureDimensions(curves).x);
+        let u = srgb_encode(rgb) * ((size - 1.0) / size) + vec3<f32>(0.5 / size);
+        rgb = srgb_decode(vec3<f32>(
+            textureSampleLevel(curves, grade_sampler, vec2<f32>(u.r, 0.5), 0.0).r,
+            textureSampleLevel(curves, grade_sampler, vec2<f32>(u.g, 0.5), 0.0).g,
+            textureSampleLevel(curves, grade_sampler, vec2<f32>(u.b, 0.5), 0.0).b,
+        ));
+    }
+    return rgb;
+}
+
 fn to_gamma(rgb: vec3<f32>) -> vec3<f32> {
     return pow(max(rgb, vec3<f32>(0.0)), vec3<f32>(1.0 / GAMMA));
 }
@@ -157,10 +207,11 @@ fn sharpen(rgb: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
         return rgb;
     }
     let texel = 1.0 / vec2<f32>(textureDimensions(source));
-    let around = textureSampleLevel(source, source_sampler, uv + vec2<f32>(texel.x, 0.0), 0.0).rgb
-        + textureSampleLevel(source, source_sampler, uv - vec2<f32>(texel.x, 0.0), 0.0).rgb
-        + textureSampleLevel(source, source_sampler, uv + vec2<f32>(0.0, texel.y), 0.0).rgb
-        + textureSampleLevel(source, source_sampler, uv - vec2<f32>(0.0, texel.y), 0.0).rgb;
+    // Neighbours pass through the input LUT too, so it doesn't read as detail.
+    let around = input_grade(textureSampleLevel(source, source_sampler, uv + vec2<f32>(texel.x, 0.0), 0.0).rgb)
+        + input_grade(textureSampleLevel(source, source_sampler, uv - vec2<f32>(texel.x, 0.0), 0.0).rgb)
+        + input_grade(textureSampleLevel(source, source_sampler, uv + vec2<f32>(0.0, texel.y), 0.0).rgb)
+        + input_grade(textureSampleLevel(source, source_sampler, uv - vec2<f32>(0.0, texel.y), 0.0).rgb);
     return max(rgb + amount * (rgb - around * 0.25), vec3<f32>(0.0));
 }
 
@@ -188,13 +239,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     if placement.axis_y_opacity.w > 0.5 {
         color = vec4<f32>(color.rgb / max(color.a, 1e-6), color.a);
     }
+    color = vec4<f32>(input_grade(color.rgb), color.a);
     let mask = placement.mask;
     let shown = all(in.canvas >= mask.xy) && all(in.canvas <= vec2<f32>(1.0) - mask.zw);
     let keyed = key_alpha(color.rgb);
     // Desaturating the key's edge suppresses the screen's color spilling onto it.
     let unspilled = mix(vec3<f32>(dot(color.rgb, LUMA)), color.rgb, keyed);
     let sharp = sharpen(unspilled, in.uv);
-    var rgb = stylize(correct(sharp), in.uv);
+    var rgb = stylize(creative_grade(correct(sharp)), in.uv);
     rgb = mix(rgb, vec3<f32>(1.0), placement.balance.w);
     return vec4<f32>(rgb, color.a * keyed * placement.axis_y_opacity.z * f32(shown));
 }

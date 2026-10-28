@@ -1,5 +1,8 @@
+use std::sync::Arc;
+
 use crate::blit::{self, Blit, DISPLAY_FORMAT};
 use crate::blur::BlurTargets;
+use crate::grade::Grade;
 use crate::placement::{fit_scale, LayerLook, Placement};
 use crate::scope::{Scope, ScopeTrace};
 use crate::{RenderError, WORKING_FORMAT};
@@ -21,6 +24,8 @@ pub enum Presented {
 pub struct LayerImage<'a> {
     pub picture: Picture<'a>,
     pub look: LayerLook,
+    /// Shared between frames, so its textures are only uploaded when it changes.
+    pub grade: Option<Arc<Grade>>,
 }
 
 #[derive(Debug, Clone)]
@@ -66,6 +71,8 @@ struct Slot {
     /// Created the first time the layer is blurred.
     blur: Option<BlurTargets>,
     blurred: bool,
+    /// The lookups last drawn with and their textures' binding.
+    grade: Option<(Arc<Grade>, wgpu::BindGroup)>,
 }
 
 impl Slot {
@@ -220,7 +227,7 @@ impl Compositor {
             &mut encoder,
             &targets.output,
             &self.blit.to_display,
-            &[&targets.working_binding],
+            &[[&targets.working_binding, &self.blit.grade.none]],
             wgpu::Color::BLACK,
         );
         if let Some(trace) = &self.scope {
@@ -230,10 +237,17 @@ impl Compositor {
         Ok(presented)
     }
 
-    fn placed(&self, slots: &[usize]) -> Vec<&wgpu::BindGroup> {
+    fn placed(&self, slots: &[usize]) -> Vec<[&wgpu::BindGroup; 2]> {
         slots
             .iter()
-            .map(|&index| self.slots[index].placed())
+            .map(|&index| {
+                let slot = &self.slots[index];
+                let grade = slot
+                    .grade
+                    .as_ref()
+                    .map_or(&self.blit.grade.none, |(_, binding)| binding);
+                [slot.placed(), grade]
+            })
             .collect()
     }
 
@@ -288,7 +302,7 @@ impl Compositor {
                     index
                 }
             };
-            self.place(index, &layer.look, canvas);
+            self.place(index, layer, canvas);
             if self.slots[index].blurred {
                 steps.push(Step::Blur(index));
             }
@@ -342,8 +356,19 @@ impl Compositor {
         );
     }
 
-    fn place(&mut self, index: usize, look: &LayerLook, canvas: (u32, u32)) {
+    fn place(&mut self, index: usize, layer: &LayerImage<'_>, canvas: (u32, u32)) {
+        let look = &layer.look;
         let slot = &mut self.slots[index];
+        slot.grade = match (&layer.grade, slot.grade.take()) {
+            (Some(grade), Some((drawn, binding))) if Arc::ptr_eq(grade, &drawn) => {
+                Some((drawn, binding))
+            }
+            (Some(grade), _) => Some((
+                Arc::clone(grade),
+                self.blit.grade.bind(&self.device, &self.queue, grade),
+            )),
+            (None, _) => None,
+        };
         let size = (slot.width, slot.height);
         // The blur radius is in canvas pixels, but the blur runs on the layer itself.
         let sigma = look.blur / (fit_scale(size, canvas) * look.scale.max(0.01));
@@ -359,6 +384,7 @@ impl Compositor {
         let placement = Placement {
             // Compositing leaves a group's colors multiplied by its coverage.
             premultiplied: slot.kind == SlotKind::Group,
+            grade: Grade::uniform(layer.grade.as_deref(), look.color.look_intensity),
             ..Placement::new(size, canvas, look)
         };
         Blit::write_placement(&self.queue, &slot.placement, placement);
@@ -387,6 +413,7 @@ impl Compositor {
             placement,
             blur: None,
             blurred: false,
+            grade: None,
         }
     }
 
