@@ -77,22 +77,7 @@ pub(super) fn controls(ui: &mut egui::Ui, look: &mut Look, time: Ticks) -> Outpu
             });
         });
     egui::CollapsingHeader::new("Color").show(ui, |ui| {
-        let color = &mut look.color;
-        ui.label(RichText::new("White Balance").weak());
-        rows.param(
-            ui,
-            "Temperature",
-            &mut color.temperature,
-            -100.0..=100.0,
-            "",
-        );
-        rows.param(ui, "Tint", &mut color.tint, -100.0..=100.0, "");
-        ui.label(RichText::new("Tone").weak());
-        rows.param(ui, "Exposure", &mut color.exposure, -5.0..=5.0, "");
-        rows.param(ui, "Contrast", &mut color.contrast, -100.0..=100.0, "");
-        rows.param(ui, "Highlights", &mut color.highlights, -100.0..=100.0, "");
-        rows.param(ui, "Shadows", &mut color.shadows, -100.0..=100.0, "");
-        rows.param(ui, "Saturation", &mut color.saturation, 0.0..=200.0, "%");
+        super::color::controls(ui, &mut rows, &mut look.color);
     });
     ui.add_space(4.0);
     if ui.button("Reset Effects").clicked() && *look != Look::default() {
@@ -117,6 +102,10 @@ impl Rows {
                 seek: None,
             },
         }
+    }
+
+    pub(super) fn time(&self) -> Ticks {
+        self.time
     }
 
     pub(super) fn commit(&mut self) {

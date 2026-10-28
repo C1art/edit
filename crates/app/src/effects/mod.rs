@@ -1,3 +1,4 @@
+mod color;
 mod generated;
 mod look;
 mod sound;
