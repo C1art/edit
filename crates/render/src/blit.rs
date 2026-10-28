@@ -16,6 +16,10 @@ pub(crate) struct Blit {
     sampler: wgpu::Sampler,
     /// Blends layers over the working texture.
     pub(crate) to_working: wgpu::RenderPipeline,
+    /// The third bind group of blend-mode blits: a copy of what lies under the layer.
+    pub(crate) backdrop_layout: wgpu::BindGroupLayout,
+    /// Draws a layer over the working texture by its blend mode.
+    pub(crate) blended: wgpu::RenderPipeline,
     /// Copies the working texture to the display texture.
     pub(crate) to_display: wgpu::RenderPipeline,
     /// One direction of a Gaussian blur into a working-format texture.
@@ -24,7 +28,16 @@ pub(crate) struct Blit {
 
 impl Blit {
     pub(crate) fn new(device: &wgpu::Device) -> Self {
-        let blit_shader = device.create_shader_module(wgpu::include_wgsl!("../shaders/blit.wgsl"));
+        let blit_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("blit.wgsl"),
+            source: wgpu::ShaderSource::Wgsl(
+                concat!(
+                    include_str!("../shaders/blit.wgsl"),
+                    include_str!("../shaders/blend.wgsl")
+                )
+                .into(),
+            ),
+        });
         let blur_shader = device.create_shader_module(wgpu::include_wgsl!("../shaders/blur.wgsl"));
         let fragment = wgpu::ShaderStages::FRAGMENT;
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -64,12 +77,30 @@ impl Blit {
             bind_group_layouts: &[Some(&layout), Some(&grade.layout)],
             immediate_size: 0,
         });
+        let backdrop_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("backdrop_layout"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: fragment,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            }],
+        });
+        let blended_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("blended_pipeline_layout"),
+            bind_group_layouts: &[Some(&layout), Some(&grade.layout), Some(&backdrop_layout)],
+            immediate_size: 0,
+        });
         let blur_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("blur_pipeline_layout"),
             bind_group_layouts: &[Some(&layout)],
             immediate_size: 0,
         });
-        let pipeline = |shader: &wgpu::ShaderModule, pipeline_layout, format, blend| {
+        let pipeline = |shader: &wgpu::ShaderModule, pipeline_layout, format, blend, fragment| {
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("blit_pipeline"),
                 layout: Some(pipeline_layout),
@@ -84,7 +115,7 @@ impl Blit {
                 multisample: wgpu::MultisampleState::default(),
                 fragment: Some(wgpu::FragmentState {
                     module: shader,
-                    entry_point: Some("fs_main"),
+                    entry_point: Some(fragment),
                     targets: &[Some(wgpu::ColorTargetState {
                         format,
                         blend,
@@ -96,15 +127,19 @@ impl Blit {
                 cache: None,
             })
         };
+        let over = Some(wgpu::BlendState::ALPHA_BLENDING);
         Self {
-            to_working: pipeline(
+            to_working: pipeline(&blit_shader, &blit_layout, WORKING_FORMAT, over, "fs_main"),
+            blended: pipeline(
                 &blit_shader,
-                &blit_layout,
+                &blended_layout,
                 WORKING_FORMAT,
-                Some(wgpu::BlendState::ALPHA_BLENDING),
+                over,
+                "fs_blend",
             ),
-            to_display: pipeline(&blit_shader, &blit_layout, DISPLAY_FORMAT, None),
-            blur: pipeline(&blur_shader, &blur_layout, WORKING_FORMAT, None),
+            backdrop_layout,
+            to_display: pipeline(&blit_shader, &blit_layout, DISPLAY_FORMAT, None, "fs_main"),
+            blur: pipeline(&blur_shader, &blur_layout, WORKING_FORMAT, None, "fs_main"),
             sampler: device.create_sampler(&wgpu::SamplerDescriptor {
                 label: Some("blit_sampler"),
                 mag_filter: wgpu::FilterMode::Linear,
@@ -167,7 +202,7 @@ pub(crate) fn draw<const GROUPS: usize>(
     target: &wgpu::TextureView,
     pipeline: &wgpu::RenderPipeline,
     bindings: &[[&wgpu::BindGroup; GROUPS]],
-    clear: wgpu::Color,
+    load: wgpu::LoadOp<wgpu::Color>,
 ) {
     let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: Some("blit_pass"),
@@ -176,7 +211,7 @@ pub(crate) fn draw<const GROUPS: usize>(
             depth_slice: None,
             resolve_target: None,
             ops: wgpu::Operations {
-                load: wgpu::LoadOp::Clear(clear),
+                load,
                 store: wgpu::StoreOp::Store,
             },
         })],

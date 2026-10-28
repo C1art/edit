@@ -1,3 +1,4 @@
+mod backdrop;
 mod blit;
 mod blur;
 mod compositor;

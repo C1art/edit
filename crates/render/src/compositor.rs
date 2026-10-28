@@ -1,5 +1,8 @@
 use std::sync::Arc;
 
+use timeline::BlendMode;
+
+use crate::backdrop::{Backdrop, Drawn};
 use crate::blit::{self, Blit, DISPLAY_FORMAT};
 use crate::blur::BlurTargets;
 use crate::grade::Grade;
@@ -71,6 +74,7 @@ struct Slot {
     /// Created the first time the layer is blurred.
     blur: Option<BlurTargets>,
     blurred: bool,
+    blend: BlendMode,
     /// The lookups last drawn with and their textures' binding.
     grade: Option<(Arc<Grade>, wgpu::BindGroup)>,
 }
@@ -87,8 +91,10 @@ impl Slot {
 struct Targets {
     width: u32,
     height: u32,
+    working_texture: wgpu::Texture,
     working: wgpu::TextureView,
     working_binding: wgpu::BindGroup,
+    backdrop: Backdrop,
     output_texture: wgpu::Texture,
     output: wgpu::TextureView,
 }
@@ -207,19 +213,22 @@ impl Compositor {
                         blur.draw(&mut encoder, &self.blit);
                     }
                 }
-                Step::Group { index, members } => blit::draw(
-                    &mut encoder,
-                    &self.slots[*index].view,
-                    &self.blit.to_working,
-                    &self.placed(members),
-                    wgpu::Color::TRANSPARENT,
-                ),
+                Step::Group { index, members } => {
+                    let group = &self.slots[*index];
+                    targets.backdrop.draw_layers(
+                        &mut encoder,
+                        &self.blit,
+                        (&group.texture, &group.view),
+                        &self.placed(members),
+                        wgpu::Color::TRANSPARENT,
+                    );
+                }
             }
         }
-        blit::draw(
+        targets.backdrop.draw_layers(
             &mut encoder,
-            &targets.working,
-            &self.blit.to_working,
+            &self.blit,
+            (&targets.working_texture, &targets.working),
             &self.placed(&top),
             wgpu::Color::BLACK,
         );
@@ -228,7 +237,7 @@ impl Compositor {
             &targets.output,
             &self.blit.to_display,
             &[[&targets.working_binding, &self.blit.grade.none]],
-            wgpu::Color::BLACK,
+            wgpu::LoadOp::Clear(wgpu::Color::BLACK),
         );
         if let Some(trace) = &self.scope {
             trace.record(&mut encoder);
@@ -237,7 +246,7 @@ impl Compositor {
         Ok(presented)
     }
 
-    fn placed(&self, slots: &[usize]) -> Vec<[&wgpu::BindGroup; 2]> {
+    fn placed(&self, slots: &[usize]) -> Vec<Drawn<'_>> {
         slots
             .iter()
             .map(|&index| {
@@ -246,7 +255,10 @@ impl Compositor {
                     .grade
                     .as_ref()
                     .map_or(&self.blit.grade.none, |(_, binding)| binding);
-                [slot.placed(), grade]
+                Drawn {
+                    groups: [slot.placed(), grade],
+                    blend: slot.blend,
+                }
             })
             .collect()
     }
@@ -369,6 +381,7 @@ impl Compositor {
             )),
             (None, _) => None,
         };
+        slot.blend = look.blend;
         let size = (slot.width, slot.height);
         // The blur radius is in canvas pixels, but the blur runs on the layer itself.
         let sigma = look.blur / (fit_scale(size, canvas) * look.scale.max(0.01));
@@ -393,7 +406,11 @@ impl Compositor {
     fn create_slot(&self, (width, height): (u32, u32), kind: SlotKind) -> Slot {
         let (format, written) = match kind {
             SlotKind::Picture => (SOURCE_FORMAT, wgpu::TextureUsages::COPY_DST),
-            SlotKind::Group => (WORKING_FORMAT, wgpu::TextureUsages::RENDER_ATTACHMENT),
+            // Copied to the backdrop under members with a blend mode.
+            SlotKind::Group => (
+                WORKING_FORMAT,
+                wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            ),
         };
         let texture = self.texture(
             "layer",
@@ -413,15 +430,20 @@ impl Compositor {
             placement,
             blur: None,
             blurred: false,
+            blend: BlendMode::Normal,
             grade: None,
         }
     }
 
     fn create_targets(&self, width: u32, height: u32) -> Targets {
         let usage = wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING;
-        let working = self
-            .texture("working_frame", (width, height), WORKING_FORMAT, usage)
-            .create_view(&wgpu::TextureViewDescriptor::default());
+        let working_texture = self.texture(
+            "working_frame",
+            (width, height),
+            WORKING_FORMAT,
+            usage | wgpu::TextureUsages::COPY_SRC,
+        );
+        let working = working_texture.create_view(&wgpu::TextureViewDescriptor::default());
         // Copyable so export can read the presented frame back.
         let output_texture = self.texture(
             "output_frame",
@@ -436,6 +458,8 @@ impl Compositor {
             height,
             working_binding: self.blit.bind(&self.device, &working, &placement),
             working,
+            working_texture,
+            backdrop: Backdrop::new(&self.device, &self.blit, (width, height)),
             output: output_texture.create_view(&wgpu::TextureViewDescriptor::default()),
             output_texture,
         }

@@ -193,7 +193,7 @@ impl ScopeTrace {
             &self.view,
             &self.draw,
             &[[&self.draw_binding]],
-            wgpu::Color::BLACK,
+            wgpu::LoadOp::Clear(wgpu::Color::BLACK),
         );
     }
 }

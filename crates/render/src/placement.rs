@@ -1,3 +1,5 @@
+use timeline::BlendMode;
+
 use crate::mask::{self, LayerMask, MAX_MASKS};
 use crate::pixel::PixelEffects;
 
@@ -24,6 +26,7 @@ pub struct LayerLook {
     /// 0 to 1: how far the picture is washed out to white.
     pub wash: f32,
     pub effects: PixelEffects,
+    pub blend: BlendMode,
 }
 
 /// Color correction in linear light, every field neutral at zero except saturation.
@@ -86,6 +89,7 @@ impl LayerLook {
         mask: [0.0; 4],
         wash: 0.0,
         effects: PixelEffects::NONE,
+        blend: BlendMode::Normal,
     };
 }
 
@@ -106,6 +110,7 @@ pub(crate) struct Placement {
     pub(crate) mask: [f32; 4],
     pub(crate) wash: f32,
     pub(crate) effects: PixelEffects,
+    pub(crate) blend: BlendMode,
     /// Whether the picture's colors are already multiplied by its alpha.
     pub(crate) premultiplied: bool,
     /// What the shader reads of the layer's lookups.
@@ -125,6 +130,7 @@ impl Placement {
         mask: [0.0; 4],
         wash: 0.0,
         effects: PixelEffects::NONE,
+        blend: BlendMode::Normal,
         premultiplied: false,
         grade: [0.0; 4],
     };
@@ -151,6 +157,7 @@ impl Placement {
             mask: look.mask.map(|side| side.clamp(0.0, 1.0)),
             wash: look.wash.clamp(0.0, 1.0),
             effects: look.effects,
+            blend: look.blend,
             premultiplied: false,
             grade: [0.0; 4],
         }
@@ -174,7 +181,13 @@ impl Placement {
             .chain([color.temperature, color.tint, color.saturation, self.wash])
             .chain(self.mask)
             .chain(self.effects.uniform())
-            .chain([color.whites, color.blacks, color.vibrance, 0.0])
+            // The shader numbers blend modes in declaration order.
+            .chain([
+                color.whites,
+                color.blacks,
+                color.vibrance,
+                self.blend as u32 as f32,
+            ])
             .chain(
                 color
                     .wheels

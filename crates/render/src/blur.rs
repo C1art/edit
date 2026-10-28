@@ -71,14 +71,14 @@ impl BlurTargets {
             &self.horizontal_view,
             &blit.blur,
             &[[&self.horizontal]],
-            wgpu::Color::TRANSPARENT,
+            wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
         );
         blit::draw(
             encoder,
             &self.vertical_view,
             &blit.blur,
             &[[&self.vertical]],
-            wgpu::Color::TRANSPARENT,
+            wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
         );
     }
 }

@@ -25,7 +25,7 @@ struct Placement {
     tint_white: vec4<f32>,
     // Vignette midpoint and feather.
     vignette: vec4<f32>,
-    // Whites, blacks, vibrance.
+    // Whites, blacks, vibrance, then the blend mode's number (see blend.wgsl).
     finish: vec4<f32>,
     // Shadow, midtone and highlight wheels: push toward blue and red, then level.
     wheels: array<vec4<f32>, 3>,
@@ -292,6 +292,11 @@ fn mask_coverage(uv: vec2<f32>) -> f32 {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    return layer_color(in);
+}
+
+// The layer's graded, keyed and masked color, not yet premultiplied.
+fn layer_color(in: VertexOutput) -> vec4<f32> {
     var color = textureSample(source, source_sampler, in.uv);
     if placement.axis_y_opacity.w > 0.5 {
         color = vec4<f32>(color.rgb / max(color.a, 1e-6), color.a);
