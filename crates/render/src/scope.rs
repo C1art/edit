@@ -1,15 +1,39 @@
 use crate::compositor::extent;
 use crate::DISPLAY_FORMAT;
 
-/// Horizontal resolution of the scope; narrower frames use one column per pixel.
+/// Horizontal resolution of the waveforms; narrower frames use one column per pixel.
 const MAX_COLUMNS: u32 = 512;
-/// One level per 8-bit code value.
+/// One level per 8-bit code value, and one vectorscope bin per pair of chroma codes.
 const LEVELS: u32 = 256;
-const PARAMS_BYTES: u64 = 16;
+/// The drawn trace is square so the vectorscope keeps its shape.
+const TRACE_SIZE: u32 = 512;
+const PARAMS_BYTES: u64 = 32;
 const WORKGROUP: u32 = 16;
 
-/// A luma waveform of the presented frame, measured and drawn on the GPU.
-pub(crate) struct Waveform {
+/// What a scope measures of the presented frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Scope {
+    /// Luma by column, black at the bottom and white at the top.
+    #[default]
+    LumaWaveform,
+    /// Red, green and blue waveforms side by side.
+    RgbParade,
+    /// Chroma as Cb across and Cr up, centered on neutral.
+    Vectorscope,
+}
+
+impl Scope {
+    fn code(self) -> u32 {
+        match self {
+            Self::LumaWaveform => 0,
+            Self::RgbParade => 1,
+            Self::Vectorscope => 2,
+        }
+    }
+}
+
+/// A scope of the presented frame, measured and drawn on the GPU.
+pub(crate) struct ScopeTrace {
     bin: wgpu::ComputePipeline,
     bin_layout: wgpu::BindGroupLayout,
     draw: wgpu::RenderPipeline,
@@ -18,19 +42,20 @@ pub(crate) struct Waveform {
     params: wgpu::Buffer,
     /// The binding of the frame being measured and its size.
     source: Option<(wgpu::BindGroup, (u32, u32))>,
+    scope: Scope,
     pub(crate) view: wgpu::TextureView,
 }
 
-impl Waveform {
-    pub(crate) fn new(device: &wgpu::Device) -> Self {
+impl ScopeTrace {
+    pub(crate) fn new(device: &wgpu::Device, scope: Scope) -> Self {
         let counts = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("waveform_counts"),
-            size: u64::from(MAX_COLUMNS * LEVELS) * 4,
+            label: Some("scope_counts"),
+            size: u64::from((MAX_COLUMNS * LEVELS).max(LEVELS * LEVELS)) * 4,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
         let params = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("waveform_params"),
+            label: Some("scope_params"),
             size: PARAMS_BYTES,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
@@ -38,7 +63,7 @@ impl Waveform {
         let compute = wgpu::ShaderStages::COMPUTE;
         let fragment = wgpu::ShaderStages::FRAGMENT;
         let bin_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("waveform_bin_layout"),
+            label: Some("scope_bin_layout"),
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
@@ -55,11 +80,11 @@ impl Waveform {
             ],
         });
         let draw_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("waveform_draw_layout"),
+            label: Some("scope_draw_layout"),
             entries: &[storage_entry(0, fragment, true), uniform_entry(1, fragment)],
         });
         let draw_binding = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("waveform_draw_binding"),
+            label: Some("scope_draw_binding"),
             layout: &draw_layout,
             entries: &[
                 wgpu::BindGroupEntry {
@@ -74,8 +99,8 @@ impl Waveform {
         });
         let view = device
             .create_texture(&wgpu::TextureDescriptor {
-                label: Some("waveform"),
-                size: extent(MAX_COLUMNS, LEVELS),
+                label: Some("scope"),
+                size: extent(TRACE_SIZE, TRACE_SIZE),
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
@@ -93,8 +118,30 @@ impl Waveform {
             counts,
             params,
             source: None,
+            scope,
             view,
         }
+    }
+
+    pub(crate) fn scope(&self) -> Scope {
+        self.scope
+    }
+
+    /// Measures `scope` from the next recording on.
+    pub(crate) fn set_scope(&mut self, queue: &wgpu::Queue, scope: Scope) {
+        self.scope = scope;
+        if let Some((_, size)) = self.source {
+            self.write_params(queue, size);
+        }
+    }
+
+    fn write_params(&self, queue: &wgpu::Queue, (width, height): (u32, u32)) {
+        let columns = width.min(MAX_COLUMNS);
+        let params: Vec<u8> = [width, height, columns, LEVELS, self.scope.code(), 0, 0, 0]
+            .iter()
+            .flat_map(|value| value.to_le_bytes())
+            .collect();
+        queue.write_buffer(&self.params, 0, &params);
     }
 
     /// Measures `frame` from now on; call whenever the presented texture is replaced.
@@ -105,14 +152,9 @@ impl Waveform {
         frame: &wgpu::TextureView,
         (width, height): (u32, u32),
     ) {
-        let columns = width.min(MAX_COLUMNS);
-        let params: Vec<u8> = [width, height, columns, LEVELS]
-            .iter()
-            .flat_map(|value| value.to_le_bytes())
-            .collect();
-        queue.write_buffer(&self.params, 0, &params);
+        self.write_params(queue, (width, height));
         let binding = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("waveform_bin_binding"),
+            label: Some("scope_bin_binding"),
             layout: &self.bin_layout,
             entries: &[
                 wgpu::BindGroupEntry {
@@ -139,7 +181,7 @@ impl Waveform {
         encoder.clear_buffer(&self.counts, 0, None);
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("waveform_bin"),
+                label: Some("scope_bin"),
                 timestamp_writes: None,
             });
             pass.set_pipeline(&self.bin);
@@ -187,14 +229,14 @@ fn uniform_entry(binding: u32, visibility: wgpu::ShaderStages) -> wgpu::BindGrou
 }
 
 fn bin_pipeline(device: &wgpu::Device, layout: &wgpu::BindGroupLayout) -> wgpu::ComputePipeline {
-    let shader = device.create_shader_module(wgpu::include_wgsl!("../shaders/waveform_bin.wgsl"));
+    let shader = device.create_shader_module(wgpu::include_wgsl!("../shaders/scope_bin.wgsl"));
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: Some("waveform_bin_pipeline_layout"),
+        label: Some("scope_bin_pipeline_layout"),
         bind_group_layouts: &[Some(layout)],
         immediate_size: 0,
     });
     device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-        label: Some("waveform_bin"),
+        label: Some("scope_bin"),
         layout: Some(&layout),
         module: &shader,
         entry_point: Some("main"),
@@ -204,14 +246,14 @@ fn bin_pipeline(device: &wgpu::Device, layout: &wgpu::BindGroupLayout) -> wgpu::
 }
 
 fn draw_pipeline(device: &wgpu::Device, layout: &wgpu::BindGroupLayout) -> wgpu::RenderPipeline {
-    let shader = device.create_shader_module(wgpu::include_wgsl!("../shaders/waveform_draw.wgsl"));
+    let shader = device.create_shader_module(wgpu::include_wgsl!("../shaders/scope_draw.wgsl"));
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: Some("waveform_draw_pipeline_layout"),
+        label: Some("scope_draw_pipeline_layout"),
         bind_group_layouts: &[Some(layout)],
         immediate_size: 0,
     });
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("waveform_draw"),
+        label: Some("scope_draw"),
         layout: Some(&layout),
         vertex: wgpu::VertexState {
             module: &shader,
