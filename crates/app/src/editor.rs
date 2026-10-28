@@ -31,6 +31,7 @@ pub struct Editor {
     proxies: Option<ProxyMaker>,
     /// Whether the monitors play proxies where media has them.
     pub(crate) use_proxies: bool,
+    pub(crate) hardware_decoding: bool,
     pub(crate) source: Option<SourceMonitor>,
     pub(crate) program: Option<Viewer>,
     /// The timeline revision the program viewer is playing.
@@ -83,6 +84,7 @@ impl Editor {
             importer,
             proxies,
             use_proxies: false,
+            hardware_decoding: true,
             source: None,
             program,
             focus: Focus::Program,

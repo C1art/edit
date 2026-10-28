@@ -48,6 +48,22 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             {
                 editor.redo();
             }
+            ui.separator();
+            ui.menu_button("Preferences", |ui| {
+                let decoding = &mut editor.hardware_decoding;
+                let device = media::hardware_decoder().map_or_else(
+                    || "No GPU decoder is in use yet.".to_owned(),
+                    |name| format!("Decoding on {name}."),
+                );
+                let hint = format!("Applies to media opened from now on. {device}");
+                if ui
+                    .checkbox(decoding, "Hardware-Accelerated Decoding")
+                    .on_hover_text(hint)
+                    .changed()
+                {
+                    media::set_hardware_decoding(*decoding);
+                }
+            });
         });
         ui.menu_button("Clip", |ui| {
             if ui.add(Button::new("Insert").shortcut_text(",")).clicked() {
