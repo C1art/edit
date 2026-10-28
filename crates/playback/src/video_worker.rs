@@ -7,7 +7,7 @@ use timeline::{Sequence, SourceId, Ticks};
 
 use crate::command::{coalesce, Coalesced, Command, Event};
 use crate::frame_picker::TaggedFrame;
-use crate::{compose, ComposedFrame};
+use crate::{compose, ComposedFrame, Resolution};
 
 /// How long the worker waits for room in the frame queue before checking commands again.
 const BACKOFF: Duration = Duration::from_millis(4);
@@ -37,6 +37,7 @@ pub(crate) fn spawn(
             finished: true,
             composed: false,
             warned: Vec::new(),
+            resolution: Resolution::Full,
         }
         .run();
     })
@@ -55,6 +56,7 @@ struct VideoWorker {
     composed: bool,
     /// Media already reported as unreadable.
     warned: Vec<SourceId>,
+    resolution: Resolution,
 }
 
 impl VideoWorker {
@@ -90,10 +92,17 @@ impl VideoWorker {
                     Err(_) => return,
                 }
             };
-            let Some(Coalesced { sequence, seek }) = coalesce(command, &self.channels.commands)
+            let Some(Coalesced {
+                sequence,
+                seek,
+                resolution,
+            }) = coalesce(command, &self.channels.commands)
             else {
                 return;
             };
+            if let Some(resolution) = resolution {
+                self.resolution = resolution;
+            }
             if let Some(sequence) = sequence {
                 self.sequence = sequence;
             }
@@ -157,6 +166,7 @@ impl VideoWorker {
                 &mut self.tracks,
                 &mut self.warned,
                 &mut warnings,
+                self.resolution,
             )
         });
         for warning in warnings {

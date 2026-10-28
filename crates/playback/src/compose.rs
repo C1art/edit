@@ -12,7 +12,7 @@ use crate::generated::caption_frame;
 use crate::grades::grade_for;
 use crate::pixel_effects::pixel_effects;
 use crate::track_video::TrackVideo;
-use crate::{Layer, LayerPicture, PlaybackError};
+use crate::{Layer, LayerPicture, PlaybackError, Resolution};
 
 /// Gaussian blur's "blurriness" reaches about two standard deviations.
 const BLURRINESS_PER_SIGMA: f32 = 2.0;
@@ -29,9 +29,14 @@ pub(crate) fn layers_at(
     tracks: &mut Vec<TrackDecoders>,
     warned: &mut Vec<SourceId>,
     warnings: &mut Vec<PlaybackError>,
+    resolution: Resolution,
 ) -> Vec<Layer> {
-    let mut reported = Reported { warned, warnings };
-    let mut layers = video_layers(sequence, &sequence.video, pts, tracks, &mut reported);
+    let mut decoding = Decoding {
+        warned,
+        warnings,
+        resolution,
+    };
+    let mut layers = video_layers(sequence, &sequence.video, pts, tracks, &mut decoding);
     let captions = &sequence.captions;
     if let Some(caption) = captions.at(pts).filter(|_| !captions.hidden) {
         let format = sequence.format;
@@ -47,10 +52,11 @@ pub(crate) fn layers_at(
     layers
 }
 
-/// Media already reported as unreadable, and the reports to send.
-struct Reported<'a> {
+/// Media already reported as unreadable, the reports to send, and how finely to decode.
+struct Decoding<'a> {
     warned: &'a mut Vec<SourceId>,
     warnings: &'a mut Vec<PlaybackError>,
+    resolution: Resolution,
 }
 
 /// The layers of `video` tracks, which are the sequence's own or a nest's; nests
@@ -60,7 +66,7 @@ fn video_layers(
     video: &[Track],
     pts: Ticks,
     tracks: &mut Vec<TrackDecoders>,
-    reported: &mut Reported<'_>,
+    decoding: &mut Decoding<'_>,
 ) -> Vec<Layer> {
     tracks.resize_with(video.len(), || {
         ClipDecoders::new(|| TrackVideo::new(sequence.timebase))
@@ -83,7 +89,7 @@ fn video_layers(
                 plan.reveal,
                 canvas,
             );
-            let grade = grade_for(&plan.clip.look.color, reported.warnings);
+            let grade = grade_for(&plan.clip.look.color, decoding.warnings);
             if media.generator == Some(Generator::AdjustmentLayer) {
                 adjust(&mut layers, TrackRef::video(index), look, grade);
                 continue;
@@ -93,11 +99,11 @@ fn video_layers(
                 .filter(|matte| matte.track != index && matte.track < video.len())
                 .map(|matte| {
                     let pictures =
-                        matte_layers(sequence, video, matte.track, pts, tracks, reported);
+                        matte_layers(sequence, video, matte.track, pts, tracks, decoding);
                     (matte, pictures)
                 });
             let decoders = &mut tracks[index];
-            let Some(picture) = clip_picture(sequence, &plan, media, decoders, &showing, reported)
+            let Some(picture) = clip_picture(sequence, &plan, media, decoders, &showing, decoding)
             else {
                 continue;
             };
@@ -124,24 +130,24 @@ fn clip_picture(
     media: &MediaItem,
     decoders: &mut TrackDecoders,
     showing: &[ClipId],
-    reported: &mut Reported<'_>,
+    decoding: &mut Decoding<'_>,
 ) -> Option<LayerPicture> {
     let decoder = decoders.for_clip(plan.clip.id, showing);
     match &media.nest {
         Some(nest) => {
             let (time, nested) = (plan.source_time, &mut decoder.nested);
-            let inner = video_layers(sequence, &nest.video, time, nested, reported);
+            let inner = video_layers(sequence, &nest.video, time, nested, decoding);
             (!inner.is_empty()).then_some(LayerPicture::Nest(inner))
         }
         None => {
             let size = [sequence.format.width, sequence.format.height];
-            match decoder.frame_at(media, plan.source_time, size) {
+            match decoder.frame_at(media, plan.source_time, size, decoding.resolution) {
                 Ok(frame) => frame.map(LayerPicture::Frame),
                 Err(error) => {
                     decoder.reset();
-                    if !reported.warned.contains(&media.id) {
-                        reported.warned.push(media.id);
-                        reported.warnings.push(PlaybackError::Media(error));
+                    if !decoding.warned.contains(&media.id) {
+                        decoding.warned.push(media.id);
+                        decoding.warnings.push(PlaybackError::Media(error));
                     }
                     None
                 }
@@ -181,7 +187,7 @@ fn matte_layers(
     index: usize,
     pts: Ticks,
     tracks: &mut [TrackDecoders],
-    reported: &mut Reported<'_>,
+    decoding: &mut Decoding<'_>,
 ) -> Vec<Layer> {
     let canvas = [sequence.format.width, sequence.format.height].map(|side| side as f32);
     let planned = track_layers_at(sequence, &video[index], pts);
@@ -195,13 +201,13 @@ fn matte_layers(
             continue;
         };
         let decoders = &mut tracks[index];
-        if let Some(picture) = clip_picture(sequence, plan, media, decoders, &showing, reported) {
+        if let Some(picture) = clip_picture(sequence, plan, media, decoders, &showing, decoding) {
             let time = plan.clip.source_time(pts);
             layers.push(Layer {
                 track: TrackRef::video(index),
                 picture,
                 look: layer_look(&plan.clip.look, time, plan.reveal, canvas),
-                grade: grade_for(&plan.clip.look.color, reported.warnings),
+                grade: grade_for(&plan.clip.look.color, decoding.warnings),
             });
         }
     }

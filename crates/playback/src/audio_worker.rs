@@ -84,7 +84,7 @@ impl AudioWorker {
             let Some(command) = command else {
                 continue;
             };
-            let Some(Coalesced { sequence, seek }) = coalesce(command, &self.commands) else {
+            let Some(Coalesced { sequence, seek, .. }) = coalesce(command, &self.commands) else {
                 return;
             };
             if let Some(sequence) = sequence {

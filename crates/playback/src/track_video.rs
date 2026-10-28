@@ -6,7 +6,7 @@ use media::{DecodedFrame, MediaError, MediaReader, Streams, VideoFrame};
 use timeline::{Generator, MediaItem, SourceId, Ticks, Timebase};
 
 use crate::compose::TrackDecoders;
-use crate::generated_frame;
+use crate::{generated_frame, Resolution};
 
 /// Jumps further ahead than this seek instead of decoding through; keyframe intervals
 /// are usually shorter, so decoding forward is cheaper below it.
@@ -39,6 +39,8 @@ pub(crate) struct TrackVideo {
     behind: VecDeque<Arc<VideoFrame>>,
     /// The decoders of a nested sequence's tracks, when the clip followed is one.
     pub(crate) nested: Vec<TrackDecoders>,
+    /// What the open reader's pictures are sized for.
+    resolution: Resolution,
 }
 
 impl TrackVideo {
@@ -51,6 +53,7 @@ impl TrackVideo {
             ended: false,
             behind: VecDeque::new(),
             nested: Vec::new(),
+            resolution: Resolution::Full,
         }
     }
 
@@ -68,6 +71,7 @@ impl TrackVideo {
         media: &MediaItem,
         time: Ticks,
         canvas: [u32; 2],
+        resolution: Resolution,
     ) -> Result<Option<Arc<VideoFrame>>, MediaError> {
         if let Some(generator) = &media.generator {
             return Ok(Some(self.generated(generator, canvas)));
@@ -92,6 +96,17 @@ impl TrackVideo {
         let Source::Open(_, _, reader) = &mut self.source else {
             return Ok(None);
         };
+        if !same_media || resolution != self.resolution {
+            let size = media
+                .video
+                .and_then(|video| resolution.shrink(video.width, video.height));
+            reader.set_video_size(size)?;
+            self.resolution = resolution;
+            // Pictures decoded at the old size would otherwise keep showing.
+            self.current = None;
+            self.next = None;
+            self.behind.clear();
+        }
         let decode_ahead = Timebase::new(1, 1).map_or(Ticks::ZERO, |second| {
             Ticks(MAX_DECODE_AHEAD_SECONDS).rescale(second, self.timebase)
         });

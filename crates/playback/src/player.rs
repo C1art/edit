@@ -10,7 +10,7 @@ use crate::clock::PlaybackClock;
 use crate::command::{Command, Event};
 use crate::frame_picker::{FramePicker, TaggedFrame};
 use crate::shuttle::Shuttle;
-use crate::{audio_worker, video_worker, ComposedFrame, Levels, PlaybackError};
+use crate::{audio_worker, video_worker, ComposedFrame, Levels, PlaybackError, Resolution};
 
 /// Composed frames buffered ahead of the clock, enough to absorb a slow decode.
 const FRAME_QUEUE: usize = 8;
@@ -47,6 +47,7 @@ pub struct Player {
     levels: Option<Levels>,
     /// Whether the video worker decodes media items' proxies instead of their files.
     proxies: bool,
+    resolution: Resolution,
     shuttle: Option<Shuttle>,
 }
 
@@ -105,6 +106,7 @@ impl Player {
             pending_levels: VecDeque::new(),
             levels: None,
             proxies: false,
+            resolution: Resolution::Full,
             shuttle: None,
         };
         player.seek(Ticks::ZERO);
@@ -126,6 +128,18 @@ impl Player {
         if self.proxies != enabled {
             self.proxies = enabled;
             self.set_sequence(Arc::clone(&self.sequence));
+        }
+    }
+
+    pub fn resolution(&self) -> Resolution {
+        self.resolution
+    }
+
+    pub fn set_resolution(&mut self, resolution: Resolution) {
+        if self.resolution != resolution {
+            self.resolution = resolution;
+            let _ = self.video_commands.send(Command::Resolution(resolution));
+            self.seek(self.position());
         }
     }
 
