@@ -6,6 +6,9 @@ use crate::{AudioEffect, Clip, Gain, Pan, Param, SubmixId, Ticks};
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Track {
     pub clips: Vec<Clip>,
+    /// Shown beside the track's number, as "A1 Dialogue"; none until the user names it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     /// Hidden for video, silent for audio.
     #[serde(default)]
     pub muted: bool,

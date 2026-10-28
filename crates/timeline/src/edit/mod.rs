@@ -56,8 +56,8 @@ pub use remap::{AddSpeedKeyframe, RemoveSpeedKeyframe, RemoveTimeRemap, SetSegme
 pub use sound::{ClipSound, SetClipsSound};
 pub use speed::{RateStretch, SetClipSpeed, SetTimeInterpolation};
 pub use structure::{
-    AddTrack, ImportMedia, RemoveMedia, RemoveTrack, SetProxy, SetSequenceFormat, SetTrackSwitch,
-    TrackSwitch,
+    AddTrack, ImportMedia, RemoveMedia, RemoveTrack, RenameTrack, SetProxy, SetSequenceFormat,
+    SetTrackSwitch, TrackSwitch,
 };
 pub use submix::{AddSubmix, RemoveSubmix, SetSubmix, SetTrackOutput};
 pub use trim::{Edge, Roll, Slide, Slip, Trim, TrimMode};

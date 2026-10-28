@@ -47,6 +47,34 @@ impl Edit for RemoveTrack {
     }
 }
 
+/// Names a track, or clears its name when `name` is none or blank.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenameTrack {
+    pub track: TrackRef,
+    pub name: Option<String>,
+}
+
+impl Edit for RenameTrack {
+    fn name(&self) -> &'static str {
+        "Rename Track"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let name = self
+            .name
+            .as_deref()
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .map(str::to_owned);
+        let track = ops::track_mut(sequence, self.track)?;
+        if track.name == name {
+            return Err(TimelineError::NothingToEdit);
+        }
+        track.name = name;
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TrackSwitch {
     Mute,

@@ -56,12 +56,12 @@ pub use edit::{
     NormalizeClipGains, PasteAttributes, PasteClips, PlaceClip, PlaceMode, RateStretch, Razor,
     RazorTarget, RelinkMedia, RemoveAttributes, RemoveBin, RemoveMarker, RemoveMedia,
     RemoveSpeedKeyframe, RemoveSubmix, RemoveTimeRemap, RemoveTrack, RenameBin, RenameMedia,
-    RippleDelete, RippleTrimToPlayhead, Roll, SetCaptions, SetClipAudioEffects, SetClipGain,
-    SetClipLabel, SetClipLook, SetClipSpeed, SetClipVolume, SetClipsEnabled, SetClipsSound,
-    SetGenerator, SetLinked, SetMarks, SetMasterEffects, SetMasterGain, SetProxy, SetSegmentSpeed,
-    SetSequenceFormat, SetSubmix, SetTimeInterpolation, SetToFrameSize, SetTrackAutomation,
-    SetTrackEffects, SetTrackMix, SetTrackOutput, SetTrackSwitch, SetTransition, Slide, Slip,
-    SwitchAngle, TrackSwitch, Trim, TrimMode, UpdateMarker,
+    RenameTrack, RippleDelete, RippleTrimToPlayhead, Roll, SetCaptions, SetClipAudioEffects,
+    SetClipGain, SetClipLabel, SetClipLook, SetClipSpeed, SetClipVolume, SetClipsEnabled,
+    SetClipsSound, SetGenerator, SetLinked, SetMarks, SetMasterEffects, SetMasterGain, SetProxy,
+    SetSegmentSpeed, SetSequenceFormat, SetSubmix, SetTimeInterpolation, SetToFrameSize,
+    SetTrackAutomation, SetTrackEffects, SetTrackMix, SetTrackOutput, SetTrackSwitch,
+    SetTransition, Slide, Slip, SwitchAngle, TrackSwitch, Trim, TrimMode, UpdateMarker,
 };
 pub use effect::{
     ColorMatch, EffectCategory, MatteChannel, RampShape, Rgb, TimecodeSource, VideoEffect,
