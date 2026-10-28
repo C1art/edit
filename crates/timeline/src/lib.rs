@@ -27,7 +27,7 @@ mod transition;
 mod validate;
 
 pub use audio_effect::AudioEffect;
-pub use audio_plan::{audio_fade, audio_span, clip_level};
+pub use audio_plan::{audio_fade, audio_span, clip_level, track_automation};
 pub use caption::{captions_from_cues, Caption, CaptionStyle, Captions};
 pub use color::{ColorCorrection, ColorWheel};
 pub use curves::{Curve, CurvePoint, Curves, CURVE_RANGE};
@@ -38,8 +38,8 @@ pub use edit::{
     RelinkMedia, RemoveMarker, RemoveMedia, RemoveTrack, RenameMedia, RippleDelete,
     RippleTrimToPlayhead, Roll, SetCaptions, SetClipAudioEffects, SetClipGain, SetClipLook,
     SetClipSpeed, SetClipVolume, SetClipsEnabled, SetGenerator, SetMarks, SetMasterGain, SetProxy,
-    SetSequenceFormat, SetTrackMix, SetTrackSwitch, SetTransition, Slide, Slip, TrackSwitch, Trim,
-    TrimMode, UpdateMarker,
+    SetSequenceFormat, SetTrackAutomation, SetTrackMix, SetTrackSwitch, SetTransition, Slide, Slip,
+    TrackSwitch, Trim, TrimMode, UpdateMarker,
 };
 pub use effect::{Rgb, VideoEffect};
 pub use error::TimelineError;

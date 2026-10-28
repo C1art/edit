@@ -208,6 +208,10 @@ pub struct Track {
     pub volume: Gain,
     #[serde(default)]
     pub pan: Pan,
+    /// An audio track's level in decibels after its fader, keyframed over sequence time
+    /// rather than any clip's, so it stays put when clips move.
+    #[serde(default)]
+    pub automation: Param,
 }
 
 impl Track {

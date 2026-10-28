@@ -146,6 +146,33 @@ impl Edit for SetTrackMix {
     }
 }
 
+/// Replaces an audio track's volume automation and its keyframes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetTrackAutomation {
+    pub track: TrackRef,
+    pub automation: Param,
+}
+
+impl Edit for SetTrackAutomation {
+    fn name(&self) -> &'static str {
+        "Track Keyframes"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        if self.track.kind != TrackKind::Audio {
+            return Err(TimelineError::NothingToEdit);
+        }
+        let track = sequence
+            .track_mut(self.track)
+            .ok_or(TimelineError::TrackNotFound(self.track))?;
+        if track.automation == self.automation {
+            return Err(TimelineError::NothingToEdit);
+        }
+        track.automation = self.automation.clone();
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SetMasterGain {
     pub gain: Gain,

@@ -25,7 +25,8 @@ pub use enable::SetClipsEnabled;
 pub use generate::{AddGenerated, SetGenerator};
 pub use hold::AddFrameHold;
 pub use levels::{
-    NormalizeClipGains, SetClipAudioEffects, SetClipGain, SetClipVolume, SetMasterGain, SetTrackMix,
+    NormalizeClipGains, SetClipAudioEffects, SetClipGain, SetClipVolume, SetMasterGain,
+    SetTrackAutomation, SetTrackMix,
 };
 pub use look::{SetClipLook, SetTransition};
 pub use marker::{AddMarker, RemoveMarker, UpdateMarker};

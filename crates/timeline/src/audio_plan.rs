@@ -29,6 +29,11 @@ pub fn clip_level(clip: &Clip, position: Ticks) -> f32 {
     clip.gain.amplitude() * volume.amplitude()
 }
 
+/// The amplitude of an audio track's automation at `position`, before its fader.
+pub fn track_automation(track: &Track, position: Ticks) -> f32 {
+    Gain::from_db(track.automation.value_at(position)).amplitude()
+}
+
 /// The amplitude transitions give clip `index` at `position`. Fades follow a
 /// constant-power curve, so a crossfade between correlated-free sources holds its
 /// loudness through the middle.
