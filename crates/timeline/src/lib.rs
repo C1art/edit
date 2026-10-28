@@ -51,7 +51,7 @@ pub use edit::{
     SetSequenceFormat, SetToFrameSize, SetTrackAutomation, SetTrackMix, SetTrackSwitch,
     SetTransition, Slide, Slip, TrackSwitch, Trim, TrimMode, UpdateMarker,
 };
-pub use effect::{MatteChannel, Rgb, VideoEffect};
+pub use effect::{EffectCategory, MatteChannel, Rgb, VideoEffect};
 pub use error::TimelineError;
 pub use generator::{Generator, TextAlign, Title, TitleFont, GENERATED_SECONDS};
 pub use history::{preview, Edit, EditCommand, Timeline};

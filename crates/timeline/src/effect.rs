@@ -63,6 +63,94 @@ pub enum VideoEffect {
         channel: MatteChannel,
         reverse: bool,
     },
+    /// Both -100 to 100, on the encoded picture as a display shows it.
+    BrightnessContrast {
+        brightness: Param,
+        contrast: Param,
+    },
+    /// An exponent on the encoded picture; above 1 darkens the midtones.
+    GammaCorrection {
+        gamma: Param,
+    },
+    /// Steps of brightness per channel, 2 to 64.
+    Posterize {
+        levels: Param,
+    },
+    /// Grain that changes every frame, in percent.
+    Noise {
+        amount: Param,
+    },
+    /// Outlines where the picture changes, dark lines on white unless inverted.
+    FindEdges {
+        invert: bool,
+        /// Percent of the original showing through.
+        blend: Param,
+    },
+    /// Blocks across and down the picture, each one color.
+    Mosaic {
+        horizontal: Param,
+        vertical: Param,
+    },
+    /// Shifts the picture, wrapping it around, by percent of its width and height.
+    Offset {
+        shift: [Param; 2],
+        /// Percent of the original showing through.
+        blend: Param,
+    },
+    /// Turns the picture around its center, most at the center.
+    Twirl {
+        /// Degrees.
+        angle: Param,
+        /// Percent of half the picture's diagonal.
+        radius: Param,
+    },
+    /// -100 (pinched) to 100 (bulging), as through a wide lens.
+    LensDistortion {
+        curvature: Param,
+    },
+    /// Smears the picture both ways along a direction.
+    DirectionalBlur {
+        /// Degrees clockwise from vertical.
+        direction: Param,
+        /// Sequence pixels.
+        length: Param,
+    },
+}
+
+/// The groups the effects menu lists effects in, as Premiere's Effects panel does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EffectCategory {
+    BlurAndSharpen,
+    ColorCorrection,
+    Distort,
+    ImageControl,
+    Keying,
+    Stylize,
+    Transform,
+}
+
+impl EffectCategory {
+    pub const ALL: [Self; 7] = [
+        Self::BlurAndSharpen,
+        Self::ColorCorrection,
+        Self::Distort,
+        Self::ImageControl,
+        Self::Keying,
+        Self::Stylize,
+        Self::Transform,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::BlurAndSharpen => "Blur & Sharpen",
+            Self::ColorCorrection => "Color Correction",
+            Self::Distort => "Distort",
+            Self::ImageControl => "Image Control",
+            Self::Keying => "Keying",
+            Self::Stylize => "Stylize",
+            Self::Transform => "Transform",
+        }
+    }
 }
 
 /// What of the matte's picture decides how much of the clip shows.
@@ -87,7 +175,7 @@ impl MatteChannel {
 
 impl VideoEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 10] {
+    pub fn catalog() -> [Self; 20] {
         [
             Self::GaussianBlur {
                 blurriness: Param::from_value(10.0),
@@ -121,7 +209,64 @@ impl VideoEffect {
                 channel: MatteChannel::Alpha,
                 reverse: false,
             },
+            Self::BrightnessContrast {
+                brightness: Param::default(),
+                contrast: Param::default(),
+            },
+            Self::GammaCorrection {
+                gamma: Param::from_value(1.0),
+            },
+            Self::Posterize {
+                levels: Param::from_value(7.0),
+            },
+            Self::Noise {
+                amount: Param::from_value(20.0),
+            },
+            Self::FindEdges {
+                invert: false,
+                blend: Param::default(),
+            },
+            Self::Mosaic {
+                horizontal: Param::from_value(10.0),
+                vertical: Param::from_value(10.0),
+            },
+            Self::Offset {
+                shift: [Param::from_value(50.0), Param::from_value(50.0)],
+                blend: Param::default(),
+            },
+            Self::Twirl {
+                angle: Param::from_value(50.0),
+                radius: Param::from_value(75.0),
+            },
+            Self::LensDistortion {
+                curvature: Param::from_value(-30.0),
+            },
+            Self::DirectionalBlur {
+                direction: Param::default(),
+                length: Param::from_value(10.0),
+            },
         ]
+    }
+
+    pub fn category(&self) -> EffectCategory {
+        match self {
+            Self::GaussianBlur { .. } | Self::Sharpen { .. } | Self::DirectionalBlur { .. } => {
+                EffectCategory::BlurAndSharpen
+            }
+            Self::Tint { .. } | Self::BrightnessContrast { .. } => EffectCategory::ColorCorrection,
+            Self::Twirl { .. } | Self::LensDistortion { .. } | Self::Offset { .. } => {
+                EffectCategory::Distort
+            }
+            Self::BlackAndWhite | Self::GammaCorrection { .. } => EffectCategory::ImageControl,
+            Self::UltraKey { .. } | Self::TrackMatteKey { .. } => EffectCategory::Keying,
+            Self::Invert { .. }
+            | Self::Vignette { .. }
+            | Self::Posterize { .. }
+            | Self::Noise { .. }
+            | Self::FindEdges { .. }
+            | Self::Mosaic { .. } => EffectCategory::Stylize,
+            Self::HorizontalFlip | Self::VerticalFlip => EffectCategory::Transform,
+        }
     }
 
     pub fn name(&self) -> &'static str {
@@ -136,12 +281,47 @@ impl VideoEffect {
             Self::Vignette { .. } => "Vignette",
             Self::UltraKey { .. } => "Ultra Key",
             Self::TrackMatteKey { .. } => "Track Matte Key",
+            Self::BrightnessContrast { .. } => "Brightness & Contrast",
+            Self::GammaCorrection { .. } => "Gamma Correction",
+            Self::Posterize { .. } => "Posterize",
+            Self::Noise { .. } => "Noise",
+            Self::FindEdges { .. } => "Find Edges",
+            Self::Mosaic { .. } => "Mosaic",
+            Self::Offset { .. } => "Offset",
+            Self::Twirl { .. } => "Twirl",
+            Self::LensDistortion { .. } => "Lens Distortion",
+            Self::DirectionalBlur { .. } => "Directional Blur",
         }
     }
 
     pub fn params_mut(&mut self) -> Vec<&mut Param> {
         match self {
             Self::GaussianBlur { blurriness } => vec![blurriness],
+            Self::GammaCorrection { gamma: one }
+            | Self::Posterize { levels: one }
+            | Self::Noise { amount: one }
+            | Self::FindEdges { blend: one, .. }
+            | Self::LensDistortion { curvature: one } => vec![one],
+            Self::BrightnessContrast {
+                brightness: first,
+                contrast: second,
+            }
+            | Self::Mosaic {
+                horizontal: first,
+                vertical: second,
+            }
+            | Self::Twirl {
+                angle: first,
+                radius: second,
+            }
+            | Self::DirectionalBlur {
+                direction: first,
+                length: second,
+            } => vec![first, second],
+            Self::Offset {
+                shift: [x, y],
+                blend,
+            } => vec![x, y, blend],
             Self::HorizontalFlip
             | Self::VerticalFlip
             | Self::BlackAndWhite
@@ -165,6 +345,31 @@ impl VideoEffect {
     pub fn params(&self) -> Vec<&Param> {
         match self {
             Self::GaussianBlur { blurriness } => vec![blurriness],
+            Self::GammaCorrection { gamma: one }
+            | Self::Posterize { levels: one }
+            | Self::Noise { amount: one }
+            | Self::FindEdges { blend: one, .. }
+            | Self::LensDistortion { curvature: one } => vec![one],
+            Self::BrightnessContrast {
+                brightness: first,
+                contrast: second,
+            }
+            | Self::Mosaic {
+                horizontal: first,
+                vertical: second,
+            }
+            | Self::Twirl {
+                angle: first,
+                radius: second,
+            }
+            | Self::DirectionalBlur {
+                direction: first,
+                length: second,
+            } => vec![first, second],
+            Self::Offset {
+                shift: [x, y],
+                blend,
+            } => vec![x, y, blend],
             Self::HorizontalFlip
             | Self::VerticalFlip
             | Self::BlackAndWhite
