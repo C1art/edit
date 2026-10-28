@@ -1,7 +1,7 @@
 use std::ops::RangeInclusive;
 
 use egui::{DragValue, RichText};
-use timeline::{BlendMode, Interpolation, Look, Param, Rgb, Ticks, VideoEffect};
+use timeline::{BlendMode, Interpolation, Look, MatteChannel, Param, Rgb, Ticks, VideoEffect};
 
 use super::LutSlot;
 use crate::mixer::{response_state, Change};
@@ -16,8 +16,14 @@ pub(super) struct Output {
     pub(super) choose_lut: Option<LutSlot>,
 }
 
-/// Edits `look` at source time `time`, where animated parameters get their keyframes.
-pub(super) fn controls(ui: &mut egui::Ui, look: &mut Look, time: Ticks) -> Output {
+/// Edits `look` at source time `time`, where animated parameters get their keyframes,
+/// of a clip among `video_tracks` video tracks.
+pub(super) fn controls(
+    ui: &mut egui::Ui,
+    look: &mut Look,
+    time: Ticks,
+    video_tracks: usize,
+) -> Output {
     let mut rows = Rows::new(time);
     egui::CollapsingHeader::new("Motion")
         .default_open(true)
@@ -81,7 +87,7 @@ pub(super) fn controls(ui: &mut egui::Ui, look: &mut Look, time: Ticks) -> Outpu
                             removed = Some(index);
                         }
                     });
-                    rows.effect(ui, effect);
+                    rows.effect(ui, effect, video_tracks);
                 });
             }
             if let Some(index) = removed {
@@ -134,7 +140,7 @@ impl Rows {
         self.output.change = Some(Change::Commit);
     }
 
-    fn effect(&mut self, ui: &mut egui::Ui, effect: &mut VideoEffect) {
+    fn effect(&mut self, ui: &mut egui::Ui, effect: &mut VideoEffect, video_tracks: usize) {
         match effect {
             VideoEffect::GaussianBlur { blurriness } => {
                 self.param(ui, "Blurriness", blurriness, 0.0..=500.0, "");
@@ -175,7 +181,53 @@ impl Rows {
                 self.param(ui, "Tolerance", tolerance, 0.0..=100.0, "%");
                 self.param(ui, "Softness", softness, 0.0..=100.0, "%");
             }
+            VideoEffect::TrackMatteKey {
+                matte,
+                channel,
+                reverse,
+            } => {
+                self.choice(ui, "Matte", |ui| {
+                    let name = |track: Option<usize>| {
+                        track.map_or("None".to_owned(), |index| format!("Video {}", index + 1))
+                    };
+                    let mut chosen = false;
+                    egui::ComboBox::from_id_salt("matte")
+                        .selected_text(name(*matte))
+                        .show_ui(ui, |ui| {
+                            let tracks = std::iter::once(None).chain((0..video_tracks).map(Some));
+                            for track in tracks {
+                                chosen |= ui.selectable_value(matte, track, name(track)).clicked();
+                            }
+                        });
+                    chosen
+                });
+                self.choice(ui, "Composite Using", |ui| {
+                    let mut chosen = false;
+                    egui::ComboBox::from_id_salt("matte_channel")
+                        .selected_text(channel.name())
+                        .show_ui(ui, |ui| {
+                            for option in MatteChannel::ALL {
+                                chosen |= ui
+                                    .selectable_value(channel, option, option.name())
+                                    .clicked();
+                            }
+                        });
+                    chosen
+                });
+                self.choice(ui, "Reverse", |ui| ui.checkbox(reverse, "").changed());
+            }
         }
+    }
+
+    /// A labelled row of controls that return whether they made a choice.
+    fn choice(&mut self, ui: &mut egui::Ui, label: &str, add: impl FnOnce(&mut egui::Ui) -> bool) {
+        ui.horizontal(|ui| {
+            ui.add_space(20.0);
+            ui.add_sized([72.0, 18.0], egui::Label::new(label));
+            if add(ui) {
+                self.commit();
+            }
+        });
     }
 
     fn color(&mut self, ui: &mut egui::Ui, label: &str, color: &mut Rgb) {

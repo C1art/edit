@@ -92,7 +92,8 @@ fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
     let drawing_change = drawing
         .as_mut()
         .and_then(|generator| generated::controls(ui, generator));
-    let output = look::controls(ui, &mut look, time);
+    let video_tracks = editor.timeline.sequence().video.len();
+    let output = look::controls(ui, &mut look, time, video_tracks);
     seek_to_key(editor, clip, output.seek);
     if let Some(slot) = output.choose_lut {
         editor.prompt_path(PathPurpose::Lut(clip.id, slot));
