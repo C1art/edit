@@ -1,0 +1,94 @@
+use std::path::PathBuf;
+
+use timeline::{
+    Clip, ClipId, Gain, Keyframe, MediaItem, Pan, SourceId, Ticks, Timebase, Track, Transition,
+    TransitionKind, VideoEffect, VideoFormat,
+};
+
+use super::*;
+
+fn sample() -> ProjectFile {
+    let mut sequence = Sequence::new(Timebase::HZ_90K, VideoFormat::default());
+    sequence.media.push(MediaItem {
+        id: SourceId(1),
+        name: "Interview \"A\" — café\n".to_owned(),
+        path: PathBuf::from(r"C:\Footage\interview 😀.mp4"),
+        duration: Ticks(900_000),
+        video: Some(VideoFormat::default()),
+        has_audio: true,
+        proxy: Some(PathBuf::from(r"C:\Footage\Proxies\interview_Proxy.mp4")),
+    });
+    let mut clip = Clip::new(ClipId(7), SourceId(1), Ticks(0), Ticks(90_000), Ticks(-3));
+    clip.gain = Gain(-600);
+    clip.transition_in = Some(Transition {
+        kind: TransitionKind::DipToBlack,
+        duration: Ticks(i64::MAX),
+    });
+    clip.look.motion.scale.keys.push(Keyframe {
+        time: Ticks(45_000),
+        hundredths: -12_345,
+    });
+    clip.look.effects.push(VideoEffect::GaussianBlur {
+        blurriness: clip.look.opacity.clone(),
+    });
+    sequence.video.push(Track {
+        clips: vec![clip],
+        locked: true,
+        ..Track::default()
+    });
+    sequence.audio.push(Track {
+        pan: Pan::new(-40),
+        ..Track::default()
+    });
+    ProjectFile::new(sequence)
+}
+
+#[test]
+fn project_round_trips_through_text() {
+    let project = sample();
+    let text = project.to_text().unwrap();
+    assert_eq!(ProjectFile::from_text(&text).unwrap(), project);
+}
+
+#[test]
+fn fields_added_later_default_when_missing() {
+    let project = ProjectFile::new(Sequence::new(Timebase::HZ_90K, VideoFormat::default()));
+    let text = format!(
+        r#"{{"format_version": 1, "sequence": {{"timebase": {}}}}}"#,
+        json::to_value(&project.sequence.timebase)
+            .unwrap()
+            .to_text()
+    );
+    assert_eq!(ProjectFile::from_text(&text).unwrap(), project);
+}
+
+#[test]
+fn newer_or_unversioned_files_are_refused() {
+    let newer = format!(r#"{{"format_version": {}}}"#, FORMAT_VERSION + 1);
+    assert!(matches!(
+        ProjectFile::from_text(&newer),
+        Err(ProjectError::UnsupportedVersion(v)) if v == FORMAT_VERSION + 1
+    ));
+    assert!(matches!(
+        ProjectFile::from_text(r#"{"sequence": {}}"#),
+        Err(ProjectError::MissingVersion)
+    ));
+}
+
+#[test]
+fn damaged_text_reports_the_line() {
+    let error =
+        ProjectFile::from_text("{\n  \"format_version\": 1,\n  \"sequence\": [\n").unwrap_err();
+    assert!(
+        matches!(error, ProjectError::Syntax { line: 4, .. }),
+        "{error}"
+    );
+    assert!(Value::parse("[1.5]").is_err());
+    assert!(Value::parse(&"[".repeat(10_000)).is_err());
+}
+
+#[test]
+fn escapes_decode_including_surrogate_pairs() {
+    let value = Value::parse(r#""a\"\\\n\u00e9\ud83d\ude00""#).unwrap();
+    assert_eq!(value, Value::String("a\"\\\né😀".to_owned()));
+}
