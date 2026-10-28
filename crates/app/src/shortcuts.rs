@@ -14,6 +14,7 @@ pub const REDO: KeyboardShortcut =
     KeyboardShortcut::new(Modifiers::COMMAND.plus(Modifiers::SHIFT), Key::Z);
 const REDO_ALT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::Y);
 pub const ADD_EDIT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::K);
+pub const TRANSITION: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::D);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Action {
@@ -22,6 +23,7 @@ enum Action {
     Undo,
     Redo,
     AddEdit,
+    Transition,
     RippleDelete,
     Lift,
     MarkIn,
@@ -68,6 +70,7 @@ fn pressed(ctx: &egui::Context) -> Option<Action> {
             (IMPORT, Action::Import),
             (EXPORT, Action::Export),
             (ADD_EDIT, Action::AddEdit),
+            (TRANSITION, Action::Transition),
             (
                 KeyboardShortcut::new(Modifiers::SHIFT, Key::Delete),
                 Action::RippleDelete,
@@ -108,6 +111,7 @@ fn run(editor: &mut Editor, action: Action) {
         Action::Undo => editor.undo(),
         Action::Redo => editor.redo(),
         Action::AddEdit => editor.add_edit(),
+        Action::Transition => crate::effects::apply_default_transition(editor),
         Action::RippleDelete => editor.ripple_delete(),
         Action::Lift => editor.lift(),
         Action::MarkIn | Action::MarkOut => {

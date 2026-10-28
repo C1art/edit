@@ -1,5 +1,5 @@
 use egui::{Align2, Color32, FontId, Painter, Rect, Stroke, StrokeKind};
-use timeline::{ClipId, Gain, Sequence, Ticks, Timecode, TrackKind};
+use timeline::{Clip, ClipId, Gain, Sequence, Ticks, Timecode, Track, TrackKind};
 
 use super::layout::{clip_rect, Row};
 use super::scale::{label_interval, TimeScale};
@@ -115,6 +115,7 @@ pub fn clips(
             Stroke::new(1.0, Color32::from_black_alpha(120))
         };
         painter.rect_stroke(rect, 3.0, stroke, StrokeKind::Inside);
+        transition_marks(painter, row, scale, track, clip);
         let name = sequence
             .media_item(clip.source)
             .map_or("Missing media", |item| item.name.as_str());
@@ -133,6 +134,47 @@ pub fn clips(
             Align2::LEFT_TOP,
             format!("{name}{link}{gain}"),
             FontId::proportional(11.0),
+            Color32::WHITE,
+        );
+    }
+}
+
+/// Shades where a clip's transitions play: across a shared cut or inside the clip.
+fn transition_marks(painter: &Painter, row: &Row, scale: &TimeScale, track: &Track, clip: &Clip) {
+    let follows = |start: Ticks| track.clips.iter().any(|other| other.end() == start);
+    let mut spans = Vec::new();
+    if let Some(transition) = clip.transition_in {
+        let span = if follows(clip.start) {
+            let half = Ticks(transition.duration.0 / 2);
+            (clip.start - half, clip.start - half + transition.duration)
+        } else {
+            (
+                clip.start,
+                clip.start + transition.duration.min(clip.duration),
+            )
+        };
+        spans.push((span, transition.kind));
+    }
+    if let Some(transition) = clip.transition_out {
+        if !track.clips.iter().any(|next| next.start == clip.end()) {
+            let duration = transition.duration.min(clip.duration);
+            spans.push(((clip.end() - duration, clip.end()), transition.kind));
+        }
+    }
+    for ((start, end), kind) in spans {
+        let rect = clip_rect(row, scale, start, end).shrink2(egui::vec2(0.0, 2.0));
+        painter.rect_filled(rect, 2.0, Color32::from_white_alpha(50));
+        painter.rect_stroke(
+            rect,
+            2.0,
+            Stroke::new(1.0, Color32::from_white_alpha(140)),
+            StrokeKind::Inside,
+        );
+        painter.with_clip_rect(rect).text(
+            rect.left_bottom() + egui::vec2(3.0, -2.0),
+            Align2::LEFT_BOTTOM,
+            kind.name(),
+            FontId::proportional(9.0),
             Color32::WHITE,
         );
     }

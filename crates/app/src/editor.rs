@@ -3,12 +3,13 @@ use std::sync::Arc;
 
 use audio::AudioOutput;
 use eframe::egui_wgpu::RenderState;
-use egui::{CentralPanel, Panel};
+use egui::{CentralPanel, Panel, RichText};
 use timeline::{
     Edit, Sequence, SetSequenceFormat, SourceId, Ticks, Timebase, Timeline, TimelineError,
     VideoFormat,
 };
 
+use crate::effects::{self, EffectControls, SideTab};
 use crate::export::ExportDialog;
 use crate::import::Importer;
 use crate::media_pool::{self, PoolAction};
@@ -33,6 +34,8 @@ pub struct Editor {
     pub(crate) focus: Focus,
     pub(crate) view: TimelineView,
     pub(crate) mixer: Mixer,
+    pub(crate) effects: EffectControls,
+    side_tab: SideTab,
     /// The gain in dB being typed into the clip gain dialog, while it is showing.
     pub(crate) gain_prompt: Option<f32>,
     /// The path being typed into the import dialog, while it is showing.
@@ -76,6 +79,8 @@ impl Editor {
             focus: Focus::Program,
             view: TimelineView::default(),
             mixer: Mixer::default(),
+            effects: EffectControls::default(),
+            side_tab: SideTab::default(),
             gain_prompt: None,
             import_prompt: None,
             export: None,
@@ -251,6 +256,23 @@ impl Editor {
         }
     }
 
+    fn side_panel(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            let tabs = [
+                (SideTab::EffectControls, "Effect Controls"),
+                (SideTab::AudioMixer, "Audio Mixer"),
+            ];
+            for (tab, name) in tabs {
+                ui.selectable_value(&mut self.side_tab, tab, RichText::new(name).heading());
+            }
+        });
+        ui.separator();
+        match self.side_tab {
+            SideTab::EffectControls => effects::ui(self, ui),
+            SideTab::AudioMixer => mixer::ui(self, ui),
+        }
+    }
+
     fn timeline_panel(&mut self, ui: &mut egui::Ui) {
         crate::menus::timeline_toolbar(self, ui);
         let playhead = self.playhead();
@@ -300,10 +322,10 @@ impl eframe::App for Editor {
             .resizable(true)
             .default_size(260.0)
             .show(ui, |ui| self.media_panel(ui));
-        Panel::right("mixer")
+        Panel::right("side_panel")
             .resizable(true)
             .default_size(290.0)
-            .show(ui, |ui| mixer::ui(self, ui));
+            .show(ui, |ui| self.side_panel(ui));
         Panel::bottom("timeline")
             .resizable(true)
             .default_size(340.0)

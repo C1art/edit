@@ -65,6 +65,11 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             if ui.add(add_edit).clicked() {
                 editor.add_edit();
             }
+            let transition = Button::new("Apply Video Transition")
+                .shortcut_text(shortcut(ui, shortcuts::TRANSITION));
+            if ui.add(transition).clicked() {
+                crate::effects::apply_default_transition(editor);
+            }
             if ui
                 .add(Button::new("Lift").shortcut_text("Delete"))
                 .clicked()

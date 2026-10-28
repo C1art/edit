@@ -77,8 +77,6 @@ fn to_db(peak: f32) -> f32 {
 }
 
 pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
-    ui.heading("Audio Mixer");
-    ui.separator();
     let dt = ui.input(|input| input.stable_dt).min(0.1);
     let tracks = editor.timeline.sequence().audio.len();
     let levels = editor
@@ -207,13 +205,16 @@ fn strip(editor: &mut Editor, ui: &mut egui::Ui, channel: Channel) {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-enum Change {
+pub(crate) enum Change {
     Live,
     Commit,
 }
 
 /// A drag in progress is heard live; a release, click or double-click commits.
-fn response_state(response: &egui::Response, previous: Option<Change>) -> Option<Change> {
+pub(crate) fn response_state(
+    response: &egui::Response,
+    previous: Option<Change>,
+) -> Option<Change> {
     let state = if response.drag_stopped() || response.double_clicked() {
         Some(Change::Commit)
     } else if response.changed() && response.dragged() {
