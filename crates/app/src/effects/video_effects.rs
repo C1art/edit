@@ -1,6 +1,6 @@
 use timeline::{
-    ColorChange, ColorMatch, EffectCategory, MatteChannel, RampShape, Rgb, TimecodeSource,
-    VideoEffect,
+    ColorChange, ColorMatch, EffectCategory, KeyOutput, MatteChannel, RampShape, Rgb,
+    TimecodeSource, VideoEffect,
 };
 
 use super::look::Rows;
@@ -270,10 +270,29 @@ impl Rows {
                 color,
                 tolerance,
                 softness,
+                output,
+                pedestal,
+                contrast,
+                choke,
+                soften,
+                spill,
             } => {
+                self.options(
+                    ui,
+                    "Output",
+                    "key_output",
+                    output,
+                    KeyOutput::ALL,
+                    KeyOutput::name,
+                );
                 self.color(ui, "Key Color", color);
                 self.param(ui, "Tolerance", tolerance, 0.0..=100.0, "%");
                 self.param(ui, "Softness", softness, 0.0..=100.0, "%");
+                self.param(ui, "Pedestal", pedestal, 0.0..=100.0, "%");
+                self.param(ui, "Choke", choke, 0.0..=100.0, "%");
+                self.param(ui, "Soften", soften, 0.0..=100.0, "%");
+                self.param(ui, "Contrast", contrast, 0.0..=100.0, "%");
+                self.param(ui, "Spill", spill, 0.0..=100.0, "%");
             }
             VideoEffect::TrackMatteKey {
                 matte,
