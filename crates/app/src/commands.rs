@@ -1,7 +1,7 @@
 use timeline::{
-    AddFrameHold, AddTrack, Clipboard, CloseGap, FrameFit, Lift, LinkedSelection, PasteClips,
-    PlaceMode, Razor, RazorTarget, RippleDelete, SetClipsEnabled, SetGrouped, SetLinked,
-    SetLinkedSelection, SetToFrameSize, Timecode, TrackKind,
+    AddFrameHold, AddTrack, Clipboard, CloseGap, FrameFit, JoinThroughEdits, Lift, LinkedSelection,
+    PasteClips, PlaceMode, Razor, RazorTarget, RippleDelete, SetClipsEnabled, SetGrouped,
+    SetLinked, SetLinkedSelection, SetToFrameSize, Timecode, TrackKind,
 };
 
 use crate::editor::Editor;
@@ -225,6 +225,15 @@ impl Editor {
             self.notice("Select two or more clips to group");
         } else {
             self.notice("Select a grouped clip to ungroup");
+        }
+    }
+
+    pub(crate) fn join_through_edits(&mut self) {
+        let edit = JoinThroughEdits {
+            clips: self.view.selection.clone(),
+        };
+        if !self.apply(edit) {
+            self.notice("No through edits at the selected clips");
         }
     }
 

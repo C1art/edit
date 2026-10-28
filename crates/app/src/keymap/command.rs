@@ -34,6 +34,7 @@ pub enum Command {
     ToggleLink,
     Group,
     Ungroup,
+    JoinThroughEdits,
     MakeSubclip,
     NudgeLeft,
     NudgeRight,
@@ -105,7 +106,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Self; 95] = [
+    pub const ALL: [Self; 96] = [
         Self::NewProject,
         Self::OpenProject,
         Self::Save,
@@ -133,6 +134,7 @@ impl Command {
         Self::ToggleLink,
         Self::Group,
         Self::Ungroup,
+        Self::JoinThroughEdits,
         Self::MakeSubclip,
         Self::NudgeLeft,
         Self::NudgeRight,
@@ -234,6 +236,7 @@ impl Command {
             Self::ToggleLink => ("toggle_link", "Link"),
             Self::Group => ("group", "Group"),
             Self::Ungroup => ("ungroup", "Ungroup"),
+            Self::JoinThroughEdits => ("join_through_edits", "Join Through Edits"),
             Self::MakeSubclip => ("make_subclip", "Make Subclip"),
             Self::NudgeLeft => ("nudge_left", "Nudge Clip Selection Left One Frame"),
             Self::NudgeRight => ("nudge_right", "Nudge Clip Selection Right One Frame"),
@@ -340,8 +343,8 @@ impl Command {
             Undo | Redo | Cut | Copy | Paste | PasteInsert | PasteAttributes | Clear
             | RippleDelete | CancelDrag | SelectAll | DeselectAll | KeyboardShortcuts => "Edit",
             SpeedDuration | AudioGain | ToggleEnabled | ToggleLink | Group | Ungroup
-            | MakeSubclip | Insert | Overwrite | NudgeLeft | NudgeRight | NudgeLeftFive
-            | NudgeRightFive | NudgeUp | NudgeDown => "Clip",
+            | JoinThroughEdits | MakeSubclip | Insert | Overwrite | NudgeLeft | NudgeRight
+            | NudgeLeftFive | NudgeRightFive | NudgeUp | NudgeDown => "Clip",
             AddEdit
             | ExtendEdit
             | SelectAtPlayhead
@@ -451,7 +454,9 @@ impl Command {
             Self::MinimizeAllTracks => vec![shift(Key::Minus)],
             Self::MulticamView => vec![shift(Key::Num0)],
             Self::RenderInToOut => vec![plain(Key::Enter)],
-            Self::DeleteRenderFiles | Self::ToggleLinkedSelection => Vec::new(),
+            Self::DeleteRenderFiles | Self::ToggleLinkedSelection | Self::JoinThroughEdits => {
+                Vec::new()
+            }
             Self::MarkIn => vec![plain(Key::I)],
             Self::MarkOut => vec![plain(Key::O)],
             Self::ClearInOut => vec![ctrl_shift(Key::X)],

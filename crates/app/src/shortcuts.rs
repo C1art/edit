@@ -102,6 +102,7 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         Command::ToggleLink => editor.toggle_link(),
         Command::Group => editor.set_grouped(true),
         Command::Ungroup => editor.set_grouped(false),
+        Command::JoinThroughEdits => editor.join_through_edits(),
         Command::MakeSubclip => editor.make_subclip(),
         Command::NudgeLeft => editor.nudge(-1),
         Command::NudgeRight => editor.nudge(1),

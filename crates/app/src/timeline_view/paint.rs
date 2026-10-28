@@ -1,6 +1,7 @@
 use egui::{Align2, Color32, FontId, Painter, Rect, Stroke, StrokeKind};
 use timeline::{
-    cut_window, Clip, ClipId, Gain, Label, Sequence, Ticks, Timecode, Track, TrackKind,
+    cut_window, is_through_edit, Clip, ClipId, Gain, Label, Sequence, Ticks, Timecode, Track,
+    TrackKind,
 };
 
 use super::clip_art::{self, ClipArea};
@@ -261,6 +262,29 @@ pub fn clips(
             FontId::proportional(11.0),
             Color32::WHITE,
         );
+    }
+    through_edit_marks(painter, row, scale, track);
+}
+
+/// Premiere's bow-tie at a cut the media plays straight through, which can be joined.
+fn through_edit_marks(painter: &Painter, row: &Row, scale: &TimeScale, track: &Track) {
+    let fill = Color32::from_white_alpha(200);
+    for pair in track.clips.windows(2) {
+        if !is_through_edit(&pair[0], &pair[1]) {
+            continue;
+        }
+        let rect = clip_rect(row, scale, pair[0].start, pair[1].end());
+        let x = scale.x(pair[1].start);
+        for (edge, inward) in [(rect.top() + 1.0, 5.0), (rect.bottom() - 1.0, -5.0)] {
+            for side in [-4.0, 4.0] {
+                let points = vec![
+                    egui::pos2(x, edge + inward),
+                    egui::pos2(x + side, edge),
+                    egui::pos2(x, edge),
+                ];
+                painter.add(egui::Shape::convex_polygon(points, fill, Stroke::NONE));
+            }
+        }
     }
 }
 

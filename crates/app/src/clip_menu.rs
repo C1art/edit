@@ -98,6 +98,11 @@ pub(crate) fn items(editor: &mut Editor, ui: &mut Ui) {
             editor.set_grouped(grouped);
         }
     }
+    let join = Button::new(Command::JoinThroughEdits.name())
+        .shortcut_text(editor.keymap.label(Command::JoinThroughEdits));
+    if ui.add(join).clicked() {
+        editor.join_through_edits();
+    }
     let gain = Button::new("Audio Gain…").shortcut_text(editor.keymap.label(Command::AudioGain));
     if ui.add(gain).clicked() {
         editor.prompt_clip_gain();
