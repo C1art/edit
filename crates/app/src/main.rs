@@ -20,6 +20,7 @@ mod mixer;
 mod monitor;
 mod monitors;
 mod nesting;
+mod panels;
 mod placing;
 mod project_files;
 mod project_store;
