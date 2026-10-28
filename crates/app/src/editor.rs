@@ -29,6 +29,13 @@ use crate::viewer::Viewer;
 /// Notices kept for display; older ones are dropped.
 const MAX_NOTICES: usize = 8;
 
+/// What the left panel shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MediaTab {
+    Project,
+    History,
+}
+
 pub struct Editor {
     pub(crate) timeline: Timeline,
     pub(crate) audio: Option<AudioOutput>,
@@ -49,6 +56,9 @@ pub struct Editor {
     pub(crate) effects: EffectControls,
     pub(crate) captions: CaptionPanel,
     pub(crate) side_tab: SideTab,
+    media_tab: MediaTab,
+    /// The history step last scrolled into view, so the list follows new edits only.
+    pub(crate) history_scrolled: Option<usize>,
     /// The gain in dB being typed into the clip gain dialog, while it is showing.
     pub(crate) gain_prompt: Option<f32>,
     pub(crate) speed_prompt: Option<crate::speed_dialog::SpeedPrompt>,
@@ -132,6 +142,8 @@ impl Editor {
             effects: EffectControls::default(),
             captions: CaptionPanel::default(),
             side_tab: SideTab::default(),
+            media_tab: MediaTab::Project,
+            history_scrolled: None,
             gain_prompt: None,
             speed_prompt: None,
             clipboard: None,
@@ -310,15 +322,27 @@ impl Editor {
     }
 
     fn media_panel(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Project");
+        ui.horizontal(|ui| {
+            for (tab, name) in [
+                (MediaTab::Project, "Project"),
+                (MediaTab::History, "History"),
+            ] {
+                ui.selectable_value(&mut self.media_tab, tab, RichText::new(name).heading());
+            }
+        });
         ui.separator();
-        let importing = self.importer.as_ref().is_some_and(Importer::is_busy);
-        let sequence = self.timeline.sequence();
-        let proxies = self.proxies.as_ref();
-        if let Some(action) =
-            media_pool::ui(ui, &sequence.media, sequence.timebase, importing, proxies)
-        {
-            self.pool_action(action);
+        match self.media_tab {
+            MediaTab::Project => {
+                let importing = self.importer.as_ref().is_some_and(Importer::is_busy);
+                let sequence = self.timeline.sequence();
+                let proxies = self.proxies.as_ref();
+                if let Some(action) =
+                    media_pool::ui(ui, &sequence.media, sequence.timebase, importing, proxies)
+                {
+                    self.pool_action(action);
+                }
+            }
+            MediaTab::History => crate::history_panel::ui(self, ui),
         }
         if !self.notices.is_empty() {
             ui.separator();

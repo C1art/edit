@@ -6,6 +6,7 @@ mod editor;
 mod effects;
 mod export;
 mod export_format;
+mod history_panel;
 mod import;
 mod marker_dialog;
 mod media_pool;

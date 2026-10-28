@@ -19,6 +19,13 @@ impl Editor {
         }
     }
 
+    pub(crate) fn go_to_history(&mut self, step: usize) {
+        self.view.cancel_drag();
+        if let Err(error) = self.timeline.go_to(step) {
+            self.notice(format!("Cannot redo: {error}"));
+        }
+    }
+
     /// Cuts every unlocked track at the playhead.
     pub(crate) fn add_edit(&mut self) {
         let tracks = self
