@@ -49,6 +49,10 @@ pub struct PictureStyle {
     pub shadow_opacity: f32,
     /// Linear.
     pub shadow_color: [f32; 3],
+    /// Where each point of the steadied picture is found in the source picture: a
+    /// shift right and down and a turn clockwise in radians, then a scale, in shares of
+    /// the picture's longer side about its center.
+    pub stabilize: [f32; 4],
 }
 
 impl PictureStyle {
@@ -77,10 +81,11 @@ impl PictureStyle {
         shadow_softness: 0.0,
         shadow_opacity: 0.0,
         shadow_color: [0.0; 3],
+        stabilize: [0.0, 0.0, 0.0, 1.0],
     };
 
-    /// The shader's view, as eight vec4s.
-    pub(crate) fn uniform(&self) -> [f32; 32] {
+    /// The shader's view, as nine vec4s.
+    pub(crate) fn uniform(&self) -> [f32; 36] {
         let inverted = if self.edges_inverted { 1.0 } else { 0.0 };
         let [mosaic_x, mosaic_y] = self.mosaic;
         let [offset_x, offset_y] = self.offset;
@@ -119,6 +124,10 @@ impl PictureStyle {
             green,
             blue,
             0.0,
+            self.stabilize[0],
+            self.stabilize[1],
+            self.stabilize[2],
+            self.stabilize[3],
         ]
     }
 }

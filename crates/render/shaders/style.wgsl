@@ -57,7 +57,20 @@ fn warp(uv_in: vec2<f32>) -> vec2<f32> {
     if blocks.y >= 1.0 {
         uv.y = (floor(uv.y * blocks.y) + 0.5) / blocks.y;
     }
-    return uv;
+    return steadied(uv, aspect);
+}
+
+// Steadying undoes the camera's shake before any other effect sees the picture, so
+// it maps nearest the source.
+fn steadied(uv: vec2<f32>, aspect: vec2<f32>) -> vec2<f32> {
+    let stabilize = placement.style_stabilize;
+    if all(stabilize == vec4<f32>(0.0, 0.0, 0.0, 1.0)) {
+        return uv;
+    }
+    let p = (uv - vec2<f32>(0.5)) * aspect;
+    let turn = vec2<f32>(sin(stabilize.z), cos(stabilize.z));
+    let turned = vec2<f32>(turn.y * p.x - turn.x * p.y, turn.x * p.x + turn.y * p.y);
+    return (turned * stabilize.w + stabilize.xy) / aspect + vec2<f32>(0.5);
 }
 
 fn smeared(uv: vec2<f32>) -> vec4<f32> {

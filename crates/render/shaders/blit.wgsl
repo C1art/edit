@@ -65,6 +65,8 @@ struct Placement {
     style_shadow: vec4<f32>,
     // The shadow's color, linear.
     style_shadow_color: vec4<f32>,
+    // Warp Stabilizer's shift, turn and scale of the source (see style.wgsl).
+    style_stabilize: vec4<f32>,
 };
 
 const OUTLINE_VEC4S: u32 = 32u;
