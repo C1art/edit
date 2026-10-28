@@ -39,6 +39,7 @@ pub enum SideTab {
     #[default]
     EffectControls,
     AudioMixer,
+    EssentialSound,
     Scopes,
     Captions,
 }

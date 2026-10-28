@@ -4,8 +4,8 @@ use std::sync::Arc;
 use egui::{Key, ProgressBar};
 use playback::{EnvelopeEvent, EnvelopeJob};
 use timeline::{
-    active_spans, ducked_volume, AutoDuck, ClipId, Gain, Sequence, Ticks, Timebase, Track,
-    TrackKind,
+    active_spans, ducked_volume, AudioType, AutoDuck, ClipId, Gain, Sequence, Ticks, Timebase,
+    Track, TrackKind,
 };
 
 use crate::editor::Editor;
@@ -63,6 +63,25 @@ impl Editor {
             fade_ms: 800,
             measuring: None,
         });
+    }
+
+    /// Opens Auto Duck set to duck under the tracks holding clips typed as dialogue,
+    /// when there are any.
+    pub(crate) fn open_auto_duck_under_dialogue(&mut self) {
+        self.open_auto_duck();
+        let sequence = self.timeline.sequence();
+        let Some(dialog) = &mut self.duck_dialog else {
+            return;
+        };
+        let speaks = |track: &Track| {
+            track.clips.iter().any(|clip| {
+                clip.audio_type == Some(AudioType::Dialogue) && !dialog.clips.contains(&clip.id)
+            })
+        };
+        let against: Vec<bool> = sequence.audio.iter().map(speaks).collect();
+        if against.contains(&true) {
+            dialog.against = against;
+        }
     }
 }
 

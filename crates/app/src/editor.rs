@@ -60,6 +60,7 @@ pub struct Editor {
     pub(crate) view: TimelineView,
     pub(crate) mixer: Mixer,
     pub(crate) effects: EffectControls,
+    pub(crate) essential_sound: crate::essential_sound::EssentialSound,
     pub(crate) captions: CaptionPanel,
     pub(crate) side_tab: SideTab,
     pub(crate) media_tab: MediaTab,
@@ -171,6 +172,7 @@ impl Editor {
             view: TimelineView::default(),
             mixer: Mixer::default(),
             effects: EffectControls::default(),
+            essential_sound: Default::default(),
             captions: CaptionPanel::default(),
             side_tab: SideTab::default(),
             media_tab: MediaTab::Project,
@@ -379,6 +381,7 @@ impl eframe::App for Editor {
         self.poll_imports();
         self.poll_offline();
         self.poll_render_previews(&ctx);
+        crate::essential_sound::poll(self, &ctx);
         self.poll_proxies(&ctx);
         self.poll_multicam_sync(&ctx);
         self.poll_scene_edits(&ctx);

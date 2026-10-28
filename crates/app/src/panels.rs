@@ -54,10 +54,11 @@ impl Editor {
     }
 
     pub(crate) fn side_panel(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             let tabs = [
                 (SideTab::EffectControls, "Effect Controls"),
                 (SideTab::AudioMixer, "Audio Mixer"),
+                (SideTab::EssentialSound, "Essential Sound"),
                 (SideTab::Scopes, "Scopes"),
                 (SideTab::Captions, "Captions"),
             ];
@@ -73,6 +74,7 @@ impl Editor {
         match self.side_tab {
             SideTab::EffectControls => effects::ui(self, ui),
             SideTab::AudioMixer => mixer::ui(self, ui),
+            SideTab::EssentialSound => crate::essential_sound::ui(self, ui),
             SideTab::Scopes => crate::scopes::ui(self, ui),
             SideTab::Captions => crate::captions::ui(self, ui),
         }
