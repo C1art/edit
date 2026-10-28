@@ -8,6 +8,7 @@ mod generator;
 mod history;
 mod look;
 mod marker;
+mod marks;
 mod media;
 mod mix;
 mod model;
@@ -26,12 +27,12 @@ pub use audio_plan::{audio_fade, audio_span, clip_level};
 pub use color::ColorCorrection;
 pub use edit::{
     clamp_delta, AddFrameHold, AddGenerated, AddMarker, AddNest, AddTrack, Clipboard, CloseGap,
-    Edge, ImportMedia, InNest, Lift, MoveClips, NestClips, PasteClips, PlaceClip, PlaceMode,
-    RateStretch, Razor, RazorTarget, RelinkMedia, RemoveMarker, RemoveMedia, RemoveTrack,
-    RenameMedia, RippleDelete, Roll, SetClipAudioEffects, SetClipGain, SetClipLook, SetClipSpeed,
-    SetClipVolume, SetClipsEnabled, SetGenerator, SetMasterGain, SetProxy, SetSequenceFormat,
-    SetTrackMix, SetTrackSwitch, SetTransition, Slide, Slip, TrackSwitch, Trim, TrimMode,
-    UpdateMarker,
+    Edge, ExtractMarked, ImportMedia, InNest, Lift, LiftMarked, MoveClips, NestClips, PasteClips,
+    PlaceClip, PlaceMode, RateStretch, Razor, RazorTarget, RelinkMedia, RemoveMarker, RemoveMedia,
+    RemoveTrack, RenameMedia, RippleDelete, Roll, SetClipAudioEffects, SetClipGain, SetClipLook,
+    SetClipSpeed, SetClipVolume, SetClipsEnabled, SetGenerator, SetMarks, SetMasterGain, SetProxy,
+    SetSequenceFormat, SetTrackMix, SetTrackSwitch, SetTransition, Slide, Slip, TrackSwitch, Trim,
+    TrimMode, UpdateMarker,
 };
 pub use effect::{Rgb, VideoEffect};
 pub use error::TimelineError;
@@ -39,6 +40,7 @@ pub use generator::{Generator, TextAlign, Title, TitleFont, GENERATED_SECONDS};
 pub use history::{preview, Edit, EditCommand, Timeline};
 pub use look::{Crop, Look, Motion};
 pub use marker::{Marker, MarkerColor, MarkerId};
+pub use marks::Marks;
 pub use media::{MediaItem, SourceId};
 pub use mix::{Gain, Pan};
 pub use model::{

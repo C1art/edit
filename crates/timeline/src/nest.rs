@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{Clip, Gain, Marker, Sequence, SourceId, Ticks, TimelineError, Track, TrackRef};
+use crate::{Clip, Gain, Marker, Marks, Sequence, SourceId, Ticks, TimelineError, Track, TrackRef};
 
 /// A sequence placed as media in the project's sequence. It has its own tracks, mix and
 /// markers but shares the project's media pool, timebase and frame format.
@@ -14,6 +14,8 @@ pub struct Nest {
     pub master: Gain,
     #[serde(default)]
     pub markers: Vec<Marker>,
+    #[serde(default)]
+    pub marks: Marks,
 }
 
 impl Nest {
@@ -57,11 +59,12 @@ impl Sequence {
             audio: nest.audio.clone(),
             master: nest.master,
             markers: nest.markers.clone(),
+            marks: nest.marks,
             ..self.clone()
         })
     }
 
-    /// Trades this sequence's tracks, mix and markers for those of nest `id`, so an edit
+    /// Trades this sequence's tracks, mix, markers and marks for those of nest `id`, so an edit
     /// of the sequence edits the nest. Swapping again trades them back.
     pub(crate) fn swap_nest(&mut self, id: SourceId) -> Result<(), TimelineError> {
         let nest = self
@@ -74,6 +77,7 @@ impl Sequence {
         std::mem::swap(&mut self.audio, &mut nest.audio);
         std::mem::swap(&mut self.master, &mut nest.master);
         std::mem::swap(&mut self.markers, &mut nest.markers);
+        std::mem::swap(&mut self.marks, &mut nest.marks);
         Ok(())
     }
 
