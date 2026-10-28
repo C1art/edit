@@ -12,12 +12,17 @@ enum Request {
         revision: u64,
     },
     Open(PathBuf),
+    Autosave {
+        path: PathBuf,
+        sequence: Box<Sequence>,
+    },
 }
 
 pub enum StoreEvent {
     /// The timeline revision that was written, so later edits still count as unsaved.
     Saved(PathBuf, u64, Result<(), String>),
     Opened(PathBuf, Result<Box<Sequence>, String>),
+    Autosaved(PathBuf, Result<(), String>),
 }
 
 /// Reads and writes project files on a worker thread so the UI never touches the disk.
@@ -58,6 +63,17 @@ impl ProjectStore {
         }
     }
 
+    /// Writes a copy that doesn't count as saving the project.
+    pub fn autosave(&mut self, path: PathBuf, sequence: Sequence) {
+        let request = Request::Autosave {
+            path,
+            sequence: Box::new(sequence),
+        };
+        if self.requests.send(request).is_ok() {
+            self.pending += 1;
+        }
+    }
+
     pub fn open(&mut self, path: PathBuf) {
         if self.requests.send(Request::Open(path)).is_ok() {
             self.pending += 1;
@@ -92,6 +108,18 @@ fn handle(request: Request) -> StoreEvent {
                 .map(|file| Box::new(file.sequence))
                 .map_err(|error| error.to_string());
             StoreEvent::Opened(path, result)
+        }
+        Request::Autosave { path, sequence } => {
+            let result = path
+                .parent()
+                .map_or(Ok(()), std::fs::create_dir_all)
+                .map_err(|error| error.to_string())
+                .and_then(|()| {
+                    ProjectFile::new(*sequence)
+                        .save(&path)
+                        .map_err(|error| error.to_string())
+                });
+            StoreEvent::Autosaved(path, result)
         }
     }
 }

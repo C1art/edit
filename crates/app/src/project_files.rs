@@ -105,6 +105,7 @@ impl Editor {
         self.saved_revision = revision;
         self.project_path = path;
         self.after_save = None;
+        self.autosave.forget();
         // A new timeline restarts its revisions, so the program viewer is updated directly.
         self.shown_revision = revision;
         self.view.prune_selection(self.timeline.sequence());
@@ -141,6 +142,10 @@ impl Editor {
                 }
                 StoreEvent::Opened(path, Err(error)) => {
                     self.notice(format!("Cannot open {}: {error}", path.display()));
+                }
+                StoreEvent::Autosaved(_, Ok(())) => {}
+                StoreEvent::Autosaved(path, Err(error)) => {
+                    self.notice(format!("Cannot autosave to {}: {error}", path.display()));
                 }
             }
         }

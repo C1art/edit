@@ -100,6 +100,16 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                 {
                     media::set_hardware_decoding(*decoding);
                 }
+                ui.horizontal(|ui| {
+                    let autosave = &mut editor.autosave;
+                    ui.checkbox(&mut autosave.enabled, "Auto-Save Every");
+                    ui.add_enabled(
+                        autosave.enabled,
+                        egui::DragValue::new(&mut autosave.minutes)
+                            .range(1..=60)
+                            .suffix(" min"),
+                    );
+                });
             });
         });
         ui.menu_button("Clip", |ui| {

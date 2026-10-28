@@ -9,6 +9,7 @@ use timeline::{
     Timeline, TimelineError, VideoFormat,
 };
 
+use crate::autosave::Autosave;
 use crate::clip_art::{ClipArt, ThumbnailWorker, WaveformWorker};
 use crate::effects::{self, EffectControls, SideTab};
 use crate::export::ExportDialog;
@@ -62,6 +63,7 @@ pub struct Editor {
     pub(crate) after_save: Option<AfterDiscard>,
     /// Set once the user chose to close, so the close request isn't questioned again.
     pub(crate) quitting: bool,
+    pub(crate) autosave: Autosave,
     pub(crate) window_title: String,
     pub(crate) ctx: egui::Context,
     pub(crate) export: Option<ExportDialog>,
@@ -133,6 +135,7 @@ impl Editor {
             project_path: None,
             confirm_discard: None,
             after_save: None,
+            autosave: Autosave::default(),
             quitting: false,
             window_title: String::new(),
             ctx: creation_context.egui_ctx.clone(),
@@ -437,6 +440,7 @@ impl eframe::App for Editor {
             self.open_path(path);
         }
         self.poll_store();
+        self.autosave_tick();
         self.poll_imports();
         self.poll_proxies(&ctx);
         if self.importer.as_ref().is_some_and(Importer::is_busy) {
