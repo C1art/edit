@@ -1,4 +1,6 @@
-use timeline::{Generator, Rgb, Shape, ShapeKind, TextAlign, TextStroke, Title, TitleFont};
+use timeline::{
+    Generator, Rgb, Scroll, Shape, ShapeKind, TextAlign, TextStroke, Title, TitleFont, TitleMotion,
+};
 
 use crate::mixer::{response_state, Change};
 
@@ -106,6 +108,73 @@ fn title_controls(ui: &mut egui::Ui, title: &mut Title) -> Option<Change> {
             change = color_button(ui, background).or(change);
         }
     });
+    motion_controls(ui, &mut title.motion).or(change)
+}
+
+/// Roll and crawl, with where the title starts and ends and its timing in frames.
+fn motion_controls(ui: &mut egui::Ui, motion: &mut TitleMotion) -> Option<Change> {
+    let mut change = None;
+    let scroll = motion.scroll().unwrap_or_default();
+    ui.horizontal(|ui| {
+        ui.label("Motion");
+        egui::ComboBox::from_id_salt("title_motion")
+            .selected_text(motion.name())
+            .show_ui(ui, |ui| {
+                for choice in [
+                    TitleMotion::Still,
+                    TitleMotion::Roll(scroll),
+                    TitleMotion::CrawlLeft(scroll),
+                    TitleMotion::CrawlRight(scroll),
+                ] {
+                    if ui.selectable_value(motion, choice, choice.name()).changed() {
+                        change = Some(Change::Commit);
+                    }
+                }
+            });
+    });
+    let Some(mut scroll) = motion.scroll() else {
+        return change;
+    };
+    ui.horizontal(|ui| {
+        for (on, label) in [
+            (&mut scroll.start_off_screen, "Start Off Screen"),
+            (&mut scroll.end_off_screen, "End Off Screen"),
+        ] {
+            if ui.checkbox(on, label).changed() {
+                change = Some(Change::Commit);
+            }
+        }
+    });
+    egui::Grid::new("title_scroll_timing").show(ui, |ui| {
+        let Scroll {
+            preroll,
+            ease_in,
+            ease_out,
+            postroll,
+            ..
+        } = &mut scroll;
+        for (index, (label, frames)) in [
+            ("Preroll", preroll),
+            ("Ease-In", ease_in),
+            ("Ease-Out", ease_out),
+            ("Postroll", postroll),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            ui.label(label);
+            let drag = ui.add(
+                egui::DragValue::new(frames)
+                    .range(0..=100_000)
+                    .suffix(" fr"),
+            );
+            change = response_state(&drag, change);
+            if index % 2 == 1 {
+                ui.end_row();
+            }
+        }
+    });
+    *motion = motion.with_scroll(scroll);
     change
 }
 
