@@ -7,6 +7,9 @@ use timeline::{
 use crate::editor::Editor;
 use crate::effects::{add_transition, apply_transition, audio_category, AUDIO_CATEGORIES};
 
+/// Premiere's bins for video transitions, as [`TransitionKind::category`] names them.
+const TRANSITION_CATEGORIES: [&str; 6] = ["3D Motion", "Dissolve", "Iris", "Slide", "Wipe", "Zoom"];
+
 /// An entry of the Effects panel, carried while it is dragged onto the timeline.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum EffectItem {
@@ -71,10 +74,13 @@ pub(crate) fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
             (category.name(), items.collect::<Vec<_>>())
         });
         folder(ui, "Video Effects", searching, &groups, &shown, &mut chosen);
-        let transitions = TransitionKind::VIDEO
-            .iter()
-            .map(|&kind| EffectItem::Transition(TrackKind::Video, kind));
-        let groups = [("", transitions.collect())];
+        let groups = TRANSITION_CATEGORIES.map(|category| {
+            let items = TransitionKind::VIDEO
+                .iter()
+                .filter(|kind| kind.category() == category)
+                .map(|&kind| EffectItem::Transition(TrackKind::Video, kind));
+            (category, items.collect::<Vec<_>>())
+        });
         folder(
             ui,
             "Video Transitions",
