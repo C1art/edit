@@ -1,15 +1,19 @@
 mod audio_worker;
 mod clock;
 mod command;
+mod compose;
 mod composed;
 mod error;
+mod export;
 mod frame_picker;
 mod mixdown;
 mod player;
+mod sequence_mix;
 mod track_audio;
 mod track_video;
 mod video_worker;
 
 pub use composed::{ComposedFrame, Layer, Levels};
 pub use error::PlaybackError;
+pub use export::{ExportEvent, ExportJob, ExportSettings};
 pub use player::Player;

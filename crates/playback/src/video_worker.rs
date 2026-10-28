@@ -3,12 +3,12 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use crossbeam::channel::{Receiver, RecvTimeoutError, Sender, TrySendError};
-use timeline::{Sequence, SourceId, Ticks, TrackRef};
+use timeline::{Sequence, SourceId, Ticks};
 
 use crate::command::{coalesce, Coalesced, Command, Event};
 use crate::frame_picker::TaggedFrame;
 use crate::track_video::TrackVideo;
-use crate::{ComposedFrame, Layer, PlaybackError};
+use crate::{compose, ComposedFrame};
 
 /// How long the worker waits for room in the frame queue before checking commands again.
 const BACKOFF: Duration = Duration::from_millis(4);
@@ -108,9 +108,6 @@ impl VideoWorker {
         while self.channels.stale_frames.try_recv().is_ok() {}
         let rate = self.sequence.format.frame_rate;
         self.next_frame = rate.frame_at(position, self.sequence.timebase);
-        self.tracks.resize_with(self.sequence.video.len(), || {
-            TrackVideo::new(self.sequence.timebase)
-        });
         if self.channels.reports_seeks {
             let _ = self.channels.events.send(Event::Seeked {
                 generation,
@@ -132,34 +129,16 @@ impl VideoWorker {
             });
             return;
         }
-        let mut layers = Vec::new();
-        for ((index, track), decoder) in sequence.video.iter().enumerate().zip(&mut self.tracks) {
-            if track.muted {
-                continue;
-            }
-            let Some(clip) = track.clip_at(pts) else {
-                continue;
-            };
-            let Some(media) = sequence.media_item(clip.source) else {
-                continue;
-            };
-            match decoder.frame_at(media, clip.source_time(pts)) {
-                Ok(Some(frame)) => layers.push(Layer {
-                    track: TrackRef::video(index),
-                    frame,
-                }),
-                Ok(None) => {}
-                Err(error) => {
-                    decoder.reset();
-                    if !self.warned.contains(&media.id) {
-                        self.warned.push(media.id);
-                        let _ = self
-                            .channels
-                            .events
-                            .send(Event::Warning(PlaybackError::Media(error)));
-                    }
-                }
-            }
+        let mut warnings = Vec::new();
+        let layers = compose::layers_at(
+            &sequence,
+            pts,
+            &mut self.tracks,
+            &mut self.warned,
+            &mut warnings,
+        );
+        for warning in warnings {
+            let _ = self.channels.events.send(Event::Warning(warning));
         }
         self.pending = Some(ComposedFrame { pts, layers });
         self.next_frame += 1;
