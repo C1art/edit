@@ -1,8 +1,28 @@
-use crate::{Edit, Marker, MarkerColor, MarkerId, Sequence, Ticks, TimelineError};
+use crate::edit::ops;
+use crate::{ClipId, Edit, Marker, MarkerColor, MarkerId, Sequence, Ticks, TimelineError};
+
+/// Whose markers an edit changes. A clip's markers are timed in its source.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum MarkerOwner {
+    #[default]
+    Sequence,
+    Clip(ClipId),
+}
+
+fn markers_mut(
+    sequence: &mut Sequence,
+    owner: MarkerOwner,
+) -> Result<&mut Vec<Marker>, TimelineError> {
+    match owner {
+        MarkerOwner::Sequence => Ok(&mut sequence.markers),
+        MarkerOwner::Clip(id) => Ok(&mut ops::clip_mut(sequence, id)?.markers),
+    }
+}
 
 /// Adds an unnamed marker, unless one is already at `at`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AddMarker {
+    pub owner: MarkerOwner,
     pub at: Ticks,
 }
 
@@ -15,24 +35,27 @@ impl Edit for AddMarker {
         if self.at < Ticks::ZERO {
             return Err(TimelineError::BeforeSequenceStart);
         }
-        if sequence.markers.iter().any(|marker| marker.at == self.at) {
+        let id = MarkerId(sequence.ids.next());
+        let markers = markers_mut(sequence, self.owner)?;
+        if markers.iter().any(|marker| marker.at == self.at) {
             return Err(TimelineError::NothingToEdit);
         }
         let marker = Marker {
-            id: MarkerId(sequence.ids.next()),
+            id,
             at: self.at,
             name: String::new(),
             comment: String::new(),
             color: MarkerColor::default(),
         };
-        let index = sequence.markers.partition_point(|m| m.at < self.at);
-        sequence.markers.insert(index, marker);
+        let index = markers.partition_point(|m| m.at < self.at);
+        markers.insert(index, marker);
         Ok(())
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoveMarker {
+    pub owner: MarkerOwner,
     pub id: MarkerId,
 }
 
@@ -42,9 +65,10 @@ impl Edit for RemoveMarker {
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
-        let count = sequence.markers.len();
-        sequence.markers.retain(|marker| marker.id != self.id);
-        if sequence.markers.len() == count {
+        let markers = markers_mut(sequence, self.owner)?;
+        let count = markers.len();
+        markers.retain(|marker| marker.id != self.id);
+        if markers.len() == count {
             return Err(TimelineError::MarkerNotFound(self.id));
         }
         Ok(())
@@ -54,6 +78,7 @@ impl Edit for RemoveMarker {
 /// Replaces a marker's position, name, comment and color, keeping markers in time order.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UpdateMarker {
+    pub owner: MarkerOwner,
     pub marker: Marker,
 }
 
@@ -66,17 +91,17 @@ impl Edit for UpdateMarker {
         if self.marker.at < Ticks::ZERO {
             return Err(TimelineError::BeforeSequenceStart);
         }
-        let index = sequence
-            .markers
+        let markers = markers_mut(sequence, self.owner)?;
+        let index = markers
             .iter()
             .position(|marker| marker.id == self.marker.id)
             .ok_or(TimelineError::MarkerNotFound(self.marker.id))?;
-        if sequence.markers[index] == self.marker {
+        if markers[index] == self.marker {
             return Err(TimelineError::NothingToEdit);
         }
-        sequence.markers.remove(index);
-        let index = sequence.markers.partition_point(|m| m.at <= self.marker.at);
-        sequence.markers.insert(index, self.marker.clone());
+        markers.remove(index);
+        let index = markers.partition_point(|m| m.at <= self.marker.at);
+        markers.insert(index, self.marker.clone());
         Ok(())
     }
 }

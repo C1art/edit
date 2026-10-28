@@ -102,6 +102,10 @@ pub struct Clip {
     /// The video track of a multi-camera source the clip shows; other sources ignore it.
     #[serde(default, skip_serializing_if = "is_first_angle")]
     pub angle: usize,
+    /// Points in the clip's source, in source time, so they travel with it through moves,
+    /// trims and slips. Sorted by time.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub markers: Vec<Marker>,
 }
 
 fn is_first_angle(angle: &usize) -> bool {
@@ -138,6 +142,7 @@ impl Clip {
             label: None,
             remap: None,
             angle: 0,
+            markers: Vec::new(),
         }
     }
 
@@ -189,6 +194,17 @@ impl Clip {
         } else {
             self.start + self.speed.sequence_span(source - self.source_in)
         }
+    }
+
+    /// The markers within the part of the source the clip plays, with the sequence
+    /// position each plays at.
+    pub fn shown_markers(&self) -> impl Iterator<Item = (Ticks, &Marker)> {
+        let (first, last) = (self.source_in, self.source_out());
+        let (low, high) = (first.min(last), first.max(last));
+        self.markers
+            .iter()
+            .filter(move |marker| low <= marker.at && marker.at < high)
+            .map(|marker| (self.position_of(marker.at), marker))
     }
 
     /// Moves the head `delta` later in the sequence (earlier when negative), keeping the

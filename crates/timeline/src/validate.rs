@@ -43,6 +43,7 @@ fn check_tracks<'a>(
             if clip.duration <= Ticks::ZERO {
                 return Err(TimelineError::NonPositiveDuration);
             }
+            check_markers(&clip.markers)?;
             if clip.start < previous_end {
                 return Err(TimelineError::ClipOverlap {
                     track: track_ref,
