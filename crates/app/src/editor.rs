@@ -48,7 +48,7 @@ pub struct Editor {
     pub(crate) mixer: Mixer,
     pub(crate) effects: EffectControls,
     pub(crate) captions: CaptionPanel,
-    side_tab: SideTab,
+    pub(crate) side_tab: SideTab,
     /// The gain in dB being typed into the clip gain dialog, while it is showing.
     pub(crate) gain_prompt: Option<f32>,
     pub(crate) speed_prompt: Option<crate::speed_dialog::SpeedPrompt>,

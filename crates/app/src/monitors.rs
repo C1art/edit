@@ -109,6 +109,10 @@ fn program(editor: &mut Editor, ui: &mut egui::Ui) {
     };
     let response = program.picture(ui, picture_size(ui));
     outline(ui, &response, focused);
+    crate::effects::mask_overlay(editor, ui, response.rect);
+    let Some(program) = &mut editor.program else {
+        return;
+    };
     let marks = editor.timeline.sequence().marks;
     transport::ui(ui, &mut program.player, Some(marks));
     ui.horizontal(|ui| {

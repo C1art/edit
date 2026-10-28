@@ -2,6 +2,8 @@ mod color;
 mod curves;
 mod generated;
 mod look;
+mod mask_overlay;
+mod masks;
 mod sound;
 mod transitions;
 
@@ -20,6 +22,7 @@ use crate::mixer::Change;
 use crate::project_files::PathPurpose;
 
 pub use color::LutSlot;
+pub use mask_overlay::mask_overlay;
 pub use transitions::apply_default_transition;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -76,10 +79,7 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
 
 fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
     let time = keyframe_time(editor, clip);
-    let mut look = match &editor.effects.adjusting {
-        Some((id, look)) if *id == clip.id => look.clone(),
-        _ => clip.look.clone(),
-    };
+    let mut look = shown_look(editor, clip);
     let mut drawing = editor
         .timeline
         .sequence()
@@ -117,7 +117,19 @@ fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
         clip: clip.id,
         look,
     };
-    match output.change {
+    adjust_look(editor, edit, output.change);
+}
+
+/// The look `clip` is shown with: the one being dragged, if any, else its own.
+fn shown_look(editor: &Editor, clip: &Clip) -> Look {
+    match &editor.effects.adjusting {
+        Some((id, look)) if *id == clip.id => look.clone(),
+        _ => clip.look.clone(),
+    }
+}
+
+fn adjust_look(editor: &mut Editor, edit: SetClipLook, change: Option<Change>) {
+    match change {
         Some(Change::Live) => {
             show_live(editor, &edit);
             editor.effects.adjusting = Some((edit.clip, edit.look));

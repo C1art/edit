@@ -39,6 +39,7 @@ pub(super) fn controls(ui: &mut egui::Ui, look: &mut Look, time: Ticks) -> Outpu
         .default_open(true)
         .show(ui, |ui| {
             rows.param(ui, "Opacity", &mut look.opacity, 0.0..=100.0, "%");
+            super::masks::controls(ui, &mut rows, &mut look.masks);
         });
     egui::CollapsingHeader::new("Crop").show(ui, |ui| {
         let crop = &mut look.crop;
