@@ -4,6 +4,7 @@ mod edit;
 mod error;
 mod history;
 mod look;
+mod marker;
 mod media;
 mod mix;
 mod model;
@@ -17,14 +18,16 @@ mod validate;
 pub use audio_plan::{audio_fade, audio_span};
 pub use color::ColorCorrection;
 pub use edit::{
-    clamp_delta, AddTrack, Clipboard, CloseGap, Edge, ImportMedia, Lift, MoveClips, PasteClips,
-    PlaceClip, PlaceMode, Razor, RazorTarget, RemoveMedia, RemoveTrack, RippleDelete, Roll,
-    SetClipGain, SetClipLook, SetMasterGain, SetProxy, SetSequenceFormat, SetTrackMix,
-    SetTrackSwitch, SetTransition, Slide, Slip, TrackSwitch, Trim, TrimMode,
+    clamp_delta, AddMarker, AddTrack, Clipboard, CloseGap, Edge, ImportMedia, Lift, MoveClips,
+    PasteClips, PlaceClip, PlaceMode, Razor, RazorTarget, RemoveMarker, RemoveMedia, RemoveTrack,
+    RippleDelete, Roll, SetClipGain, SetClipLook, SetMasterGain, SetProxy, SetSequenceFormat,
+    SetTrackMix, SetTrackSwitch, SetTransition, Slide, Slip, TrackSwitch, Trim, TrimMode,
+    UpdateMarker,
 };
 pub use error::TimelineError;
 pub use history::{preview, Edit, EditCommand, Timeline};
 pub use look::{Crop, Look, Motion, VideoEffect};
+pub use marker::{Marker, MarkerColor, MarkerId};
 pub use media::{MediaItem, SourceId};
 pub use mix::{Gain, Pan};
 pub use model::{

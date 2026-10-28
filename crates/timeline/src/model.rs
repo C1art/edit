@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{FrameRate, Gain, Look, MediaItem, Pan, SourceId, Ticks, Timebase, Transition};
+use crate::{FrameRate, Gain, Look, Marker, MediaItem, Pan, SourceId, Ticks, Timebase, Transition};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct ClipId(pub u64);
@@ -191,6 +191,9 @@ pub struct Sequence {
     pub audio: Vec<Track>,
     #[serde(default)]
     pub master: Gain,
+    /// Sorted by time.
+    #[serde(default)]
+    pub markers: Vec<Marker>,
     #[serde(default)]
     pub(crate) ids: IdGenerator,
 }
@@ -204,6 +207,7 @@ impl Sequence {
             video: Vec::new(),
             audio: Vec::new(),
             master: Gain::UNITY,
+            markers: Vec::new(),
             ids: IdGenerator::default(),
         }
     }
@@ -296,6 +300,19 @@ impl Sequence {
             .map(|(_, track)| track.end())
             .max()
             .unwrap_or(Ticks::ZERO)
+    }
+
+    /// The first marker strictly after `position`.
+    pub fn marker_after(&self, position: Ticks) -> Option<&Marker> {
+        self.markers.iter().find(|marker| marker.at > position)
+    }
+
+    /// The last marker strictly before `position`.
+    pub fn marker_before(&self, position: Ticks) -> Option<&Marker> {
+        self.markers
+            .iter()
+            .rev()
+            .find(|marker| marker.at < position)
     }
 
     /// Clip starts and ends on all tracks, sorted and deduplicated, for snapping and

@@ -1,12 +1,13 @@
 use std::fmt;
 
-use crate::{ClipId, SourceId, Ticks, TrackRef};
+use crate::{ClipId, MarkerId, SourceId, Ticks, TrackRef};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TimelineError {
     TrackNotFound(TrackRef),
     TrackLocked(TrackRef),
     ClipNotFound(ClipId),
+    MarkerNotFound(MarkerId),
     MediaNotFound(SourceId),
     MediaInUse(SourceId),
     ClipOverlap {
@@ -14,6 +15,7 @@ pub enum TimelineError {
         at: Ticks,
     },
     NonPositiveDuration,
+    MarkersOutOfOrder,
     BeforeSequenceStart,
     /// The clip would need source material before the start or after the end of its media.
     OutsideMedia(ClipId),
@@ -27,6 +29,7 @@ impl fmt::Display for TimelineError {
             Self::TrackNotFound(track) => write!(f, "track {track} does not exist"),
             Self::TrackLocked(track) => write!(f, "track {track} is locked"),
             Self::ClipNotFound(clip) => write!(f, "clip {} does not exist", clip.0),
+            Self::MarkerNotFound(marker) => write!(f, "marker {} does not exist", marker.0),
             Self::MediaNotFound(source) => write!(f, "media {} is not in the project", source.0),
             Self::MediaInUse(source) => write!(f, "media {} is used in the sequence", source.0),
             Self::ClipOverlap { track, at } => {
@@ -36,8 +39,9 @@ impl fmt::Display for TimelineError {
                     at.0
                 )
             }
+            Self::MarkersOutOfOrder => f.write_str("markers are out of time order"),
             Self::NonPositiveDuration => f.write_str("clip duration must be positive"),
-            Self::BeforeSequenceStart => f.write_str("clips can't start before the sequence"),
+            Self::BeforeSequenceStart => f.write_str("nothing can start before the sequence"),
             Self::OutsideMedia(_) => f.write_str("not enough source media for this edit"),
             Self::NothingToEdit => f.write_str("nothing to edit"),
         }

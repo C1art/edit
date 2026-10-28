@@ -2,7 +2,7 @@ use crate::{Sequence, Ticks, TimelineError};
 
 /// Checks the invariants every edit must preserve: on each track clips are sorted,
 /// don't overlap and have positive length, every clip stays within its media, and
-/// locked tracks are untouched since `before`.
+/// locked tracks are untouched since `before`. Markers are in time order.
 pub(crate) fn check(before: &Sequence, after: &Sequence) -> Result<(), TimelineError> {
     for (track_ref, track) in after.tracks() {
         let was_locked = before
@@ -33,6 +33,16 @@ pub(crate) fn check(before: &Sequence, after: &Sequence) -> Result<(), TimelineE
             }
             previous_end = clip.end();
         }
+    }
+    let markers = &after.markers;
+    if markers
+        .first()
+        .is_some_and(|marker| marker.at < Ticks::ZERO)
+    {
+        return Err(TimelineError::BeforeSequenceStart);
+    }
+    if markers.windows(2).any(|pair| pair[0].at > pair[1].at) {
+        return Err(TimelineError::MarkersOutOfOrder);
     }
     Ok(())
 }
