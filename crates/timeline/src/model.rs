@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     AudioEffect, Bin, Captions, FrameRate, Gain, Label, Look, Marker, Marks, MediaItem, Pan, Param,
-    SourceId, Speed, Ticks, Timebase, Transition,
+    SourceId, Speed, Ticks, TimeRemap, Timebase, Transition,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -96,6 +96,9 @@ pub struct Clip {
     /// Shown instead of the track's color on the timeline.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<Label>,
+    /// Replaces `speed` and `reverse` on a video clip whose speed changes over time.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remap: Option<TimeRemap>,
 }
 
 impl Clip {
@@ -126,6 +129,7 @@ impl Clip {
             transition_in: None,
             transition_out: None,
             label: None,
+            remap: None,
         }
     }
 
@@ -136,6 +140,9 @@ impl Clip {
     pub fn source_out(&self) -> Ticks {
         if self.hold {
             return self.source_in + Ticks(1);
+        }
+        if let Some(remap) = &self.remap {
+            return remap.source_at(self.duration);
         }
         self.source_in + self.speed.source_span(self.duration)
     }
@@ -154,6 +161,8 @@ impl Clip {
     pub fn source_time(&self, position: Ticks) -> Ticks {
         if self.hold {
             self.source_in
+        } else if let Some(remap) = &self.remap {
+            remap.source_at(position - self.start)
         } else if self.reverse {
             self.source_in + self.speed.source_span(self.end() - position) - Ticks(1)
         } else {
@@ -165,6 +174,8 @@ impl Clip {
     pub fn position_of(&self, source: Ticks) -> Ticks {
         if self.hold {
             self.start
+        } else if let Some(remap) = &self.remap {
+            self.start + remap.offset_of(source)
         } else if self.reverse {
             self.end() - self.speed.sequence_span(source + Ticks(1) - self.source_in)
         } else {
@@ -175,7 +186,10 @@ impl Clip {
     /// Moves the head `delta` later in the sequence (earlier when negative), keeping the
     /// tail and the source showing there. The caller moves `start`.
     pub(crate) fn trim_head(&mut self, delta: Ticks) {
-        if !self.reverse && !self.hold {
+        if let (Some(remap), false) = (&mut self.remap, self.hold) {
+            remap.shift(Ticks::ZERO - delta, Ticks::ZERO);
+            self.source_in = remap.source_at(Ticks::ZERO);
+        } else if !self.reverse && !self.hold {
             self.source_in = self.source_in + self.speed.source_span(delta);
         }
         self.duration = self.duration - delta;
@@ -184,7 +198,7 @@ impl Clip {
     /// Moves the tail `delta` later in the sequence, keeping the head and the source
     /// showing there.
     pub(crate) fn trim_tail(&mut self, delta: Ticks) {
-        if self.reverse && !self.hold {
+        if self.reverse && !self.hold && self.remap.is_none() {
             let source_out = self.source_out();
             self.duration = self.duration + delta;
             self.source_in = source_out - self.speed.source_span(self.duration);

@@ -17,6 +17,7 @@ mod ops;
 mod paste;
 mod place;
 mod range;
+mod remap;
 mod speed;
 mod structure;
 mod trim;
@@ -45,6 +46,7 @@ pub use nest::{AddNest, InNest, NestClips};
 pub use paste::{Clipboard, PasteClips};
 pub use place::{PlaceClip, PlaceMode, Razor, RazorTarget};
 pub use range::{ExtractMarked, LiftMarked, RippleTrimToPlayhead, SetMarks};
+pub use remap::{AddSpeedKeyframe, RemoveSpeedKeyframe, RemoveTimeRemap, SetSegmentSpeed};
 pub use speed::{RateStretch, SetClipSpeed};
 pub use structure::{
     AddTrack, ImportMedia, RemoveMedia, RemoveTrack, SetProxy, SetSequenceFormat, SetTrackSwitch,

@@ -144,6 +144,9 @@ impl Edit for Slip {
         for id in ids {
             let clip = ops::clip_mut(sequence, id)?;
             clip.source_in = clip.source_in + self.delta;
+            if let Some(remap) = &mut clip.remap {
+                remap.shift(Ticks::ZERO, self.delta);
+            }
         }
         Ok(())
     }

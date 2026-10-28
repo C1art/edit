@@ -52,7 +52,7 @@ fn check_tracks<'a>(
             let item = media
                 .media_item(clip.source)
                 .ok_or(TimelineError::MediaNotFound(clip.source))?;
-            if !clip.speed.is_in_range() {
+            if !clip.speed.is_in_range() || clip.remap.as_ref().is_some_and(|r| !r.is_valid()) {
                 return Err(TimelineError::SpeedOutOfRange(clip.id));
             }
             if clip.source_in < Ticks::ZERO || clip.source_out() > item.duration {

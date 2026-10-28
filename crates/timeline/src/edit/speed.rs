@@ -54,6 +54,7 @@ impl Edit for SetClipSpeed {
             shift.get_or_insert(duration - clip.duration);
             let clip = ops::clip_mut(sequence, id)?;
             clip.speed = self.speed;
+            clip.remap = None;
             clip.duration = duration;
             clip.reverse = self.reverse;
             clip.maintain_pitch = self.maintain_pitch;
@@ -91,7 +92,9 @@ impl Edit for RateStretch {
                 Edge::Head => clip.duration - self.delta,
                 Edge::Tail => clip.duration + self.delta,
             };
-            if !clip.hold {
+            if let Some(remap) = &mut clip.remap {
+                remap.stretch(clip.duration, duration);
+            } else if !clip.hold {
                 clip.speed =
                     Speed::stretch(source, duration).ok_or(TimelineError::NonPositiveDuration)?;
             }
