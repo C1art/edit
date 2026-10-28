@@ -1,4 +1,4 @@
-use render::{ChromaKey, ColorKey, LeaveColor, Mirror, PixelEffects, Ramp};
+use render::{ChromaKey, ColorKey, LeaveColor, Mirror, PixelEffects, PlaneTransform, Ramp, Warp};
 use timeline::{ColorMatch, RampShape, Rgb, Ticks, Timebase, VideoEffect};
 
 /// The per-pixel part of an effect stack at source time `time`. The shader runs each
@@ -142,8 +142,48 @@ pub(crate) fn pixel_effects(
                 });
             }
             VideoEffect::CornerPin { corners } => {
-                pixel.reshape.corner_pin =
-                    Some(corners.each_ref().map(|corner| corner.each_ref().map(unit)));
+                let corners = corners.each_ref().map(|corner| corner.each_ref().map(unit));
+                pixel.reshape.push(Warp::CornerPin(corners));
+            }
+            VideoEffect::Transform {
+                anchor,
+                position,
+                scale,
+                skew,
+                skew_axis,
+                rotation,
+                ..
+            } => pixel.reshape.push(Warp::Transform(PlaneTransform {
+                anchor: anchor.each_ref().map(unit),
+                position: position.each_ref().map(unit),
+                scale: scale.each_ref().map(unit),
+                skew_degrees: skew.value_at(time),
+                skew_axis_degrees: skew_axis.value_at(time),
+                rotation_degrees: rotation.value_at(time),
+            })),
+            VideoEffect::Basic3D {
+                swivel,
+                tilt,
+                distance,
+            } => pixel.reshape.push(Warp::Turn {
+                swivel: swivel.value_at(time).to_radians(),
+                tilt: tilt.value_at(time).to_radians(),
+                distance: unit(distance),
+            }),
+            VideoEffect::Spherize { radius, center } => {
+                pixel.style.sphere_radius = radius.value_at(time).max(0.0);
+                pixel.style.sphere_center = center.each_ref().map(unit);
+            }
+            VideoEffect::Emboss {
+                direction,
+                relief,
+                contrast,
+                blend,
+            } => {
+                pixel.style.emboss_direction = direction.value_at(time).to_radians();
+                pixel.style.emboss_relief = relief.value_at(time).max(0.0);
+                pixel.style.emboss_contrast = unit(contrast).max(0.0);
+                pixel.style.emboss_mix = 1.0 - unit(blend).clamp(0.0, 1.0);
             }
             VideoEffect::StrobeLight {
                 color,
@@ -225,4 +265,17 @@ pub(crate) fn linear(color: Rgb) -> [f32; 3] {
             ((encoded + 0.055) / 1.055).powf(2.4)
         }
     })
+}
+
+/// How much the stack's Transform effects let through, each fading the layer further.
+pub(crate) fn transform_opacity(effects: &[VideoEffect], time: Ticks) -> f32 {
+    effects
+        .iter()
+        .filter_map(|effect| match effect {
+            VideoEffect::Transform { opacity, .. } => {
+                Some((opacity.value_at(time) / 100.0).clamp(0.0, 1.0))
+            }
+            _ => None,
+        })
+        .product()
 }

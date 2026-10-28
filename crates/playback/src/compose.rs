@@ -13,7 +13,7 @@ use timeline::{
 use crate::clip_decoders::ClipDecoders;
 use crate::generated::{caption_frame, scrolled};
 use crate::grades::grade_for;
-use crate::pixel_effects::{linear, pixel_effects};
+use crate::pixel_effects::{linear, pixel_effects, transform_opacity};
 use crate::time_effects::{posterized, with_timecode};
 use crate::track_video::TrackVideo;
 use crate::{Layer, LayerPicture, PlaybackError, Resolution};
@@ -311,7 +311,7 @@ fn layer_look(
         scale: percent(&look.motion.scale) * reveal.zoom,
         rotation_degrees: value(&look.motion.rotation),
         crop: [&crop.left, &crop.top, &crop.right, &crop.bottom].map(percent),
-        opacity: percent(&look.opacity) * reveal.fade,
+        opacity: percent(&look.opacity) * transform_opacity(&look.effects, time) * reveal.fade,
         opacity_masks: opacity_masks(&look.masks, time),
         blur: look.blurriness_at(time) / BLURRINESS_PER_SIGMA,
         color: color_adjust(&look.color, time),
