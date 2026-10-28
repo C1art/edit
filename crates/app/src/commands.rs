@@ -1,7 +1,7 @@
 use timeline::{
     AddFrameHold, AddTrack, Clipboard, CloseGap, FrameFit, JoinThroughEdits, Lift, LinkedSelection,
     PasteClips, PlaceMode, Razor, RazorTarget, RippleDelete, SetClipsEnabled, SetGrouped,
-    SetLinked, SetLinkedSelection, SetToFrameSize, Timecode, TrackKind,
+    SetLinked, SetLinkedSelection, SetToFrameSize, Timecode, TrackKind, TrackRef,
 };
 
 use crate::editor::Editor;
@@ -28,8 +28,46 @@ impl Editor {
         }
     }
 
-    /// Cuts every unlocked track at the playhead.
+    /// Cuts the selected clips under the playhead there, or with none of those, the
+    /// targeted tracks.
     pub(crate) fn add_edit(&mut self) {
+        let at = self.playhead();
+        let sequence = self.timeline.sequence();
+        let selected: Vec<_> = self
+            .view
+            .selection
+            .iter()
+            .copied()
+            .filter(|&id| {
+                sequence
+                    .clip(id)
+                    .is_some_and(|(_, clip)| clip.start < at && at < clip.end())
+            })
+            .collect();
+        let target = if selected.is_empty() {
+            let targets = &self.view.targets;
+            let targeted = [
+                targets.video.map(TrackRef::video),
+                targets.audio.map(TrackRef::audio),
+            ];
+            let tracks: Vec<_> = targeted
+                .into_iter()
+                .flatten()
+                .filter(|&track| sequence.track(track).is_some_and(|track| !track.locked))
+                .collect();
+            if tracks.is_empty() {
+                self.notice("Target a track to add an edit to");
+                return;
+            }
+            RazorTarget::Tracks(tracks)
+        } else {
+            RazorTarget::Clips(selected)
+        };
+        self.apply(Razor { at, target });
+    }
+
+    /// Cuts every unlocked track at the playhead.
+    pub(crate) fn add_edit_to_all_tracks(&mut self) {
         let tracks = self
             .timeline
             .sequence()

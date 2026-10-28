@@ -216,6 +216,11 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             if ui.add(add_edit).clicked() {
                 editor.add_edit();
             }
+            let add_edit_all = Button::new("Add Edit to All Tracks")
+                .shortcut_text(editor.keymap.label(Command::AddEditToAllTracks));
+            if ui.add(add_edit_all).clicked() {
+                editor.add_edit_to_all_tracks();
+            }
             let render = Button::new("Render In to Out")
                 .shortcut_text(editor.keymap.label(Command::RenderInToOut));
             if ui.add(render).clicked() {
@@ -320,6 +325,19 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                 .shortcut_text(editor.keymap.label(Command::RippleTrimNext));
             if ui.add(next).clicked() {
                 editor.ripple_trim_to_playhead(Edge::Tail);
+            }
+            for (edge, name, command) in [
+                (
+                    Edge::Head,
+                    "Trim Previous Edit to Playhead",
+                    Command::TrimPrevious,
+                ),
+                (Edge::Tail, "Trim Next Edit to Playhead", Command::TrimNext),
+            ] {
+                let trim = Button::new(name).shortcut_text(editor.keymap.label(command));
+                if ui.add(trim).clicked() {
+                    editor.trim_to_playhead(edge);
+                }
             }
             if ui
                 .add(

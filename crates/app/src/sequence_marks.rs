@@ -1,5 +1,6 @@
 use timeline::{
-    Edge, ExtractMarked, LiftMarked, Marks, RippleTrimToPlayhead, SetMarks, Ticks, TrackKind,
+    Edge, ExtractMarked, LiftMarked, Marks, RippleTrimToPlayhead, SetMarks, Ticks, TimelineError,
+    TrackKind, TrimToPlayhead,
 };
 
 use crate::editor::Editor;
@@ -106,6 +107,20 @@ impl Editor {
         // What was under the playhead closes up to the cut before it.
         if self.apply(trim) {
             self.seek_program(span.start);
+        }
+    }
+
+    pub(crate) fn trim_to_playhead(&mut self, edge: Edge) {
+        let trim = TrimToPlayhead {
+            at: self.playhead(),
+            edge,
+        };
+        match self.timeline.apply(trim) {
+            Ok(()) => {}
+            Err(TimelineError::NothingToEdit) => {
+                self.notice("Put the playhead over a clip to trim it");
+            }
+            Err(error) => self.notice(format!("Cannot trim: {error}")),
         }
     }
 

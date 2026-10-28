@@ -114,6 +114,7 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         Command::Insert => placing::edit_from_source(editor, PlaceMode::Insert),
         Command::Overwrite => placing::edit_from_source(editor, PlaceMode::Overwrite),
         Command::AddEdit => editor.add_edit(),
+        Command::AddEditToAllTracks => editor.add_edit_to_all_tracks(),
         Command::ExtendEdit => editor.extend_edit(),
         Command::SelectAtPlayhead => editor.select_at_playhead(),
         Command::VideoTransition => {
@@ -126,6 +127,8 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         Command::ExtractMarked => editor.extract_marked(),
         Command::RippleTrimPrevious => editor.ripple_trim_to_playhead(Edge::Head),
         Command::RippleTrimNext => editor.ripple_trim_to_playhead(Edge::Tail),
+        Command::TrimPrevious => editor.trim_to_playhead(Edge::Head),
+        Command::TrimNext => editor.trim_to_playhead(Edge::Tail),
         Command::SelectNearestEditPoint => editor.select_nearest_edit_point(),
         Command::ToggleTrimType => editor.toggle_trim_type(),
         Command::TrimBackward => editor.trim_edit_point(-1),

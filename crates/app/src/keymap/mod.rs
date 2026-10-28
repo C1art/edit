@@ -341,6 +341,6 @@ mod tests {
         );
         assert_eq!(keymap.command(chord("Shift+Equals")), Some(Command::ZoomIn));
         assert_eq!(keymap.command(chord("Alt+A")), None);
-        assert_eq!(keymap.command(chord("Ctrl+Shift+K")), None);
+        assert_eq!(keymap.command(chord("Ctrl+Shift+J")), None);
     }
 }

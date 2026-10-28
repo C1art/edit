@@ -39,6 +39,7 @@ pub enum Command {
     Insert,
     Overwrite,
     AddEdit,
+    AddEditToAllTracks,
     ExtendEdit,
     SelectAtPlayhead,
     VideoTransition,
@@ -47,6 +48,8 @@ pub enum Command {
     ExtractMarked,
     RippleTrimPrevious,
     RippleTrimNext,
+    TrimPrevious,
+    TrimNext,
     SelectNearestEditPoint,
     ToggleTrimType,
     TrimBackward,
@@ -128,7 +131,7 @@ const WORKSPACE_WORDS: [(&str, &str); WORKSPACE_SLOTS as usize] = [
 ];
 
 impl Command {
-    pub const ALL: [Self; 116] = [
+    pub const ALL: [Self; 119] = [
         Self::NewProject,
         Self::OpenProject,
         Self::Save,
@@ -167,6 +170,7 @@ impl Command {
         Self::Insert,
         Self::Overwrite,
         Self::AddEdit,
+        Self::AddEditToAllTracks,
         Self::ExtendEdit,
         Self::SelectAtPlayhead,
         Self::VideoTransition,
@@ -175,6 +179,8 @@ impl Command {
         Self::ExtractMarked,
         Self::RippleTrimPrevious,
         Self::RippleTrimNext,
+        Self::TrimPrevious,
+        Self::TrimNext,
         Self::SelectNearestEditPoint,
         Self::ToggleTrimType,
         Self::TrimBackward,
@@ -289,6 +295,7 @@ impl Command {
             Self::Insert => ("insert", "Insert"),
             Self::Overwrite => ("overwrite", "Overwrite"),
             Self::AddEdit => ("add_edit", "Add Edit"),
+            Self::AddEditToAllTracks => ("add_edit_all_tracks", "Add Edit to All Tracks"),
             Self::ExtendEdit => ("extend_edit", "Extend Selected Edit to Playhead"),
             Self::SelectAtPlayhead => ("select_at_playhead", "Select Clip at Playhead"),
             Self::VideoTransition => ("video_transition", "Apply Video Transition"),
@@ -300,6 +307,8 @@ impl Command {
                 "Ripple Trim Previous Edit to Playhead",
             ),
             Self::RippleTrimNext => ("ripple_trim_next", "Ripple Trim Next Edit to Playhead"),
+            Self::TrimPrevious => ("trim_previous", "Trim Previous Edit to Playhead"),
+            Self::TrimNext => ("trim_next", "Trim Next Edit to Playhead"),
             Self::SelectNearestEditPoint => {
                 ("select_nearest_edit_point", "Select Nearest Edit Point")
             }
@@ -405,6 +414,7 @@ impl Command {
             | JoinThroughEdits | MakeSubclip | Insert | Overwrite | NudgeLeft | NudgeRight
             | NudgeLeftFive | NudgeRightFive | NudgeUp | NudgeDown => "Clip",
             AddEdit
+            | AddEditToAllTracks
             | ExtendEdit
             | SelectAtPlayhead
             | VideoTransition
@@ -413,6 +423,8 @@ impl Command {
             | ExtractMarked
             | RippleTrimPrevious
             | RippleTrimNext
+            | TrimPrevious
+            | TrimNext
             | SelectNearestEditPoint
             | ToggleTrimType
             | TrimBackward
