@@ -44,7 +44,7 @@ impl FrameRate {
     }
 
     /// Frames counted per timecode second: the rate rounded up, so 29.97 counts to 30.
-    fn nominal(self) -> i64 {
+    pub(crate) fn nominal(self) -> i64 {
         i64::from(self.num.div_ceil(self.den))
     }
 

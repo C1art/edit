@@ -42,6 +42,7 @@ mod timecode;
 mod track;
 mod transition;
 mod validate;
+mod xmeml;
 
 pub use audio_effect::AudioEffect;
 pub use audio_plan::{audio_fade, audio_span, clip_level, track_automation};
@@ -107,3 +108,4 @@ pub use three_point::{edit_points, EditPoints, FourPoint};
 pub use time::{Ticks, Timebase};
 pub use timecode::{FrameRate, Timecode};
 pub use transition::{nearest_transition_edge, Transition, TransitionKind};
+pub use xmeml::to_xmeml;
