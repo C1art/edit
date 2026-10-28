@@ -4,6 +4,7 @@ mod captions;
 mod clip_art;
 mod clip_menu;
 mod commands;
+mod duck_dialog;
 mod editor;
 mod effects;
 mod export;

@@ -75,6 +75,13 @@ pub(crate) fn items(editor: &mut Editor, ui: &mut Ui) {
     if ui.add(gain).clicked() {
         editor.prompt_clip_gain();
     }
+    if ui
+        .button("Auto Duck…")
+        .on_hover_text("Lower the selected music wherever other tracks are heard")
+        .clicked()
+    {
+        editor.open_auto_duck();
+    }
     ui.menu_button("Label", |ui| labels(editor, ui));
     ui.menu_button("Video Options", |ui| {
         if ui.button("Add Frame Hold").clicked() {

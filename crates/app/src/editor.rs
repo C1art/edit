@@ -65,6 +65,7 @@ pub struct Editor {
     pub(crate) marker_filter: crate::markers_panel::MarkerFilter,
     pub(crate) pool: media_pool::PoolView,
     pub(crate) gain_dialog: Option<crate::gain_dialog::GainDialog>,
+    pub(crate) duck_dialog: Option<crate::duck_dialog::DuckDialog>,
     pub(crate) attributes_dialog: Option<crate::attributes_dialog::AttributesDialog>,
     pub(crate) loudness: Option<crate::loudness_window::LoudnessWindow>,
     pub(crate) speed_prompt: Option<crate::speed_dialog::SpeedPrompt>,
@@ -159,6 +160,7 @@ impl Editor {
             marker_filter: Default::default(),
             pool: Default::default(),
             gain_dialog: None,
+            duck_dialog: None,
             attributes_dialog: None,
             loudness: None,
             speed_prompt: None,
@@ -379,6 +381,7 @@ impl eframe::App for Editor {
         crate::project_files::discard_dialog(self, &ctx);
         crate::marker_dialog::dialog(self, &ctx);
         crate::gain_dialog::dialog(self, &ctx);
+        crate::duck_dialog::dialog(self, &ctx);
         crate::attributes_dialog::dialog(self, &ctx);
         crate::loudness_window::window(self, &ctx);
         crate::speed_dialog::dialog(self, &ctx);
