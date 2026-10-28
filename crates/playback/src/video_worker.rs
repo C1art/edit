@@ -35,6 +35,7 @@ pub(crate) fn spawn(
             next_frame: 0,
             pending: None,
             finished: true,
+            composed: false,
             warned: Vec::new(),
         }
         .run();
@@ -50,6 +51,8 @@ struct VideoWorker {
     next_frame: i64,
     pending: Option<ComposedFrame>,
     finished: bool,
+    /// Whether a frame went out since the last seek.
+    composed: bool,
     /// Media already reported as unreadable.
     warned: Vec<SourceId>,
 }
@@ -104,6 +107,7 @@ impl VideoWorker {
         self.generation = generation;
         self.pending = None;
         self.finished = false;
+        self.composed = false;
         while self.channels.stale_frames.try_recv().is_ok() {}
         let rate = self.sequence.format.frame_rate;
         self.next_frame = rate.frame_at(position, self.sequence.timebase);
@@ -121,6 +125,17 @@ impl VideoWorker {
             .format
             .frame_rate
             .frame_start(self.next_frame, sequence.timebase);
+        // A seek to the end shows the last frame, or nothing in an empty sequence, so
+        // the picture from before the seek doesn't linger, as after undoing every edit.
+        if pts >= sequence.duration() && !self.composed {
+            let last = sequence.duration() - Ticks(1);
+            let shown = (last >= Ticks::ZERO).then(|| {
+                let rate = sequence.format.frame_rate;
+                rate.frame_start(rate.frame_at(last, sequence.timebase), sequence.timebase)
+            });
+            self.compose(&sequence, shown);
+            return;
+        }
         if pts >= sequence.duration() {
             self.finished = true;
             let _ = self.channels.events.send(Event::Ended {
@@ -128,18 +143,29 @@ impl VideoWorker {
             });
             return;
         }
+        self.compose(&sequence, Some(pts));
+        self.next_frame += 1;
+    }
+
+    /// Queues the frame at `pts`, or an empty one for `None`.
+    fn compose(&mut self, sequence: &Sequence, pts: Option<Ticks>) {
         let mut warnings = Vec::new();
-        let layers = compose::layers_at(
-            &sequence,
-            pts,
-            &mut self.tracks,
-            &mut self.warned,
-            &mut warnings,
-        );
+        let layers = pts.map_or_else(Vec::new, |pts| {
+            compose::layers_at(
+                sequence,
+                pts,
+                &mut self.tracks,
+                &mut self.warned,
+                &mut warnings,
+            )
+        });
         for warning in warnings {
             let _ = self.channels.events.send(Event::Warning(warning));
         }
-        self.pending = Some(ComposedFrame { pts, layers });
-        self.next_frame += 1;
+        self.pending = Some(ComposedFrame {
+            pts: pts.unwrap_or(Ticks::ZERO),
+            layers,
+        });
+        self.composed = true;
     }
 }
