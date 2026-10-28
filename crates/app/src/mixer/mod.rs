@@ -145,7 +145,7 @@ fn strip(editor: &mut Editor, ui: &mut egui::Ui, channel: Channel) {
             };
             let meter = editor.mixer.meters.get(track_ref.index).copied();
             (
-                track_ref.to_string(),
+                track.name.clone().unwrap_or_else(|| track_ref.to_string()),
                 track.volume,
                 track.pan,
                 Some([
@@ -211,7 +211,13 @@ fn strip(editor: &mut Editor, ui: &mut egui::Ui, channel: Channel) {
             if pass.is_some() {
                 title = title.color(RECORDING);
             }
-            ui.label(title);
+            let label = ui.add(egui::Label::new(title).truncate());
+            match channel {
+                Channel::Track(track) if name != track.to_string() => {
+                    label.on_hover_text(format!("{track} {name}"));
+                }
+                _ => {}
+            }
         }
         if let Channel::Track(track) = channel {
             mode_picker(ui, &mut editor.mixer, track);

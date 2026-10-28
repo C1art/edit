@@ -76,8 +76,12 @@ fn settle(editor: &mut Editor, change: Change, edit: impl Edit + 'static) {
 fn owned(editor: &Editor, channel: Channel) -> Option<(String, Vec<AudioEffect>)> {
     match channel {
         Channel::Track(track) => {
-            let effects = editor.timeline.sequence().track(track)?.effects.clone();
-            Some((track.to_string(), effects))
+            let owner = editor.timeline.sequence().track(track)?;
+            let name = owner
+                .name
+                .as_ref()
+                .map_or_else(|| track.to_string(), |name| format!("{track} {name}"));
+            Some((name, owner.effects.clone()))
         }
         Channel::Submix(id) => {
             let submix = submixes::find(editor, id)?;

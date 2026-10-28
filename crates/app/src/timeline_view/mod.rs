@@ -15,8 +15,8 @@ use std::collections::BTreeSet;
 
 use egui::{Rect, Sense};
 use timeline::{
-    ClipId, MarkerId, MarkerOwner, Sequence, SetTrackSwitch, SourceId, Ticks, Timeline, TrackKind,
-    TrackRef,
+    AddTrack, ClipId, MarkerId, MarkerOwner, RemoveTrack, RenameTrack, Sequence, SetTrackSwitch,
+    SourceId, Ticks, Timeline, TrackKind, TrackRef,
 };
 
 use crate::clip_art::ClipArt;
@@ -119,6 +119,7 @@ pub struct TimelineView {
     context_clip: bool,
     /// Audio tracks showing their automation in place of their clips' volume lines.
     automation_shown: BTreeSet<TrackRef>,
+    renaming: Option<header::Renaming>,
     pub heights: TrackHeights,
     /// The costly segments, each with whether a render preview of it is ready.
     pub render_bar: Vec<(std::ops::Range<Ticks>, bool)>,
@@ -139,6 +140,7 @@ impl Default for TimelineView {
             context_marker: None,
             context_clip: false,
             automation_shown: BTreeSet::new(),
+            renaming: None,
             heights: TrackHeights::default(),
             render_bar: Vec::new(),
         }
@@ -314,6 +316,7 @@ impl TimelineView {
                     sequence,
                     &self.targets,
                     automation,
+                    &mut self.renaming,
                 )
             })
             .collect();
@@ -327,9 +330,25 @@ impl TimelineView {
                     }
                 }
                 HeaderAction::Switch(track, switch, on) => {
-                    if let Err(error) = timeline.apply(SetTrackSwitch { track, switch, on }) {
-                        output.errors.push(error.to_string());
-                    }
+                    report(
+                        timeline.apply(SetTrackSwitch { track, switch, on }),
+                        &mut output.errors,
+                    );
+                }
+                HeaderAction::Rename(track, name) => {
+                    report(
+                        timeline.apply(RenameTrack {
+                            track,
+                            name: Some(name),
+                        }),
+                        &mut output.errors,
+                    );
+                }
+                HeaderAction::Add(kind) => {
+                    report(timeline.apply(AddTrack { kind }), &mut output.errors)
+                }
+                HeaderAction::Delete(track) => {
+                    report(timeline.apply(RemoveTrack { track }), &mut output.errors)
                 }
             }
         }
@@ -428,4 +447,11 @@ fn handle_drop(
         });
     }
     response.dnd_hover_payload::<SourceId>().map(|_| at)
+}
+
+fn report(result: Result<(), timeline::TimelineError>, errors: &mut Vec<String>) {
+    match result {
+        Ok(()) | Err(timeline::TimelineError::NothingToEdit) => {}
+        Err(error) => errors.push(error.to_string()),
+    }
 }
