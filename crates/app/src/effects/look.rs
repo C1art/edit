@@ -1,11 +1,10 @@
 use std::ops::RangeInclusive;
 
 use egui::{DragValue, RichText};
-use timeline::{Look, Param, Ticks, VideoEffect};
+use timeline::{Look, Param, Rgb, Ticks, VideoEffect};
 
 use crate::mixer::{response_state, Change};
 
-const DEFAULT_BLURRINESS: i32 = 1_000;
 const ANIMATED: egui::Color32 = egui::Color32::from_rgb(90, 160, 240);
 
 pub(super) struct Output {
@@ -60,16 +59,14 @@ pub(super) fn controls(ui: &mut egui::Ui, look: &mut Look, time: Ticks) -> Outpu
         .show(ui, |ui| {
             let mut removed = None;
             for (index, effect) in look.effects.iter_mut().enumerate() {
-                ui.push_id(index, |ui| match effect {
-                    VideoEffect::GaussianBlur { blurriness } => {
-                        ui.horizontal(|ui| {
-                            ui.label(RichText::new("Gaussian Blur").strong());
-                            if ui.small_button("Remove").clicked() {
-                                removed = Some(index);
-                            }
-                        });
-                        rows.param(ui, "Blurriness", blurriness, 0.0..=500.0, "");
-                    }
+                ui.push_id(index, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(effect.name()).strong());
+                        if ui.small_button("Remove").clicked() {
+                            removed = Some(index);
+                        }
+                    });
+                    rows.effect(ui, effect);
                 });
             }
             if let Some(index) = removed {
@@ -77,11 +74,11 @@ pub(super) fn controls(ui: &mut egui::Ui, look: &mut Look, time: Ticks) -> Outpu
                 rows.commit();
             }
             ui.menu_button("Add Effect", |ui| {
-                if ui.button("Gaussian Blur").clicked() {
-                    look.effects.push(VideoEffect::GaussianBlur {
-                        blurriness: Param::new(DEFAULT_BLURRINESS),
-                    });
-                    rows.commit();
+                for effect in VideoEffect::catalog() {
+                    if ui.button(effect.name()).clicked() {
+                        look.effects.push(effect);
+                        rows.commit();
+                    }
                 }
             });
         });
@@ -119,6 +116,62 @@ struct Rows {
 impl Rows {
     fn commit(&mut self) {
         self.output.change = Some(Change::Commit);
+    }
+
+    fn effect(&mut self, ui: &mut egui::Ui, effect: &mut VideoEffect) {
+        match effect {
+            VideoEffect::GaussianBlur { blurriness } => {
+                self.param(ui, "Blurriness", blurriness, 0.0..=500.0, "");
+            }
+            VideoEffect::HorizontalFlip
+            | VideoEffect::VerticalFlip
+            | VideoEffect::BlackAndWhite => {}
+            VideoEffect::Tint {
+                black,
+                white,
+                amount,
+            } => {
+                self.color(ui, "Map Black To", black);
+                self.color(ui, "Map White To", white);
+                self.param(ui, "Amount", amount, 0.0..=100.0, "%");
+            }
+            VideoEffect::Invert { amount } => {
+                self.param(ui, "Blend", amount, 0.0..=100.0, "%");
+            }
+            VideoEffect::Sharpen { amount } => {
+                self.param(ui, "Amount", amount, 0.0..=500.0, "");
+            }
+            VideoEffect::Vignette {
+                amount,
+                midpoint,
+                feather,
+            } => {
+                self.param(ui, "Amount", amount, -100.0..=100.0, "");
+                self.param(ui, "Midpoint", midpoint, 0.0..=100.0, "");
+                self.param(ui, "Feather", feather, 0.0..=100.0, "");
+            }
+            VideoEffect::UltraKey {
+                color,
+                tolerance,
+                softness,
+            } => {
+                self.color(ui, "Key Color", color);
+                self.param(ui, "Tolerance", tolerance, 0.0..=100.0, "%");
+                self.param(ui, "Softness", softness, 0.0..=100.0, "%");
+            }
+        }
+    }
+
+    fn color(&mut self, ui: &mut egui::Ui, label: &str, color: &mut Rgb) {
+        ui.horizontal(|ui| {
+            ui.add_space(20.0);
+            ui.add_sized([72.0, 18.0], egui::Label::new(label));
+            let mut rgb = [color.r, color.g, color.b];
+            if ui.color_edit_button_srgb(&mut rgb).changed() {
+                *color = Rgb::new(rgb[0], rgb[1], rgb[2]);
+                self.commit();
+            }
+        });
     }
 
     /// A value with its keyframe controls: the first button turns animation on and off,
