@@ -2,6 +2,7 @@ mod color;
 mod curves;
 mod generated;
 mod key_selection;
+mod keying;
 mod lane;
 mod look;
 mod mask_overlay;

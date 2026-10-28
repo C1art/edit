@@ -1,6 +1,5 @@
 use timeline::{
-    ColorChange, ColorMatch, EffectCategory, KeyOutput, MatteChannel, RampShape, Rgb,
-    TimecodeSource, VideoEffect,
+    ColorChange, ColorMatch, EffectCategory, RampShape, Rgb, TimecodeSource, VideoEffect,
 };
 
 use super::look::Rows;
@@ -266,74 +265,12 @@ impl Rows {
                 self.param(ui, "Midpoint", midpoint, 0.0..=100.0, "");
                 self.param(ui, "Feather", feather, 0.0..=100.0, "");
             }
-            VideoEffect::UltraKey {
-                color,
-                tolerance,
-                softness,
-                output,
-                pedestal,
-                contrast,
-                choke,
-                soften,
-                spill,
-            } => {
-                self.options(
-                    ui,
-                    "Output",
-                    "key_output",
-                    output,
-                    KeyOutput::ALL,
-                    KeyOutput::name,
-                );
-                self.color(ui, "Key Color", color);
-                self.param(ui, "Tolerance", tolerance, 0.0..=100.0, "%");
-                self.param(ui, "Softness", softness, 0.0..=100.0, "%");
-                self.param(ui, "Pedestal", pedestal, 0.0..=100.0, "%");
-                self.param(ui, "Choke", choke, 0.0..=100.0, "%");
-                self.param(ui, "Soften", soften, 0.0..=100.0, "%");
-                self.param(ui, "Contrast", contrast, 0.0..=100.0, "%");
-                self.param(ui, "Spill", spill, 0.0..=100.0, "%");
-            }
-            VideoEffect::TrackMatteKey {
-                matte,
-                channel,
-                reverse,
-            } => {
-                self.choice(ui, "Matte", |ui| {
-                    let name = |track: Option<usize>| {
-                        track.map_or("None".to_owned(), |index| format!("Video {}", index + 1))
-                    };
-                    let mut chosen = false;
-                    egui::ComboBox::from_id_salt("matte")
-                        .selected_text(name(*matte))
-                        .show_ui(ui, |ui| {
-                            let tracks = std::iter::once(None).chain((0..video_tracks).map(Some));
-                            for track in tracks {
-                                chosen |= ui.selectable_value(matte, track, name(track)).clicked();
-                            }
-                        });
-                    chosen
-                });
-                self.options(
-                    ui,
-                    "Composite Using",
-                    "matte_channel",
-                    channel,
-                    MatteChannel::ALL,
-                    MatteChannel::name,
-                );
-                self.choice(ui, "Reverse", |ui| ui.checkbox(reverse, "").changed());
-            }
             VideoEffect::WarpStabilizer(stabilizer) => self.stabilizer(ui, stabilizer),
-            VideoEffect::ColorKey {
-                color,
-                tolerance,
-                softness,
-            } => {
-                self.color(ui, "Key Color", color);
-                self.param(ui, "Tolerance", tolerance, 0.0..=100.0, "%");
-                self.param(ui, "Softness", softness, 0.0..=100.0, "%");
-            }
+            VideoEffect::UltraKey { .. }
+            | VideoEffect::TrackMatteKey { .. }
+            | VideoEffect::ColorKey { .. }
+            | VideoEffect::LumaKey { .. }
+            | VideoEffect::AlphaAdjust { .. } => self.keying(ui, effect, video_tracks),
             VideoEffect::LeaveColor {
                 color,
                 amount,
@@ -386,6 +323,20 @@ impl Rows {
                 self.param(ui, "Center Y", y, -100.0..=200.0, "%");
                 self.param(ui, "Angle", angle, -360.0..=360.0, "°");
             }
+            VideoEffect::Solarize { threshold } => {
+                self.param(ui, "Threshold", threshold, 0.0..=100.0, "%");
+            }
+            VideoEffect::Threshold { level } => {
+                self.param(ui, "Level", level, 0.0..=255.0, "");
+            }
+            VideoEffect::Replicate { count } => {
+                self.param(ui, "Count", count, 2.0..=16.0, "");
+            }
+            VideoEffect::ColorBalanceRgb { gains } => {
+                for (name, gain) in ["Red", "Green", "Blue"].into_iter().zip(gains) {
+                    self.param(ui, name, gain, 0.0..=200.0, "%");
+                }
+            }
             VideoEffect::CornerPin { corners } => {
                 let names = ["Upper Left", "Upper Right", "Lower Left", "Lower Right"];
                 for (name, [x, y]) in names.into_iter().zip(corners) {
@@ -435,7 +386,7 @@ impl Rows {
         });
     }
 
-    fn color(&mut self, ui: &mut egui::Ui, label: &str, color: &mut Rgb) {
+    pub(super) fn color(&mut self, ui: &mut egui::Ui, label: &str, color: &mut Rgb) {
         ui.horizontal(|ui| {
             ui.add_space(20.0);
             ui.add_sized([72.0, 18.0], egui::Label::new(label));
