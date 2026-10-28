@@ -19,7 +19,7 @@ pub fn ui(ui: &mut egui::Ui, player: &mut Player, marks: Option<Marks>) {
     let sequence = player.sequence();
     let (timebase, rate) = (sequence.timebase, sequence.format.frame_rate);
     let position = player.position();
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         let label = if player.is_playing() { "Pause" } else { "Play" };
         if ui
             .add(Button::new(label).min_size([56.0, 0.0].into()))

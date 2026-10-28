@@ -353,7 +353,7 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
 
 pub fn timeline_toolbar(editor: &mut Editor, ui: &mut egui::Ui) {
     crate::nesting::breadcrumbs(editor, ui);
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         for tool in Tool::ALL {
             if ui
                 .selectable_label(editor.view.tool == tool, tool.label())

@@ -9,8 +9,10 @@ use crate::project_files::PathPurpose;
 use crate::transport;
 use crate::trim_monitor::TrimMonitor;
 
-/// Space below each picture for its scrub bar, transport and buttons.
+/// Space below each picture for its scrub bar, transport and buttons, until they
+/// have been measured.
 const CONTROLS_HEIGHT: f32 = 84.0;
+const SMALLEST_PICTURE: f32 = 60.0;
 
 /// Which monitor the transport keys drive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,9 +24,28 @@ pub enum Focus {
 /// The source monitor on the left and the program monitor on the right.
 pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
     ui.columns(2, |columns| {
-        source(editor, &mut columns[0]);
-        program(editor, &mut columns[1]);
+        fitted(&mut columns[0], |ui| source(editor, ui));
+        fitted(&mut columns[1], |ui| program(editor, ui));
     });
+}
+
+fn controls_id(ui: &egui::Ui) -> egui::Id {
+    ui.scope_id().with("controls_height")
+}
+
+/// Shows a monitor, then measures what it showed besides its picture, so that its
+/// picture leaves room for buttons wrapped onto more rows in a narrow monitor.
+fn fitted(ui: &mut egui::Ui, monitor: impl FnOnce(&mut egui::Ui)) {
+    let top = ui.cursor().top();
+    let picture = picture_size(ui).y;
+    monitor(ui);
+    let id = controls_id(ui);
+    let measured = (ui.min_rect().bottom() - top - picture).max(0.0);
+    let controls = ui.data(|data| data.get_temp(id)).unwrap_or(CONTROLS_HEIGHT);
+    if (measured - controls).abs() > 0.5 {
+        ui.data_mut(|data| data.insert_temp(id, measured));
+        ui.ctx().request_repaint();
+    }
 }
 
 fn title(ui: &mut egui::Ui, text: &str, focused: bool) {
@@ -37,9 +58,12 @@ fn title(ui: &mut egui::Ui, text: &str, focused: bool) {
 }
 
 fn picture_size(ui: &egui::Ui) -> egui::Vec2 {
+    let controls = ui
+        .data(|data| data.get_temp(controls_id(ui)))
+        .unwrap_or(CONTROLS_HEIGHT);
     egui::vec2(
         ui.available_width(),
-        (ui.available_height() - CONTROLS_HEIGHT).max(60.0),
+        (ui.available_height() - controls).max(SMALLEST_PICTURE),
     )
 }
 
@@ -76,7 +100,7 @@ fn source(editor: &mut Editor, ui: &mut egui::Ui) {
     transport::ui(ui, &mut source.viewer.player, Some(marks));
     let mut place = None;
     let mut subclip = false;
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         if ui.button("Mark In").on_hover_text("I").clicked() {
             source.mark_in();
         }
@@ -132,7 +156,7 @@ fn program(editor: &mut Editor, ui: &mut egui::Ui) {
     };
     let marks = editor.timeline.sequence().marks;
     transport::ui(ui, &mut program.player, Some(marks));
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         if ui.button("Mark In").on_hover_text("I").clicked() {
             editor.mark_sequence_in();
         }
