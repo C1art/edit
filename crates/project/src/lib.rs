@@ -71,6 +71,17 @@ impl ProjectFile {
     }
 }
 
+/// A digest of `value` as a project saves it, the same from run to run and build to
+/// build, so files named by it can be found again.
+pub fn fingerprint<T: Serialize>(value: &T) -> Result<u64, ProjectError> {
+    const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+    const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
+    let text = json::to_value(value)?.to_text();
+    Ok(text.bytes().fold(FNV_OFFSET, |hash, byte| {
+        (hash ^ u64::from(byte)).wrapping_mul(FNV_PRIME)
+    }))
+}
+
 /// Brings a document from `version` up to the current layout, one version at a time.
 fn migrate(document: &mut Value, version: u32) -> Result<(), ProjectError> {
     // Version 1 is the first layout; migrations from it are added here as it changes.
