@@ -36,6 +36,18 @@ impl TimelineView {
                 }
             }
         }
+        if response.secondary_clicked() {
+            if let Some(pos) = response.interact_pointer_pos() {
+                let hit = layout::hit(sequence, &rows, &scale, pos);
+                self.context_clip = matches!(hit, Hit::Body { .. } | Hit::Edge { .. });
+                if let Hit::Body { clip, .. } | Hit::Edge { clip, .. } = hit {
+                    if !self.selection.contains(&clip) {
+                        self.selection = sequence.with_links(&[clip]);
+                    }
+                }
+            }
+            return;
+        }
         if response.clicked() {
             if let Some(pos) = response.interact_pointer_pos() {
                 let hit = layout::hit(sequence, &rows, &scale, pos);

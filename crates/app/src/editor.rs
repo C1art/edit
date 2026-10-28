@@ -405,6 +405,9 @@ impl Editor {
             playhead,
             playing,
         );
+        if let Some(response) = output.clip_menu {
+            response.context_menu(|ui| crate::clip_menu::context(self, ui));
+        }
         for error in output.errors {
             self.notice(format!("Cannot edit: {error}"));
         }

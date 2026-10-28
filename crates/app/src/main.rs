@@ -2,6 +2,7 @@ mod attributes_dialog;
 mod autosave;
 mod captions;
 mod clip_art;
+mod clip_menu;
 mod commands;
 mod editor;
 mod effects;

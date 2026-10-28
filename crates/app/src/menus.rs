@@ -1,5 +1,5 @@
 use egui::{Button, MenuBar, ViewportCommand};
-use timeline::{Edge, FrameFit, Generator, PlaceMode, Rgb, Title, TrackKind};
+use timeline::{Edge, Generator, PlaceMode, Rgb, Title, TrackKind};
 
 use crate::editor::Editor;
 use crate::placing;
@@ -147,44 +147,7 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                 placing::edit_from_source(editor, PlaceMode::Overwrite);
             }
             ui.separator();
-            let speed = Button::new("Speed/Duration…")
-                .shortcut_text(shortcut(ui, shortcuts::SPEED_DURATION));
-            if ui.add(speed).clicked() {
-                editor.speed_duration();
-            }
-            let enable =
-                Button::new("Enable").shortcut_text(shortcut(ui, shortcuts::TOGGLE_ENABLED));
-            if ui.add(enable).clicked() {
-                editor.toggle_enabled();
-            }
-            let link = if editor.selection_linked() == Some(true) {
-                "Unlink"
-            } else {
-                "Link"
-            };
-            let link = Button::new(link).shortcut_text(shortcut(ui, shortcuts::TOGGLE_LINK));
-            if ui.add(link).clicked() {
-                editor.toggle_link();
-            }
-            let gain = Button::new("Audio Gain…").shortcut_text("G");
-            if ui.add(gain).clicked() {
-                editor.prompt_clip_gain();
-            }
-            ui.menu_button("Video Options", |ui| {
-                if ui.button("Add Frame Hold").clicked() {
-                    editor.add_frame_hold();
-                }
-                if ui.button("Set to Frame Size").clicked() {
-                    editor.set_to_frame_size(FrameFit::Fit);
-                }
-                if ui.button("Set to Fill Frame").clicked() {
-                    editor.set_to_frame_size(FrameFit::Fill);
-                }
-            });
-            ui.separator();
-            if ui.button("Nest").clicked() {
-                editor.nest_selection();
-            }
+            crate::clip_menu::items(editor, ui);
         });
         ui.menu_button("Markers", |ui| {
             crate::marker_dialog::menu(editor, ui);

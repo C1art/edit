@@ -85,6 +85,8 @@ pub struct TimelineOutput {
     pub drop: Option<MediaDrop>,
     /// A double-clicked clip, whose media to open.
     pub open_clip: Option<ClipId>,
+    /// The clip area while a right-click on a clip has its menu open.
+    pub clip_menu: Option<egui::Response>,
     pub errors: Vec<String>,
 }
 
@@ -108,6 +110,8 @@ pub struct TimelineView {
     drag: Option<Drag>,
     /// The marker a ruler context menu was opened on.
     context_marker: Option<MarkerId>,
+    /// Whether the last right-click in the clip area landed on a clip.
+    context_clip: bool,
     /// Audio tracks showing their automation in place of their clips' volume lines.
     automation_shown: BTreeSet<TrackRef>,
 }
@@ -125,6 +129,7 @@ impl Default for TimelineView {
             width: 1000.0,
             drag: None,
             context_marker: None,
+            context_clip: false,
             automation_shown: BTreeSet::new(),
         }
     }
@@ -222,6 +227,7 @@ impl TimelineView {
         );
         let top = tracks.top() - self.scroll_y;
         self.handle_gestures(&response, timeline, scale, top, playhead, &mut output);
+        output.clip_menu = self.context_clip.then(|| response.clone());
         let drop_guide = handle_drop(&response, timeline.sequence(), scale, top, &mut output);
 
         let sequence = self
