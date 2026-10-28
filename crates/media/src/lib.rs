@@ -1,6 +1,7 @@
 mod error;
 mod ffi;
 mod frames;
+mod peaks;
 mod probe;
 mod proxy;
 mod reader;
@@ -20,6 +21,7 @@ pub fn hardware_decoder() -> Option<&'static str> {
     ffi::hardware_device_name()
 }
 
+pub use peaks::{read_peaks, Peaks};
 pub use probe::{probe, MediaInfo, StreamInfo, StreamKind};
 pub use proxy::{create_proxy, proxy_size};
 pub use reader::{MediaReader, SourceInfo, Streams, VideoInfo};
