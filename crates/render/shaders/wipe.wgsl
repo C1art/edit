@@ -42,6 +42,11 @@ fn wipe_order(pattern: u32, pixel: vec2<f32>, size: vec2<f32>) -> f32 {
             return (fract(pixel.x / square) + odd) * 0.5;
         }
         case 12u: { return max(pixel.x / size.x, pixel.y / size.y); }
+        case 14u: {
+            let across = pixel.x / size.x;
+            let odd = fract(floor(pixel.y / size.y * WIPE_BANDS) * 0.5) > 0.25;
+            return select(across, 1.0 - across, odd);
+        }
         default: {
             let index = floor(pixel / (size.y / WIPE_BLOCKS_DOWN));
             return fract(sin(dot(index, vec2<f32>(12.9898, 78.233))) * 43758.5453);

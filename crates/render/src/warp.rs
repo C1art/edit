@@ -23,6 +23,8 @@ pub enum Warp {
         tilt: f32,
         /// Picture heights it moves away by.
         distance: f32,
+        /// Picture heights behind the picture that the axes it turns about lie.
+        pivot: f32,
     },
 }
 
@@ -59,16 +61,20 @@ impl Warp {
                 swivel,
                 tilt,
                 distance,
+                pivot,
             } => {
-                let (swivel, tilt) = (f64::from(swivel), f64::from(tilt));
+                let (swivel, tilt, pivot) = (f64::from(swivel), f64::from(tilt), f64::from(pivot));
                 let x = (point[0] - 0.5) * aspect;
                 let y = point[1] - 0.5;
-                let (x, z) = (x * swivel.cos(), -x * swivel.sin());
+                let (x, z) = (
+                    x * swivel.cos() - pivot * swivel.sin(),
+                    -x * swivel.sin() - pivot * swivel.cos(),
+                );
                 let (y, z) = (
                     y * tilt.cos() + z * tilt.sin(),
                     -y * tilt.sin() + z * tilt.cos(),
                 );
-                let depth = FOCAL_LENGTH + z + f64::from(distance);
+                let depth = FOCAL_LENGTH + z + pivot + f64::from(distance);
                 if depth < FOCAL_LENGTH * NEAREST {
                     return None;
                 }
@@ -147,6 +153,7 @@ mod tests {
             swivel: 0.5,
             tilt: 0.0,
             distance: 0.0,
+            pivot: 0.0,
         };
         let near = turn.map([1.0, 0.0], 1.0).unwrap();
         let far = turn.map([0.0, 0.0], 1.0).unwrap();
