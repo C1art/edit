@@ -1,4 +1,4 @@
-use timeline::{clamp_delta, Edge, MoveClips, Ticks, TrackKind, Trim, TrimMode};
+use timeline::{clamp_delta, Edge, MoveClips, MoveMode, Ticks, TrackKind, Trim, TrimMode};
 
 use crate::editor::Editor;
 
@@ -19,6 +19,7 @@ impl Editor {
             delta,
             video_tracks: 0,
             audio_tracks: 0,
+            mode: MoveMode::Overwrite,
         };
         let delta = clamp_delta(sequence, target - first.start, make);
         if delta != Ticks::ZERO {
@@ -38,6 +39,7 @@ impl Editor {
             delta: Ticks::ZERO,
             video_tracks: step,
             audio_tracks: -step,
+            mode: MoveMode::Overwrite,
         });
     }
 

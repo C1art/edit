@@ -1,6 +1,6 @@
 use egui::{Pos2, Rangef};
 use timeline::{
-    ClipId, LinkedSelection, MarkerOwner, Razor, RazorTarget, Sequence, SetClipVolume,
+    ClipId, LinkedSelection, MarkerOwner, MoveMode, Razor, RazorTarget, Sequence, SetClipVolume,
     SetTrackAutomation, Ticks, Timeline, TrackKind, TrackRef,
 };
 
@@ -98,7 +98,8 @@ impl TimelineView {
                 .input(|input| input.pointer.press_origin())
                 .unwrap_or(pos);
             let hit = layout::hit(sequence, &rows, &scale, origin);
-            let links = if alt {
+            // Ctrl+Alt rearranges whole linked clips rather than one side of them.
+            let links = if alt && !command {
                 LinkedSelection::Apart
             } else {
                 LinkedSelection::Together
@@ -115,7 +116,11 @@ impl TimelineView {
                 let only = shift.then(|| hit_track(hit)).flatten();
                 self.selection =
                     track_select::pick(sequence, frame_time(origin.x), direction, only);
-            } else if let (true, Hit::Body { clip, .. } | Hit::Edge { clip, .. }) = (alt, hit) {
+            } else if let (
+                LinkedSelection::Apart,
+                Hit::Body { clip, .. } | Hit::Edge { clip, .. },
+            ) = (links, hit)
+            {
                 self.selection = vec![clip];
             }
             let band = self
@@ -171,7 +176,12 @@ impl TimelineView {
                     delta = scale::snap(delta, &edges, &targets, scale.span(SNAP_POINTS));
                 }
                 let over = layout::row_at(&rows, pos.y).map(|row| row.track);
-                let pending = drag.gesture.edit(sequence, delta, over, pos.y);
+                let mode = match (command, alt) {
+                    (true, true) => MoveMode::Rearrange,
+                    (true, false) => MoveMode::Insert,
+                    (false, _) => MoveMode::Overwrite,
+                };
+                let pending = drag.gesture.edit(sequence, delta, over, pos.y, mode);
                 drag.preview = pending.preview(sequence).ok();
                 drag.pending = Some(pending);
             }

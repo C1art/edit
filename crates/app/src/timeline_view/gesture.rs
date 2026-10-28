@@ -1,7 +1,7 @@
 use egui::Rangef;
 use timeline::{
-    clamp_delta, preview, ClipId, Edge, Edit, LinkedSelection, MoveClips, RateStretch, Roll,
-    Sequence, SetClipVolume, SetTrackAutomation, Slide, Slip, Ticks, Timeline, TimelineError,
+    clamp_delta, preview, ClipId, Edge, Edit, LinkedSelection, MoveClips, MoveMode, RateStretch,
+    Roll, Sequence, SetClipVolume, SetTrackAutomation, Slide, Slip, Ticks, Timeline, TimelineError,
     TrackKind, TrackRef, Trim, TrimMode, Unlinked,
 };
 
@@ -152,17 +152,18 @@ impl Gesture {
     }
 
     /// The edit for a drag of `delta` (already snapped and frame-aligned) that ended over
-    /// `track` at height `y`, clamped to what the sequence allows.
+    /// `track` at height `y`, clamped to what the sequence allows; a move does `mode`.
     pub fn edit(
         &self,
         sequence: &Sequence,
         delta: Ticks,
         track: Option<TrackRef>,
         y: f32,
+        mode: MoveMode,
     ) -> PendingEdit {
         match self {
             Self::Move { clips, from } => {
-                PendingEdit::Move(clamped_move(sequence, clips, *from, delta, track))
+                PendingEdit::Move(clamped_move(sequence, clips, *from, delta, track, mode))
             }
             Self::Trim { clips, edge, mode } => {
                 let make = |delta| Trim {
@@ -233,6 +234,7 @@ fn clamped_move(
     from: TrackRef,
     delta: Ticks,
     over: Option<TrackRef>,
+    mode: MoveMode,
 ) -> MoveClips {
     let moved: Vec<(TrackRef, Ticks)> = sequence
         .with_links(clips)
@@ -262,5 +264,6 @@ fn clamped_move(
         delta,
         video_tracks,
         audio_tracks,
+        mode,
     }
 }
