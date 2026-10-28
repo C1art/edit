@@ -4,6 +4,7 @@ use timeline::{
 };
 use timeline::{Timebase, Track};
 
+use crate::audio_effects::EffectChain;
 use crate::clip_audio::{ClipAudio, ClipRead, FrameSource};
 use crate::clip_decoders::ClipDecoders;
 use crate::mixdown;
@@ -16,11 +17,24 @@ pub(crate) struct TracksMix {
     sample_rate: SampleRate,
     /// One tick per output frame.
     rate: Timebase,
-    tracks: Vec<ClipDecoders<ClipAudio<MediaAudio>>>,
+    tracks: Vec<ClipDecoders<Voice>>,
     track_mix: Vec<f32>,
     clip_mix: Vec<f32>,
     /// Media already reported as unreadable.
     warned: Vec<SourceId>,
+}
+
+/// One clip's decoding and the state of its effects.
+struct Voice {
+    audio: ClipAudio<MediaAudio>,
+    effects: EffectChain,
+}
+
+impl Voice {
+    fn reset(&mut self) {
+        self.audio.reset();
+        self.effects.reset();
+    }
 }
 
 /// Peak levels after the faders: one per track, then the master.
@@ -47,7 +61,7 @@ impl TracksMix {
         self.tracks
             .iter_mut()
             .flat_map(ClipDecoders::iter_mut)
-            .for_each(ClipAudio::reset);
+            .for_each(Voice::reset);
     }
 
     /// Writes the mix of `tracks` from output frame `start` over `out`. Clips find
@@ -65,7 +79,10 @@ impl TracksMix {
         let end = start + (out.len() / 2) as i64;
         let sample_rate = self.sample_rate;
         self.tracks.resize_with(tracks.len(), || {
-            ClipDecoders::new(|| ClipAudio::new(MediaAudio::new(timebase, sample_rate)))
+            ClipDecoders::new(|| Voice {
+                audio: ClipAudio::new(MediaAudio::new(timebase, sample_rate)),
+                effects: EffectChain::new(sample_rate),
+            })
         });
         self.track_mix.resize(out.len(), 0.0);
         self.clip_mix.resize(out.len(), 0.0);
@@ -102,7 +119,7 @@ impl TracksMix {
                 let length = usize::try_from(to - from).unwrap_or(0) * 2;
                 let clip_mix = &mut self.clip_mix[..length];
                 clip_mix.fill(0.0);
-                let decoder = decoders.for_clip(clip.id, &keep);
+                let voice = decoders.for_clip(clip.id, &keep);
                 let read = ClipRead {
                     source_in: to_frames(clip.source_in),
                     length: to_frames(clip.end()) - to_frames(clip.start),
@@ -111,11 +128,20 @@ impl TracksMix {
                     maintain_pitch: clip.maintain_pitch,
                 };
                 let into_clip = from - to_frames(clip.start);
-                if let Err(error) = decoder.mix_into(pool, media, &read, into_clip, clip_mix) {
+                if let Err(error) = voice
+                    .audio
+                    .mix_into(pool, media, &read, into_clip, clip_mix)
+                {
                     if !self.warned.contains(&media.id) {
                         self.warned.push(media.id);
                         warnings.push(error);
                     }
+                }
+                if !clip.audio_effects.is_empty() {
+                    let at = clip.source_time(Ticks(from).rescale(self.rate, timebase));
+                    voice
+                        .effects
+                        .process(clip.id, &clip.audio_effects, at, clip_mix);
                 }
                 let (pairs, _) = clip_mix.as_chunks_mut::<2>();
                 for (frame, pair) in (from..to).zip(pairs) {
