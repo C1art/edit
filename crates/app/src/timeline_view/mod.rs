@@ -1,4 +1,5 @@
 mod clip_art;
+mod edit_point;
 mod gesture;
 mod header;
 mod interact;
@@ -21,6 +22,7 @@ use timeline::{
 };
 
 use crate::clip_art::ClipArt;
+pub use edit_point::{EditPoint, TrimType};
 use gesture::{Gesture, PendingEdit};
 use header::HeaderAction;
 pub use markers::color as marker_color;
@@ -114,6 +116,8 @@ pub struct TimelineView {
     pub selection: Vec<ClipId>,
     /// A selected gap: its track and a time inside it.
     pub gap: Option<(TrackRef, Ticks)>,
+    /// A cut selected for keyboard trimming.
+    pub edit_point: Option<EditPoint>,
     pub targets: Targets,
     scroll: Ticks,
     scroll_y: f32,
@@ -141,6 +145,7 @@ impl Default for TimelineView {
             snapping: true,
             selection: Vec::new(),
             gap: None,
+            edit_point: None,
             targets: Targets::default(),
             scroll: Ticks::ZERO,
             scroll_y: 0.0,
@@ -271,6 +276,10 @@ impl TimelineView {
             .unwrap_or(timeline.sequence());
         let rows = layout::rows(sequence, &self.heights, top);
         let painter = ui.painter_at(tracks);
+        let edit_point = self
+            .edit_point
+            .as_ref()
+            .filter(|point| point.is_on(sequence));
         for row in &rows {
             paint::row_background(
                 &painter,
@@ -292,6 +301,9 @@ impl TimelineView {
             let selected_gap = self.gap.filter(|&(track, _)| track == row.track);
             if let Some(range) = selected_gap.and_then(|(track, at)| gap(sequence, track, at)) {
                 paint::gap(&painter, row, &scale, range);
+            }
+            if let Some(point) = edit_point {
+                edit_point::paint(&painter, row, &scale, point);
             }
             if let Some(track) = sequence.track(row.track).filter(|_| automation) {
                 let end = scale.time(tracks.right());

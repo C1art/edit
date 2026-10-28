@@ -90,9 +90,15 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         Command::PasteAttributes => editor.paste_attributes(),
         Command::Clear => editor.lift(),
         Command::RippleDelete => editor.ripple_delete(),
-        Command::CancelDrag => editor.view.cancel_drag(),
+        Command::CancelDrag => {
+            editor.view.cancel_drag();
+            editor.view.edit_point = None;
+        }
         Command::SelectAll => editor.select_all(),
-        Command::DeselectAll => editor.view.selection.clear(),
+        Command::DeselectAll => {
+            editor.view.selection.clear();
+            editor.view.edit_point = None;
+        }
         Command::KeyboardShortcuts => {
             editor.keymap_window = Some(KeymapWindow::default());
         }
@@ -125,6 +131,12 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         Command::ExtractMarked => editor.extract_marked(),
         Command::RippleTrimPrevious => editor.ripple_trim_to_playhead(Edge::Head),
         Command::RippleTrimNext => editor.ripple_trim_to_playhead(Edge::Tail),
+        Command::SelectNearestEditPoint => editor.select_nearest_edit_point(),
+        Command::ToggleTrimType => editor.toggle_trim_type(),
+        Command::TrimBackward => editor.trim_edit_point(-1),
+        Command::TrimForward => editor.trim_edit_point(1),
+        Command::TrimBackwardMany => editor.trim_edit_point(-5),
+        Command::TrimForwardMany => editor.trim_edit_point(5),
         Command::MatchFrame => editor.match_frame(),
         Command::ToggleSnapping => editor.view.snapping = !editor.view.snapping,
         Command::ToggleLinkedSelection => editor.toggle_linked_selection(),

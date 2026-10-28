@@ -50,6 +50,12 @@ pub enum Command {
     ExtractMarked,
     RippleTrimPrevious,
     RippleTrimNext,
+    SelectNearestEditPoint,
+    ToggleTrimType,
+    TrimBackward,
+    TrimForward,
+    TrimBackwardMany,
+    TrimForwardMany,
     MatchFrame,
     ToggleSnapping,
     ToggleLinkedSelection,
@@ -103,7 +109,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Self; 96] = [
+    pub const ALL: [Self; 102] = [
         Self::NewProject,
         Self::OpenProject,
         Self::Save,
@@ -150,6 +156,12 @@ impl Command {
         Self::ExtractMarked,
         Self::RippleTrimPrevious,
         Self::RippleTrimNext,
+        Self::SelectNearestEditPoint,
+        Self::ToggleTrimType,
+        Self::TrimBackward,
+        Self::TrimForward,
+        Self::TrimBackwardMany,
+        Self::TrimForwardMany,
         Self::MatchFrame,
         Self::ToggleSnapping,
         Self::ToggleLinkedSelection,
@@ -255,6 +267,14 @@ impl Command {
                 "Ripple Trim Previous Edit to Playhead",
             ),
             Self::RippleTrimNext => ("ripple_trim_next", "Ripple Trim Next Edit to Playhead"),
+            Self::SelectNearestEditPoint => {
+                ("select_nearest_edit_point", "Select Nearest Edit Point")
+            }
+            Self::ToggleTrimType => ("toggle_trim_type", "Toggle Trim Type"),
+            Self::TrimBackward => ("trim_backward", "Trim Backward"),
+            Self::TrimForward => ("trim_forward", "Trim Forward"),
+            Self::TrimBackwardMany => ("trim_backward_many", "Trim Backward Many"),
+            Self::TrimForwardMany => ("trim_forward_many", "Trim Forward Many"),
             Self::MatchFrame => ("match_frame", "Match Frame"),
             Self::ToggleSnapping => ("toggle_snapping", "Snap in Timeline"),
             Self::ToggleLinkedSelection => ("toggle_linked_selection", "Linked Selection"),
@@ -351,6 +371,12 @@ impl Command {
             | ExtractMarked
             | RippleTrimPrevious
             | RippleTrimNext
+            | SelectNearestEditPoint
+            | ToggleTrimType
+            | TrimBackward
+            | TrimForward
+            | TrimBackwardMany
+            | TrimForwardMany
             | MatchFrame
             | ToggleSnapping
             | ToggleLinkedSelection

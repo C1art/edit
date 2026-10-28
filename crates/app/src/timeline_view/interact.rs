@@ -59,6 +59,9 @@ impl TimelineView {
             }
             return;
         }
+        if response.clicked() || response.drag_started() {
+            self.edit_point = None;
+        }
         if response.clicked() {
             if let Some(pos) = response.interact_pointer_pos() {
                 let hit = layout::hit(sequence, &rows, &scale, pos);

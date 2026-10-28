@@ -288,7 +288,6 @@ fn through_edit_marks(painter: &Painter, row: &Row, scale: &TimeScale, track: &T
     }
 }
 
-/// A diamond at the bottom of the clip for each keyframe it shows.
 /// Premiere's red frame count on a clip slipped out of sync with its link; returns the
 /// width it takes so the name can follow it.
 fn sync_badge(painter: &Painter, rect: Rect, sequence: &Sequence, clip: &Clip) -> f32 {
@@ -315,6 +314,7 @@ fn sync_badge(painter: &Painter, rect: Rect, sequence: &Sequence, clip: &Clip) -
     badge.width() + 2.0
 }
 
+/// A diamond at the bottom of the clip for each keyframe it shows.
 fn keyframe_marks(painter: &Painter, rect: Rect, scale: &TimeScale, clip: &Clip) {
     let y = rect.bottom() - 6.0;
     for time in clip.look.key_times() {

@@ -18,6 +18,7 @@ mod gain_dialog;
 mod history_panel;
 mod import;
 mod interpret_dialog;
+mod keyboard_trim;
 mod keymap;
 mod link_media;
 mod loudness_window;
