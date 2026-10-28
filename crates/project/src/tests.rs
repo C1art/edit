@@ -1,8 +1,9 @@
 use std::path::PathBuf;
 
 use timeline::{
-    Clip, ClipId, Gain, Generator, Keyframe, MediaItem, Nest, Pan, Rgb, SourceId, TextAlign, Ticks,
-    Timebase, Title, TitleFont, Track, Transition, TransitionKind, VideoEffect, VideoFormat,
+    AudioEffect, Clip, ClipId, Gain, Generator, Keyframe, MediaItem, Nest, Pan, Rgb, SourceId,
+    TextAlign, Ticks, Timebase, Title, TitleFont, Track, Transition, TransitionKind, VideoEffect,
+    VideoFormat,
 };
 
 use super::*;
@@ -47,6 +48,7 @@ fn sample() -> ProjectFile {
         Ticks(60),
         Ticks(0),
     ));
+    nest.audio[1].clips[0].audio_effects = AudioEffect::catalog().to_vec();
     nest.master = Gain(-150);
     sequence.media.push(MediaItem {
         id: SourceId(3),

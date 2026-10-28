@@ -1,5 +1,7 @@
 use crate::edit::ops;
-use crate::{ClipId, Edit, Gain, Pan, Param, Sequence, TimelineError, TrackKind, TrackRef};
+use crate::{
+    AudioEffect, ClipId, Edit, Gain, Pan, Param, Sequence, TimelineError, TrackKind, TrackRef,
+};
 
 /// Sets the gain of the audio clips among `clips` and the clips linked to them.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -57,6 +59,34 @@ impl Edit for SetClipVolume {
             return Err(TimelineError::NothingToEdit);
         }
         clip.volume = self.volume.clone();
+        Ok(())
+    }
+}
+
+/// Replaces an audio clip's effects and their settings.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetClipAudioEffects {
+    pub clip: ClipId,
+    pub effects: Vec<AudioEffect>,
+}
+
+impl Edit for SetClipAudioEffects {
+    fn name(&self) -> &'static str {
+        "Audio Effects"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        if sequence
+            .clip(self.clip)
+            .is_some_and(|(track, _)| track.kind != TrackKind::Audio)
+        {
+            return Err(TimelineError::NothingToEdit);
+        }
+        let clip = ops::clip_mut(sequence, self.clip)?;
+        if clip.audio_effects == self.effects {
+            return Err(TimelineError::NothingToEdit);
+        }
+        clip.audio_effects.clone_from(&self.effects);
         Ok(())
     }
 }

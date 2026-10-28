@@ -1,3 +1,4 @@
+mod audio_effect;
 mod audio_plan;
 mod color;
 mod edit;
@@ -20,15 +21,16 @@ mod timecode;
 mod transition;
 mod validate;
 
+pub use audio_effect::AudioEffect;
 pub use audio_plan::{audio_fade, audio_span, clip_level};
 pub use color::ColorCorrection;
 pub use edit::{
     clamp_delta, AddGenerated, AddMarker, AddNest, AddTrack, Clipboard, CloseGap, Edge,
     ImportMedia, InNest, Lift, MoveClips, NestClips, PasteClips, PlaceClip, PlaceMode, RateStretch,
     Razor, RazorTarget, RelinkMedia, RemoveMarker, RemoveMedia, RemoveTrack, RenameMedia,
-    RippleDelete, Roll, SetClipGain, SetClipLook, SetClipSpeed, SetClipVolume, SetClipsEnabled,
-    SetGenerator, SetMasterGain, SetProxy, SetSequenceFormat, SetTrackMix, SetTrackSwitch,
-    SetTransition, Slide, Slip, TrackSwitch, Trim, TrimMode, UpdateMarker,
+    RippleDelete, Roll, SetClipAudioEffects, SetClipGain, SetClipLook, SetClipSpeed, SetClipVolume,
+    SetClipsEnabled, SetGenerator, SetMasterGain, SetProxy, SetSequenceFormat, SetTrackMix,
+    SetTrackSwitch, SetTransition, Slide, Slip, TrackSwitch, Trim, TrimMode, UpdateMarker,
 };
 pub use effect::{Rgb, VideoEffect};
 pub use error::TimelineError;
