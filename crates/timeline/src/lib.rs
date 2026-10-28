@@ -1,3 +1,4 @@
+mod audio_plan;
 mod edit;
 mod error;
 mod history;
@@ -11,6 +12,7 @@ mod timecode;
 mod transition;
 mod validate;
 
+pub use audio_plan::{audio_fade, audio_span};
 pub use edit::{
     clamp_delta, AddTrack, CloseGap, Edge, ImportMedia, Lift, MoveClips, PlaceClip, PlaceMode,
     Razor, RazorTarget, RemoveMedia, RemoveTrack, RippleDelete, Roll, SetClipGain, SetClipLook,

@@ -87,7 +87,11 @@ pub fn track_layers_at<'a>(
 
 /// How far a transition at the cut between `outgoing` and `incoming` reaches before and
 /// after the cut: centered, but never further than either clip's own length.
-fn cut_window(outgoing: &Clip, incoming: &Clip, transition: Transition) -> (Ticks, Ticks) {
+pub(crate) fn cut_window(
+    outgoing: &Clip,
+    incoming: &Clip,
+    transition: Transition,
+) -> (Ticks, Ticks) {
     let half = Ticks(transition.duration.0 / 2);
     let before = half.min(outgoing.duration);
     let after = (transition.duration - half).min(incoming.duration);
@@ -95,7 +99,7 @@ fn cut_window(outgoing: &Clip, incoming: &Clip, transition: Transition) -> (Tick
 }
 
 /// `part / whole` clamped to 0..=1, with an empty whole counting as complete.
-fn fraction(part: Ticks, whole: Ticks) -> f32 {
+pub(crate) fn fraction(part: Ticks, whole: Ticks) -> f32 {
     if whole <= Ticks::ZERO {
         return 1.0;
     }
