@@ -1,7 +1,7 @@
 use egui::DragValue;
 use timeline::{
-    nearest_transition_edge, Alignment, Clip, Edge, Sequence, SetTransition, Side, TrackKind,
-    TrackRef, Transition, TransitionKind,
+    nearest_transition_edge, Alignment, Clip, Edge, Rgb, Sequence, SetTransition, Side, Sweep,
+    TrackKind, TrackRef, Transition, TransitionKind,
 };
 
 use crate::editor::Editor;
@@ -120,7 +120,47 @@ fn transition_row(
             }
         });
     }
+    if let Some(transition) = chosen
+        .as_mut()
+        .filter(|transition| transition.kind.pattern().is_some())
+    {
+        wipe_row(ui, label, transition);
+    }
     (chosen != current).then_some(chosen)
+}
+
+/// Reverse, border width and border color, which only wipes have.
+fn wipe_row(ui: &mut egui::Ui, label: &str, transition: &mut Transition) {
+    ui.horizontal(|ui| {
+        ui.add_space(38.0);
+        let mut reversed = transition.sweep == Sweep::Reverse;
+        if ui.checkbox(&mut reversed, "Reverse").changed() {
+            transition.sweep = if reversed {
+                Sweep::Reverse
+            } else {
+                Sweep::Forward
+            };
+        }
+        ui.label("Border");
+        let border = &mut transition.border;
+        ui.add(
+            DragValue::new(&mut border.width)
+                .range(0..=200)
+                .suffix(" px"),
+        )
+        .on_hover_text("Border width");
+        let Rgb { r, g, b } = border.color;
+        let mut color = [r, g, b];
+        let picked = ui
+            .push_id((label, "border"), |ui| {
+                ui.color_edit_button_srgb(&mut color)
+            })
+            .inner;
+        if picked.changed() {
+            let [r, g, b] = color;
+            border.color = Rgb::new(r, g, b);
+        }
+    });
 }
 
 /// A one-second cross dissolve, like Premiere's default; on audio it is a
