@@ -25,10 +25,13 @@ pub(crate) fn category(effect: &AudioEffect) -> &'static str {
         | AudioEffect::Compressor { .. }
         | AudioEffect::HardLimiter { .. }
         | AudioEffect::NoiseGate { .. }
-        | AudioEffect::DeEsser { .. } => CATEGORIES[0],
+        | AudioEffect::DeEsser { .. }
+        | AudioEffect::ChannelVolume { .. }
+        | AudioEffect::MultibandCompressor { .. } => CATEGORIES[0],
         AudioEffect::Bass { .. }
         | AudioEffect::Treble { .. }
         | AudioEffect::Equalizer { .. }
+        | AudioEffect::GraphicEqualizer { .. }
         | AudioEffect::HighPass { .. }
         | AudioEffect::LowPass { .. }
         | AudioEffect::Notch { .. } => CATEGORIES[1],
@@ -196,6 +199,41 @@ fn effect_rows(ui: &mut egui::Ui, rows: &mut Rows, effect: &mut AudioEffect) {
             let most = audio::MAX_HARMONICS as f32;
             rows.param(ui, "Harmonics", harmonics, 1.0..=most, "");
             rows.param(ui, "Reduction", reduction, 0.0..=60.0, " dB");
+        }
+        AudioEffect::ChannelVolume { left, right } => {
+            rows.param(ui, "Left", left, GAIN_DB, " dB");
+            rows.param(ui, "Right", right, GAIN_DB, " dB");
+        }
+        AudioEffect::GraphicEqualizer { bands } => {
+            for (band, hz) in bands.iter_mut().zip(audio::GRAPHIC_BANDS_HZ) {
+                let label = if hz < 1_000.0 {
+                    format!("{hz} Hz")
+                } else {
+                    format!("{} kHz", hz / 1_000.0)
+                };
+                rows.param(ui, &label, band, GAIN_DB, " dB");
+            }
+        }
+        AudioEffect::MultibandCompressor {
+            low_crossover,
+            high_crossover,
+            low_threshold,
+            mid_threshold,
+            high_threshold,
+            ratio,
+            attack,
+            release,
+            makeup,
+        } => {
+            rows.param(ui, "Low/Mid", low_crossover, 40.0..=1_000.0, " Hz");
+            rows.param(ui, "Mid/High", high_crossover, 1_000.0..=12_000.0, " Hz");
+            rows.param(ui, "Low Threshold", low_threshold, -60.0..=0.0, " dB");
+            rows.param(ui, "Mid Threshold", mid_threshold, -60.0..=0.0, " dB");
+            rows.param(ui, "High Threshold", high_threshold, -60.0..=0.0, " dB");
+            rows.param(ui, "Ratio", ratio, 1.0..=20.0, ":1");
+            rows.param(ui, "Attack", attack, 0.1..=200.0, " ms");
+            rows.param(ui, "Release", release, 10.0..=2_000.0, " ms");
+            rows.param(ui, "Makeup", makeup, 0.0..=24.0, " dB");
         }
         AudioEffect::FillLeftWithRight
         | AudioEffect::FillRightWithLeft

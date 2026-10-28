@@ -22,7 +22,7 @@ const TRANSITION_CATEGORIES: [&str; 7] = [
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum EffectItem {
     Video(Box<VideoEffect>),
-    Audio(AudioEffect),
+    Audio(Box<AudioEffect>),
     Transition(TrackKind, TransitionKind),
     Preset(EffectPreset),
 }
@@ -102,7 +102,7 @@ pub(crate) fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
             let items = audio
                 .iter()
                 .filter(|effect| audio_category(effect) == category)
-                .map(|effect| EffectItem::Audio(effect.clone()));
+                .map(|effect| EffectItem::Audio(Box::new(effect.clone())));
             (category, items.collect::<Vec<_>>())
         });
         folder(ui, "Audio Effects", searching, &groups, &shown, &mut chosen);
