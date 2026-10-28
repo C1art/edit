@@ -5,8 +5,8 @@ mod remix;
 mod resampler;
 
 pub use dsp::{
-    Biquad, Coefficients, Compressor, CompressorSettings, Delay, Gate, Limiter, LoudnessMeter,
-    Reverb,
+    Biquad, Coefficients, Compressor, CompressorSettings, DeEsser, Delay, Gate, Limiter,
+    LoudnessMeter, ModulatedDelay, PitchShifter, Reverb, Sweep,
 };
 pub use error::AudioError;
 pub use output::{AudioOutput, AudioWriter, OutputFormat};
