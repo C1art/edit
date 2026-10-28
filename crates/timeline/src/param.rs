@@ -28,7 +28,8 @@ impl Keyframe {
 }
 
 /// How the value moves through a keyframe. Easing slows the change arriving at the
-/// keyframe (in), leaving it (out) or both; a hold keeps the value until the next one.
+/// keyframe (in), leaving it (out) or both; a hold keeps the value until the next one;
+/// auto Bezier curves smoothly through it, toward its neighbours.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Interpolation {
     #[default]
@@ -37,11 +38,13 @@ pub enum Interpolation {
     EaseIn,
     EaseOut,
     Ease,
+    AutoBezier,
 }
 
 impl Interpolation {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Linear,
+        Self::AutoBezier,
         Self::Hold,
         Self::EaseIn,
         Self::EaseOut,
@@ -55,6 +58,7 @@ impl Interpolation {
             Self::EaseIn => "Ease In",
             Self::EaseOut => "Ease Out",
             Self::Ease => "Ease In and Out",
+            Self::AutoBezier => "Auto Bezier",
         }
     }
 
@@ -117,16 +121,39 @@ impl Param {
             }
             (Some(before), Some(next)) => {
                 let span = (next.time - before.time).0 as f64;
-                let progress = eased(
-                    (time - before.time).0 as f64 / span,
-                    before.interpolation.eases_out(),
-                    next.interpolation.eases_in(),
-                );
                 let (from, to) = (f64::from(before.hundredths), f64::from(next.hundredths));
-                from + (to - from) * progress
+                let straight = (to - from) / span;
+                let slope = |index: usize, eased: bool| match self.keys[index].interpolation {
+                    _ if eased => 0.0,
+                    Interpolation::AutoBezier => self.smooth_slope(index).unwrap_or(straight),
+                    _ => straight,
+                };
+                let leaving = slope(after - 1, before.interpolation.eases_out());
+                let arriving = slope(after, next.interpolation.eases_in());
+                hermite(
+                    (time - before.time).0 as f64 / span,
+                    [from, to],
+                    [leaving * span, arriving * span],
+                )
             }
         };
         (hundredths / 100.0) as f32
+    }
+
+    /// The hundredths per tick an auto Bezier curve passes the key at `index` with: along
+    /// the line between its neighbours, but level at a peak or dip so the curve never
+    /// overshoots a keyed value. `None` at the first or last key.
+    fn smooth_slope(&self, index: usize) -> Option<f64> {
+        let [previous, key, next] = [index.checked_sub(1)?, index, index + 1]
+            .map(|index| self.keys.get(index))
+            .map(|key| key.map(|key| (key.time.0 as f64, f64::from(key.hundredths))));
+        let ((previous_time, previous), (_, value), (next_time, next)) = (previous?, key?, next?);
+        let turns = (value - previous) * (next - value) <= 0.0;
+        Some(if turns {
+            0.0
+        } else {
+            (next - previous) / (next_time - previous_time)
+        })
     }
 
     /// Sets the value at `time`: a keyframe there when animated, the whole value otherwise.
@@ -246,13 +273,16 @@ impl Param {
     }
 }
 
-/// `progress` through a segment reshaped by a cubic Hermite curve whose slope is zero
-/// at an eased end and one at a linear end, so a segment with neither eased stays linear.
-fn eased(progress: f64, out_of_start: bool, into_end: bool) -> f64 {
-    let slope = |eased: bool| if eased { 0.0 } else { 1.0 };
+/// The value `progress` through a segment between `values`, on the cubic Hermite curve
+/// leaving and arriving with `slopes` given per whole segment, so slopes equal to the
+/// change between the values draw a straight line.
+fn hermite(progress: f64, [from, to]: [f64; 2], [leaving, arriving]: [f64; 2]) -> f64 {
     let p = progress;
     let (p2, p3) = (p * p, p * p * p);
-    (p3 - 2.0 * p2 + p) * slope(out_of_start) + (3.0 * p2 - 2.0 * p3) + (p3 - p2) * slope(into_end)
+    (2.0 * p3 - 3.0 * p2 + 1.0) * from
+        + (p3 - 2.0 * p2 + p) * leaving
+        + (3.0 * p2 - 2.0 * p3) * to
+        + (p3 - p2) * arriving
 }
 
 fn to_hundredths(value: f32) -> i32 {
@@ -343,5 +373,29 @@ mod tests {
         let start = param.value_at(Ticks(101));
         assert!((start - 99.0).abs() < 0.05, "{start}");
         assert!(param.value_at(Ticks(199)) < 0.05);
+    }
+
+    #[test]
+    fn auto_bezier_curves_through_a_key_without_overshooting_a_peak() {
+        let mut param = Param::from_value(0.0);
+        param.toggle_animation(Ticks(0));
+        param.set_at(Ticks(100), 50.0);
+        param.set_at(Ticks(200), 200.0);
+        param.set_at(Ticks(300), 0.0);
+        for time in [100, 200] {
+            param.set_interpolation(Ticks(time), Interpolation::AutoBezier);
+        }
+        // Through the rising key at the slope between its neighbours, one per tick,
+        // rather than kinking from half a unit a tick to one and a half.
+        let slopes =
+            [99, 100].map(|time| param.value_at(Ticks(time + 1)) - param.value_at(Ticks(time)));
+        assert!(
+            slopes.iter().all(|slope| (slope - 1.0).abs() < 0.03),
+            "{slopes:?}"
+        );
+        // Level across the peak, never above it.
+        let around = [190, 199, 200, 201, 210].map(|time| param.value_at(Ticks(time)));
+        assert!(around.iter().all(|value| *value <= 200.0), "{around:?}");
+        assert!(around[1] > 199.9 && around[3] > 199.9, "{around:?}");
     }
 }
