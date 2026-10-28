@@ -133,6 +133,7 @@ mod tests {
             duration: Ticks(180_000),
             video: None,
             has_audio: true,
+            proxy: None,
         }
     }
 

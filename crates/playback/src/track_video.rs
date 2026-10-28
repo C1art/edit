@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use media::{DecodedFrame, MediaError, MediaReader, Streams, VideoFrame};
@@ -9,9 +10,10 @@ const MAX_DECODE_AHEAD_SECONDS: i64 = 2;
 
 enum Source {
     None,
-    Open(SourceId, Box<MediaReader>),
-    /// Opening failed; not retried until the track moves to other media.
-    Failed(SourceId),
+    Open(SourceId, PathBuf, Box<MediaReader>),
+    /// Opening failed; not retried until the track moves to other media or another file
+    /// of it, such as its proxy.
+    Failed(SourceId, PathBuf),
 }
 
 /// Decodes the pictures one video track needs, reading forward while playback is
@@ -49,21 +51,23 @@ impl TrackVideo {
         time: Ticks,
     ) -> Result<Option<Arc<VideoFrame>>, MediaError> {
         let same_media = match &self.source {
-            Source::Open(id, _) | Source::Failed(id) => *id == media.id,
+            Source::Open(id, path, _) | Source::Failed(id, path) => {
+                *id == media.id && *path == media.path
+            }
             Source::None => false,
         };
         if !same_media {
             self.reset();
             self.source =
                 match MediaReader::open_streams(&media.path, self.timebase, Streams::Video) {
-                    Ok(reader) => Source::Open(media.id, Box::new(reader)),
+                    Ok(reader) => Source::Open(media.id, media.path.clone(), Box::new(reader)),
                     Err(error) => {
-                        self.source = Source::Failed(media.id);
+                        self.source = Source::Failed(media.id, media.path.clone());
                         return Err(error);
                     }
                 };
         }
-        let Source::Open(_, reader) = &mut self.source else {
+        let Source::Open(_, _, reader) = &mut self.source else {
             return Ok(None);
         };
         let decode_ahead = Timebase::new(1, 1).map_or(Ticks::ZERO, |second| {

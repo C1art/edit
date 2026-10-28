@@ -44,6 +44,8 @@ pub struct Player {
     /// Meter readings for audio not yet heard, oldest first.
     pending_levels: VecDeque<Levels>,
     levels: Option<Levels>,
+    /// Whether the video worker decodes media items' proxies instead of their files.
+    proxies: bool,
 }
 
 impl Player {
@@ -100,6 +102,7 @@ impl Player {
             warnings: Vec::new(),
             pending_levels: VecDeque::new(),
             levels: None,
+            proxies: false,
         };
         player.seek(Ticks::ZERO);
         Ok(player)
@@ -111,16 +114,35 @@ impl Player {
 
     /// Plays `sequence` from the current position from now on, e.g. after an edit.
     pub fn set_sequence(&mut self, sequence: Arc<Sequence>) {
-        self.sequence = Arc::clone(&sequence);
-        self.send(Command::Sequence(sequence));
+        self.send_sequence(sequence);
         self.seek(self.position());
+    }
+
+    /// Shows proxies, where media items have them, in place of their full-size pictures.
+    pub fn set_proxies(&mut self, enabled: bool) {
+        if self.proxies != enabled {
+            self.proxies = enabled;
+            self.set_sequence(Arc::clone(&self.sequence));
+        }
     }
 
     /// Plays `sequence` without seeking, for edits that change only levels, so faders
     /// can be heard while they move. Audio already queued keeps its old levels.
     pub fn set_mix(&mut self, sequence: Arc<Sequence>) {
+        self.send_sequence(sequence);
+    }
+
+    fn send_sequence(&mut self, sequence: Arc<Sequence>) {
         self.sequence = Arc::clone(&sequence);
-        self.send(Command::Sequence(sequence));
+        if let Some(audio) = &self.audio_commands {
+            let _ = audio.send(Command::Sequence(Arc::clone(&sequence)));
+        }
+        let pictures = if self.proxies {
+            Arc::new(sequence.with_proxies())
+        } else {
+            sequence
+        };
+        let _ = self.video_commands.send(Command::Sequence(pictures));
     }
 
     /// The meter reading for the audio being heard, while playing.

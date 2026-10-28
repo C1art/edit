@@ -5,7 +5,7 @@ use std::thread;
 
 use audio::SampleRate;
 use crossbeam::channel::{Receiver, Sender};
-use media::{AudioSettings, MediaWriter, VideoSettings};
+use media::{AudioSettings, EncodeProfile, MediaWriter, VideoSettings};
 use render::{Compositor, LayerImage};
 use timeline::{Sequence, Ticks};
 
@@ -120,6 +120,7 @@ impl Worker {
             height: format.height,
             frame_rate: rate,
             crf: self.settings.crf,
+            profile: EncodeProfile::Delivery,
         };
         let audio = AudioSettings {
             sample_rate: self.settings.sample_rate,
