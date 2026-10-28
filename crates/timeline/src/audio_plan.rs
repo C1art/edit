@@ -1,7 +1,7 @@
 use std::f32::consts::FRAC_PI_2;
 
 use crate::plan::{cut_window, fraction};
-use crate::{Clip, Gain, Ticks, Track};
+use crate::{Clip, Gain, Ticks, Track, TransitionKind};
 
 /// Where clip `index` of `track` is heard: its own span, widened by the part of a
 /// crossfade that plays it past either edge.
@@ -34,17 +34,27 @@ pub fn track_automation(track: &Track, position: Ticks) -> f32 {
     Gain::from_db(track.automation.value_at(position)).amplitude()
 }
 
-/// The amplitude transitions give clip `index` at `position`. Fades follow a
-/// constant-power curve, so a crossfade between correlated-free sources holds its
-/// loudness through the middle.
+/// How loud a fade `progress` of the way up is. Constant power, the default, holds the
+/// loudness of a crossfade between uncorrelated sources through the middle.
+fn rise(kind: TransitionKind, progress: f32) -> f32 {
+    match kind {
+        TransitionKind::ConstantGain => progress,
+        // 60 dB of range, ending at silence.
+        TransitionKind::ExponentialFade if progress <= 0.0 => 0.0,
+        TransitionKind::ExponentialFade => 1000f32.powf(progress - 1.0),
+        _ => (progress * FRAC_PI_2).sin(),
+    }
+}
+
+/// The amplitude transitions give clip `index` at `position`.
 pub fn audio_fade(track: &Track, index: usize, position: Ticks) -> f32 {
     let clip = &track.clips[index];
     let (previous, next) = neighbors(track, index);
-    let rise = |progress: f32| (progress * FRAC_PI_2).sin();
     let mut gain = 1.0;
     match (clip.transition_in, previous) {
         (Some(transition), Some(previous)) => {
             let (before, after) = cut_window(previous, clip, transition);
+            let rise = |progress| rise(transition.kind, progress);
             gain *= match transition.kind {
                 kind if !kind.is_dip() => {
                     rise(fraction(position - (clip.start - before), before + after))
@@ -55,7 +65,7 @@ pub fn audio_fade(track: &Track, index: usize, position: Ticks) -> f32 {
         }
         (Some(transition), None) => {
             let length = transition.duration.min(clip.duration);
-            gain *= rise(fraction(position - clip.start, length));
+            gain *= rise(transition.kind, fraction(position - clip.start, length));
         }
         (None, _) => {}
     }
@@ -66,6 +76,7 @@ pub fn audio_fade(track: &Track, index: usize, position: Ticks) -> f32 {
         (Some((transition, next)), _) => {
             let (before, after) = cut_window(clip, next, transition);
             let start = clip.end() - before;
+            let rise = |progress| rise(transition.kind, progress);
             gain *= match transition.kind {
                 kind if !kind.is_dip() => rise(1.0 - fraction(position - start, before + after)),
                 _ if position >= clip.end() => 0.0,
@@ -75,7 +86,7 @@ pub fn audio_fade(track: &Track, index: usize, position: Ticks) -> f32 {
         (None, None) => {
             if let Some(transition) = clip.transition_out {
                 let length = transition.duration.min(clip.duration);
-                gain *= rise(fraction(clip.end() - position, length));
+                gain *= rise(transition.kind, fraction(clip.end() - position, length));
             }
         }
         (None, Some(_)) => {}
@@ -127,6 +138,21 @@ mod tests {
         }
         assert_eq!(audio_fade(&track, 1, Ticks(80)), 0.0);
         assert_eq!(audio_fade(&track, 0, Ticks(79)), 1.0);
+    }
+
+    #[test]
+    fn constant_gain_sums_amplitude_and_exponential_fades_evenly_in_decibels() {
+        let curve = |kind| {
+            let mut track = track_with_crossfade(40);
+            track.clips[1].transition_in = Some(Transition::new(kind, Ticks(40)));
+            let at = |index| audio_fade(&track, index, Ticks(100));
+            (at(0), at(1))
+        };
+        let (out, incoming) = curve(TransitionKind::ConstantGain);
+        assert!((out + incoming - 1.0).abs() < 1e-6);
+        let (out, incoming) = curve(TransitionKind::ExponentialFade);
+        assert!((20.0 * incoming.log10() + 30.0).abs() < 0.01);
+        assert!((out - incoming).abs() < 1e-6);
     }
 
     #[test]

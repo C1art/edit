@@ -38,11 +38,8 @@ pub fn track_layers_at<'a>(
         let (before, after) = cut_window(outgoing, incoming, transition);
         let start = incoming.start - before;
         let window = before + after;
-        let (out, into) = transition.kind.reveals(
-            fraction(position - start, window),
-            fraction(before, window),
-            transition.side(),
-        );
+        let (out, into) =
+            transition.reveals(fraction(position - start, window), fraction(before, window));
         let layers = [layer(outgoing, own.and(out)), layer(incoming, into)];
         let visible: Vec<_> = layers
             .iter()
@@ -68,7 +65,7 @@ pub fn track_layers_at<'a>(
         (Some(transition), None) => {
             let length = transition.duration.min(current.duration);
             let progress = fraction(position - current.start, length);
-            reveal = reveal.and(transition.kind.reveals(progress, 0.0, transition.side()).1);
+            reveal = reveal.and(transition.reveals(progress, 0.0).1);
         }
         (None, _) => {}
     }
@@ -83,7 +80,7 @@ pub fn track_layers_at<'a>(
             if let (Some(transition), None) = (current.transition_out, next) {
                 let length = transition.duration.min(current.duration);
                 let remaining = fraction(current.end() - position, length).min(1.0);
-                reveal = reveal.and(transition.kind.reveals(remaining, 0.0, transition.side()).1);
+                reveal = reveal.and(transition.reveals(remaining, 0.0).1);
             }
         }
     }

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{ClipId, Edge, Ticks, Track};
+use crate::{Border, ClipId, Edge, Sweep, Ticks, Track, WipePattern};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TransitionKind {
@@ -22,21 +22,52 @@ pub enum TransitionKind {
     Slide,
     /// The incoming picture pushes the outgoing one out to the left.
     Push,
+    IrisRound,
+    IrisDiamond,
+    IrisCross,
+    ClockWipe,
+    WedgeWipe,
+    RadialWipe,
+    Pinwheel,
+    VenetianBlinds,
+    CheckerWipe,
+    Inset,
+    RandomBlocks,
+    /// Audio only: a linear crossfade, which dips in loudness through the middle.
+    ConstantGain,
+    /// Audio only: a crossfade linear in decibels, quick to fade out and slow to fade in.
+    ExponentialFade,
 }
 
 impl TransitionKind {
-    pub const VIDEO: [Self; 9] = [
+    pub const VIDEO: [Self; 20] = [
         Self::CrossDissolve,
         Self::DipToBlack,
         Self::DipToWhite,
         Self::CrossZoom,
+        Self::IrisBox,
+        Self::IrisRound,
+        Self::IrisDiamond,
+        Self::IrisCross,
         Self::Wipe,
         Self::BarnDoors,
-        Self::IrisBox,
+        Self::ClockWipe,
+        Self::WedgeWipe,
+        Self::RadialWipe,
+        Self::Pinwheel,
+        Self::VenetianBlinds,
+        Self::CheckerWipe,
+        Self::Inset,
+        Self::RandomBlocks,
         Self::Slide,
         Self::Push,
     ];
-    pub const AUDIO: [Self; 2] = [Self::CrossDissolve, Self::DipToBlack];
+    pub const AUDIO: [Self; 4] = [
+        Self::CrossDissolve,
+        Self::ConstantGain,
+        Self::ExponentialFade,
+        Self::DipToBlack,
+    ];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -49,28 +80,70 @@ impl TransitionKind {
             Self::IrisBox => "Iris Box",
             Self::Slide => "Slide",
             Self::Push => "Push",
+            Self::IrisRound => "Iris Round",
+            Self::IrisDiamond => "Iris Diamond",
+            Self::IrisCross => "Iris Cross",
+            Self::ClockWipe => "Clock Wipe",
+            Self::WedgeWipe => "Wedge Wipe",
+            Self::RadialWipe => "Radial Wipe",
+            Self::Pinwheel => "Pinwheel",
+            Self::VenetianBlinds => "Venetian Blinds",
+            Self::CheckerWipe => "Checker Wipe",
+            Self::Inset => "Inset",
+            Self::RandomBlocks => "Random Blocks",
+            Self::ConstantGain => "Constant Gain",
+            Self::ExponentialFade => "Exponential Fade",
         }
     }
 
     pub fn audio_name(self) -> &'static str {
-        if self.is_dip() {
-            "Dip to Silence"
-        } else {
-            "Constant Power"
+        match self {
+            _ if self.is_dip() => "Dip to Silence",
+            Self::ConstantGain | Self::ExponentialFade => self.name(),
+            _ => "Constant Power",
         }
+    }
+
+    /// The shape a wipe uncovers the incoming picture in, for kinds that wipe.
+    pub fn pattern(self) -> Option<WipePattern> {
+        Some(match self {
+            Self::Wipe => WipePattern::Edge,
+            Self::BarnDoors => WipePattern::Split,
+            Self::IrisBox => WipePattern::Box,
+            Self::IrisRound => WipePattern::Round,
+            Self::IrisDiamond => WipePattern::Diamond,
+            Self::IrisCross => WipePattern::Cross,
+            Self::ClockWipe => WipePattern::Clock,
+            Self::WedgeWipe => WipePattern::Wedge,
+            Self::RadialWipe => WipePattern::Radial,
+            Self::Pinwheel => WipePattern::Pinwheel,
+            Self::VenetianBlinds => WipePattern::Blinds,
+            Self::CheckerWipe => WipePattern::Checker,
+            Self::Inset => WipePattern::Inset,
+            Self::RandomBlocks => WipePattern::Blocks,
+            _ => return None,
+        })
     }
 
     /// Whether the side the incoming picture enters from can be chosen.
     pub fn has_direction(self) -> bool {
         matches!(
             self,
-            Self::Wipe | Self::BarnDoors | Self::Slide | Self::Push
+            Self::Wipe
+                | Self::BarnDoors
+                | Self::Slide
+                | Self::Push
+                | Self::RadialWipe
+                | Self::VenetianBlinds
+                | Self::CheckerWipe
+                | Self::Inset
         )
     }
 
     pub fn default_side(self) -> Side {
         match self {
             Self::Slide | Self::Push => Side::Right,
+            Self::VenetianBlinds => Side::Top,
             _ => Side::Left,
         }
     }
@@ -145,6 +218,12 @@ pub struct Transition {
     /// The kind's usual side when unset.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub from: Option<Side>,
+    /// For wipes only.
+    #[serde(default, skip_serializing_if = "Sweep::is_forward")]
+    pub sweep: Sweep,
+    /// For wipes only.
+    #[serde(default, skip_serializing_if = "Border::is_none")]
+    pub border: Border,
 }
 
 impl Transition {
@@ -154,6 +233,8 @@ impl Transition {
             duration,
             alignment: Alignment::Center,
             from: None,
+            sweep: Sweep::Forward,
+            border: Border::NONE,
         }
     }
 
