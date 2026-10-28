@@ -1,7 +1,8 @@
 use std::mem::{discriminant, Discriminant};
 
 use audio::{
-    Biquad, Coefficients, Compressor, CompressorSettings, Delay, Gate, Limiter, Reverb, SampleRate,
+    Biquad, Coefficients, Compressor, CompressorSettings, DeEsser, Delay, Gate, Limiter,
+    ModulatedDelay, PitchShifter, Reverb, SampleRate, Sweep,
 };
 use timeline::{AudioEffect, ClipId, Ticks};
 
@@ -13,6 +14,9 @@ const BASS_HZ: f32 = 200.0;
 const TREBLE_HZ: f32 = 4_000.0;
 /// The equalizer's bell spans about an octave and a third.
 const BELL_Q: f32 = 1.0;
+/// The fixed part of each modulated delay, under its sweep.
+const CHORUS_BASE_MS: f32 = 15.0;
+const FLANGER_BASE_MS: f32 = 1.0;
 /// A Butterworth response: flat, then rolling off without a bump.
 const BUTTERWORTH_Q: f32 = std::f32::consts::FRAC_1_SQRT_2;
 
@@ -24,6 +28,9 @@ enum Unit {
     Limiter(Limiter),
     Gate(Gate),
     Reverb(Box<Reverb>),
+    DeEsser(DeEsser),
+    Sweep(Box<ModulatedDelay>),
+    Pitch(Box<PitchShifter>),
     /// For effects that keep nothing from one sample to the next.
     Stateless,
 }
@@ -57,6 +64,9 @@ impl EffectChain {
                 Unit::Limiter(limiter) => limiter.reset(),
                 Unit::Gate(gate) => gate.reset(),
                 Unit::Reverb(reverb) => reverb.reset(),
+                Unit::DeEsser(deesser) => deesser.reset(),
+                Unit::Sweep(sweep) => sweep.reset(),
+                Unit::Pitch(shifter) => shifter.reset(),
                 Unit::Stateless => {}
             }
         }
@@ -225,6 +235,61 @@ impl EffectChain {
                     mix.value_at(time) / 100.0,
                     samples,
                 ),
+                (
+                    AudioEffect::DeEsser {
+                        threshold,
+                        reduction,
+                        frequency,
+                    },
+                    Unit::DeEsser(deesser),
+                ) => deesser.process(
+                    threshold.value_at(time),
+                    reduction.value_at(time),
+                    frequency.value_at(time),
+                    rate,
+                    samples,
+                ),
+                (
+                    AudioEffect::Chorus {
+                        rate: speed,
+                        depth,
+                        mix,
+                    },
+                    Unit::Sweep(delay),
+                ) => {
+                    let sweep = Sweep {
+                        base_ms: CHORUS_BASE_MS,
+                        depth_ms: depth.value_at(time),
+                        rate_hz: speed.value_at(time),
+                        feedback: 0.0,
+                        mix: mix.value_at(time) / 100.0,
+                    };
+                    delay.process(&sweep, samples);
+                }
+                (
+                    AudioEffect::Flanger {
+                        rate: speed,
+                        depth,
+                        feedback,
+                        mix,
+                    },
+                    Unit::Sweep(delay),
+                ) => {
+                    let sweep = Sweep {
+                        base_ms: FLANGER_BASE_MS,
+                        depth_ms: depth.value_at(time),
+                        rate_hz: speed.value_at(time),
+                        feedback: feedback.value_at(time) / 100.0,
+                        mix: mix.value_at(time) / 100.0,
+                    };
+                    delay.process(&sweep, samples);
+                }
+                (AudioEffect::PitchShifter { semitones, mix }, Unit::Pitch(shifter)) => shifter
+                    .process(
+                        semitones.value_at(time),
+                        mix.value_at(time) / 100.0,
+                        samples,
+                    ),
                 _ => {}
             }
         }
@@ -259,6 +324,11 @@ impl EffectChain {
             AudioEffect::HardLimiter { .. } => Unit::Limiter(Limiter::default()),
             AudioEffect::NoiseGate { .. } => Unit::Gate(Gate::default()),
             AudioEffect::Reverb { .. } => Unit::Reverb(Box::new(Reverb::new(self.rate))),
+            AudioEffect::DeEsser { .. } => Unit::DeEsser(DeEsser::default()),
+            AudioEffect::Chorus { .. } | AudioEffect::Flanger { .. } => {
+                Unit::Sweep(Box::new(ModulatedDelay::new(self.rate)))
+            }
+            AudioEffect::PitchShifter { .. } => Unit::Pitch(Box::new(PitchShifter::new(self.rate))),
             AudioEffect::Amplify { .. }
             | AudioEffect::Balance { .. }
             | AudioEffect::FillLeftWithRight
