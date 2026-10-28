@@ -54,11 +54,40 @@ pub enum VideoEffect {
         tolerance: Param,
         softness: Param,
     },
+    /// Shows the clip only where the picture of another video track is, as Premiere's
+    /// Track Matte Key does. The matte is that track's picture in sequence space, so
+    /// moving the clip moves it behind the matte.
+    TrackMatteKey {
+        /// The track's index among the video tracks the clip sits with, bottom first.
+        matte: Option<usize>,
+        channel: MatteChannel,
+        reverse: bool,
+    },
+}
+
+/// What of the matte's picture decides how much of the clip shows.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum MatteChannel {
+    #[default]
+    Alpha,
+    /// The brightness of the matte over black.
+    Luma,
+}
+
+impl MatteChannel {
+    pub const ALL: [Self; 2] = [Self::Alpha, Self::Luma];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Alpha => "Matte Alpha",
+            Self::Luma => "Matte Luma",
+        }
+    }
 }
 
 impl VideoEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 9] {
+    pub fn catalog() -> [Self; 10] {
         [
             Self::GaussianBlur {
                 blurriness: Param::from_value(10.0),
@@ -87,6 +116,11 @@ impl VideoEffect {
                 tolerance: Param::from_value(30.0),
                 softness: Param::from_value(10.0),
             },
+            Self::TrackMatteKey {
+                matte: None,
+                channel: MatteChannel::Alpha,
+                reverse: false,
+            },
         ]
     }
 
@@ -101,13 +135,17 @@ impl VideoEffect {
             Self::Sharpen { .. } => "Sharpen",
             Self::Vignette { .. } => "Vignette",
             Self::UltraKey { .. } => "Ultra Key",
+            Self::TrackMatteKey { .. } => "Track Matte Key",
         }
     }
 
     pub fn params(&self) -> Vec<&Param> {
         match self {
             Self::GaussianBlur { blurriness } => vec![blurriness],
-            Self::HorizontalFlip | Self::VerticalFlip | Self::BlackAndWhite => Vec::new(),
+            Self::HorizontalFlip
+            | Self::VerticalFlip
+            | Self::BlackAndWhite
+            | Self::TrackMatteKey { .. } => Vec::new(),
             Self::Tint { amount, .. } | Self::Invert { amount } | Self::Sharpen { amount } => {
                 vec![amount]
             }
