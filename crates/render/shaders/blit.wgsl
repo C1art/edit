@@ -121,6 +121,20 @@ struct Placement {
     creative_shadow: vec4<f32>,
     creative_highlight: vec4<f32>,
     creative_vignette: vec4<f32>,
+    // Checkerboard's anchor and square size, then its encoded color and opacity, off
+    // at zero; Grid's the same; Circle's center, radius and feather, then its color;
+    // Grid's border and 1 when inverted, 1 when Circle is inverted and 4-Color
+    // Gradient's blend; then that gradient's points and colors, the first carrying
+    // its opacity (see generate.wgsl).
+    generate_checker: vec4<f32>,
+    generate_checker_color: vec4<f32>,
+    generate_grid: vec4<f32>,
+    generate_grid_color: vec4<f32>,
+    generate_circle: vec4<f32>,
+    generate_circle_color: vec4<f32>,
+    generate_detail: vec4<f32>,
+    generate_four_points: array<vec4<f32>, 2>,
+    generate_four_colors: array<vec4<f32>, 4>,
 };
 
 const OUTLINE_VEC4S: u32 = 32u;
@@ -323,7 +337,7 @@ fn source_color(uv: vec2<f32>) -> vec4<f32> {
     if placement.axis_y_opacity.w > 0.5 {
         color = vec4<f32>(color.rgb / max(color.a, 1e-6), color.a);
     }
-    return ramped(vec4<f32>(input_grade(color.rgb), color.a), uv);
+    return generated(ramped(vec4<f32>(input_grade(color.rgb), color.a), uv), uv);
 }
 
 // How much of the cropped, keyed picture covers `uv`, which casts the shadow.
