@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use egui::text::{CCursor, CCursorRange};
 use egui::{Color32, RichText};
 use timeline::{preview, Caption, Captions, Rgb, SetCaptions, Ticks, Timebase, Timecode};
@@ -118,11 +116,8 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
             let edit = SetCaptions {
                 captions: captions.clone(),
             };
-            if let (Ok(sequence), Some(program)) = (
-                preview(editor.timeline.sequence(), &edit),
-                &mut editor.program,
-            ) {
-                program.player.set_sequence(Arc::new(sequence));
+            if let Ok(sequence) = preview(editor.timeline.sequence(), &edit) {
+                editor.show_program(sequence);
             }
             editor.captions.draft = Some((revision, captions));
         }

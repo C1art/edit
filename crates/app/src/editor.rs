@@ -41,6 +41,10 @@ pub struct Editor {
     pub(crate) use_proxies: bool,
     /// Outlines the action and title safe areas over the program picture.
     pub(crate) safe_margins: bool,
+    /// Whether the program monitor shows every camera of the multi-camera clips beside
+    /// the program, and where it puts them while it does.
+    pub(crate) multicam_view: bool,
+    pub(crate) multicam_layout: Option<timeline::MulticamLayout>,
     pub(crate) hardware_decoding: bool,
     pub(crate) source: Option<SourceMonitor>,
     pub(crate) program: Option<Viewer>,
@@ -133,6 +137,8 @@ impl Editor {
             clip_art,
             use_proxies: false,
             safe_margins: false,
+            multicam_view: false,
+            multicam_layout: None,
             hardware_decoding: true,
             source: None,
             program,
@@ -196,11 +202,7 @@ impl Editor {
             return;
         }
         self.shown_revision = self.timeline.revision();
-        if let Some(program) = &mut self.program {
-            program
-                .player
-                .set_mix(Arc::new(self.timeline.sequence().clone()));
-        }
+        self.mix_program(self.timeline.sequence().clone());
     }
 
     /// Opens a project file or imports anything else.
@@ -298,11 +300,7 @@ impl Editor {
                 source.refresh(item, pool);
             }
         }
-        if let Some(program) = &mut self.program {
-            program
-                .player
-                .set_sequence(Arc::new(self.timeline.sequence().clone()));
-        }
+        self.show_program(self.timeline.sequence().clone());
     }
 
     fn update_viewers(&mut self, ctx: &egui::Context) {

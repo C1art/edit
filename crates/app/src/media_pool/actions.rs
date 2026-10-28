@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use timeline::{
-    AddBin, Edit, MoveToBin, RelinkMedia, RemoveBin, RemoveMedia, RenameBin, RenameMedia, SetProxy,
-    SourceId, Ticks, TimelineError,
+    AddBin, CreateMulticam, Edit, MoveToBin, RelinkMedia, RemoveBin, RemoveMedia, RenameBin,
+    RenameMedia, SetProxy, SourceId, Ticks, TimelineError,
 };
 
 use super::{PoolAction, PoolEntry};
@@ -52,6 +52,7 @@ impl Editor {
                 };
                 self.apply_to_pool(MoveToBin { media, bins, to });
             }
+            PoolAction::CreateMulticam(sources) => self.create_multicam(sources),
         }
     }
 
@@ -100,6 +101,24 @@ impl Editor {
         }) {
             if let Some(bin) = self.timeline.project().bins.last() {
                 self.pool.renaming = Some((PoolEntry::Bin(bin.id), name));
+            }
+        }
+    }
+
+    fn create_multicam(&mut self, sources: Vec<SourceId>) {
+        let pool = self.timeline.project();
+        let first = sources.first().and_then(|&id| pool.media_item(id));
+        let name = first.map_or_else(
+            || "Multicam".to_owned(),
+            |item| format!("{} Multicam", item.name),
+        );
+        if self.apply_to_pool(CreateMulticam { sources, name }) {
+            if let Some(item) = self.timeline.project().media.last() {
+                self.pool.selected = vec![item.id];
+                self.notice(format!(
+                    "Created {}; place it in a sequence and turn on Multi-Camera in the program monitor's View menu",
+                    item.name
+                ));
             }
         }
     }

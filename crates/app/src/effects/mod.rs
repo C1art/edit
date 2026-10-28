@@ -12,7 +12,6 @@ mod transitions;
 mod video_effects;
 
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use egui::RichText;
 use timeline::{
@@ -241,9 +240,7 @@ pub(crate) fn set_lut(editor: &mut Editor, clip: ClipId, slot: LutSlot, path: Pa
 /// Shows the program as `edit` would leave it, without adding to the undo history.
 fn show_live(editor: &mut Editor, edit: &impl Edit) {
     if let Ok(sequence) = preview(editor.timeline.sequence(), edit) {
-        if let Some(program) = &mut editor.program {
-            program.player.set_sequence(Arc::new(sequence));
-        }
+        editor.show_program(sequence);
     }
 }
 
@@ -251,9 +248,7 @@ fn show_live(editor: &mut Editor, edit: &impl Edit) {
 /// sound is heard while playback carries on.
 fn hear_live(editor: &mut Editor, edit: &impl Edit) {
     if let Ok(sequence) = preview(editor.timeline.sequence(), edit) {
-        if let Some(program) = &mut editor.program {
-            program.player.set_mix(Arc::new(sequence));
-        }
+        editor.mix_program(sequence);
     }
 }
 

@@ -197,10 +197,16 @@ pub fn clips(
                 crate::speed_dialog::percent_text(clip.speed)
             ),
         };
+        let camera = match row.track.kind {
+            TrackKind::Video if sequence.multicam_of(clip).is_some() => {
+                format!("[MC{}] ", clip.angle + 1)
+            }
+            _ => String::new(),
+        };
         painter.with_clip_rect(rect.shrink(2.0)).text(
             rect.left_top() + egui::vec2(5.0, 4.0),
             Align2::LEFT_TOP,
-            format!("{name}{speed}{link}{gain}"),
+            format!("{camera}{name}{speed}{link}{gain}"),
             FontId::proportional(11.0),
             Color32::WHITE,
         );

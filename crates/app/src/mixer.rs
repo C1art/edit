@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use egui::{Color32, Rect, RichText, Sense, Slider};
 use timeline::{
     preview, Edit, Gain, Pan, SetMasterGain, SetTrackMix, SetTrackSwitch, TrackRef, TrackSwitch,
@@ -240,9 +238,7 @@ fn live(editor: &mut Editor, edit: &impl Edit) {
     let Ok(sequence) = preview(editor.timeline.sequence(), edit) else {
         return;
     };
-    if let Some(program) = &mut editor.program {
-        program.player.set_mix(Arc::new(sequence));
-    }
+    editor.mix_program(sequence);
 }
 
 fn meter_bar(ui: &mut egui::Ui, levels: [f32; 2]) {

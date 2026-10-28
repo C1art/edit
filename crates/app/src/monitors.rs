@@ -110,12 +110,20 @@ fn program(editor: &mut Editor, ui: &mut egui::Ui) {
     };
     let response = program.picture(ui, picture_size(ui));
     outline(ui, &response, focused);
-    if editor.safe_margins {
-        let format = editor.timeline.sequence().format;
-        let canvas = egui::vec2(format.width as f32, format.height as f32);
-        crate::safe_margins::paint(ui, response.rect, canvas);
+    if editor.multicam_layout.is_some() {
+        let clicked = response
+            .clicked()
+            .then(|| response.interact_pointer_pos())
+            .flatten();
+        crate::multicam::overlay(editor, ui, response.rect, clicked);
+    } else {
+        if editor.safe_margins {
+            let format = editor.timeline.sequence().format;
+            let canvas = egui::vec2(format.width as f32, format.height as f32);
+            crate::safe_margins::paint(ui, response.rect, canvas);
+        }
+        crate::effects::mask_overlay(editor, ui, response.rect);
     }
-    crate::effects::mask_overlay(editor, ui, response.rect);
     let Some(program) = &mut editor.program else {
         return;
     };
@@ -145,6 +153,13 @@ fn program(editor: &mut Editor, ui: &mut egui::Ui) {
         ui.separator();
         ui.menu_button("View", |ui| {
             ui.checkbox(&mut editor.safe_margins, "Safe Margins");
+            let mut multicam = editor.multicam_view;
+            let toggle = ui
+                .checkbox(&mut multicam, "Multi-Camera")
+                .on_hover_text("Every camera of the multi-camera clips beside the program; click one or press 1–9 to switch (Shift+0)");
+            if toggle.clicked() {
+                editor.toggle_multicam_view();
+            }
             ui.menu_button("Playback Resolution", |ui| {
                 let Some(program) = &mut editor.program else {
                     return;

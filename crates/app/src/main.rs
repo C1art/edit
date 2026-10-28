@@ -19,6 +19,7 @@ mod menus;
 mod mixer;
 mod monitor;
 mod monitors;
+mod multicam;
 mod nesting;
 mod panels;
 mod placing;

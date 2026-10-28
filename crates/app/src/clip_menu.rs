@@ -87,6 +87,7 @@ pub(crate) fn items(editor: &mut Editor, ui: &mut Ui) {
             editor.set_to_frame_size(FrameFit::Fill);
         }
     });
+    crate::multicam::camera_menu(editor, ui);
     ui.separator();
     if ui.button("Nest").clicked() {
         editor.nest_selection();

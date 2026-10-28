@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use egui::{Key, ViewportCommand};
 use timeline::{
@@ -159,11 +158,7 @@ impl Editor {
         // A new timeline restarts its revisions, so the program viewer is updated directly.
         self.shown_revision = revision;
         self.view.prune_selection(self.timeline.sequence());
-        if let Some(program) = &mut self.program {
-            program
-                .player
-                .set_sequence(Arc::new(self.timeline.sequence().clone()));
-        }
+        self.show_program(self.timeline.sequence().clone());
     }
 
     pub(crate) fn poll_store(&mut self) {

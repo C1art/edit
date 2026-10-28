@@ -41,6 +41,19 @@ pub const ADD_EDIT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND,
 pub const TRANSITION: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::D);
 pub const AUDIO_TRANSITION: KeyboardShortcut =
     KeyboardShortcut::new(Modifiers::COMMAND.plus(Modifiers::SHIFT), Key::D);
+pub const MULTICAM_VIEW: KeyboardShortcut = KeyboardShortcut::new(Modifiers::SHIFT, Key::Num0);
+/// Switch to cameras one to nine in the multi-camera view.
+const ANGLE_KEYS: [Key; crate::multicam::KEYED_ANGLES] = [
+    Key::Num1,
+    Key::Num2,
+    Key::Num3,
+    Key::Num4,
+    Key::Num5,
+    Key::Num6,
+    Key::Num7,
+    Key::Num8,
+    Key::Num9,
+];
 pub const GO_TO_IN: KeyboardShortcut = KeyboardShortcut::new(Modifiers::SHIFT, Key::I);
 pub const GO_TO_OUT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::SHIFT, Key::O);
 pub const CLEAR_IN_OUT: KeyboardShortcut =
@@ -87,12 +100,23 @@ enum Action {
     ToggleLink,
     PasteAttributes,
     NewTitle,
+    ToggleMulticamView,
 }
 
 /// Editor-wide keys. Skipped while a text field has focus so typing isn't hijacked.
 pub fn handle(editor: &mut Editor, ctx: &egui::Context) {
     if ctx.egui_wants_keyboard_input() {
         return;
+    }
+    if editor.multicam_layout.is_some() {
+        let angle = ctx.input_mut(|input| {
+            ANGLE_KEYS
+                .iter()
+                .position(|&key| input.consume_key(Modifiers::NONE, key))
+        });
+        if let Some(angle) = angle {
+            editor.switch_angle(angle);
+        }
     }
     if let Some(action) = pressed(ctx) {
         run(editor, action);
@@ -140,6 +164,7 @@ fn pressed(ctx: &egui::Context) -> Option<Action> {
             (NEW_TITLE, Action::NewTitle),
             (TRANSITION, Action::Transition(TrackKind::Video)),
             (CLEAR_IN_OUT, Action::ClearInOut),
+            (MULTICAM_VIEW, Action::ToggleMulticamView),
             (GO_TO_IN, Action::GoToMark(Edge::Head)),
             (GO_TO_OUT, Action::GoToMark(Edge::Tail)),
             (
@@ -251,6 +276,7 @@ fn run(editor: &mut Editor, action: Action) {
         Action::ZoomToFit => editor.view.zoom_to_fit(editor.timeline.sequence()),
         Action::CancelDrag => editor.view.cancel_drag(),
         Action::ClipGain => editor.prompt_clip_gain(),
+        Action::ToggleMulticamView => editor.toggle_multicam_view(),
     }
 }
 

@@ -23,6 +23,8 @@ pub enum PoolAction {
     RenameBin(BinId, String),
     RemoveBin(BinId),
     Move(PoolEntry, Option<BinId>),
+    /// Makes a multi-camera source sequence of the items, each a camera.
+    CreateMulticam(Vec<SourceId>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,10 +33,12 @@ pub enum PoolEntry {
     Bin(BinId),
 }
 
-/// The project panel's search text, and the entry being renamed with its name so far.
+/// The project panel's search text, its selected items, and the entry being renamed with
+/// its name so far.
 #[derive(Debug, Default)]
 pub struct PoolView {
     search: String,
+    pub(crate) selected: Vec<SourceId>,
     renaming: Option<(PoolEntry, String)>,
 }
 
@@ -171,15 +175,50 @@ impl Pool<'_> {
             response.dnd_set_drag_payload(item.id);
         }
         self.drop_target(ui, &response, item.bin);
+        let selected = &mut self.view.selected;
         if response.clicked() {
-            self.action = Some(PoolAction::Open(item.id));
+            if ui.input(|input| input.modifiers.command) {
+                match selected.iter().position(|&id| id == item.id) {
+                    Some(index) => {
+                        selected.remove(index);
+                    }
+                    None => selected.push(item.id),
+                }
+            } else {
+                *selected = vec![item.id];
+                self.action = Some(PoolAction::Open(item.id));
+            }
         }
+        if selected.contains(&item.id) {
+            let stroke = ui.visuals().selection.stroke;
+            let rect = response.rect;
+            ui.painter()
+                .rect_stroke(rect, 2.0, stroke, StrokeKind::Inside);
+        }
+        // In project order, whatever order they were picked in.
+        let cameras: Vec<SourceId> = self
+            .sequence
+            .media
+            .iter()
+            .filter(|item| selected.contains(&item.id) && item.is_file() && item.video.is_some())
+            .map(|item| item.id)
+            .collect();
         if response.double_clicked() && item.nest.is_some() {
             self.action = Some(PoolAction::OpenNest(item.id));
         }
         response.context_menu(|ui| {
             if ui.button("Open in Source Monitor").clicked() {
                 self.action = Some(PoolAction::Open(item.id));
+            }
+            let can_sync = cameras.len() >= 2 && cameras.contains(&item.id);
+            let multicam = ui
+                .add_enabled(
+                    can_sync,
+                    egui::Button::new("Create Multi-Camera Source Sequence"),
+                )
+                .on_disabled_hover_text("Ctrl+click two or more video clips to use as cameras");
+            if multicam.clicked() {
+                self.action = Some(PoolAction::CreateMulticam(cameras.clone()));
             }
             if item.nest.is_some() && ui.button("Open in Timeline").clicked() {
                 self.action = Some(PoolAction::OpenNest(item.id));
