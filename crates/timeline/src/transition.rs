@@ -43,6 +43,12 @@ pub enum TransitionKind {
     FlipOver,
     /// The pictures turn together as two faces of a cube.
     CubeSpin,
+    /// Two passes of a checkerboard's squares, each wiping across.
+    Checkerboard,
+    SpiralBoxes,
+    ZigZagBlocks,
+    RandomWipe,
+    PaintSplatter,
     /// Audio only: a linear crossfade, which dips in loudness through the middle.
     ConstantGain,
     /// Audio only: a crossfade linear in decibels, quick to fade out and slow to fade in.
@@ -50,7 +56,7 @@ pub enum TransitionKind {
 }
 
 impl TransitionKind {
-    pub const VIDEO: [Self; 25] = [
+    pub const VIDEO: [Self; 30] = [
         Self::CrossDissolve,
         Self::AdditiveDissolve,
         Self::NonAdditiveDissolve,
@@ -71,9 +77,14 @@ impl TransitionKind {
         Self::Pinwheel,
         Self::VenetianBlinds,
         Self::CheckerWipe,
+        Self::Checkerboard,
         Self::Inset,
         Self::RandomBlocks,
+        Self::RandomWipe,
         Self::BandWipe,
+        Self::SpiralBoxes,
+        Self::ZigZagBlocks,
+        Self::PaintSplatter,
         Self::Slide,
         Self::Push,
     ];
@@ -113,6 +124,23 @@ impl TransitionKind {
             Self::CubeSpin => "Cube Spin",
             Self::ConstantGain => "Constant Gain",
             Self::ExponentialFade => "Exponential Fade",
+            Self::Checkerboard => "CheckerBoard",
+            Self::SpiralBoxes => "Spiral Boxes",
+            Self::ZigZagBlocks => "Zig-Zag Blocks",
+            Self::RandomWipe => "Random Wipe",
+            Self::PaintSplatter => "Paint Splatter",
+        }
+    }
+
+    /// The bin the Effects panel files a video transition under.
+    pub fn category(self) -> &'static str {
+        match self {
+            Self::FlipOver | Self::CubeSpin => "3D Motion",
+            Self::IrisBox | Self::IrisRound | Self::IrisDiamond | Self::IrisCross => "Iris",
+            Self::Slide | Self::Push => "Slide",
+            Self::CrossZoom => "Zoom",
+            _ if self.pattern().is_some() => "Wipe",
+            _ => "Dissolve",
         }
     }
 
@@ -138,7 +166,12 @@ impl TransitionKind {
             Self::RadialWipe => WipePattern::Radial,
             Self::Pinwheel => WipePattern::Pinwheel,
             Self::VenetianBlinds => WipePattern::Blinds,
-            Self::CheckerWipe => WipePattern::Checker,
+            Self::CheckerWipe => WipePattern::Staggered,
+            Self::Checkerboard => WipePattern::Checker,
+            Self::SpiralBoxes => WipePattern::Spiral,
+            Self::ZigZagBlocks => WipePattern::ZigZag,
+            Self::RandomWipe => WipePattern::Scatter,
+            Self::PaintSplatter => WipePattern::Splatter,
             Self::Inset => WipePattern::Inset,
             Self::RandomBlocks => WipePattern::Blocks,
             Self::BandWipe => WipePattern::Bands,
@@ -157,6 +190,9 @@ impl TransitionKind {
                 | Self::RadialWipe
                 | Self::VenetianBlinds
                 | Self::CheckerWipe
+                | Self::Checkerboard
+                | Self::ZigZagBlocks
+                | Self::RandomWipe
                 | Self::Inset
                 | Self::BandWipe
                 | Self::FlipOver
@@ -167,7 +203,7 @@ impl TransitionKind {
     pub fn default_side(self) -> Side {
         match self {
             Self::Slide | Self::Push | Self::FlipOver | Self::CubeSpin => Side::Right,
-            Self::VenetianBlinds => Side::Top,
+            Self::VenetianBlinds | Self::ZigZagBlocks | Self::RandomWipe => Side::Top,
             _ => Side::Left,
         }
     }

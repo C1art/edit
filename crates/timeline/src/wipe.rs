@@ -32,6 +32,17 @@ pub enum WipePattern {
     Blocks,
     /// Bands across the picture, each wiping in from the opposite side to the last.
     Bands,
+    /// Rows of squares, each row half a square along from the last, all wiping across
+    /// at once.
+    Staggered,
+    /// Boxes one at a time in a spiral from the top left corner in to the middle.
+    Spiral,
+    /// Boxes one at a time up the first column, down the next, and so on across.
+    ZigZag,
+    /// Blocks in a random order that sweeps across.
+    Scatter,
+    /// Blotches that spread until they meet.
+    Splatter,
 }
 
 /// Whether a wipe uncovers the incoming picture as its pattern grows, or as it shrinks:
