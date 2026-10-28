@@ -1,5 +1,5 @@
 use egui::{Button, MenuBar, ViewportCommand};
-use timeline::{Edge, Generator, PlaceMode, Rgb, Title, TrackKind};
+use timeline::{Edge, FrameFit, Generator, PlaceMode, Rgb, Title, TrackKind};
 
 use crate::editor::Editor;
 use crate::placing;
@@ -170,9 +170,17 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             if ui.add(gain).clicked() {
                 editor.prompt_clip_gain();
             }
-            if ui.button("Add Frame Hold").clicked() {
-                editor.add_frame_hold();
-            }
+            ui.menu_button("Video Options", |ui| {
+                if ui.button("Add Frame Hold").clicked() {
+                    editor.add_frame_hold();
+                }
+                if ui.button("Set to Frame Size").clicked() {
+                    editor.set_to_frame_size(FrameFit::Fit);
+                }
+                if ui.button("Set to Fill Frame").clicked() {
+                    editor.set_to_frame_size(FrameFit::Fill);
+                }
+            });
             ui.separator();
             if ui.button("Nest").clicked() {
                 editor.nest_selection();

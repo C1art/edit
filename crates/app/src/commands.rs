@@ -1,6 +1,6 @@
 use timeline::{
-    AddFrameHold, AddTrack, Clipboard, Lift, PasteClips, PlaceMode, Razor, RazorTarget,
-    RippleDelete, SetClipsEnabled, SetLinked, Timecode, TrackKind,
+    AddFrameHold, AddTrack, Clipboard, FrameFit, Lift, PasteClips, PlaceMode, Razor, RazorTarget,
+    RippleDelete, SetClipsEnabled, SetLinked, SetToFrameSize, Timecode, TrackKind,
 };
 
 use crate::editor::Editor;
@@ -190,6 +190,20 @@ impl Editor {
             self.apply(edit);
         } else if !self.apply(edit) {
             self.notice("Select two or more clips to link");
+        }
+    }
+
+    pub(crate) fn set_to_frame_size(&mut self, fit: FrameFit) {
+        if self.view.selection.is_empty() {
+            self.notice("Select video clips to size to the frame");
+            return;
+        }
+        let edit = SetToFrameSize {
+            clips: self.view.selection.clone(),
+            fit,
+        };
+        if !self.apply(edit) {
+            self.notice("The selected video clips already match the frame");
         }
     }
 }
