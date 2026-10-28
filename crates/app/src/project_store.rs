@@ -3,7 +3,9 @@ use std::thread;
 
 use crossbeam::channel::{self, Receiver, Sender};
 use project::ProjectFile;
-use timeline::{captions_from_cues, parse_srt, to_srt, Caption, Sequence, Timebase};
+use timeline::{
+    captions_from_cues, parse_srt, read_xmeml, to_srt, Caption, ImportXmeml, Sequence, Timebase,
+};
 
 enum Request {
     Save {
@@ -24,6 +26,8 @@ enum Request {
     },
     ReadKeymap(PathBuf),
     WriteKeymap(PathBuf, String),
+    /// A Final Cut Pro XML file to read a sequence from.
+    ReadInterchange(PathBuf),
     /// A sequence written for another editor, such as an EDL.
     WriteInterchange(PathBuf, String),
 }
@@ -38,6 +42,7 @@ pub enum StoreEvent {
     /// The shortcuts file's text, or none where there is no file yet.
     KeymapRead(PathBuf, Result<Option<String>, String>),
     KeymapWritten(PathBuf, Result<(), String>),
+    InterchangeRead(PathBuf, Result<Box<ImportXmeml>, String>),
     InterchangeWritten(PathBuf, Result<(), String>),
 }
 
@@ -114,6 +119,10 @@ impl ProjectStore {
             captions,
             timebase,
         });
+    }
+
+    pub fn read_interchange(&mut self, path: PathBuf) {
+        self.send(Request::ReadInterchange(path));
     }
 
     pub fn write_interchange(&mut self, path: PathBuf, text: String) {
@@ -206,6 +215,13 @@ fn handle(request: Request) -> StoreEvent {
                 .and_then(|()| std::fs::write(&path, text))
                 .map_err(|error| error.to_string());
             StoreEvent::KeymapWritten(path, result)
+        }
+        Request::ReadInterchange(path) => {
+            let result = std::fs::read_to_string(&path)
+                .map_err(|error| error.to_string())
+                .and_then(|text| read_xmeml(&text).map_err(|error| error.to_string()))
+                .map(Box::new);
+            StoreEvent::InterchangeRead(path, result)
         }
         Request::WriteInterchange(path, text) => {
             let result = std::fs::write(&path, text).map_err(|error| error.to_string());

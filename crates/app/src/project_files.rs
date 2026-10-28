@@ -64,6 +64,10 @@ pub fn is_project(path: &Path) -> bool {
     has_extension(path, project::EXTENSION)
 }
 
+pub fn is_xml(path: &Path) -> bool {
+    has_extension(path, XML)
+}
+
 pub fn is_subrip(path: &Path) -> bool {
     has_extension(path, SUBRIP)
 }
@@ -132,6 +136,13 @@ impl Editor {
         match &mut self.store {
             Some(store) => store.read_captions(path, timebase),
             None => self.notice("Cannot import captions: the project worker is not running"),
+        }
+    }
+
+    pub(crate) fn import_interchange(&mut self, path: PathBuf) {
+        match &mut self.store {
+            Some(store) => store.read_interchange(path),
+            None => self.notice("Cannot import XML: the project worker is not running"),
         }
     }
 
@@ -267,6 +278,18 @@ impl Editor {
                 StoreEvent::CaptionsWritten(path, Err(error)) => {
                     self.notice(format!("Cannot export {}: {error}", path.display()));
                 }
+                StoreEvent::InterchangeRead(path, Ok(import)) => {
+                    let name = import.name.clone();
+                    if self.apply(*import) {
+                        self.notice(format!(
+                            "Imported the sequence {name} from {}; open it from the project",
+                            path.display()
+                        ));
+                    }
+                }
+                StoreEvent::InterchangeRead(path, Err(error)) => {
+                    self.notice(format!("Cannot import {}: {error}", path.display()));
+                }
                 StoreEvent::InterchangeWritten(path, Ok(())) => {
                     self.notice(format!("Exported the sequence to {}", path.display()));
                 }
@@ -328,7 +351,7 @@ pub fn path_dialog(editor: &mut Editor, ctx: &egui::Context) {
     let (title, hint, action) = match prompt.purpose {
         PathPurpose::Import => (
             "Import Media",
-            "Path to a video or audio file (or drop files on the window):",
+            "Path to a video, audio or Final Cut Pro XML file (or drop files on the window):",
             "Import",
         ),
         PathPurpose::Replace(_) => (
@@ -399,6 +422,7 @@ pub fn path_dialog(editor: &mut Editor, ctx: &egui::Context) {
     if let Some(path) = submitted.filter(|path| !path.as_os_str().is_empty()) {
         editor.path_prompt = None;
         match purpose {
+            PathPurpose::Import if is_xml(&path) => editor.import_interchange(path),
             PathPurpose::Import => editor.import(path, None),
             PathPurpose::Replace(id) => editor.import(path, Some(id)),
             PathPurpose::OpenProject => editor.discard_then(AfterDiscard::Open(path)),

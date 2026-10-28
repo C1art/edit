@@ -20,7 +20,7 @@ use crate::mixer::Mixer;
 use crate::monitors::{self, Focus};
 use crate::nesting::Level;
 use crate::panels::MediaTab;
-use crate::project_files::{is_project, is_subrip, AfterDiscard, PathPrompt};
+use crate::project_files::{is_project, is_subrip, is_xml, AfterDiscard, PathPrompt};
 use crate::project_store::ProjectStore;
 use crate::proxies::ProxyMaker;
 use crate::source::SourceMonitor;
@@ -255,6 +255,8 @@ impl Editor {
             self.discard_then(AfterDiscard::Open(path));
         } else if is_subrip(&path) {
             self.import_captions(path);
+        } else if is_xml(&path) {
+            self.import_interchange(path);
         } else {
             self.import(path, None);
         }
