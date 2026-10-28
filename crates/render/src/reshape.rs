@@ -6,6 +6,18 @@ pub struct Reshape {
     pub mirror: Option<Mirror>,
     /// Maps of the picture's plane, in the order they apply.
     pub warps: [Option<Warp>; MAX_WARPS],
+    /// The picture as a page turning away, before the warps place it.
+    pub fold: Option<PageFold>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PageFold {
+    /// The corner it lifts from: -1 or 1 across, then down, from the picture's center.
+    pub corner: [f32; 2],
+    /// 0 flat, 1 lifted clear of the picture.
+    pub progress: f32,
+    /// Whether the page curls, its back pale and shaded, rather than folding flat.
+    pub curl: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -23,6 +35,7 @@ impl Reshape {
     pub const NONE: Self = Self {
         mirror: None,
         warps: [None; MAX_WARPS],
+        fold: None,
     };
 
     /// Adds `warp` after the others; past the most a layer holds, it is left out.
@@ -49,11 +62,11 @@ impl Reshape {
         }))
     }
 
-    /// The shader's view, as five vec4s: the mirror's center, angle and 1 when on; the
+    /// The shader's view, as six vec4s: the mirror's center, angle and 1 when on; the
     /// rows of the map from the warped picture back to the source, the first ending in
-    /// 1 when on; then the warped picture's bounds. A picture warped out of sight maps
-    /// nowhere.
-    pub(crate) fn uniform(&self, aspect: f32) -> [f32; 20] {
+    /// 1 when on; the warped picture's bounds; then the fold's corner, progress, and 1
+    /// when flat or 2 when curling. A picture warped out of sight maps nowhere.
+    pub(crate) fn uniform(&self, aspect: f32) -> [f32; 24] {
         let mirror = self.mirror.map_or([0.0; 4], |mirror| {
             [mirror.center[0], mirror.center[1], mirror.angle, 1.0]
         });
@@ -63,10 +76,14 @@ impl Reshape {
         let [first, second, third] = rows.unwrap_or([[0.0; 3]; 3]);
         let bounds = corners.map_or([0.0; 4], bounds);
         let on = if corners.is_some() { 1.0 } else { 0.0 };
+        let fold = self.fold.map_or([0.0; 4], |fold| {
+            let style = if fold.curl { 2.0 } else { 1.0 };
+            [fold.corner[0], fold.corner[1], fold.progress, style]
+        });
         [
             mirror[0], mirror[1], mirror[2], mirror[3], first[0], first[1], first[2], on,
             second[0], second[1], second[2], 0.0, third[0], third[1], third[2], 0.0, bounds[0],
-            bounds[1], bounds[2], bounds[3],
+            bounds[1], bounds[2], bounds[3], fold[0], fold[1], fold[2], fold[3],
         ]
     }
 }

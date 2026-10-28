@@ -78,10 +78,12 @@ struct Placement {
     style_turbulence: vec4<f32>,
     style_turbulence_center: vec4<f32>,
     // Mirror's center, angle and 1 when on; the warps' map back to the picture, its
-    // first row ending in 1 when on, and the warped picture's bounds (see reshape.wgsl).
+    // first row ending in 1 when on; the warped picture's bounds; then a page fold's
+    // corner, progress, and 1 when flat or 2 when curling (see reshape.wgsl).
     reshape_mirror: vec4<f32>,
     reshape_unpin: array<vec4<f32>, 3>,
     reshape_bounds: vec4<f32>,
+    reshape_fold: vec4<f32>,
     // Color Key's encoded color and tolerance, then Leave Color's; Leave Color's amount,
     // softness and 1 when matching hue, then Color Key's softness (see recolor.wgsl).
     recolor_key: vec4<f32>,
@@ -156,6 +158,10 @@ fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
         low = min(low, placement.reshape_bounds.xy - margin);
         high = max(high, placement.reshape_bounds.zw + margin);
     }
+    // A folded page's back can lie up to a picture beyond it.
+    let folding = f32(placement.reshape_fold.w > 0.5);
+    low -= folding;
+    high += folding;
     let uv = mix(low, high, corners[index]);
     let center = placement.center_axis_x.xy;
     let axis_x = placement.center_axis_x.zw;
@@ -462,7 +468,8 @@ fn cast_alpha(uv: vec2<f32>) -> f32 {
 
 // The layer's graded, keyed and masked color, not yet premultiplied.
 fn layer_color(in: VertexOutput) -> vec4<f32> {
-    let pinned = unpinned(in.uv);
+    let page = folded(in.uv);
+    let pinned = unpinned(page.uv);
     let uv = warp(pinned);
     let color = source_color(uv);
     let wiped = wipe_cover(in.canvas);
@@ -470,15 +477,17 @@ fn layer_color(in: VertexOutput) -> vec4<f32> {
     let keyed = key_shown(matte);
     let sharp = sharpen(despill(color.rgb, matte), uv);
     var rgb = restyle(stylize(secondary(creative_grade(correct(change_to_color(mix_channels(leave_color(sharp)))))), pinned), uv);
-    rgb = key_view(rgb, matte);
+    rgb = page_side(key_view(rgb, matte), page);
     rgb = mix(rgb, vec3<f32>(1.0), placement.balance.w);
     let picture = color.a * keyed * f32(in_crop(pinned));
     let shadow = shadow_alpha(pinned);
     let covered = picture + shadow * (1.0 - picture);
     rgb = mix(placement.style_shadow_color.rgb, rgb, picture / max(covered, 1e-6));
-    let opacity = placement.axis_y_opacity.z * mask_coverage(in.uv);
+    let opacity = placement.axis_y_opacity.z * mask_coverage(page.uv);
     let shown = covered * wiped.picture;
     let border = 1.0 - wiped.picture;
     rgb = (rgb * shown + wiped.border * border) / max(shown + border, 1e-6);
-    return vec4<f32>(rgb, (shown + border) * wiped.shown * opacity);
+    let alpha = (shown + border) * wiped.shown * opacity;
+    let under = page.shadow * placement.axis_y_opacity.z * (1.0 - alpha);
+    return vec4<f32>(rgb * alpha / max(alpha + under, 1e-6), alpha + under);
 }

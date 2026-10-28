@@ -26,7 +26,7 @@ pub use mask::{LayerMask, Outline, MAX_MASKS, MAX_OUTLINE_POINTS};
 pub use pixel::{ChromaKey, PixelEffects, Vignette};
 pub use placement::{ColorAdjust, LayerLook};
 pub use recolor::{ChangeToColor, ChannelMixer, ColorChange, ColorKey, LeaveColor, Ramp, Recolor};
-pub use reshape::{Mirror, Reshape};
+pub use reshape::{Mirror, PageFold, Reshape};
 pub use scope::Scope;
 pub use secondary::SecondaryAdjust;
 pub use style::PictureStyle;
