@@ -1,6 +1,6 @@
 use render::{
-    ColorAdjust, LayerLook, LayerMask, LayerWipe, Outline, PixelEffects, SecondaryAdjust, Warp,
-    MAX_MASKS, MAX_OUTLINE_POINTS,
+    ColorAdjust, LayerLook, LayerMask, LayerWipe, Outline, PageFold, PixelEffects, SecondaryAdjust,
+    Warp, MAX_MASKS, MAX_OUTLINE_POINTS,
 };
 use timeline::{
     ColorCorrection, HslSecondary, Look, Mask, MaskShape, Param, Reveal, Ticks, Timebase,
@@ -71,8 +71,14 @@ fn smeared(mut effects: PixelEffects, reveal: Reveal, canvas: [f32; 2]) -> Pixel
     effects
 }
 
-/// `effects` with the transition's turn last, after the clip's own warps.
+/// `effects` with the transition's turn last, after the clip's own warps, and its page
+/// fold.
 fn turned(mut effects: PixelEffects, reveal: Reveal, [width, height]: [f32; 2]) -> PixelEffects {
+    effects.reshape.fold = reveal.fold.map(|fold| PageFold {
+        corner: fold.corner,
+        progress: fold.progress,
+        curl: fold.curl,
+    });
     let Some(turn) = reveal.turn else {
         return effects;
     };
