@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use timeline::{
-    Clip, ClipId, Gain, Generator, Keyframe, MediaItem, Pan, Rgb, SourceId, TextAlign, Ticks,
+    Clip, ClipId, Gain, Generator, Keyframe, MediaItem, Nest, Pan, Rgb, SourceId, TextAlign, Ticks,
     Timebase, Title, TitleFont, Track, Transition, TransitionKind, VideoEffect, VideoFormat,
 };
 
@@ -38,6 +38,26 @@ fn sample() -> ProjectFile {
             background: Some(Rgb::BLACK),
         })),
         nest: None,
+    });
+    let mut nest = Nest::with_default_tracks();
+    nest.audio[1].clips.push(Clip::new(
+        ClipId(8),
+        SourceId(1),
+        Ticks(30),
+        Ticks(60),
+        Ticks(0),
+    ));
+    nest.master = Gain(-150);
+    sequence.media.push(MediaItem {
+        id: SourceId(3),
+        name: "Nested Sequence 01".to_owned(),
+        path: PathBuf::new(),
+        duration: Ticks(90),
+        video: Some(VideoFormat::default()),
+        has_audio: true,
+        proxy: None,
+        generator: None,
+        nest: Some(nest),
     });
     let mut clip = Clip::new(ClipId(7), SourceId(1), Ticks(0), Ticks(90_000), Ticks(3));
     clip.gain = Gain(-600);
