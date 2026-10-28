@@ -1,4 +1,4 @@
-use timeline::{EffectCategory, MatteChannel, Rgb, VideoEffect};
+use timeline::{ColorMatch, EffectCategory, MatteChannel, RampShape, Rgb, VideoEffect};
 
 use super::look::Rows;
 
@@ -160,22 +160,85 @@ impl Rows {
                         });
                     chosen
                 });
-                self.choice(ui, "Composite Using", |ui| {
-                    let mut chosen = false;
-                    egui::ComboBox::from_id_salt("matte_channel")
-                        .selected_text(channel.name())
-                        .show_ui(ui, |ui| {
-                            for option in MatteChannel::ALL {
-                                chosen |= ui
-                                    .selectable_value(channel, option, option.name())
-                                    .clicked();
-                            }
-                        });
-                    chosen
-                });
+                self.options(
+                    ui,
+                    "Composite Using",
+                    "matte_channel",
+                    channel,
+                    MatteChannel::ALL,
+                    MatteChannel::name,
+                );
                 self.choice(ui, "Reverse", |ui| ui.checkbox(reverse, "").changed());
             }
             VideoEffect::WarpStabilizer(stabilizer) => self.stabilizer(ui, stabilizer),
+            VideoEffect::ColorKey {
+                color,
+                tolerance,
+                softness,
+            } => {
+                self.color(ui, "Key Color", color);
+                self.param(ui, "Tolerance", tolerance, 0.0..=100.0, "%");
+                self.param(ui, "Softness", softness, 0.0..=100.0, "%");
+            }
+            VideoEffect::LeaveColor {
+                color,
+                amount,
+                tolerance,
+                softness,
+                matching,
+            } => {
+                self.param(ui, "Amount", amount, 0.0..=100.0, "%");
+                self.color(ui, "Color", color);
+                self.param(ui, "Tolerance", tolerance, 0.0..=100.0, "%");
+                self.param(ui, "Softness", softness, 0.0..=100.0, "%");
+                self.options(
+                    ui,
+                    "Match",
+                    "leave_match",
+                    matching,
+                    ColorMatch::ALL,
+                    ColorMatch::name,
+                );
+            }
+            VideoEffect::GradientRamp {
+                start: [start_x, start_y],
+                start_color,
+                end: [end_x, end_y],
+                end_color,
+                shape,
+                blend,
+            } => {
+                self.param(ui, "Start X", start_x, -100.0..=200.0, "%");
+                self.param(ui, "Start Y", start_y, -100.0..=200.0, "%");
+                self.color(ui, "Start Color", start_color);
+                self.param(ui, "End X", end_x, -100.0..=200.0, "%");
+                self.param(ui, "End Y", end_y, -100.0..=200.0, "%");
+                self.color(ui, "End Color", end_color);
+                self.options(
+                    ui,
+                    "Shape",
+                    "ramp_shape",
+                    shape,
+                    RampShape::ALL,
+                    RampShape::name,
+                );
+                self.param(ui, "Blend", blend, 0.0..=100.0, "%");
+            }
+            VideoEffect::Mirror {
+                center: [x, y],
+                angle,
+            } => {
+                self.param(ui, "Center X", x, -100.0..=200.0, "%");
+                self.param(ui, "Center Y", y, -100.0..=200.0, "%");
+                self.param(ui, "Angle", angle, -360.0..=360.0, "°");
+            }
+            VideoEffect::CornerPin { corners } => {
+                let names = ["Upper Left", "Upper Right", "Lower Left", "Lower Right"];
+                for (name, [x, y]) in names.into_iter().zip(corners) {
+                    self.param(ui, &format!("{name} X"), x, -200.0..=300.0, "%");
+                    self.param(ui, &format!("{name} Y"), y, -200.0..=300.0, "%");
+                }
+            }
         }
     }
 
@@ -192,6 +255,29 @@ impl Rows {
             if add(ui) {
                 self.commit();
             }
+        });
+    }
+
+    /// A drop-down of `all`, named by `name`.
+    fn options<T: Copy + PartialEq>(
+        &mut self,
+        ui: &mut egui::Ui,
+        label: &str,
+        id: &str,
+        value: &mut T,
+        all: impl IntoIterator<Item = T>,
+        name: fn(T) -> &'static str,
+    ) {
+        self.choice(ui, label, |ui| {
+            let mut chosen = false;
+            egui::ComboBox::from_id_salt(id)
+                .selected_text(name(*value))
+                .show_ui(ui, |ui| {
+                    for option in all {
+                        chosen |= ui.selectable_value(value, option, name(option)).clicked();
+                    }
+                });
+            chosen
         });
     }
 
