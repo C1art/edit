@@ -162,6 +162,7 @@ fn layer_look(look: &Look, time: Ticks, reveal: Reveal, canvas: [f32; 2]) -> Lay
         mask: reveal.mask,
         wash: reveal.wash,
         effects: pixel_effects(&look.effects, time),
+        blend: look.blend,
     }
 }
 
