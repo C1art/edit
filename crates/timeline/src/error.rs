@@ -16,6 +16,7 @@ pub enum TimelineError {
     },
     NonPositiveDuration,
     MarkersOutOfOrder,
+    SpeedOutOfRange(ClipId),
     BeforeSequenceStart,
     /// The clip would need source material before the start or after the end of its media.
     OutsideMedia(ClipId),
@@ -40,6 +41,7 @@ impl fmt::Display for TimelineError {
                 )
             }
             Self::MarkersOutOfOrder => f.write_str("markers are out of time order"),
+            Self::SpeedOutOfRange(_) => f.write_str("clip speed must be between 1% and 10,000%"),
             Self::NonPositiveDuration => f.write_str("clip duration must be positive"),
             Self::BeforeSequenceStart => f.write_str("nothing can start before the sequence"),
             Self::OutsideMedia(_) => f.write_str("not enough source media for this edit"),

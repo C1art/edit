@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{FrameRate, Gain, Look, Marker, MediaItem, Pan, SourceId, Ticks, Timebase, Transition};
+use crate::{
+    FrameRate, Gain, Look, Marker, MediaItem, Pan, SourceId, Speed, Ticks, Timebase, Transition,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct ClipId(pub u64);
@@ -59,6 +61,8 @@ pub struct Clip {
     pub duration: Ticks,
     pub source_in: Ticks,
     #[serde(default)]
+    pub speed: Speed,
+    #[serde(default)]
     pub link: Option<LinkId>,
     /// Level of an audio clip; ignored for video.
     #[serde(default)]
@@ -87,6 +91,7 @@ impl Clip {
             start,
             duration,
             source_in,
+            speed: Speed::NORMAL,
             link: None,
             gain: Gain::UNITY,
             look: Look::default(),
@@ -100,7 +105,7 @@ impl Clip {
     }
 
     pub fn source_out(&self) -> Ticks {
-        self.source_in + self.duration
+        self.source_in + self.speed.source_span(self.duration)
     }
 
     pub fn overlaps(&self, other: &Clip) -> bool {
@@ -114,7 +119,12 @@ impl Clip {
 
     /// The source time playing at sequence `position`.
     pub fn source_time(&self, position: Ticks) -> Ticks {
-        position - self.start + self.source_in
+        self.source_in + self.speed.source_span(position - self.start)
+    }
+
+    /// The sequence position where source time `source` plays.
+    pub fn position_of(&self, source: Ticks) -> Ticks {
+        self.start + self.speed.sequence_span(source - self.source_in)
     }
 }
 

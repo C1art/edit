@@ -10,6 +10,7 @@ mod mix;
 mod model;
 mod param;
 mod plan;
+mod speed;
 mod time;
 mod timecode;
 mod transition;
@@ -19,10 +20,10 @@ pub use audio_plan::{audio_fade, audio_span};
 pub use color::ColorCorrection;
 pub use edit::{
     clamp_delta, AddMarker, AddTrack, Clipboard, CloseGap, Edge, ImportMedia, Lift, MoveClips,
-    PasteClips, PlaceClip, PlaceMode, Razor, RazorTarget, RemoveMarker, RemoveMedia, RemoveTrack,
-    RippleDelete, Roll, SetClipGain, SetClipLook, SetMasterGain, SetProxy, SetSequenceFormat,
-    SetTrackMix, SetTrackSwitch, SetTransition, Slide, Slip, TrackSwitch, Trim, TrimMode,
-    UpdateMarker,
+    PasteClips, PlaceClip, PlaceMode, RateStretch, Razor, RazorTarget, RemoveMarker, RemoveMedia,
+    RemoveTrack, RippleDelete, Roll, SetClipGain, SetClipLook, SetClipSpeed, SetMasterGain,
+    SetProxy, SetSequenceFormat, SetTrackMix, SetTrackSwitch, SetTransition, Slide, Slip,
+    TrackSwitch, Trim, TrimMode, UpdateMarker,
 };
 pub use error::TimelineError;
 pub use history::{preview, Edit, EditCommand, Timeline};
@@ -35,6 +36,7 @@ pub use model::{
 };
 pub use param::{Keyframe, Param};
 pub use plan::{track_layers_at, PlannedLayer};
+pub use speed::Speed;
 pub use time::{Ticks, Timebase};
 pub use timecode::{FrameRate, Timecode};
 pub use transition::{nearest_transition_edge, Transition, TransitionKind};

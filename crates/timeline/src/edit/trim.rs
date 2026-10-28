@@ -48,11 +48,11 @@ impl Edit for Trim {
             match (self.edge, self.mode) {
                 (Edge::Head, TrimMode::Normal) => {
                     clip.start = clip.start + d;
-                    clip.source_in = clip.source_in + d;
+                    clip.source_in = clip.source_in + clip.speed.source_span(d);
                     clip.duration = clip.duration - d;
                 }
                 (Edge::Head, TrimMode::Ripple) => {
-                    clip.source_in = clip.source_in + d;
+                    clip.source_in = clip.source_in + clip.speed.source_span(d);
                     clip.duration = clip.duration - d;
                 }
                 (Edge::Tail, _) => clip.duration = clip.duration + d,
@@ -71,7 +71,7 @@ impl Edit for Trim {
 
 /// Shifts each unlocked track from its edit point, or from the primary edit point on
 /// tracks without a trimmed clip.
-fn ripple(
+pub(super) fn ripple(
     sequence: &mut Sequence,
     edit_points: &[(TrackRef, Ticks)],
     shift: Ticks,
@@ -115,7 +115,7 @@ impl Edit for Roll {
                     rolled = true;
                 } else if clip.start == self.at {
                     clip.start = clip.start + self.delta;
-                    clip.source_in = clip.source_in + self.delta;
+                    clip.source_in = clip.source_in + clip.speed.source_span(self.delta);
                     clip.duration = clip.duration - self.delta;
                     rolled = true;
                 }
@@ -185,7 +185,7 @@ impl Edit for Slide {
                     neighbor.duration = neighbor.duration + d;
                 } else if neighbor.start == end {
                     neighbor.start = neighbor.start + d;
-                    neighbor.source_in = neighbor.source_in + d;
+                    neighbor.source_in = neighbor.source_in + neighbor.speed.source_span(d);
                     neighbor.duration = neighbor.duration - d;
                 }
             }

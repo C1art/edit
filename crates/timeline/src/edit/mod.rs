@@ -5,6 +5,7 @@ mod marker;
 mod ops;
 mod paste;
 mod place;
+mod speed;
 mod structure;
 mod trim;
 
@@ -17,6 +18,7 @@ pub use look::{SetClipLook, SetTransition};
 pub use marker::{AddMarker, RemoveMarker, UpdateMarker};
 pub use paste::{Clipboard, PasteClips};
 pub use place::{PlaceClip, PlaceMode, Razor, RazorTarget};
+pub use speed::{RateStretch, SetClipSpeed};
 pub use structure::{
     AddTrack, ImportMedia, RemoveMedia, RemoveTrack, SetProxy, SetSequenceFormat, SetTrackSwitch,
     TrackSwitch,

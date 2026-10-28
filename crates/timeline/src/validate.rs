@@ -28,6 +28,9 @@ pub(crate) fn check(before: &Sequence, after: &Sequence) -> Result<(), TimelineE
             let media = after
                 .media_item(clip.source)
                 .ok_or(TimelineError::MediaNotFound(clip.source))?;
+            if !clip.speed.is_in_range() {
+                return Err(TimelineError::SpeedOutOfRange(clip.id));
+            }
             if clip.source_in < Ticks::ZERO || clip.source_out() > media.duration {
                 return Err(TimelineError::OutsideMedia(clip.id));
             }
