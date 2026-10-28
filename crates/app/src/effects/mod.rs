@@ -1,5 +1,6 @@
 mod color;
 mod curves;
+mod generate;
 mod generated;
 mod key_selection;
 mod keying;

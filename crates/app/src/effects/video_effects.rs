@@ -271,6 +271,10 @@ impl Rows {
             | VideoEffect::ColorKey { .. }
             | VideoEffect::LumaKey { .. }
             | VideoEffect::AlphaAdjust { .. } => self.keying(ui, effect, video_tracks),
+            VideoEffect::Checkerboard { .. }
+            | VideoEffect::Grid { .. }
+            | VideoEffect::Circle { .. }
+            | VideoEffect::FourColorGradient { .. } => self.generate(ui, effect),
             VideoEffect::LeaveColor {
                 color,
                 amount,
