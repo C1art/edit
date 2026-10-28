@@ -142,6 +142,86 @@ pub enum VideoEffect {
     },
     /// Steadies a shaky camera from an analysis of the clip's motion.
     WarpStabilizer(Stabilizer),
+    /// Keys out colors whose encoded values lie near `color`, with no spill handling.
+    ColorKey {
+        color: Rgb,
+        /// Percent of the largest distance between colors.
+        tolerance: Param,
+        softness: Param,
+    },
+    /// Turns everything but colors near `color` grey.
+    LeaveColor {
+        color: Rgb,
+        /// Percent the other colors lose.
+        amount: Param,
+        tolerance: Param,
+        softness: Param,
+        matching: ColorMatch,
+    },
+    /// Fills the picture with a blend from one color to another.
+    GradientRamp {
+        /// Percent of the picture's width and height.
+        start: [Param; 2],
+        start_color: Rgb,
+        end: [Param; 2],
+        end_color: Rgb,
+        shape: RampShape,
+        /// Percent of the original showing through.
+        blend: Param,
+    },
+    /// Reflects the picture across a line through `center`, the side the line's
+    /// normal points away from showing on both.
+    Mirror {
+        /// Percent of the picture's width and height.
+        center: [Param; 2],
+        /// Degrees clockwise; at 0 the left half shows on the right.
+        angle: Param,
+    },
+    /// Moves the picture's corners, each in percent of its width and height: upper left,
+    /// upper right, lower left, lower right.
+    CornerPin {
+        corners: [[Param; 2]; 4],
+    },
+}
+
+/// How Leave Color tells colors apart.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ColorMatch {
+    /// By distance between the encoded colors.
+    #[default]
+    Rgb,
+    /// By hue alone, keeping every shade of it.
+    Hue,
+}
+
+impl ColorMatch {
+    pub const ALL: [Self; 2] = [Self::Rgb, Self::Hue];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Rgb => "Using RGB",
+            Self::Hue => "Using Hue",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum RampShape {
+    #[default]
+    Linear,
+    /// Rings around the start, reaching the end color at the end point's distance.
+    Radial,
+}
+
+impl RampShape {
+    pub const ALL: [Self; 2] = [Self::Linear, Self::Radial];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Linear => "Linear Ramp",
+            Self::Radial => "Radial Ramp",
+        }
+    }
 }
 
 /// The groups the effects menu lists effects in, as Premiere's Effects panel does.
@@ -150,6 +230,7 @@ pub enum EffectCategory {
     BlurAndSharpen,
     ColorCorrection,
     Distort,
+    Generate,
     ImageControl,
     Keying,
     Perspective,
@@ -158,10 +239,11 @@ pub enum EffectCategory {
 }
 
 impl EffectCategory {
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::BlurAndSharpen,
         Self::ColorCorrection,
         Self::Distort,
+        Self::Generate,
         Self::ImageControl,
         Self::Keying,
         Self::Perspective,
@@ -174,6 +256,7 @@ impl EffectCategory {
             Self::BlurAndSharpen => "Blur & Sharpen",
             Self::ColorCorrection => "Color Correction",
             Self::Distort => "Distort",
+            Self::Generate => "Generate",
             Self::ImageControl => "Image Control",
             Self::Keying => "Keying",
             Self::Perspective => "Perspective",

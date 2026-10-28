@@ -1,9 +1,9 @@
-use super::{EffectCategory, MatteChannel, Rgb, VideoEffect};
+use super::{ColorMatch, EffectCategory, MatteChannel, RampShape, Rgb, VideoEffect};
 use crate::{Param, Stabilizer};
 
 impl VideoEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 23] {
+    pub fn catalog() -> [Self; 28] {
         [
             Self::GaussianBlur {
                 blurriness: Param::from_value(10.0),
@@ -87,6 +87,34 @@ impl VideoEffect {
                 speed: Param::from_value(1.0),
             },
             Self::WarpStabilizer(Stabilizer::default()),
+            Self::ColorKey {
+                color: Rgb::GREEN,
+                tolerance: Param::from_value(20.0),
+                softness: Param::from_value(5.0),
+            },
+            Self::LeaveColor {
+                color: Rgb::new(255, 0, 0),
+                amount: Param::from_value(100.0),
+                tolerance: Param::from_value(15.0),
+                softness: Param::from_value(5.0),
+                matching: ColorMatch::Hue,
+            },
+            Self::GradientRamp {
+                start: [Param::from_value(50.0), Param::default()],
+                start_color: Rgb::BLACK,
+                end: [Param::from_value(50.0), Param::from_value(100.0)],
+                end_color: Rgb::WHITE,
+                shape: RampShape::Linear,
+                blend: Param::default(),
+            },
+            Self::Mirror {
+                center: [Param::from_value(50.0), Param::from_value(50.0)],
+                angle: Param::default(),
+            },
+            Self::CornerPin {
+                corners: [[0.0, 0.0], [100.0, 0.0], [0.0, 100.0], [100.0, 100.0]]
+                    .map(|corner| corner.map(Param::from_value)),
+            },
         ]
     }
 
@@ -100,10 +128,16 @@ impl VideoEffect {
             | Self::LensDistortion { .. }
             | Self::Offset { .. }
             | Self::WaveWarp { .. }
-            | Self::WarpStabilizer(_) => EffectCategory::Distort,
+            | Self::WarpStabilizer(_)
+            | Self::Mirror { .. }
+            | Self::CornerPin { .. } => EffectCategory::Distort,
+            Self::LeaveColor { .. } => EffectCategory::ColorCorrection,
+            Self::GradientRamp { .. } => EffectCategory::Generate,
             Self::DropShadow { .. } => EffectCategory::Perspective,
             Self::BlackAndWhite | Self::GammaCorrection { .. } => EffectCategory::ImageControl,
-            Self::UltraKey { .. } | Self::TrackMatteKey { .. } => EffectCategory::Keying,
+            Self::UltraKey { .. } | Self::TrackMatteKey { .. } | Self::ColorKey { .. } => {
+                EffectCategory::Keying
+            }
             Self::Invert { .. }
             | Self::Vignette { .. }
             | Self::Posterize { .. }
@@ -139,6 +173,11 @@ impl VideoEffect {
             Self::DropShadow { .. } => "Drop Shadow",
             Self::WaveWarp { .. } => "Wave Warp",
             Self::WarpStabilizer(_) => "Warp Stabilizer",
+            Self::ColorKey { .. } => "Color Key",
+            Self::LeaveColor { .. } => "Leave Color",
+            Self::GradientRamp { .. } => "Gradient Ramp",
+            Self::Mirror { .. } => "Mirror",
+            Self::CornerPin { .. } => "Corner Pin",
         }
     }
 }

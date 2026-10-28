@@ -55,6 +55,28 @@ impl VideoEffect {
                 softness,
                 ..
             } => vec![opacity, direction, distance, softness],
+            Self::ColorKey {
+                tolerance,
+                softness,
+                ..
+            } => vec![tolerance, softness],
+            Self::LeaveColor {
+                amount,
+                tolerance,
+                softness,
+                ..
+            } => vec![amount, tolerance, softness],
+            Self::GradientRamp {
+                start: [start_x, start_y],
+                end: [end_x, end_y],
+                blend,
+                ..
+            } => vec![start_x, start_y, end_x, end_y, blend],
+            Self::Mirror {
+                center: [x, y],
+                angle,
+            } => vec![x, y, angle],
+            Self::CornerPin { corners } => corners.iter_mut().flatten().collect(),
             Self::WaveWarp {
                 height,
                 width,
@@ -117,6 +139,28 @@ impl VideoEffect {
                 softness,
                 ..
             } => vec![opacity, direction, distance, softness],
+            Self::ColorKey {
+                tolerance,
+                softness,
+                ..
+            } => vec![tolerance, softness],
+            Self::LeaveColor {
+                amount,
+                tolerance,
+                softness,
+                ..
+            } => vec![amount, tolerance, softness],
+            Self::GradientRamp {
+                start: [start_x, start_y],
+                end: [end_x, end_y],
+                blend,
+                ..
+            } => vec![start_x, start_y, end_x, end_y, blend],
+            Self::Mirror {
+                center: [x, y],
+                angle,
+            } => vec![x, y, angle],
+            Self::CornerPin { corners } => corners.iter().flatten().collect(),
             Self::WaveWarp {
                 height,
                 width,
