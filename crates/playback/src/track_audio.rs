@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::path::PathBuf;
 
 use audio::{Resampler, SampleRate};
 use media::{DecodedFrame, MediaReader, Streams};
@@ -11,8 +12,8 @@ const CHANNELS: usize = 2;
 
 enum Source {
     None,
-    Open(SourceId, Box<MediaReader>),
-    Failed(SourceId),
+    Open(SourceId, PathBuf, Box<MediaReader>),
+    Failed(SourceId, PathBuf),
 }
 
 /// Decodes and resamples the audio one track needs, in frames at the output rate.
@@ -55,21 +56,23 @@ impl TrackAudio {
         out: &mut [f32],
     ) -> Result<(), PlaybackError> {
         let same_media = match &self.source {
-            Source::Open(id, _) | Source::Failed(id) => *id == media.id,
+            Source::Open(id, path, _) | Source::Failed(id, path) => {
+                *id == media.id && *path == media.path
+            }
             Source::None => false,
         };
         if !same_media {
             self.reset();
             self.source =
                 match MediaReader::open_streams(&media.path, self.timebase, Streams::Audio) {
-                    Ok(reader) => Source::Open(media.id, Box::new(reader)),
+                    Ok(reader) => Source::Open(media.id, media.path.clone(), Box::new(reader)),
                     Err(error) => {
-                        self.source = Source::Failed(media.id);
+                        self.source = Source::Failed(media.id, media.path.clone());
                         return Err(error.into());
                     }
                 };
         }
-        let Source::Open(_, reader) = &mut self.source else {
+        let Source::Open(_, _, reader) = &mut self.source else {
             return Ok(());
         };
         if first != self.next_frame {
