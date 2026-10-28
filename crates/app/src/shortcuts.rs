@@ -153,7 +153,6 @@ fn pressed(ctx: &egui::Context) -> Option<Action> {
         {
             return Some(action);
         }
-        let tools = Tool::ALL.map(|tool| (tool.key(), Action::Tool(tool)));
         let keys = [
             (Key::Delete, Action::Lift),
             (Key::Backspace, Action::Lift),
@@ -175,9 +174,19 @@ fn pressed(ctx: &egui::Context) -> Option<Action> {
             (Key::G, Action::ClipGain),
             (Key::M, Action::AddMarker),
         ];
-        keys.into_iter()
-            .chain(tools)
-            .find_map(|(key, action)| input.consume_key(Modifiers::NONE, key).then_some(action))
+        let mut tools = Tool::ALL;
+        // Matching ignores extra Shift, so A alone would take Shift+A if tried first.
+        tools.sort_by_key(|tool| tool.shortcut().0.is_none());
+        let tool = tools.into_iter().find_map(|tool| {
+            let (modifiers, key) = tool.shortcut();
+            input
+                .consume_key(modifiers, key)
+                .then_some(Action::Tool(tool))
+        });
+        tool.or_else(|| {
+            keys.into_iter()
+                .find_map(|(key, action)| input.consume_key(Modifiers::NONE, key).then_some(action))
+        })
     })
 }
 

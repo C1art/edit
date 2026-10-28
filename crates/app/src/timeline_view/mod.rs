@@ -8,6 +8,7 @@ mod paint;
 mod rubber_band;
 mod scale;
 mod tool;
+mod track_select;
 
 use std::collections::BTreeSet;
 

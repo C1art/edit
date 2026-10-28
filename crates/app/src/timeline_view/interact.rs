@@ -8,6 +8,7 @@ use super::gesture::Gesture;
 use super::layout::{self, Hit, Row};
 use super::rubber_band::{self, BandHit, BandOwner, Envelope};
 use super::scale::{self, TimeScale};
+use super::track_select;
 use super::{Drag, TimelineOutput, TimelineView, Tool, SNAP_POINTS};
 
 impl TimelineView {
@@ -61,6 +62,10 @@ impl TimelineView {
                             output.errors.push(error.to_string());
                         }
                     }
+                } else if let Tool::TrackSelect(direction) = self.tool {
+                    let only = shift.then(|| hit_track(hit)).flatten();
+                    self.selection =
+                        track_select::pick(sequence, frame_time(pos.x), direction, only);
                 } else if let Some((owner, grabbed, _)) = self
                     .band_hit(sequence, &rows, &scale, hit, pos)
                     .filter(|_| command && self.tool == Tool::Selection)
@@ -82,6 +87,11 @@ impl TimelineView {
                 .input(|input| input.pointer.press_origin())
                 .unwrap_or(pos);
             let hit = layout::hit(sequence, &rows, &scale, origin);
+            if let Tool::TrackSelect(direction) = self.tool {
+                let only = shift.then(|| hit_track(hit)).flatten();
+                self.selection =
+                    track_select::pick(sequence, frame_time(origin.x), direction, only);
+            }
             let band = self
                 .band_hit(sequence, &rows, &scale, hit, origin)
                 .filter(|_| self.tool == Tool::Selection);
@@ -205,6 +215,14 @@ impl TimelineView {
             selection.clone()
         };
         match (self.tool, hit) {
+            (Tool::TrackSelect(_), hit) => {
+                let (first, _) = self.selection.first().and_then(|&id| sequence.clip(id))?;
+                let from = hit_track(hit).unwrap_or(first);
+                Some(Gesture::Move {
+                    clips: self.selection.clone(),
+                    from,
+                })
+            }
             (Tool::Razor, _) | (_, Hit::Empty { .. }) => None,
             (Tool::Selection | Tool::Ripple, Hit::Edge { clip, edge, .. }) => {
                 self.selection = sequence.with_links(&[clip]);
@@ -249,6 +267,13 @@ impl TimelineView {
                 from: track,
             }),
         }
+    }
+}
+
+fn hit_track(hit: Hit) -> Option<TrackRef> {
+    match hit {
+        Hit::Body { track, .. } | Hit::Edge { track, .. } => Some(track),
+        Hit::Empty { track } => track,
     }
 }
 
