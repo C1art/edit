@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use egui::{Align2, Color32, FontId, Rect, Stroke, StrokeKind, Vec2};
-use timeline::{Clip, Sequence, SwitchAngle, Track};
+use timeline::{Clip, FlattenMulticam, Sequence, SwitchAngle, Track};
 
 use crate::editor::Editor;
 
@@ -99,6 +99,15 @@ pub fn camera_menu(editor: &mut Editor, ui: &mut egui::Ui) {
                 });
                 ui.close();
             }
+        }
+        ui.separator();
+        let flatten = ui
+            .button("Flatten")
+            .on_hover_text("Replace the selected multi-camera clips with the clips they show");
+        if flatten.clicked() {
+            let clips = editor.view.selection.to_vec();
+            editor.apply(FlattenMulticam { clips });
+            ui.close();
         }
     });
 }
