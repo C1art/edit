@@ -38,6 +38,7 @@ pub struct Editor {
     pub(crate) proxies: Option<ProxyMaker>,
     pub(crate) offline: Option<crate::offline::OfflineMedia>,
     pub(crate) render_previews: Option<crate::render_previews::RenderPreviews>,
+    pub(crate) render_replace: Option<crate::render_replace::RenderReplace>,
     pub(crate) clip_art: ClipArt,
     /// Whether the monitors play proxies where media has them.
     pub(crate) use_proxies: bool,
@@ -175,6 +176,7 @@ impl Editor {
             proxies,
             offline,
             render_previews,
+            render_replace: None,
             clip_art,
             use_proxies: false,
             safe_margins: false,
@@ -419,6 +421,7 @@ impl eframe::App for Editor {
         self.poll_imports();
         self.poll_offline();
         self.poll_render_previews(&ctx);
+        self.poll_render_replace(&ctx);
         crate::essential_sound::poll(self, &ctx);
         self.poll_proxies(&ctx);
         self.poll_multicam_sync(&ctx);
@@ -456,6 +459,7 @@ impl eframe::App for Editor {
         crate::workspaces::dialog(self, &ctx);
         crate::link_media::dialog(self, &ctx);
         crate::render_previews::window(self, &ctx);
+        crate::render_replace::window(self, &ctx);
         crate::project_manager::window(self, &ctx);
     }
 }

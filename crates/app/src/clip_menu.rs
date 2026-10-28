@@ -139,6 +139,21 @@ pub(crate) fn items(editor: &mut Editor, ui: &mut Ui) {
     if ui.button("Nest").clicked() {
         editor.nest_selection();
     }
+    let render = Button::new("Render and Replace");
+    if ui
+        .add_enabled(editor.can_render_and_replace(), render)
+        .on_hover_text("Render the selected nests and graphics to files the clips then show")
+        .clicked()
+    {
+        editor.render_and_replace();
+    }
+    let restore = Button::new("Restore Unrendered");
+    if ui
+        .add_enabled(editor.can_restore_unrendered(), restore)
+        .clicked()
+    {
+        editor.restore_unrendered();
+    }
 }
 
 /// Radio choices for the selected video clips, checked where they all agree.

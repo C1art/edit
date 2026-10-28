@@ -59,7 +59,7 @@ impl Importer {
     }
 }
 
-fn probe(path: &std::path::Path, timebase: Timebase) -> Result<ImportMedia, MediaError> {
+pub(crate) fn probe(path: &std::path::Path, timebase: Timebase) -> Result<ImportMedia, MediaError> {
     let reader = MediaReader::open(path, timebase)?;
     let info = reader.info();
     let name = path.file_name().map_or_else(
