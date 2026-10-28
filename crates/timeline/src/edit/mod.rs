@@ -3,6 +3,7 @@ mod attributes;
 mod bin;
 mod caption;
 mod enable;
+mod frame_size;
 mod generate;
 mod hold;
 mod levels;
@@ -27,6 +28,7 @@ pub use attributes::{Attribute, PasteAttributes, RemoveAttributes};
 pub use bin::{AddBin, MoveToBin, RemoveBin, RenameBin};
 pub use caption::SetCaptions;
 pub use enable::SetClipsEnabled;
+pub use frame_size::{FrameFit, SetToFrameSize};
 pub use generate::{AddGenerated, SetGenerator};
 pub use hold::AddFrameHold;
 pub use levels::{

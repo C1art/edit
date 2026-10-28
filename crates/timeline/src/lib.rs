@@ -37,14 +37,14 @@ pub use color::{ColorCorrection, ColorWheel};
 pub use curves::{Curve, CurvePoint, Curves, CURVE_RANGE};
 pub use edit::{
     clamp_delta, AddBin, AddFrameHold, AddGenerated, AddMarker, AddNest, AddTrack, Attribute,
-    Clipboard, CloseGap, Edge, ExtractMarked, ImportMedia, InNest, Lift, LiftMarked, MoveClips,
-    MoveToBin, NestClips, NormalizeClipGains, PasteAttributes, PasteClips, PlaceClip, PlaceMode,
-    RateStretch, Razor, RazorTarget, RelinkMedia, RemoveAttributes, RemoveBin, RemoveMarker,
-    RemoveMedia, RemoveTrack, RenameBin, RenameMedia, RippleDelete, RippleTrimToPlayhead, Roll,
-    SetCaptions, SetClipAudioEffects, SetClipGain, SetClipLook, SetClipSpeed, SetClipVolume,
-    SetClipsEnabled, SetGenerator, SetLinked, SetMarks, SetMasterGain, SetProxy, SetSequenceFormat,
-    SetTrackAutomation, SetTrackMix, SetTrackSwitch, SetTransition, Slide, Slip, TrackSwitch, Trim,
-    TrimMode, UpdateMarker,
+    Clipboard, CloseGap, Edge, ExtractMarked, FrameFit, ImportMedia, InNest, Lift, LiftMarked,
+    MoveClips, MoveToBin, NestClips, NormalizeClipGains, PasteAttributes, PasteClips, PlaceClip,
+    PlaceMode, RateStretch, Razor, RazorTarget, RelinkMedia, RemoveAttributes, RemoveBin,
+    RemoveMarker, RemoveMedia, RemoveTrack, RenameBin, RenameMedia, RippleDelete,
+    RippleTrimToPlayhead, Roll, SetCaptions, SetClipAudioEffects, SetClipGain, SetClipLook,
+    SetClipSpeed, SetClipVolume, SetClipsEnabled, SetGenerator, SetLinked, SetMarks, SetMasterGain,
+    SetProxy, SetSequenceFormat, SetToFrameSize, SetTrackAutomation, SetTrackMix, SetTrackSwitch,
+    SetTransition, Slide, Slip, TrackSwitch, Trim, TrimMode, UpdateMarker,
 };
 pub use effect::{MatteChannel, Rgb, VideoEffect};
 pub use error::TimelineError;

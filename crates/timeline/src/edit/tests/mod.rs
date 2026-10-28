@@ -459,6 +459,7 @@ mod attributes;
 mod bin;
 mod caption;
 mod enable;
+mod frame_size;
 mod generate;
 mod hold;
 mod link;
