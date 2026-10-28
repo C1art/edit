@@ -6,6 +6,10 @@ pub enum PlaybackError {
     Render(render::RenderError),
     Audio(audio::AudioError),
     WorkerSpawn(std::io::Error),
+    Lut {
+        path: std::path::PathBuf,
+        reason: String,
+    },
 }
 
 impl fmt::Display for PlaybackError {
@@ -15,6 +19,9 @@ impl fmt::Display for PlaybackError {
             Self::Render(error) => write!(f, "render: {error}"),
             Self::Audio(error) => write!(f, "audio: {error}"),
             Self::WorkerSpawn(error) => write!(f, "cannot start decode thread: {error}"),
+            Self::Lut { path, reason } => {
+                write!(f, "cannot use the LUT {}: {reason}", path.display())
+            }
         }
     }
 }
@@ -26,6 +33,7 @@ impl std::error::Error for PlaybackError {
             Self::Render(error) => Some(error),
             Self::Audio(error) => Some(error),
             Self::WorkerSpawn(error) => Some(error),
+            Self::Lut { .. } => None,
         }
     }
 }

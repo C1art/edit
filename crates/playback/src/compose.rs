@@ -1,4 +1,6 @@
-use render::{ColorAdjust, LayerLook};
+use std::sync::Arc;
+
+use render::{ColorAdjust, Grade, LayerLook};
 use timeline::{
     track_layers_at, ClipId, ColorCorrection, Generator, Look, Param, Reveal, Sequence, SourceId,
     Ticks, Track, TrackRef,
@@ -6,6 +8,7 @@ use timeline::{
 
 use crate::clip_decoders::ClipDecoders;
 use crate::generated::caption_frame;
+use crate::grades::grade_for;
 use crate::pixel_effects::pixel_effects;
 use crate::track_video::TrackVideo;
 use crate::{Layer, LayerPicture, PlaybackError};
@@ -37,6 +40,7 @@ pub(crate) fn layers_at(
             track: TrackRef::video(sequence.video.len()),
             picture: LayerPicture::Frame(frame),
             look: LayerLook::IDENTITY,
+            grade: None,
         });
     }
     layers
@@ -79,8 +83,9 @@ fn video_layers(
                 plan.reveal,
                 canvas,
             );
+            let grade = grade_for(&plan.clip.look.color, reported.warnings);
             if media.generator == Some(Generator::AdjustmentLayer) {
-                adjust(&mut layers, TrackRef::video(index), look);
+                adjust(&mut layers, TrackRef::video(index), look, grade);
                 continue;
             }
             let decoder = decoders.for_clip(plan.clip.id, &showing);
@@ -107,6 +112,7 @@ fn video_layers(
                     track: TrackRef::video(index),
                     picture,
                     look,
+                    grade,
                 });
             }
         }
@@ -116,7 +122,7 @@ fn video_layers(
 
 /// Applies an adjustment layer's look to the picture of `layers` as one. Below full
 /// opacity the adjusted picture blends over the untouched one, as its opacity is meant to.
-fn adjust(layers: &mut Vec<Layer>, track: TrackRef, look: LayerLook) {
+fn adjust(layers: &mut Vec<Layer>, track: TrackRef, look: LayerLook, grade: Option<Arc<Grade>>) {
     if layers.is_empty() {
         return;
     }
@@ -129,6 +135,7 @@ fn adjust(layers: &mut Vec<Layer>, track: TrackRef, look: LayerLook) {
         track,
         picture: LayerPicture::Nest(below),
         look,
+        grade,
     });
 }
 
@@ -175,13 +182,12 @@ fn color_adjust(color: &ColorCorrection, time: Ticks) -> ColorAdjust {
         tint: unit(&color.tint),
         saturation: unit(&color.saturation),
         vibrance: unit(&color.vibrance),
+        look_intensity: unit(&color.look_intensity),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use media::VideoFrame;
     use timeline::Param;
 
@@ -198,6 +204,7 @@ mod tests {
             track: TrackRef::video(track),
             picture: LayerPicture::Frame(Arc::new(frame)),
             look: layer_look(&Look::default(), Ticks::ZERO, Reveal::FULL, [1.0, 1.0]),
+            grade: None,
         }
     }
 
@@ -206,7 +213,7 @@ mod tests {
         let mut look = Look::default();
         let mut layers = vec![layer(0), layer(1)];
         let full = layer_look(&look, Ticks::ZERO, Reveal::FULL, [1.0, 1.0]);
-        adjust(&mut layers, TrackRef::video(2), full);
+        adjust(&mut layers, TrackRef::video(2), full, None);
         assert!(
             matches!(&layers[..], [Layer { picture: LayerPicture::Nest(below), .. }] if below.len() == 2)
         );
@@ -214,7 +221,7 @@ mod tests {
         look.opacity = Param::from_value(50.0);
         let faded = layer_look(&look, Ticks::ZERO, Reveal::FULL, [1.0, 1.0]);
         let mut layers = vec![layer(0)];
-        adjust(&mut layers, TrackRef::video(1), faded);
+        adjust(&mut layers, TrackRef::video(1), faded, None);
         assert!(matches!(
             &layers[..],
             [

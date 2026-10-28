@@ -10,6 +10,7 @@ mod error;
 mod export;
 mod frame_picker;
 mod generated;
+mod grades;
 mod mixdown;
 mod pixel_effects;
 mod player;

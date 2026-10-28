@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use media::VideoFrame;
-use render::{LayerImage, LayerLook, Picture};
+use render::{Grade, LayerImage, LayerLook, Picture};
 use timeline::{Ticks, TrackRef};
 
 /// One picture placed in the program picture.
@@ -10,6 +10,7 @@ pub struct Layer {
     pub track: TrackRef,
     pub picture: LayerPicture,
     pub look: LayerLook,
+    pub grade: Option<Arc<Grade>>,
 }
 
 #[derive(Debug, Clone)]
@@ -32,6 +33,7 @@ impl Layer {
         LayerImage {
             picture,
             look: self.look,
+            grade: self.grade.clone(),
         }
     }
 }
