@@ -1,47 +1,15 @@
 use render::LayerLook;
-use timeline::{track_layers_at, ClipId, Look, Sequence, SourceId, Ticks, Timebase, TrackRef};
+use timeline::{track_layers_at, ClipId, Look, Sequence, SourceId, Ticks, TrackRef};
 
+use crate::clip_decoders::ClipDecoders;
 use crate::track_video::TrackVideo;
 use crate::{Layer, PlaybackError};
-
-/// A cross dissolve shows two clips of one track at once.
-const DECODERS_PER_TRACK: usize = 2;
 
 /// Gaussian blur's "blurriness" reaches about two standard deviations.
 const BLURRINESS_PER_SIGMA: f32 = 2.0;
 
-/// The decoders of one video track, each following one clip so both sides of a
-/// dissolve keep reading forward.
-pub(crate) struct TrackDecoders {
-    decoders: Vec<(Option<ClipId>, TrackVideo)>,
-}
-
-impl TrackDecoders {
-    fn new(timebase: Timebase) -> Self {
-        Self {
-            decoders: (0..DECODERS_PER_TRACK)
-                .map(|_| (None, TrackVideo::new(timebase)))
-                .collect(),
-        }
-    }
-
-    /// The decoder following `clip`, or else one no clip in `keep` is using.
-    fn for_clip(&mut self, clip: ClipId, keep: &[ClipId]) -> &mut TrackVideo {
-        let index = self
-            .decoders
-            .iter()
-            .position(|(owner, _)| *owner == Some(clip))
-            .or_else(|| {
-                self.decoders
-                    .iter()
-                    .position(|(owner, _)| owner.is_none_or(|owner| !keep.contains(&owner)))
-            })
-            .unwrap_or(0);
-        let (owner, decoder) = &mut self.decoders[index];
-        *owner = Some(clip);
-        decoder
-    }
-}
+/// The decoders of one video track.
+pub(crate) type TrackDecoders = ClipDecoders<TrackVideo>;
 
 /// Decodes the pictures of every visible video track at `pts`, bottom layer first.
 /// Media that can't be read is reported once in `warnings` and left out.
@@ -53,7 +21,7 @@ pub(crate) fn layers_at(
     warnings: &mut Vec<PlaybackError>,
 ) -> Vec<Layer> {
     tracks.resize_with(sequence.video.len(), || {
-        TrackDecoders::new(sequence.timebase)
+        ClipDecoders::new(|| TrackVideo::new(sequence.timebase))
     });
     let mut layers = Vec::new();
     for ((index, track), decoders) in sequence.video.iter().enumerate().zip(tracks) {

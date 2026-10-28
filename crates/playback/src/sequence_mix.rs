@@ -1,6 +1,7 @@
 use audio::SampleRate;
-use timeline::{Sequence, SourceId, Ticks, Timebase};
+use timeline::{audio_fade, audio_span, ClipId, Sequence, SourceId, Ticks, Timebase};
 
+use crate::clip_decoders::ClipDecoders;
 use crate::mixdown;
 use crate::track_audio::TrackAudio;
 use crate::{Levels, PlaybackError};
@@ -15,7 +16,7 @@ pub(crate) struct SequenceMix {
     sample_rate: SampleRate,
     /// One tick per output frame.
     rate: Timebase,
-    tracks: Vec<TrackAudio>,
+    tracks: Vec<ClipDecoders<TrackAudio>>,
     /// The last chunk mixed.
     pub(crate) mix: Vec<f32>,
     track_mix: Vec<f32>,
@@ -43,7 +44,10 @@ impl SequenceMix {
 
     /// Forgets decode positions, so the next chunk seeks.
     pub(crate) fn reset(&mut self) {
-        self.tracks.iter_mut().for_each(TrackAudio::reset);
+        self.tracks
+            .iter_mut()
+            .flat_map(ClipDecoders::iter_mut)
+            .for_each(TrackAudio::reset);
     }
 
     /// Mixes the chunk starting at output frame `start` into `self.mix` and returns its
@@ -58,35 +62,57 @@ impl SequenceMix {
         let end = start + CHUNK_FRAMES as i64;
         let (timebase, sample_rate) = (sequence.timebase, self.sample_rate);
         self.tracks.resize_with(sequence.audio.len(), || {
-            TrackAudio::new(timebase, sample_rate)
+            ClipDecoders::new(|| TrackAudio::new(timebase, sample_rate))
         });
         self.mix.fill(0.0);
         let mut track_levels = Vec::with_capacity(sequence.audio.len());
-        for (track, decoder) in sequence.audio.iter().zip(&mut self.tracks) {
+        for (track, decoders) in sequence.audio.iter().zip(&mut self.tracks) {
             self.track_mix.fill(0.0);
             if track.muted {
                 track_levels.push([0.0; 2]);
                 continue;
             }
-            for clip in &track.clips {
-                let (clip_start, clip_end) = (to_frames(clip.start), to_frames(clip.end()));
-                let (from, to) = (start.max(clip_start), end.min(clip_end));
-                if from >= to {
-                    continue;
-                }
+            let heard: Vec<(usize, i64, i64)> = (0..track.clips.len())
+                .filter_map(|index| {
+                    let (span_start, span_end) = audio_span(track, index);
+                    let (from, to) = (
+                        start.max(to_frames(span_start)),
+                        end.min(to_frames(span_end)),
+                    );
+                    (from < to).then_some((index, from, to))
+                })
+                .collect();
+            let keep: Vec<ClipId> = heard
+                .iter()
+                .map(|&(index, ..)| track.clips[index].id)
+                .collect();
+            for (index, from, to) in heard {
+                let clip = &track.clips[index];
                 let Some(media) = sequence.media_item(clip.source) else {
                     continue;
                 };
-                let first = from - clip_start + to_frames(clip.source_in);
+                let source_first = from - to_frames(clip.start) + to_frames(clip.source_in);
+                // A crossfade reaching before the media starts is silent there.
+                let skip = (-source_first).max(0);
+                let (from, first) = (from + skip, source_first + skip);
+                if from >= to {
+                    continue;
+                }
                 let offset = usize::try_from(from - start).unwrap_or(0) * 2;
                 let length = usize::try_from(to - from).unwrap_or(0) * 2;
                 let clip_mix = &mut self.clip_mix[..length];
                 clip_mix.fill(0.0);
+                let decoder = decoders.for_clip(clip.id, &keep);
                 if let Err(error) = decoder.mix_into(media, first, clip_mix) {
                     if !self.warned.contains(&media.id) {
                         self.warned.push(media.id);
                         warnings.push(error);
                     }
+                }
+                let (pairs, _) = clip_mix.as_chunks_mut::<2>();
+                for (frame, pair) in (from..to).zip(pairs) {
+                    let fade = audio_fade(track, index, Ticks(frame).rescale(self.rate, timebase));
+                    pair.iter_mut().for_each(|sample| *sample *= fade);
                 }
                 let gain = clip.gain.amplitude();
                 mixdown::add_scaled(
