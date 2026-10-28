@@ -88,6 +88,13 @@ pub(crate) fn items(editor: &mut Editor, ui: &mut Ui) {
         }
     });
     crate::multicam::camera_menu(editor, ui);
+    if ui
+        .button("Scene Edit Detection")
+        .on_hover_text("Cut the selected clips where their shots change")
+        .clicked()
+    {
+        editor.detect_scene_edits();
+    }
     ui.separator();
     if ui.button("Nest").clicked() {
         editor.nest_selection();
