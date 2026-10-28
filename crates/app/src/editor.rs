@@ -70,6 +70,7 @@ pub struct Editor {
     pub(crate) pool: media_pool::PoolView,
     pub(crate) gain_dialog: Option<crate::gain_dialog::GainDialog>,
     pub(crate) duck_dialog: Option<crate::duck_dialog::DuckDialog>,
+    pub(crate) interpret_dialog: Option<crate::interpret_dialog::InterpretDialog>,
     pub(crate) attributes_dialog: Option<crate::attributes_dialog::AttributesDialog>,
     pub(crate) loudness: Option<crate::loudness_window::LoudnessWindow>,
     pub(crate) speed_prompt: Option<crate::speed_dialog::SpeedPrompt>,
@@ -181,6 +182,7 @@ impl Editor {
             pool: Default::default(),
             gain_dialog: None,
             duck_dialog: None,
+            interpret_dialog: None,
             attributes_dialog: None,
             loudness: None,
             speed_prompt: None,
@@ -294,7 +296,10 @@ impl Editor {
         if sequence.duration() > Ticks::ZERO || self.timeline.open_nest().is_some() {
             return;
         }
-        let Some(format) = sequence.media_item(source).and_then(|item| item.video) else {
+        let Some(format) = sequence
+            .media_item(source)
+            .and_then(|item| item.played_format())
+        else {
             return;
         };
         if format != sequence.format {
@@ -416,6 +421,7 @@ impl eframe::App for Editor {
         crate::marker_dialog::dialog(self, &ctx);
         crate::gain_dialog::dialog(self, &ctx);
         crate::duck_dialog::dialog(self, &ctx);
+        crate::interpret_dialog::dialog(self, &ctx);
         crate::attributes_dialog::dialog(self, &ctx);
         crate::loudness_window::window(self, &ctx);
         crate::speed_dialog::dialog(self, &ctx);

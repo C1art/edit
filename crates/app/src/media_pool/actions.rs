@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 
 use timeline::{
-    AddBin, CreateMulticam, Edit, MakeSubclip, MoveToBin, RelinkMedia, RemoveBin, RemoveMedia,
-    RenameBin, RenameMedia, SetProxy, SourceId, Ticks, TimelineError,
+    AddBin, CreateMulticam, Edit, InterpretFootage, MakeSubclip, MoveToBin, RelinkMedia, RemoveBin,
+    RemoveMedia, RenameBin, RenameMedia, SetProxy, SourceId, Ticks, TimelineError,
 };
 
 use super::{PoolAction, PoolEntry};
@@ -38,6 +38,7 @@ impl Editor {
                     proxy: None,
                 });
             }
+            PoolAction::Interpret(id) => self.open_interpret_footage(id),
             PoolAction::NewBin(parent) => self.new_bin(parent),
             PoolAction::RenameBin(bin, name) => {
                 self.apply_to_pool(RenameBin { bin, name });
@@ -155,6 +156,10 @@ impl Editor {
     }
 
     /// Applies an edit to the media pool, which belongs to the project even inside a nest.
+    pub(crate) fn interpret_footage(&mut self, edit: InterpretFootage) {
+        self.apply_to_pool(edit);
+    }
+
     fn apply_to_pool(&mut self, edit: impl Edit) -> bool {
         match self.timeline.apply_to_project(edit) {
             Ok(()) => true,

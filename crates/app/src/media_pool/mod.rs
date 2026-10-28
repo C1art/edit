@@ -21,6 +21,8 @@ pub enum PoolAction {
     Replace(SourceId),
     CreateProxy(SourceId),
     DetachProxy(SourceId),
+    /// Asks for the frame rate to play the item's pictures at.
+    Interpret(SourceId),
     /// Adds a bin inside the given one, or at the top, and starts naming it.
     NewBin(Option<BinId>),
     RenameBin(BinId, String),
@@ -253,6 +255,9 @@ impl Pool<'_> {
                 self.action = Some(PoolAction::Remove(item.id));
             }
             if item.video.is_some() && item.is_file() {
+                if ui.button("Interpret Footage…").clicked() {
+                    self.action = Some(PoolAction::Interpret(item.id));
+                }
                 ui.separator();
                 let can_build = self.proxies.is_some() && building.is_none();
                 proxy_menu(ui, item, can_build, &mut self.action);

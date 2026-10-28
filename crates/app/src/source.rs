@@ -4,7 +4,7 @@ use std::sync::Arc;
 use audio::AudioOutput;
 use eframe::egui_wgpu::RenderState;
 use playback::PlaybackError;
-use timeline::{Clip, ClipId, Marks, MediaItem, Sequence, SourceId, Ticks, Track};
+use timeline::{Clip, ClipId, Marks, MediaItem, Sequence, SourceId, Speed, Ticks, Track};
 
 use crate::transport;
 use crate::viewer::Viewer;
@@ -17,6 +17,9 @@ pub struct SourceMonitor {
     pub viewer: Viewer,
     /// Monitor time zero in the media's time: the start of a subclip, else zero.
     offset: Ticks,
+    /// How much faster the media plays than it was recorded, when interpreted at
+    /// another frame rate; monitor time runs at that speed through the media.
+    conform: Speed,
     pub marks: Marks,
 }
 
@@ -34,6 +37,7 @@ impl SourceMonitor {
             name: item.name.clone(),
             viewer: Viewer::new(sequence, audio, render_state)?,
             offset: item.default_range(pool.timebase).start,
+            conform: item.conform(),
             marks: Marks::default(),
         })
     }
@@ -43,6 +47,7 @@ impl SourceMonitor {
         let player = &mut self.viewer.player;
         if player.sequence().media_item(item.id) != Some(item) {
             player.set_sequence(Arc::new(source_sequence(item, pool)));
+            self.conform = item.conform();
         }
     }
 
@@ -60,13 +65,20 @@ impl SourceMonitor {
     /// defaulting to the whole item.
     pub fn range(&self) -> (Ticks, Ticks) {
         let marked = self.marks.range(self.viewer.player.duration());
-        (self.offset + marked.start, marked.end - marked.start)
+        let to_media = |span| self.conform.source_span(span);
+        (
+            self.offset + to_media(marked.start),
+            to_media(marked.end - marked.start),
+        )
     }
 
     /// Marks the media range `marked` and parks on media time `at`.
     pub fn show_media(&mut self, marked: Range<Ticks>, at: Ticks) {
         let end = self.viewer.player.duration();
-        let to_monitor = |time: Ticks| (time - self.offset).clamp(Ticks::ZERO, end);
+        let to_monitor = |time: Ticks| {
+            let into = (time - self.offset).max(Ticks::ZERO);
+            self.conform.sequence_span(into).min(end)
+        };
         self.marks = Marks {
             mark_in: Some(to_monitor(marked.start)),
             mark_out: Some(to_monitor(marked.end)),
@@ -79,17 +91,16 @@ impl SourceMonitor {
 /// which has no end, shows for as long as an edit places by default.
 fn source_sequence(item: &MediaItem, pool: &Sequence) -> Sequence {
     let timebase = pool.timebase;
-    let mut sequence = Sequence::new(timebase, item.video.unwrap_or(pool.format));
+    let mut sequence = Sequence::new(timebase, item.played_format().unwrap_or(pool.format));
     sequence.media.clone_from(&pool.media);
     let range = item.default_range(timebase);
+    let conform = item.conform();
+    let duration = conform.sequence_span(range.end - range.start);
     let track = |id| Track {
-        clips: vec![Clip::new(
-            ClipId(id),
-            item.id,
-            Ticks::ZERO,
-            range.end - range.start,
-            range.start,
-        )],
+        clips: vec![Clip {
+            conform,
+            ..Clip::new(ClipId(id), item.id, Ticks::ZERO, duration, range.start)
+        }],
         ..Track::default()
     };
     if item.video.is_some() {

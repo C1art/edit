@@ -57,12 +57,13 @@ pub(super) fn item_row(
     offline: bool,
 ) -> egui::Response {
     let rate = item
-        .video
+        .played_format()
         .map_or(FrameRate::FPS_25, |video| video.frame_rate);
     let range = item.default_range(timebase);
+    let played = item.conform().sequence_span(range.end - range.start);
     let mut details = vec![match &item.generator {
         Some(generator) => generator.kind_name().to_owned(),
-        None => Timecode::new(range.end - range.start, timebase, rate).to_string(),
+        None => Timecode::new(played, timebase, rate).to_string(),
     }];
     if item.nest.is_some() {
         details.insert(0, "Sequence".to_owned());
@@ -70,9 +71,14 @@ pub(super) fn item_row(
     if item.subclip.is_some() {
         details.insert(0, "Subclip".to_owned());
     }
-    if let Some(video) = item.video {
+    if let Some(video) = item.played_format() {
+        let interpreted = if item.interpreted_rate.is_some() {
+            " (interpreted)"
+        } else {
+            ""
+        };
         details.push(format!(
-            "{}×{} {:.2} fps",
+            "{}×{} {:.2} fps{interpreted}",
             video.width,
             video.height,
             video.frame_rate.approx_fps()
