@@ -92,8 +92,11 @@ fn sample() -> ProjectFile {
         locked: true,
         ..Track::default()
     });
+    let mut automation = Param::from_value(-6.0);
+    automation.toggle_key(Ticks(30_000));
     sequence.audio.push(Track {
         pan: Pan::new(-40),
+        automation,
         ..Track::default()
     });
     sequence.marks = Marks::default().with_out(Ticks(45_000));
