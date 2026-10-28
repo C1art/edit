@@ -172,6 +172,7 @@ pub(crate) fn pixel_effects(
                 swivel: swivel.value_at(time).to_radians(),
                 tilt: tilt.value_at(time).to_radians(),
                 distance: unit(distance),
+                pivot: 0.0,
             }),
             VideoEffect::Spherize { radius, center } => {
                 pixel.style.sphere_radius = radius.value_at(time).max(0.0);

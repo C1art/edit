@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use render::{
-    ColorAdjust, Grade, LayerLook, LayerMask, LayerWipe, Outline, SecondaryAdjust, MAX_MASKS,
-    MAX_OUTLINE_POINTS,
+    ColorAdjust, Grade, LayerLook, LayerMask, LayerWipe, Outline, PixelEffects, SecondaryAdjust,
+    Warp, MAX_MASKS, MAX_OUTLINE_POINTS,
 };
 use timeline::{
     track_layers_at, BlendMode, ClipId, ColorCorrection, Generator, HslSecondary, Look, Mask,
@@ -326,9 +326,35 @@ fn layer_look(
             })
         }),
         wash: reveal.wash,
-        effects: pixel_effects(&look.effects, time, timebase),
-        blend: look.blend,
+        effects: turned(pixel_effects(&look.effects, time, timebase), reveal, canvas),
+        blend: reveal.blend.unwrap_or(look.blend),
     }
+}
+
+/// `effects` with the transition's turn last, after the clip's own warps.
+fn turned(mut effects: PixelEffects, reveal: Reveal, [width, height]: [f32; 2]) -> PixelEffects {
+    let Some(turn) = reveal.turn else {
+        return effects;
+    };
+    let aspect = width / height.max(1.0);
+    let pivot = match (turn.cube, turn.vertical) {
+        (false, _) => 0.0,
+        (true, false) => aspect / 2.0,
+        (true, true) => 0.5,
+    };
+    let (swivel, tilt) = match turn.vertical {
+        false => (turn.angle, 0.0),
+        true => (0.0, turn.angle),
+    };
+    // A cube backs away as it turns, keeping its near edge clear of the eye.
+    let distance = pivot * (2.0 * turn.angle).sin().abs() / 2.0;
+    effects.reshape.push(Warp::Turn {
+        swivel,
+        tilt,
+        distance,
+        pivot,
+    });
+    effects
 }
 
 fn color_adjust(color: &ColorCorrection, time: Ticks) -> ColorAdjust {
