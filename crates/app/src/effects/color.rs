@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use egui::epaint::{Mesh, Vertex, WHITE_UV};
 use egui::{Color32, Pos2, RichText, Sense, Stroke, Vec2};
-use timeline::{ColorCorrection, ColorWheel};
+use timeline::{ColorCorrection, ColorVignette, Param};
 
 use super::look::Rows;
 use crate::color_match::ToneGoal;
@@ -55,8 +55,11 @@ pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorr
     if color.look.is_some() {
         rows.param(ui, "Intensity", &mut color.look_intensity, 0.0..=100.0, "%");
     }
+    rows.param(ui, "Faded Film", &mut color.faded_film, 0.0..=100.0, "");
+    rows.param(ui, "Sharpen", &mut color.sharpen, 0.0..=100.0, "");
     rows.param(ui, "Vibrance", &mut color.vibrance, -100.0..=100.0, "");
     rows.param(ui, "Saturation", &mut color.saturation, 0.0..=200.0, "%");
+    split_tone(ui, rows, color);
     egui::CollapsingHeader::new("RGB Curves").show(ui, |ui| {
         super::curves::controls(ui, rows, &mut color.curves);
     });
@@ -70,7 +73,7 @@ pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorr
         for (name, wheel) in &mut wheels {
             ui.vertical(|ui| {
                 ui.label(*name);
-                wheel_pad(ui, rows, wheel);
+                wheel_pad(ui, rows, [&mut wheel.blue, &mut wheel.red]);
             });
         }
     });
@@ -84,6 +87,36 @@ pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorr
         });
     }
     super::secondary::controls(ui, rows, &mut color.secondary);
+    egui::CollapsingHeader::new("Vignette").show(ui, |ui| vignette(ui, rows, &mut color.vignette));
+}
+
+fn split_tone(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorrection) {
+    ui.horizontal(|ui| {
+        let tints = [
+            ("Shadow Tint", &mut color.shadow_tint),
+            ("Highlight Tint", &mut color.highlight_tint),
+        ];
+        for (name, [blue, red]) in tints {
+            ui.vertical(|ui| {
+                ui.label(name);
+                wheel_pad(ui, rows, [blue, red]);
+            });
+        }
+    });
+    rows.param(
+        ui,
+        "Tint Balance",
+        &mut color.tint_balance,
+        -100.0..=100.0,
+        "",
+    );
+}
+
+fn vignette(ui: &mut egui::Ui, rows: &mut Rows, vignette: &mut ColorVignette) {
+    rows.param(ui, "Amount", &mut vignette.amount, -5.0..=5.0, "");
+    rows.param(ui, "Midpoint", &mut vignette.midpoint, 0.0..=100.0, "");
+    rows.param(ui, "Roundness", &mut vignette.roundness, -100.0..=100.0, "");
+    rows.param(ui, "Feather", &mut vignette.feather, 0.0..=100.0, "");
 }
 
 fn tone_buttons(ui: &mut egui::Ui, rows: &mut Rows) {
@@ -139,17 +172,17 @@ fn lut_row(
     });
 }
 
-/// A disc of hues with a puck at the wheel's push toward blue (right) and red (up), as
-/// on a vectorscope. Dragging moves the puck; double-clicking centres it.
-pub(super) fn wheel_pad(ui: &mut egui::Ui, rows: &mut Rows, wheel: &mut ColorWheel) {
+/// A disc of hues with a puck at a push toward blue (right) and red (up), as on a
+/// vectorscope. Dragging moves the puck; double-clicking centres it.
+pub(super) fn wheel_pad(ui: &mut egui::Ui, rows: &mut Rows, [blue, red]: [&mut Param; 2]) {
     let time = rows.time();
     let (rect, mut response) =
         ui.allocate_exact_size(Vec2::splat(WHEEL_SIZE), Sense::click_and_drag());
     let center = rect.center();
     let radius = WHEEL_SIZE / 2.0 - 2.0;
     if response.double_clicked() {
-        wheel.blue.set_at(time, 0.0);
-        wheel.red.set_at(time, 0.0);
+        blue.set_at(time, 0.0);
+        red.set_at(time, 0.0);
         response.mark_changed();
     } else if let Some(pointer) = response
         .interact_pointer_pos()
@@ -157,8 +190,8 @@ pub(super) fn wheel_pad(ui: &mut egui::Ui, rows: &mut Rows, wheel: &mut ColorWhe
     {
         let offset = (pointer - center) / radius;
         let offset = offset / offset.length().max(1.0);
-        wheel.blue.set_at(time, offset.x * RIM);
-        wheel.red.set_at(time, -offset.y * RIM);
+        blue.set_at(time, offset.x * RIM);
+        red.set_at(time, -offset.y * RIM);
         response.mark_changed();
     }
     rows.output.change = response_state(&response, rows.output.change);
@@ -170,7 +203,7 @@ pub(super) fn wheel_pad(ui: &mut egui::Ui, rows: &mut Rows, wheel: &mut ColorWhe
     for axis in [Vec2::X, Vec2::Y] {
         painter.line_segment([center - axis * 4.0, center + axis * 4.0], mark);
     }
-    let puck = Vec2::new(wheel.blue.value_at(time), -wheel.red.value_at(time)) / RIM;
+    let puck = Vec2::new(blue.value_at(time), -red.value_at(time)) / RIM;
     painter.circle(
         center + puck * radius,
         4.0,

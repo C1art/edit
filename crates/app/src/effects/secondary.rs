@@ -60,7 +60,11 @@ fn key(ui: &mut egui::Ui, rows: &mut Rows, secondary: &mut HslSecondary) {
 
 fn correction(ui: &mut egui::Ui, rows: &mut Rows, secondary: &mut HslSecondary) {
     ui.label(RichText::new("Correction").weak());
-    super::color::wheel_pad(ui, rows, &mut secondary.wheel);
+    super::color::wheel_pad(
+        ui,
+        rows,
+        [&mut secondary.wheel.blue, &mut secondary.wheel.red],
+    );
     rows.param(ui, "Level", &mut secondary.wheel.level, -100.0..=100.0, "");
     rows.param(
         ui,
