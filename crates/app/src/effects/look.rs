@@ -3,10 +3,11 @@ use std::ops::RangeInclusive;
 use egui::{DragValue, RichText};
 use timeline::{BlendMode, Interpolation, Look, MatteChannel, Param, Rgb, Ticks, VideoEffect};
 
+use super::lane::Lane;
 use super::LutSlot;
 use crate::mixer::{response_state, Change};
 
-const ANIMATED: egui::Color32 = egui::Color32::from_rgb(90, 160, 240);
+pub(super) const ANIMATED: egui::Color32 = egui::Color32::from_rgb(90, 160, 240);
 
 pub(super) struct Output {
     pub(super) change: Option<Change>,
@@ -16,15 +17,13 @@ pub(super) struct Output {
     pub(super) choose_lut: Option<LutSlot>,
 }
 
-/// Edits `look` at source time `time`, where animated parameters get their keyframes,
-/// of a clip among `video_tracks` video tracks.
+/// Edits `look` in `rows`, of a clip among `video_tracks` video tracks.
 pub(super) fn controls(
     ui: &mut egui::Ui,
     look: &mut Look,
-    time: Ticks,
+    mut rows: Rows,
     video_tracks: usize,
 ) -> Output {
-    let mut rows = Rows::new(time);
     egui::CollapsingHeader::new("Motion")
         .default_open(true)
         .show(ui, |ui| {
@@ -114,16 +113,19 @@ pub(super) fn controls(
     rows.output
 }
 
-/// Parameter rows at one source time, collecting what their edits ask for.
+/// Parameter rows at one source time, where animated parameters get their keyframes,
+/// collecting what their edits ask for.
 pub(super) struct Rows {
     time: Ticks,
+    lane: Option<Lane>,
     pub(super) output: Output,
 }
 
 impl Rows {
-    pub(super) fn new(time: Ticks) -> Self {
+    pub(super) fn new(time: Ticks, lane: Option<Lane>) -> Self {
         Self {
             time,
+            lane,
             output: Output {
                 change: None,
                 seek: None,
@@ -276,9 +278,19 @@ impl Rows {
                 param.set_at(time, value);
             }
             self.output.change = response_state(&response, self.output.change);
-            if !animated {
-                return;
+            if animated {
+                self.key_buttons(ui, param);
             }
+            if let Some(lane) = &self.lane {
+                lane.show(ui, param, time, &mut self.output);
+            }
+        });
+    }
+
+    /// Steps between keyframes and adds or removes the one at the playhead.
+    fn key_buttons(&mut self, ui: &mut egui::Ui, param: &mut Param) {
+        let time = self.time;
+        ui.scope(|ui| {
             ui.spacing_mut().item_spacing.x = 2.0;
             let previous = param.previous_key(time);
             let back = icon_button(ui, Icon::Previous, false, previous.is_some())
@@ -376,23 +388,42 @@ fn icon_button(ui: &mut egui::Ui, icon: Icon, filled: bool, enabled: bool) -> eg
                 stroke,
             ));
         }
-        Icon::Key(Interpolation::Linear) => {
+        Icon::Key(interpolation) => paint_key(painter, c, interpolation, fill, stroke),
+    }
+    response
+}
+
+/// A diamond for linear keyframes, a square for holds and a circle for eases.
+pub(super) fn paint_key(
+    painter: &egui::Painter,
+    center: egui::Pos2,
+    interpolation: Interpolation,
+    fill: egui::Color32,
+    stroke: egui::Stroke,
+) {
+    let at = |points: &[(f32, f32)]| {
+        points
+            .iter()
+            .map(|&(x, y)| center + egui::vec2(x, y))
+            .collect()
+    };
+    match interpolation {
+        Interpolation::Linear => {
             painter.add(egui::Shape::convex_polygon(
                 at(&[(0.0, -5.0), (5.0, 0.0), (0.0, 5.0), (-5.0, 0.0)]),
                 fill,
                 stroke,
             ));
         }
-        Icon::Key(Interpolation::Hold) => {
+        Interpolation::Hold => {
             painter.add(egui::Shape::convex_polygon(
                 at(&[(-4.0, -4.0), (4.0, -4.0), (4.0, 4.0), (-4.0, 4.0)]),
                 fill,
                 stroke,
             ));
         }
-        Icon::Key(_) => {
-            painter.circle(c, 4.5, fill, stroke);
+        _ => {
+            painter.circle(center, 4.5, fill, stroke);
         }
     }
-    response
 }

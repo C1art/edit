@@ -1,5 +1,5 @@
 use egui::RichText;
-use timeline::{AudioEffect, Gain, Param, Ticks};
+use timeline::{AudioEffect, Gain, Param};
 
 use super::look::{Output, Rows};
 
@@ -37,9 +37,8 @@ fn category(effect: &AudioEffect) -> &'static str {
     }
 }
 
-/// Edits an audio clip's volume at source time `time`.
-pub(super) fn volume_controls(ui: &mut egui::Ui, volume: &mut Param, time: Ticks) -> Output {
-    let mut rows = Rows::new(time);
+/// Edits an audio clip's volume in `rows`.
+pub(super) fn volume_controls(ui: &mut egui::Ui, volume: &mut Param, mut rows: Rows) -> Output {
     egui::CollapsingHeader::new("Volume")
         .default_open(true)
         .show(ui, |ui| {
@@ -49,13 +48,12 @@ pub(super) fn volume_controls(ui: &mut egui::Ui, volume: &mut Param, time: Ticks
     rows.output
 }
 
-/// Edits an audio clip's effects at source time `time`.
+/// Edits an audio clip's effects in `rows`.
 pub(super) fn effect_controls(
     ui: &mut egui::Ui,
     effects: &mut Vec<AudioEffect>,
-    time: Ticks,
+    mut rows: Rows,
 ) -> Output {
-    let mut rows = Rows::new(time);
     egui::CollapsingHeader::new("Audio Effects")
         .default_open(true)
         .show(ui, |ui| {

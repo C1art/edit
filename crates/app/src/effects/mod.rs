@@ -1,6 +1,7 @@
 mod color;
 mod curves;
 mod generated;
+mod lane;
 mod look;
 mod mask_overlay;
 mod masks;
@@ -22,6 +23,8 @@ use timeline::{
 use crate::editor::Editor;
 use crate::mixer::Change;
 use crate::project_files::PathPurpose;
+use lane::Lane;
+use look::Rows;
 
 pub use color::LutSlot;
 pub use mask_overlay::mask_overlay;
@@ -98,7 +101,8 @@ fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
         .as_mut()
         .and_then(|generator| generated::controls(ui, generator));
     let video_tracks = editor.timeline.sequence().video.len();
-    let output = look::controls(ui, &mut look, time, video_tracks);
+    let rows = Rows::new(time, lane(editor, ui, clip));
+    let output = look::controls(ui, &mut look, rows, video_tracks);
     seek_to_key(editor, clip, output.seek);
     if let Some(slot) = output.choose_lut {
         editor.prompt_path(PathPurpose::Lut(clip.id, slot));
@@ -154,7 +158,8 @@ fn volume_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
         Some((id, volume)) if *id == clip.id => volume.clone(),
         _ => clip.volume.clone(),
     };
-    let output = sound::volume_controls(ui, &mut volume, time);
+    let rows = Rows::new(time, lane(editor, ui, clip));
+    let output = sound::volume_controls(ui, &mut volume, rows);
     seek_to_key(editor, clip, output.seek);
     let edit = SetClipVolume {
         clip: clip.id,
@@ -179,7 +184,8 @@ fn audio_effect_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
         Some((id, effects)) if *id == clip.id => effects.clone(),
         _ => clip.audio_effects.clone(),
     };
-    let output = sound::effect_controls(ui, &mut effects, time);
+    let rows = Rows::new(time, lane(editor, ui, clip));
+    let output = sound::effect_controls(ui, &mut effects, rows);
     seek_to_key(editor, clip, output.seek);
     let edit = SetClipAudioEffects {
         clip: clip.id,
@@ -199,6 +205,10 @@ fn audio_effect_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
 }
 
 /// The source time keyframes go to: under the playhead, kept within the clip.
+fn lane(editor: &Editor, ui: &egui::Ui, clip: &Clip) -> Option<Lane> {
+    Lane::new(ui, editor.timeline.sequence(), clip)
+}
+
 fn keyframe_time(editor: &Editor, clip: &Clip) -> Ticks {
     clip.source_time(editor.playhead().clamp(clip.start, clip.end() - Ticks(1)))
 }
