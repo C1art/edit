@@ -1,6 +1,8 @@
 use timeline::BlendMode;
 
 use crate::mask::{self, LayerMask, MAX_MASKS};
+#[cfg(test)]
+use crate::mask::{Outline, MAX_OUTLINE_POINTS};
 use crate::pixel::PixelEffects;
 use crate::secondary::SecondaryAdjust;
 
@@ -237,14 +239,17 @@ mod tests {
             expansion: 0.0,
             opacity: 1.0,
             inverted: true,
+            outline: Outline::NONE,
         };
         let look = LayerLook {
             opacity_masks: [Some(mask); MAX_MASKS],
             ..LayerLook::IDENTITY
         };
         let bytes = Placement::new((1920, 1080), (1920, 1080), &look).to_bytes();
-        // The shader's struct ends with the masks: the header, then twelve vec4s.
-        assert_eq!(bytes.len(), (20 + 1 + 3 * MAX_MASKS) * 16);
+        // The shader's struct ends with the masks: the header, three vec4s each, then
+        // their outlines at two points a vec4.
+        let outlines = MAX_MASKS * MAX_OUTLINE_POINTS / 2;
+        assert_eq!(bytes.len(), (20 + 1 + 3 * MAX_MASKS + outlines) * 16);
         assert!(bytes.len() as u64 <= crate::blit::UNIFORM_BYTES);
     }
 

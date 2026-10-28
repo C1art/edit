@@ -17,7 +17,7 @@ pub use compositor::{Compositor, LayerImage, Picture, Presented};
 pub use error::RenderError;
 pub use grade::{Grade, CURVE_SIZE};
 pub use lut::Lut3d;
-pub use mask::{LayerMask, MAX_MASKS};
+pub use mask::{LayerMask, Outline, MAX_MASKS, MAX_OUTLINE_POINTS};
 pub use pixel::{ChromaKey, PixelEffects, Vignette};
 pub use placement::{ColorAdjust, LayerLook};
 pub use scope::Scope;
