@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use timeline::{
     AudioEffect, Bin, BinId, Caption, Clip, ClipId, CurvePoint, Gain, Generator, Interpolation,
-    Keyframe, Marks, Mask, MaskShape, MediaItem, Nest, Pan, Param, Rgb, Scroll, SourceId,
+    Keyframe, Marks, Mask, MaskShape, MediaItem, MediaLog, Nest, Pan, Param, Rgb, Scroll, SourceId,
     TextAlign, TextStroke, Ticks, Timebase, Title, TitleFont, TitleMotion, Track, Transition,
     TransitionKind, VideoEffect, VideoFormat,
 };
@@ -24,6 +24,13 @@ fn sample() -> ProjectFile {
         nest: None,
         subclip: None,
         interpreted_rate: None,
+        log: MediaLog {
+            description: "Wide, \"take 3\"".to_owned(),
+            scene: "12A".to_owned(),
+            shot: "4".to_owned(),
+            log_note: String::new(),
+            good: true,
+        },
     });
     sequence.media.push(MediaItem {
         id: SourceId(2),
@@ -62,6 +69,7 @@ fn sample() -> ProjectFile {
         nest: None,
         subclip: None,
         interpreted_rate: None,
+        log: Default::default(),
     });
     sequence.bins = vec![
         Bin {
@@ -99,6 +107,7 @@ fn sample() -> ProjectFile {
         nest: Some(nest),
         subclip: None,
         interpreted_rate: None,
+        log: Default::default(),
     });
     let mut clip = Clip::new(ClipId(7), SourceId(1), Ticks(0), Ticks(90_000), Ticks(3));
     clip.gain = Gain(-600);
