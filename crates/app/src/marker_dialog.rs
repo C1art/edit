@@ -1,43 +1,60 @@
 use egui::Key;
-use timeline::{AddMarker, MarkerColor, MarkerId, RemoveMarker, Timecode, UpdateMarker};
+use timeline::{
+    AddMarker, Marker, MarkerColor, MarkerId, MarkerOwner, RemoveMarker, Ticks, Timecode,
+    UpdateMarker,
+};
 
 use crate::editor::Editor;
 use crate::timeline_view::marker_color;
 
 impl Editor {
+    /// Where M puts a marker: on the first selected clip under the playhead, in its
+    /// source time, or else on the sequence.
+    fn marker_target(&self) -> (MarkerOwner, Ticks) {
+        let playhead = self.playhead();
+        let sequence = self.timeline.sequence();
+        self.view
+            .selection
+            .iter()
+            .filter_map(|&id| sequence.clip(id))
+            .find(|(_, clip)| clip.covers(playhead))
+            .map_or((MarkerOwner::Sequence, playhead), |(_, clip)| {
+                (MarkerOwner::Clip(clip.id), clip.source_time(playhead))
+            })
+    }
+
+    fn markers_of(&self, owner: MarkerOwner) -> &[Marker] {
+        let sequence = self.timeline.sequence();
+        match owner {
+            MarkerOwner::Sequence => &sequence.markers,
+            MarkerOwner::Clip(id) => sequence.clip(id).map_or(&[], |(_, clip)| &clip.markers),
+        }
+    }
+
     /// Adds a marker at the playhead, or opens the one already there.
     pub(crate) fn add_marker(&mut self) {
-        let at = self.playhead();
-        let existing = self
-            .timeline
-            .sequence()
-            .markers
-            .iter()
-            .find(|marker| marker.at == at)
-            .map(|marker| marker.id);
-        match existing {
-            Some(id) => self.edit_marker(id),
+        let (owner, at) = self.marker_target();
+        match self.marker_at_playhead() {
+            Some(found) => self.edit_marker(found),
             None => {
-                self.apply(AddMarker { at });
+                self.apply(AddMarker { owner, at });
             }
         }
     }
 
-    pub(crate) fn edit_marker(&mut self, id: MarkerId) {
+    pub(crate) fn edit_marker(&mut self, (owner, id): (MarkerOwner, MarkerId)) {
         self.marker_dialog = self
-            .timeline
-            .sequence()
-            .markers
+            .markers_of(owner)
             .iter()
             .find(|marker| marker.id == id)
-            .cloned();
+            .map(|marker| (owner, marker.clone()));
     }
 
-    pub(crate) fn clear_marker(&mut self, id: MarkerId) {
-        self.apply(RemoveMarker { id });
+    pub(crate) fn clear_marker(&mut self, (owner, id): (MarkerOwner, MarkerId)) {
+        self.apply(RemoveMarker { owner, id });
     }
 
-    /// Moves the program playhead to the next marker, or the previous one.
+    /// Moves the program playhead to the next sequence marker, or the previous one.
     pub(crate) fn jump_to_marker(&mut self, forward: bool) {
         let sequence = self.timeline.sequence();
         let playhead = self.playhead();
@@ -51,22 +68,20 @@ impl Editor {
         }
     }
 
-    /// The marker at the playhead, if any.
-    pub(crate) fn marker_at_playhead(&self) -> Option<MarkerId> {
-        let playhead = self.playhead();
-        self.timeline
-            .sequence()
-            .markers
+    /// The marker at the playhead on whatever M would mark, if any.
+    pub(crate) fn marker_at_playhead(&self) -> Option<(MarkerOwner, MarkerId)> {
+        let (owner, at) = self.marker_target();
+        self.markers_of(owner)
             .iter()
-            .find(|marker| marker.at == playhead)
-            .map(|marker| marker.id)
+            .find(|marker| marker.at == at)
+            .map(|marker| (owner, marker.id))
     }
 }
 
 pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     let sequence = editor.timeline.sequence();
     let (timebase, rate) = (sequence.timebase, sequence.format.frame_rate);
-    let Some(marker) = &mut editor.marker_dialog else {
+    let Some((owner, marker)) = &mut editor.marker_dialog else {
         return;
     };
     let mut choice = None;
@@ -83,7 +98,10 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                         name.request_focus();
                     }
                     ui.end_row();
-                    ui.label("Time");
+                    ui.label(match owner {
+                        MarkerOwner::Sequence => "Time",
+                        MarkerOwner::Clip(_) => "Source Time",
+                    });
                     ui.monospace(Timecode::new(marker.at, timebase, rate).to_string());
                     ui.end_row();
                     ui.label("Color");
@@ -109,14 +127,14 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     let Some(choice) = choice else {
         return;
     };
-    let Some(marker) = editor.marker_dialog.take() else {
+    let Some((owner, marker)) = editor.marker_dialog.take() else {
         return;
     };
     match choice {
         Choice::Apply => {
-            editor.apply(UpdateMarker { marker });
+            editor.apply(UpdateMarker { owner, marker });
         }
-        Choice::Delete => editor.clear_marker(marker.id),
+        Choice::Delete => editor.clear_marker((owner, marker.id)),
         Choice::Cancel => {}
     }
 }

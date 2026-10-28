@@ -14,7 +14,8 @@ use std::collections::BTreeSet;
 
 use egui::{Rect, Sense};
 use timeline::{
-    ClipId, MarkerId, Sequence, SetTrackSwitch, SourceId, Ticks, Timeline, TrackKind, TrackRef,
+    ClipId, MarkerId, MarkerOwner, Sequence, SetTrackSwitch, SourceId, Ticks, Timeline, TrackKind,
+    TrackRef,
 };
 
 use crate::clip_art::ClipArt;
@@ -82,8 +83,8 @@ pub struct MediaDrop {
 pub struct TimelineOutput {
     pub seek: Option<Ticks>,
     /// A marker to open in the marker dialog.
-    pub edit_marker: Option<MarkerId>,
-    pub clear_marker: Option<MarkerId>,
+    pub edit_marker: Option<(MarkerOwner, MarkerId)>,
+    pub clear_marker: Option<(MarkerOwner, MarkerId)>,
     pub drop: Option<MediaDrop>,
     /// A double-clicked clip, whose media to open.
     pub open_clip: Option<ClipId>,
@@ -330,7 +331,8 @@ impl TimelineView {
         let hit =
             |pos: Option<egui::Pos2>| pos.and_then(|pos| markers::hit(scale, sequence, pos.x));
         if response.double_clicked() {
-            output.edit_marker = hit(response.interact_pointer_pos());
+            output.edit_marker =
+                hit(response.interact_pointer_pos()).map(|id| (MarkerOwner::Sequence, id));
         }
         if response.secondary_clicked() {
             self.context_marker = hit(response.interact_pointer_pos());
@@ -340,10 +342,10 @@ impl TimelineView {
         };
         response.context_menu(|ui| {
             if ui.button("Edit Marker…").clicked() {
-                output.edit_marker = Some(id);
+                output.edit_marker = Some((MarkerOwner::Sequence, id));
             }
             if ui.button("Clear Marker").clicked() {
-                output.clear_marker = Some(id);
+                output.clear_marker = Some((MarkerOwner::Sequence, id));
             }
         });
     }

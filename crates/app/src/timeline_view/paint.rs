@@ -163,6 +163,7 @@ pub fn clips(
         };
         painter.rect_stroke(rect, 3.0, stroke, StrokeKind::Inside);
         transition_marks(painter, row, scale, track, clip);
+        super::markers::paint_on_clip(painter, rect, scale, clip);
         match row.track.kind {
             TrackKind::Video => {
                 keyframe_marks(painter, rect, scale, clip);

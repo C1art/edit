@@ -1,5 +1,5 @@
 use egui::{epaint::PathShape, pos2, Align2, Color32, FontId, Painter, Rect, Stroke};
-use timeline::{MarkerColor, MarkerId, Sequence};
+use timeline::{Clip, MarkerColor, MarkerId, Sequence};
 
 use super::scale::TimeScale;
 
@@ -92,6 +92,43 @@ pub fn hit(scale: &TimeScale, sequence: &Sequence, x: f32) -> Option<MarkerId> {
         .markers
         .iter()
         .map(|marker| (marker.id, (scale.x(marker.at) - x).abs()))
+        .filter(|&(_, distance)| distance <= HIT_POINTS)
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(id, _)| id)
+}
+
+/// Draws a clip's markers as small flags under its top edge, each with a faint line
+/// down the clip.
+pub fn paint_on_clip(painter: &Painter, rect: Rect, scale: &TimeScale, clip: &Clip) {
+    let painter = painter.with_clip_rect(rect.intersect(painter.clip_rect()));
+    let top = rect.top() + 1.0;
+    let half = HALF_WIDTH - 1.0;
+    for (position, marker) in clip.shown_markers() {
+        let x = scale.x(position);
+        let fill = color(marker.color);
+        painter.line_segment(
+            [pos2(x, top), pos2(x, rect.bottom() - 1.0)],
+            Stroke::new(1.0, fill.gamma_multiply(0.6)),
+        );
+        let flag = vec![
+            pos2(x - half, top),
+            pos2(x + half, top),
+            pos2(x + half, top + half),
+            pos2(x, top + 2.0 * half),
+            pos2(x - half, top + half),
+        ];
+        painter.add(PathShape::convex_polygon(
+            flag,
+            fill,
+            Stroke::new(1.0, Color32::BLACK),
+        ));
+    }
+}
+
+/// The clip marker nearest screen `x`, if one is within reach.
+pub fn clip_hit(scale: &TimeScale, clip: &Clip, x: f32) -> Option<MarkerId> {
+    clip.shown_markers()
+        .map(|(position, marker)| (marker.id, (scale.x(position) - x).abs()))
         .filter(|&(_, distance)| distance <= HIT_POINTS)
         .min_by(|a, b| a.1.total_cmp(&b.1))
         .map(|(id, _)| id)

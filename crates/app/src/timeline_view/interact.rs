@@ -1,11 +1,12 @@
 use egui::{Pos2, Rangef};
 use timeline::{
-    ClipId, Razor, RazorTarget, Sequence, SetClipVolume, SetTrackAutomation, Ticks, Timeline,
-    TrackKind, TrackRef,
+    ClipId, MarkerOwner, Razor, RazorTarget, Sequence, SetClipVolume, SetTrackAutomation, Ticks,
+    Timeline, TrackKind, TrackRef,
 };
 
 use super::gesture::Gesture;
 use super::layout::{self, Hit, Row};
+use super::markers;
 use super::rubber_band::{self, BandHit, BandOwner, Envelope};
 use super::scale::{self, TimeScale};
 use super::track_select;
@@ -32,7 +33,13 @@ impl TimelineView {
         if response.double_clicked() && self.tool == Tool::Selection {
             if let Some(pos) = response.interact_pointer_pos() {
                 if let Hit::Body { clip, .. } = layout::hit(sequence, &rows, &scale, pos) {
-                    output.open_clip = Some(clip);
+                    let marker = sequence
+                        .clip(clip)
+                        .and_then(|(_, found)| markers::clip_hit(&scale, found, pos.x));
+                    match marker {
+                        Some(id) => output.edit_marker = Some((MarkerOwner::Clip(clip), id)),
+                        None => output.open_clip = Some(clip),
+                    }
                     return;
                 }
             }
@@ -124,7 +131,10 @@ impl TimelineView {
                         .tracks()
                         .flat_map(|(_, track)| &track.clips)
                         .filter(|clip| !moving.contains(&clip.id))
-                        .flat_map(|clip| [clip.start, clip.end()])
+                        .flat_map(|clip| {
+                            let marks = clip.shown_markers().map(|(position, _)| position);
+                            [clip.start, clip.end()].into_iter().chain(marks)
+                        })
                         .collect();
                     targets.extend(sequence.markers.iter().map(|marker| marker.at));
                     targets.push(playhead);

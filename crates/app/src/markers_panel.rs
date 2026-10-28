@@ -1,5 +1,5 @@
 use egui::{RichText, Sense, Stroke};
-use timeline::{MarkerColor, MarkerId, Timecode};
+use timeline::{MarkerColor, MarkerId, MarkerOwner, Timecode};
 
 use crate::editor::Editor;
 use crate::timeline_view::marker_color;
@@ -115,7 +115,7 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
         });
     match action {
         Some(RowAction::Seek(at)) => editor.seek_program(at),
-        Some(RowAction::Edit(id)) => editor.edit_marker(id),
+        Some(RowAction::Edit(id)) => editor.edit_marker((MarkerOwner::Sequence, id)),
         None => {}
     }
 }

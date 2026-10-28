@@ -72,7 +72,7 @@ pub struct Editor {
     pub(crate) speed_prompt: Option<crate::speed_dialog::SpeedPrompt>,
     pub(crate) clipboard: Option<Clipboard>,
     /// A copy of the marker being edited, while the marker dialog is showing.
-    pub(crate) marker_dialog: Option<Marker>,
+    pub(crate) marker_dialog: Option<(timeline::MarkerOwner, Marker)>,
     pub(crate) path_prompt: Option<PathPrompt>,
     pub(crate) store: Option<ProjectStore>,
     /// Where the project was last saved or opened from.
