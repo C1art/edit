@@ -1,7 +1,7 @@
 use egui::Key;
 use timeline::{
-    AddMarker, Marker, MarkerColor, MarkerId, MarkerOwner, RemoveMarker, Ticks, Timecode,
-    UpdateMarker,
+    AddMarker, Marker, MarkerColor, MarkerId, MarkerKind, MarkerOwner, RemoveMarker, Ticks,
+    Timecode, UpdateMarker,
 };
 
 use crate::editor::Editor;
@@ -104,6 +104,27 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                     });
                     ui.monospace(Timecode::new(marker.at, timebase, rate).to_string());
                     ui.end_row();
+                    ui.label("Duration");
+                    let mut frames = rate.frame_at(marker.duration, timebase).max(0);
+                    let duration = egui::DragValue::new(&mut frames)
+                        .range(0..=i64::MAX)
+                        .speed(0.5)
+                        .custom_formatter(|frames, _| {
+                            let ticks = rate.frame_start(frames as i64, timebase);
+                            Timecode::new(ticks, timebase, rate).to_string()
+                        });
+                    if ui.add(duration).changed() {
+                        marker.duration = rate.frame_start(frames, timebase);
+                    }
+                    ui.end_row();
+                    ui.label("Type");
+                    kind_picker(ui, &mut marker.kind);
+                    ui.end_row();
+                    if let MarkerKind::WebLink { url } = &mut marker.kind {
+                        ui.label("URL");
+                        ui.text_edit_singleline(url);
+                        ui.end_row();
+                    }
                     ui.label("Color");
                     color_picker(ui, &mut marker.color);
                     ui.end_row();
@@ -159,6 +180,27 @@ fn color_picker(ui: &mut egui::Ui, selected: &mut MarkerColor) {
             }
         }
     });
+}
+
+fn kind_picker(ui: &mut egui::Ui, kind: &mut MarkerKind) {
+    let kinds = [
+        MarkerKind::Comment,
+        MarkerKind::Chapter,
+        MarkerKind::Segmentation,
+        MarkerKind::WebLink { url: String::new() },
+    ];
+    egui::ComboBox::from_id_salt("marker kind")
+        .selected_text(kind.name())
+        .show_ui(ui, |ui| {
+            for choice in kinds {
+                let current = std::mem::discriminant(kind) == std::mem::discriminant(&choice);
+                if ui.selectable_label(current, choice.name()).clicked() && !current {
+                    *kind = choice;
+                }
+            }
+        })
+        .response
+        .on_hover_text("Chapter markers become chapters of exported MP4 and MOV files");
 }
 
 enum Choice {

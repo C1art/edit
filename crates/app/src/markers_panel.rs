@@ -1,5 +1,5 @@
 use egui::{RichText, Sense, Stroke};
-use timeline::{MarkerColor, MarkerId, MarkerOwner, Timecode};
+use timeline::{MarkerColor, MarkerId, MarkerKind, MarkerOwner, Ticks, Timecode};
 
 use crate::editor::Editor;
 use crate::timeline_view::marker_color;
@@ -15,7 +15,7 @@ pub struct MarkerFilter {
 }
 
 enum RowAction {
-    Seek(timeline::Ticks),
+    Seek(Ticks),
     Edit(MarkerId),
 }
 
@@ -76,7 +76,11 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
                         marker_color(marker.color),
                         Stroke::new(1.0, egui::Color32::from_black_alpha(160)),
                     );
-                    let timecode = Timecode::new(marker.at, timebase, rate).to_string();
+                    let mut timecode = Timecode::new(marker.at, timebase, rate).to_string();
+                    if marker.duration > Ticks::ZERO {
+                        let length = Timecode::new(marker.duration, timebase, rate);
+                        timecode.push_str(&format!(" · {length}"));
+                    }
                     ui.vertical(|ui| {
                         let name = if marker.name.is_empty() {
                             RichText::new("Unnamed").weak()
@@ -88,6 +92,9 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
                             RichText::new(timecode).monospace(),
                         );
                         ui.label(name);
+                        if marker.kind != MarkerKind::Comment {
+                            ui.label(RichText::new(marker.kind.name()).small());
+                        }
                         if !marker.comment.is_empty() {
                             ui.label(RichText::new(&marker.comment).small().weak());
                         }

@@ -1,5 +1,5 @@
 use egui::{epaint::PathShape, pos2, Align2, Color32, FontId, Painter, Rect, Stroke};
-use timeline::{Clip, MarkerColor, MarkerId, Sequence};
+use timeline::{Clip, MarkerColor, MarkerId, Sequence, Ticks};
 
 use super::scale::TimeScale;
 
@@ -52,16 +52,23 @@ pub fn paint_in_out(
     }
 }
 
-/// Draws each marker as a flag hanging from the bottom half of the ruler, with its name.
+/// Draws each marker as a flag hanging from the bottom half of the ruler, with its name;
+/// a span reaches on to its end as a band.
 pub fn paint(painter: &Painter, ruler: Rect, scale: &TimeScale, sequence: &Sequence) {
     let top = ruler.center().y - 2.0;
     let bottom = ruler.bottom() - 1.0;
     for marker in &sequence.markers {
         let x = scale.x(marker.at);
-        if x < ruler.left() - 200.0 || x > ruler.right() + HALF_WIDTH {
+        let end = scale.x(marker.end());
+        if end < ruler.left() - 200.0 || x > ruler.right() + HALF_WIDTH {
             continue;
         }
         let fill = color(marker.color);
+        if end > x {
+            let band = Rect::from_x_y_ranges(x..=end, top..=bottom - HALF_WIDTH);
+            painter.rect_filled(band, 0.0, fill.gamma_multiply(0.35));
+            painter.line_segment([pos2(end, top), pos2(end, bottom)], Stroke::new(1.0, fill));
+        }
         let flag = vec![
             pos2(x - HALF_WIDTH, top),
             pos2(x + HALF_WIDTH, top),
@@ -106,6 +113,12 @@ pub fn paint_on_clip(painter: &Painter, rect: Rect, scale: &TimeScale, clip: &Cl
     for (position, marker) in clip.shown_markers() {
         let x = scale.x(position);
         let fill = color(marker.color);
+        if marker.duration > Ticks::ZERO {
+            // A reversed clip shows the span leftward of its marker.
+            let end = scale.x(clip.position_of(marker.end()));
+            let band = Rect::from_x_y_ranges(x.min(end)..=x.max(end), top..=top + half);
+            painter.rect_filled(band, 0.0, fill.gamma_multiply(0.45));
+        }
         painter.line_segment(
             [pos2(x, top), pos2(x, rect.bottom() - 1.0)],
             Stroke::new(1.0, fill.gamma_multiply(0.6)),
