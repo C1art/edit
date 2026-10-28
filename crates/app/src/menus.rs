@@ -4,7 +4,7 @@ use timeline::{Edge, Generator, LinkedSelection, PlaceMode, Rgb, Title, TrackKin
 use crate::editor::Editor;
 use crate::keymap::Command;
 use crate::placing;
-use crate::project_files::{AfterDiscard, PathPurpose};
+use crate::project_files::{AfterDiscard, Interchange, PathPurpose};
 use crate::timeline_view::Tool;
 
 pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
@@ -65,7 +65,10 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                 editor.prompt_path(PathPurpose::ExportFrame);
             }
             if ui.button("Export EDL…").clicked() {
-                editor.prompt_path(PathPurpose::ExportEdl);
+                editor.prompt_path(PathPurpose::Export(Interchange::Edl));
+            }
+            if ui.button("Export Final Cut Pro XML…").clicked() {
+                editor.prompt_path(PathPurpose::Export(Interchange::FinalCutXml));
             }
             ui.separator();
             if ui.button("Quit").clicked() {

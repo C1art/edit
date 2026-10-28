@@ -19,7 +19,7 @@ pub enum PathPurpose {
     SaveProject,
     ImportCaptions,
     ExportCaptions,
-    ExportEdl,
+    Export(Interchange),
     /// An image of the program at the playhead.
     ExportFrame,
     /// A `.cube` file for one of a clip's LUTs.
@@ -29,6 +29,23 @@ pub enum PathPurpose {
 pub struct PathPrompt {
     pub purpose: PathPurpose,
     pub text: String,
+}
+
+/// A sequence description another editor reads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Interchange {
+    Edl,
+    /// Final Cut Pro 7 XML, which Premiere and Resolve also import.
+    FinalCutXml,
+}
+
+impl Interchange {
+    fn extension(self) -> &'static str {
+        match self {
+            Self::Edl => EDL,
+            Self::FinalCutXml => XML,
+        }
+    }
 }
 
 /// What to do once unsaved changes are saved or discarded.
@@ -41,6 +58,7 @@ pub enum AfterDiscard {
 
 const SUBRIP: &str = "srt";
 const EDL: &str = "edl";
+const XML: &str = "xml";
 
 pub fn is_project(path: &Path) -> bool {
     has_extension(path, project::EXTENSION)
@@ -78,10 +96,10 @@ impl Editor {
                 .as_ref()
                 .map(|path| path.with_extension(SUBRIP).display().to_string())
                 .unwrap_or_default(),
-            PathPurpose::ExportEdl => self
+            PathPurpose::Export(kind) => self
                 .project_path
                 .as_ref()
-                .map(|path| path.with_extension(EDL).display().to_string())
+                .map(|path| path.with_extension(kind.extension()).display().to_string())
                 .unwrap_or_default(),
             PathPurpose::ExportFrame => self.default_frame_path().display().to_string(),
             _ => String::new(),
@@ -129,10 +147,12 @@ impl Editor {
         }
     }
 
-    /// Writes the targeted video track, V1 when none is, with the first two audio tracks.
-    fn export_edl(&mut self, mut path: PathBuf) {
-        if !has_extension(&path, EDL) {
-            path.as_mut_os_string().push(format!(".{EDL}"));
+    /// Writes the sequence for another editor. An EDL holds the targeted video track, V1
+    /// when none is, with the first two audio tracks.
+    fn export_interchange(&mut self, mut path: PathBuf, kind: Interchange) {
+        let extension = kind.extension();
+        if !has_extension(&path, extension) {
+            path.as_mut_os_string().push(format!(".{extension}"));
         }
         let title = self
             .project_path
@@ -142,11 +162,16 @@ impl Editor {
                 || "Untitled".to_owned(),
                 |stem| stem.to_string_lossy().into_owned(),
             );
-        let video_track = self.view.targets.video.unwrap_or(0);
-        let text = timeline::to_edl(self.timeline.sequence(), &title, video_track);
+        let sequence = self.timeline.sequence();
+        let text = match kind {
+            Interchange::Edl => {
+                timeline::to_edl(sequence, &title, self.view.targets.video.unwrap_or(0))
+            }
+            Interchange::FinalCutXml => timeline::to_xmeml(sequence, &title),
+        };
         match &mut self.store {
-            Some(store) => store.write_edl(path, text),
-            None => self.notice("Cannot export the EDL: the project worker is not running"),
+            Some(store) => store.write_interchange(path, text),
+            None => self.notice("Cannot export: the project worker is not running"),
         }
     }
 
@@ -242,10 +267,10 @@ impl Editor {
                 StoreEvent::CaptionsWritten(path, Err(error)) => {
                     self.notice(format!("Cannot export {}: {error}", path.display()));
                 }
-                StoreEvent::EdlWritten(path, Ok(())) => {
-                    self.notice(format!("Exported the EDL to {}", path.display()));
+                StoreEvent::InterchangeWritten(path, Ok(())) => {
+                    self.notice(format!("Exported the sequence to {}", path.display()));
                 }
-                StoreEvent::EdlWritten(path, Err(error)) => {
+                StoreEvent::InterchangeWritten(path, Err(error)) => {
                     self.notice(format!("Cannot export {}: {error}", path.display()));
                 }
                 StoreEvent::KeymapRead(_, Ok(text)) => {
@@ -323,9 +348,14 @@ pub fn path_dialog(editor: &mut Editor, ctx: &egui::Context) {
             "Write the sequence's captions as SubRip to:",
             "Export",
         ),
-        PathPurpose::ExportEdl => (
+        PathPurpose::Export(Interchange::Edl) => (
             "Export EDL",
             "Write the targeted video track and audio tracks A1-A2 as a CMX 3600 EDL to:",
+            "Export",
+        ),
+        PathPurpose::Export(Interchange::FinalCutXml) => (
+            "Export Final Cut Pro XML",
+            "Write the sequence as Final Cut Pro XML, for Premiere, Resolve or Final Cut, to:",
             "Export",
         ),
         PathPurpose::ExportFrame => (
@@ -375,7 +405,7 @@ pub fn path_dialog(editor: &mut Editor, ctx: &egui::Context) {
             PathPurpose::SaveProject => editor.save_project_to(path),
             PathPurpose::ImportCaptions => editor.import_captions(path),
             PathPurpose::ExportCaptions => editor.export_captions(path),
-            PathPurpose::ExportEdl => editor.export_edl(path),
+            PathPurpose::Export(kind) => editor.export_interchange(path, kind),
             PathPurpose::ExportFrame => editor.export_frame(path),
             PathPurpose::Lut(clip, slot) => crate::effects::set_lut(editor, clip, slot, path),
         }

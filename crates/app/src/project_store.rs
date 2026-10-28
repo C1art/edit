@@ -24,7 +24,8 @@ enum Request {
     },
     ReadKeymap(PathBuf),
     WriteKeymap(PathBuf, String),
-    WriteEdl(PathBuf, String),
+    /// A sequence written for another editor, such as an EDL.
+    WriteInterchange(PathBuf, String),
 }
 
 pub enum StoreEvent {
@@ -37,7 +38,7 @@ pub enum StoreEvent {
     /// The shortcuts file's text, or none where there is no file yet.
     KeymapRead(PathBuf, Result<Option<String>, String>),
     KeymapWritten(PathBuf, Result<(), String>),
-    EdlWritten(PathBuf, Result<(), String>),
+    InterchangeWritten(PathBuf, Result<(), String>),
 }
 
 /// Where the editor keeps files of its own: `%APPDATA%\Edit`.
@@ -115,8 +116,8 @@ impl ProjectStore {
         });
     }
 
-    pub fn write_edl(&mut self, path: PathBuf, text: String) {
-        self.send(Request::WriteEdl(path, text));
+    pub fn write_interchange(&mut self, path: PathBuf, text: String) {
+        self.send(Request::WriteInterchange(path, text));
     }
 
     pub fn read_keymap(&mut self, path: PathBuf) {
@@ -206,9 +207,9 @@ fn handle(request: Request) -> StoreEvent {
                 .map_err(|error| error.to_string());
             StoreEvent::KeymapWritten(path, result)
         }
-        Request::WriteEdl(path, text) => {
+        Request::WriteInterchange(path, text) => {
             let result = std::fs::write(&path, text).map_err(|error| error.to_string());
-            StoreEvent::EdlWritten(path, result)
+            StoreEvent::InterchangeWritten(path, result)
         }
     }
 }
