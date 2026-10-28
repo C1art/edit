@@ -1,5 +1,5 @@
 use egui::{Button, Key, MenuBar, ViewportCommand};
-use timeline::{Gain, Generator, PlaceMode, Rgb, SetClipGain, Title, TrackKind};
+use timeline::{Edge, Gain, Generator, PlaceMode, Rgb, SetClipGain, Title, TrackKind};
 
 use crate::editor::Editor;
 use crate::placing;
@@ -159,6 +159,16 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
         });
         ui.menu_button("Markers", |ui| {
             crate::marker_dialog::menu(editor, ui);
+            ui.separator();
+            let go_to_in = Button::new("Go to In").shortcut_text(shortcut(ui, shortcuts::GO_TO_IN));
+            if ui.add(go_to_in).clicked() {
+                editor.go_to_mark(Edge::Head);
+            }
+            let go_to_out =
+                Button::new("Go to Out").shortcut_text(shortcut(ui, shortcuts::GO_TO_OUT));
+            if ui.add(go_to_out).clicked() {
+                editor.go_to_mark(Edge::Tail);
+            }
         });
         ui.menu_button("Sequence", |ui| {
             let add_edit = Button::new("Add Edit").shortcut_text(shortcut(ui, shortcuts::ADD_EDIT));
@@ -210,6 +220,20 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                 .clicked()
             {
                 editor.extract_marked();
+            }
+            let previous = Button::new("Ripple Trim Previous Edit to Playhead").shortcut_text("Q");
+            if ui.add(previous).clicked() {
+                editor.ripple_trim_to_playhead(Edge::Head);
+            }
+            let next = Button::new("Ripple Trim Next Edit to Playhead").shortcut_text("W");
+            if ui.add(next).clicked() {
+                editor.ripple_trim_to_playhead(Edge::Tail);
+            }
+            if ui
+                .add(Button::new("Match Frame").shortcut_text("F"))
+                .clicked()
+            {
+                editor.match_frame();
             }
             ui.separator();
             if ui.button("Add Video Track").clicked() {

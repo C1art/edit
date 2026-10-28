@@ -1,5 +1,5 @@
 use egui::{Event, Key, KeyboardShortcut, Modifiers};
-use timeline::{Generator, Marks, PlaceMode, Title, TrackKind};
+use timeline::{Edge, Generator, Marks, PlaceMode, Title, TrackKind};
 
 use crate::editor::Editor;
 use crate::monitors::Focus;
@@ -38,6 +38,8 @@ pub const ADD_EDIT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND,
 pub const TRANSITION: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::D);
 pub const AUDIO_TRANSITION: KeyboardShortcut =
     KeyboardShortcut::new(Modifiers::COMMAND.plus(Modifiers::SHIFT), Key::D);
+pub const GO_TO_IN: KeyboardShortcut = KeyboardShortcut::new(Modifiers::SHIFT, Key::I);
+pub const GO_TO_OUT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::SHIFT, Key::O);
 pub const CLEAR_IN_OUT: KeyboardShortcut =
     KeyboardShortcut::new(Modifiers::COMMAND.plus(Modifiers::SHIFT), Key::X);
 
@@ -64,6 +66,9 @@ enum Action {
     MarkIn,
     MarkOut,
     ClearInOut,
+    GoToMark(Edge),
+    RippleTrimToPlayhead(Edge),
+    MatchFrame,
     LiftMarked,
     ExtractMarked,
     Place(PlaceMode),
@@ -128,6 +133,8 @@ fn pressed(ctx: &egui::Context) -> Option<Action> {
             (NEW_TITLE, Action::NewTitle),
             (TRANSITION, Action::Transition(TrackKind::Video)),
             (CLEAR_IN_OUT, Action::ClearInOut),
+            (GO_TO_IN, Action::GoToMark(Edge::Head)),
+            (GO_TO_OUT, Action::GoToMark(Edge::Tail)),
             (
                 KeyboardShortcut::new(Modifiers::SHIFT, Key::Delete),
                 Action::RippleDelete,
@@ -145,6 +152,9 @@ fn pressed(ctx: &egui::Context) -> Option<Action> {
             (Key::Backspace, Action::Lift),
             (Key::I, Action::MarkIn),
             (Key::O, Action::MarkOut),
+            (Key::Q, Action::RippleTrimToPlayhead(Edge::Head)),
+            (Key::W, Action::RippleTrimToPlayhead(Edge::Tail)),
+            (Key::F, Action::MatchFrame),
             (Key::Semicolon, Action::LiftMarked),
             (Key::Quote, Action::ExtractMarked),
             (Key::Comma, Action::Place(PlaceMode::Insert)),
@@ -210,6 +220,9 @@ fn run(editor: &mut Editor, action: Action) {
         Action::RippleDelete => editor.ripple_delete(),
         Action::Lift => editor.lift(),
         Action::MarkIn | Action::MarkOut | Action::ClearInOut => mark(editor, action),
+        Action::GoToMark(edge) => editor.go_to_mark(edge),
+        Action::RippleTrimToPlayhead(edge) => editor.ripple_trim_to_playhead(edge),
+        Action::MatchFrame => editor.match_frame(),
         Action::LiftMarked => editor.lift_marked(),
         Action::ExtractMarked => editor.extract_marked(),
         Action::Place(mode) => placing::edit_from_source(editor, mode),
