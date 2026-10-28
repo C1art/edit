@@ -46,16 +46,6 @@ impl PlaybackClock {
         self.anchor = position;
         self.running = false;
     }
-
-    /// Continues from the current position on a different counter.
-    pub(crate) fn switch_counter(&mut self, old_count: u64, timebase: Timebase, new_count: u64) {
-        let running = self.running;
-        self.stop(old_count);
-        self.count_timebase = timebase;
-        if running {
-            self.start(new_count);
-        }
-    }
 }
 
 #[cfg(test)]
@@ -82,16 +72,6 @@ mod tests {
         assert_eq!(clock.position(96_000), Ticks(90_000));
         clock.start(200_000);
         assert_eq!(clock.position(248_000), Ticks(180_000));
-    }
-
-    #[test]
-    fn switching_counters_keeps_the_position_continuous() {
-        let mut clock = audio_clock();
-        clock.start(0);
-        let nanos = Timebase::new(1, 1_000_000_000).unwrap();
-        clock.switch_counter(48_000, nanos, 7_000_000_000);
-        assert_eq!(clock.position(7_000_000_000), Ticks(90_000));
-        assert_eq!(clock.position(7_500_000_000), Ticks(135_000));
     }
 
     #[test]

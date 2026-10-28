@@ -1,12 +1,13 @@
-use media::VideoFrame;
 use timeline::Ticks;
+
+use crate::ComposedFrame;
 
 /// A decoded frame labelled with the seek it belongs to, so frames decoded before a
 /// seek can be told apart from frames decoded after it.
 #[derive(Debug)]
 pub(crate) struct TaggedFrame {
     pub(crate) generation: u64,
-    pub(crate) frame: VideoFrame,
+    pub(crate) frame: ComposedFrame,
 }
 
 /// Chooses the frame to show for the clock position: frames whose time has passed are
@@ -14,15 +15,15 @@ pub(crate) struct TaggedFrame {
 #[derive(Debug, Default)]
 pub(crate) struct FramePicker {
     generation: u64,
-    current: Option<VideoFrame>,
-    next: Option<VideoFrame>,
+    current: Option<ComposedFrame>,
+    next: Option<ComposedFrame>,
     /// The current frame is from before a seek; replace it with the first new frame
     /// regardless of its timestamp.
     stale: bool,
 }
 
 impl FramePicker {
-    pub(crate) fn current(&self) -> Option<&VideoFrame> {
+    pub(crate) fn current(&self) -> Option<&ComposedFrame> {
         self.current.as_ref()
     }
 
@@ -78,11 +79,9 @@ mod tests {
     fn tagged(generation: u64, pts: i64) -> TaggedFrame {
         TaggedFrame {
             generation,
-            frame: VideoFrame {
+            frame: ComposedFrame {
                 pts: Ticks(pts),
-                width: 0,
-                height: 0,
-                pixels: Vec::new(),
+                layers: Vec::new(),
             },
         }
     }

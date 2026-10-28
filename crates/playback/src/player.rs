@@ -1,121 +1,140 @@
-use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Instant;
 
 use audio::AudioWriter;
 use crossbeam::channel::{self, Receiver, Sender};
-use media::{SourceInfo, VideoFrame};
-use timeline::{Ticks, Timebase};
+use timeline::{FrameRate, Sequence, Ticks, Timebase};
 
 use crate::clock::PlaybackClock;
+use crate::command::{Command, Event};
 use crate::frame_picker::{FramePicker, TaggedFrame};
-use crate::worker::{self, Channels, Command, Event};
-use crate::PlaybackError;
+use crate::{audio_worker, video_worker, ComposedFrame, PlaybackError};
 
-/// Decoded frames buffered ahead of the clock; enough to absorb a slow decode or a
-/// demuxer that interleaves audio well ahead of video.
-const FRAME_QUEUE: usize = 12;
+/// Composed frames buffered ahead of the clock, enough to absorb a slow decode.
+const FRAME_QUEUE: usize = 8;
 
 const NANOSECONDS: Timebase = match Timebase::new(1, 1_000_000_000) {
     Some(timebase) => timebase,
     None => unreachable!(),
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ClockSource {
-    Audio,
-    Wall,
-}
-
-/// Plays one media file. Lives on the UI thread and never blocks: call
-/// [`update`](Self::update) every frame to collect decoded output.
+/// Plays a sequence. Lives on the UI thread and never blocks: call
+/// [`update`](Self::update) every frame to collect what the workers produced.
+///
+/// With an audio writer, audio is the master clock; without one, the wall clock is.
 pub struct Player {
-    commands: Sender<Command>,
+    video_commands: Sender<Command>,
+    audio_commands: Option<Sender<Command>>,
     events: Receiver<Event>,
     frames: Receiver<TaggedFrame>,
     writer: Option<AudioWriter>,
     epoch: Instant,
-    timebase: Timebase,
+    sequence: Arc<Sequence>,
     clock: PlaybackClock,
-    source: ClockSource,
     picker: FramePicker,
     generation: u64,
     awaiting_seek: bool,
     playing: bool,
-    stream_ended: bool,
-    info: Option<SourceInfo>,
-    error: Option<PlaybackError>,
+    video_ended: bool,
+    warnings: Vec<PlaybackError>,
 }
 
 impl Player {
-    /// Starts opening `path` on a worker thread. Without a `writer` the file plays silently
-    /// against the wall clock.
-    pub fn open(
-        path: PathBuf,
-        timebase: Timebase,
+    pub fn new(
+        sequence: Arc<Sequence>,
         writer: Option<AudioWriter>,
     ) -> Result<Self, PlaybackError> {
-        let (command_tx, command_rx) = channel::unbounded();
+        let (video_tx, video_rx) = channel::unbounded();
         let (event_tx, event_rx) = channel::unbounded();
         let (frame_tx, frame_rx) = channel::bounded(FRAME_QUEUE);
-        worker::spawn(
-            path,
-            timebase,
-            writer.clone(),
-            Channels {
-                commands: command_rx,
+        let audio_commands = match &writer {
+            Some(writer) => {
+                let (audio_tx, audio_rx) = channel::unbounded();
+                audio_worker::spawn(
+                    Arc::clone(&sequence),
+                    writer.clone(),
+                    audio_rx,
+                    event_tx.clone(),
+                )
+                .map_err(PlaybackError::WorkerSpawn)?;
+                Some(audio_tx)
+            }
+            None => None,
+        };
+        video_worker::spawn(
+            Arc::clone(&sequence),
+            video_worker::VideoChannels {
+                commands: video_rx,
                 events: event_tx,
                 frames: frame_tx,
                 stale_frames: frame_rx.clone(),
+                reports_seeks: writer.is_none(),
             },
         )
         .map_err(PlaybackError::WorkerSpawn)?;
-        Ok(Self {
-            commands: command_tx,
+        let count_timebase = writer
+            .as_ref()
+            .and_then(|writer| Timebase::new(1, writer.format().sample_rate.0))
+            .unwrap_or(NANOSECONDS);
+        let mut player = Self {
+            video_commands: video_tx,
+            audio_commands,
             events: event_rx,
             frames: frame_rx,
             writer,
             epoch: Instant::now(),
-            timebase,
-            clock: PlaybackClock::new(timebase, NANOSECONDS),
-            source: ClockSource::Wall,
+            clock: PlaybackClock::new(sequence.timebase, count_timebase),
+            sequence,
             picker: FramePicker::default(),
             generation: 0,
             awaiting_seek: false,
             playing: false,
-            stream_ended: false,
-            info: None,
-            error: None,
-        })
+            video_ended: false,
+            warnings: Vec::new(),
+        };
+        player.seek(Ticks::ZERO);
+        Ok(player)
     }
 
-    pub fn info(&self) -> Option<&SourceInfo> {
-        self.info.as_ref()
+    pub fn sequence(&self) -> &Arc<Sequence> {
+        &self.sequence
     }
 
-    pub fn error(&self) -> Option<&PlaybackError> {
-        self.error.as_ref()
+    /// Plays `sequence` from the current position from now on, e.g. after an edit.
+    pub fn set_sequence(&mut self, sequence: Arc<Sequence>) {
+        self.sequence = Arc::clone(&sequence);
+        self.send(Command::Sequence(sequence));
+        self.seek(self.position());
     }
 
     pub fn is_playing(&self) -> bool {
         self.playing
     }
 
-    pub fn current_frame(&self) -> Option<&VideoFrame> {
+    pub fn current_frame(&self) -> Option<&ComposedFrame> {
         self.picker.current()
+    }
+
+    /// Problems with individual media since the last call, for the UI to report.
+    pub fn take_warnings(&mut self) -> Vec<PlaybackError> {
+        std::mem::take(&mut self.warnings)
     }
 
     /// Whether the UI must keep repainting to pick up output that is still arriving.
     pub fn is_busy(&self) -> bool {
-        self.error.is_none() && (self.playing || self.awaiting_seek || self.info.is_none())
+        self.playing || self.awaiting_seek || self.picker.has_pending() || !self.frames.is_empty()
     }
 
     pub fn position(&self) -> Ticks {
-        let position = self.clock.position(self.count());
-        self.end().map_or(position, |end| position.min(end))
+        self.clock.position(self.count()).min(self.duration())
     }
 
-    pub fn duration(&self) -> Option<Ticks> {
-        self.info.as_ref().and_then(|info| info.duration)
+    pub fn duration(&self) -> Ticks {
+        self.sequence.duration()
+    }
+
+    pub fn frame_rate(&self) -> FrameRate {
+        self.sequence.format.frame_rate
     }
 
     /// Collects worker output and advances the displayed frame to the clock. Returns
@@ -123,15 +142,6 @@ impl Player {
     pub fn update(&mut self) -> bool {
         while let Ok(event) = self.events.try_recv() {
             self.handle(event);
-        }
-        if self.playing && self.stream_ended && self.source == ClockSource::Audio {
-            let drained = self.writer.as_ref().is_none_or(AudioWriter::is_empty);
-            if drained {
-                // Audio ran out first; let video finish against the wall clock.
-                let old = self.count();
-                self.source = ClockSource::Wall;
-                self.clock.switch_counter(old, NANOSECONDS, self.count());
-            }
         }
         let position = self.clock.position(self.count());
         let frames = &self.frames;
@@ -143,11 +153,21 @@ impl Player {
     }
 
     pub fn play(&mut self) {
-        if self.playing || self.info.is_none() || self.error.is_some() {
+        if self.playing || self.duration() == Ticks::ZERO {
             return;
         }
+        let reclaimed = self.writer.as_ref().is_some_and(|writer| {
+            let lost = !writer.is_active();
+            if lost {
+                writer.claim();
+            }
+            lost
+        });
         if self.reached_end(self.position()) {
             self.seek(Ticks::ZERO);
+        } else if reclaimed {
+            // Another player used the device meanwhile, so this one's queued audio is gone.
+            self.seek(self.position());
         }
         self.playing = true;
         if let Some(writer) = &self.writer {
@@ -178,23 +198,16 @@ impl Player {
     }
 
     pub fn seek(&mut self, position: Ticks) {
-        if self.info.is_none() {
-            return;
-        }
-        let position = match self.duration() {
-            Some(duration) => position.clamp(Ticks::ZERO, duration),
-            None => position.max(Ticks::ZERO),
-        };
+        let position = position.clamp(Ticks::ZERO, self.duration());
         self.generation += 1;
         self.awaiting_seek = true;
-        self.stream_ended = false;
-        if self.source == ClockSource::Wall && self.has_audio_output() {
-            self.source = ClockSource::Audio;
-        }
-        self.clock = PlaybackClock::new(self.timebase, self.count_timebase());
+        self.video_ended = false;
+        let was_playing = self.playing;
+        self.clock.stop(self.count());
         self.clock.jump(position);
+        self.playing = was_playing;
         self.picker.reset(self.generation);
-        let _ = self.commands.send(Command::Seek {
+        self.send(Command::Seek {
             position,
             generation: self.generation,
         });
@@ -202,90 +215,59 @@ impl Player {
 
     /// Moves by whole frames from the frame on screen, pausing first.
     pub fn step(&mut self, frames: i64) {
-        let Some(rate) = self
-            .info
-            .as_ref()
-            .and_then(|info| info.video.as_ref()?.frame_rate)
-        else {
-            return;
-        };
         self.pause();
+        let rate = self.frame_rate();
         let from = self
             .current_frame()
             .map_or(self.position(), |frame| frame.pts);
-        let frame = rate.frame_at(from, self.timebase).saturating_add(frames);
-        self.seek(rate.frame_start(frame, self.timebase));
+        let frame = rate
+            .frame_at(from, self.sequence.timebase)
+            .saturating_add(frames);
+        self.seek(rate.frame_start(frame, self.sequence.timebase));
+    }
+
+    fn send(&self, command: Command) {
+        if let Some(audio) = &self.audio_commands {
+            let _ = audio.send(command.clone());
+        }
+        let _ = self.video_commands.send(command);
     }
 
     fn handle(&mut self, event: Event) {
         match event {
-            Event::Opened(info) => {
-                self.source = if info.has_audio && self.writer.is_some() {
-                    ClockSource::Audio
-                } else {
-                    ClockSource::Wall
-                };
-                self.info = Some(info);
-                self.clock = PlaybackClock::new(self.timebase, self.count_timebase());
-            }
             Event::Seeked {
                 generation,
                 frames_played,
             } if generation == self.generation => {
                 self.awaiting_seek = false;
                 if self.playing {
-                    let count = match self.source {
-                        ClockSource::Audio => frames_played,
-                        ClockSource::Wall => self.count(),
+                    let count = match self.writer {
+                        Some(_) => frames_played,
+                        None => self.count(),
                     };
                     self.clock.start(count);
                 }
             }
             Event::Ended { generation } if generation == self.generation => {
-                self.stream_ended = true;
+                self.video_ended = true;
             }
-            Event::Failed(error) => {
-                self.pause();
-                self.error = Some(error);
-            }
+            Event::Warning(error) => self.warnings.push(error),
             Event::Seeked { .. } | Event::Ended { .. } => {}
         }
     }
 
-    fn has_audio_output(&self) -> bool {
-        self.writer.is_some() && self.info.as_ref().is_some_and(|info| info.has_audio)
-    }
-
-    fn count_timebase(&self) -> Timebase {
-        match (self.source, &self.writer) {
-            (ClockSource::Audio, Some(writer)) => {
-                Timebase::new(1, writer.format().sample_rate.0).unwrap_or(NANOSECONDS)
-            }
-            _ => NANOSECONDS,
-        }
-    }
-
     fn count(&self) -> u64 {
-        match (self.source, &self.writer) {
-            (ClockSource::Audio, Some(writer)) => writer.frames_played(),
-            _ => u64::try_from(self.epoch.elapsed().as_nanos()).unwrap_or(u64::MAX),
+        match &self.writer {
+            Some(writer) => writer.frames_played(),
+            None => u64::try_from(self.epoch.elapsed().as_nanos()).unwrap_or(u64::MAX),
         }
-    }
-
-    /// The last instant of media: the declared duration, or the last frame when the
-    /// container doesn't declare one and decoding has finished.
-    fn end(&self) -> Option<Ticks> {
-        self.duration().or_else(|| {
-            let frame = self.current_frame().filter(|_| self.stream_ended)?;
-            Some(frame.pts)
-        })
     }
 
     fn reached_end(&self, position: Ticks) -> bool {
-        self.stream_ended
+        self.video_ended
             && !self.picker.has_pending()
             && self.frames.is_empty()
-            && self.end().is_some_and(|end| position >= end)
+            && position >= self.duration()
     }
 }
 
@@ -294,8 +276,8 @@ impl Drop for Player {
         if let Some(writer) = &self.writer {
             writer.set_paused(true);
         }
-        // The worker notices the shutdown within one backoff interval and exits on its own;
+        // Workers notice the shutdown within one backoff interval and exit on their own;
         // joining here would stall the UI thread.
-        let _ = self.commands.send(Command::Shutdown);
+        self.send(Command::Shutdown);
     }
 }

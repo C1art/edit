@@ -2,64 +2,98 @@
 #![allow(clippy::unwrap_used)]
 
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use media::MediaReader;
 use playback::Player;
-use timeline::{Ticks, Timebase};
+use timeline::{
+    FrameRate, ImportMedia, PlaceClip, PlaceMode, Sequence, Ticks, Timebase, Timeline, VideoFormat,
+};
 
 const TB: Timebase = Timebase::HZ_90K;
 const FRAME: i64 = 90_000 / 25;
 
-fn open() -> Player {
+/// The fixture placed twice back to back, the second time from its one-second mark.
+fn sequence() -> Arc<Sequence> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures/testsrc_2s_25fps_44k.mp4");
-    let mut player = Player::open(path, TB, None).unwrap();
-    pump_until(&mut player, |player| player.info().is_some());
-    player
+    let info = MediaReader::open(&path, TB).unwrap().info().clone();
+    let format = VideoFormat {
+        width: 320,
+        height: 240,
+        frame_rate: FrameRate::FPS_25,
+    };
+    let mut timeline = Timeline::new(Sequence::with_default_tracks(TB, format));
+    timeline
+        .apply(ImportMedia {
+            name: "testsrc".into(),
+            path,
+            duration: info.duration.unwrap(),
+            video: Some(format),
+            has_audio: true,
+        })
+        .unwrap();
+    let source = timeline.sequence().media[0].id;
+    for (at, source_in) in [(0, 0), (50 * FRAME, 25 * FRAME)] {
+        timeline
+            .apply(PlaceClip {
+                source,
+                source_in: Ticks(source_in),
+                duration: Ticks(25 * FRAME),
+                at: Ticks(at),
+                video_track: Some(0),
+                audio_track: Some(0),
+                mode: PlaceMode::Overwrite,
+            })
+            .unwrap();
+    }
+    Arc::new(timeline.sequence().clone())
 }
 
 fn pump_until(player: &mut Player, mut done: impl FnMut(&Player) -> bool) {
     let deadline = Instant::now() + Duration::from_secs(10);
     while !done(player) {
         assert!(Instant::now() < deadline, "timed out");
-        assert!(player.error().is_none(), "{:?}", player.error());
         player.update();
+        assert!(player.take_warnings().is_empty());
         std::thread::sleep(Duration::from_millis(2));
     }
 }
 
-fn shown_pts(player: &Player) -> Option<Ticks> {
-    player.current_frame().map(|frame| frame.pts)
+fn shown(player: &Player) -> Option<(Ticks, usize)> {
+    player
+        .current_frame()
+        .map(|frame| (frame.pts, frame.layers.len()))
 }
 
 #[test]
 #[ignore = "decodes a real file with FFmpeg in real time"]
-fn plays_to_the_end_on_the_wall_clock_and_stops_on_the_last_frame() {
-    let mut player = open();
+fn plays_across_a_gap_to_the_end_on_the_wall_clock() {
+    let mut player = Player::new(sequence(), None).unwrap();
+    pump_until(&mut player, |player| player.current_frame().is_some());
     player.play();
     let started = Instant::now();
-    let mut shown = 0;
-    pump_until(&mut player, |player| {
-        shown += 1;
-        !player.is_playing()
-    });
+    pump_until(&mut player, |player| !player.is_playing());
     let elapsed = started.elapsed();
-    assert!(elapsed > Duration::from_millis(1900), "{elapsed:?}");
-    assert_eq!(shown_pts(&player), Some(Ticks(49 * FRAME)));
-    assert_eq!(player.position(), player.duration().unwrap());
+    assert!(elapsed > Duration::from_millis(2900), "{elapsed:?}");
+    assert_eq!(shown(&player), Some((Ticks(74 * FRAME), 1)));
+    assert_eq!(player.position(), Ticks(75 * FRAME));
 }
 
 #[test]
 #[ignore = "decodes a real file with FFmpeg"]
-fn paused_seek_and_step_show_the_exact_frame() {
-    let mut player = open();
-    player.seek(Ticks(30 * FRAME + 10));
+fn seeks_show_the_clip_frame_or_black_in_gaps() {
+    let mut player = Player::new(sequence(), None).unwrap();
+    player.seek(Ticks(60 * FRAME + 10));
     pump_until(&mut player, |player| {
-        shown_pts(player) == Some(Ticks(30 * FRAME))
+        shown(player) == Some((Ticks(60 * FRAME), 1))
     });
-    player.step(-3);
+    let source_pts = player.current_frame().unwrap().layers[0].frame.pts;
+    assert_eq!(source_pts, Ticks(35 * FRAME));
+
+    player.step(-25);
     pump_until(&mut player, |player| {
-        shown_pts(player) == Some(Ticks(27 * FRAME))
+        shown(player) == Some((Ticks(35 * FRAME), 0))
     });
-    assert!(!player.is_playing());
 }
