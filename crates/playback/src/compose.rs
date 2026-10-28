@@ -5,6 +5,7 @@ use timeline::{
 };
 
 use crate::clip_decoders::ClipDecoders;
+use crate::pixel_effects::pixel_effects;
 use crate::track_video::TrackVideo;
 use crate::{Layer, PlaybackError};
 
@@ -84,6 +85,7 @@ fn layer_look(look: &Look, time: Ticks, reveal: Reveal, canvas: [f32; 2]) -> Lay
         color: color_adjust(&look.color, time),
         mask: reveal.mask,
         wash: reveal.wash,
+        effects: pixel_effects(&look.effects, time),
     }
 }
 

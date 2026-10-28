@@ -9,6 +9,7 @@ mod error;
 mod export;
 mod frame_picker;
 mod mixdown;
+mod pixel_effects;
 mod player;
 mod sequence_mix;
 mod track_audio;
