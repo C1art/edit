@@ -10,8 +10,8 @@ pub enum HeaderAction {
     Switch(TrackRef, TrackSwitch, bool),
 }
 
-/// The track name, which doubles as the source-patching target toggle, and the mute
-/// and lock switches.
+/// The track name, which doubles as the source-patching target toggle, and the mute,
+/// lock and, for audio, solo switches.
 pub fn header(
     ui: &mut egui::Ui,
     column: egui::Rangef,
@@ -37,10 +37,16 @@ pub fn header(
                 TrackKind::Video => "Hide",
                 TrackKind::Audio => "Mute",
             };
-            for (label, switch, on) in [
+            let solo = (row.track.kind == TrackKind::Audio).then_some((
+                "Solo",
+                TrackSwitch::Solo,
+                track.solo,
+            ));
+            let switches = [
                 (mute_label, TrackSwitch::Mute, track.muted),
                 ("Lock", TrackSwitch::Lock, track.locked),
-            ] {
+            ];
+            for (label, switch, on) in switches.into_iter().chain(solo) {
                 if ui.selectable_label(on, label).clicked() {
                     action = Some(HeaderAction::Switch(row.track, switch, !on));
                 }

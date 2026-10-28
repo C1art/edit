@@ -96,8 +96,13 @@ pub fn clips(
         TrackKind::Video => VIDEO_CLIP,
         TrackKind::Audio => AUDIO_CLIP,
     };
+    let silenced = match row.track.kind {
+        TrackKind::Video => track.muted,
+        TrackKind::Audio => !sequence.is_heard(track),
+    };
     let visible = painter.clip_rect().x_range();
     for clip in &track.clips {
+        let dimmed = silenced || clip.disabled;
         let rect = clip_rect(row, scale, clip.start, clip.end());
         if rect.right() < visible.min || rect.left() > visible.max {
             continue;
@@ -108,7 +113,7 @@ pub fn clips(
         } else {
             base
         };
-        if track.muted {
+        if dimmed {
             fill = fill.gamma_multiply(0.4);
         }
         painter.rect_filled(rect, 3.0, fill);
@@ -121,7 +126,7 @@ pub fn clips(
             };
             match row.track.kind {
                 TrackKind::Video if art.show_thumbnails => {
-                    let tint = if track.muted {
+                    let tint = if dimmed {
                         Color32::from_gray(100)
                     } else {
                         Color32::WHITE

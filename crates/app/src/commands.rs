@@ -1,6 +1,6 @@
 use timeline::{
-    AddTrack, Clipboard, Lift, PasteClips, PlaceMode, Razor, RazorTarget, RippleDelete, Timecode,
-    TrackKind,
+    AddTrack, Clipboard, Lift, PasteClips, PlaceMode, Razor, RazorTarget, RippleDelete,
+    SetClipsEnabled, Timecode, TrackKind,
 };
 
 use crate::editor::Editor;
@@ -113,5 +113,25 @@ impl Editor {
             Some(gain) => self.gain_prompt = Some(gain.db()),
             None => self.notice("Select a clip with audio first"),
         }
+    }
+
+    /// Disables the selected clips, or enables them when all are already disabled.
+    pub(crate) fn toggle_enabled(&mut self) {
+        let sequence = self.timeline.sequence();
+        let selected: Vec<_> = self
+            .view
+            .selection
+            .iter()
+            .filter_map(|&id| sequence.clip(id))
+            .collect();
+        if selected.is_empty() {
+            self.notice("Select clips to enable or disable");
+            return;
+        }
+        let enabled = selected.iter().all(|(_, clip)| clip.disabled);
+        self.apply(SetClipsEnabled {
+            clips: self.view.selection.clone(),
+            enabled,
+        });
     }
 }

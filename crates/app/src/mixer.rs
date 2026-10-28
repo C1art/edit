@@ -100,7 +100,7 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
 
 fn strip(editor: &mut Editor, ui: &mut egui::Ui, channel: Channel) {
     let sequence = editor.timeline.sequence();
-    let (name, mut volume, mut pan, muted, meter) = match channel {
+    let (name, mut volume, mut pan, switches, meter) = match channel {
         Channel::Track(track_ref) => {
             let Some(track) = sequence.track(track_ref) else {
                 return;
@@ -110,7 +110,10 @@ fn strip(editor: &mut Editor, ui: &mut egui::Ui, channel: Channel) {
                 track_ref.to_string(),
                 track.volume,
                 track.pan,
-                Some(track.muted),
+                Some([
+                    ("Mute", TrackSwitch::Mute, track.muted),
+                    ("Solo", TrackSwitch::Solo, track.solo),
+                ]),
                 meter,
             )
         }
@@ -170,14 +173,20 @@ fn strip(editor: &mut Editor, ui: &mut egui::Ui, channel: Channel) {
             }
             pan = Pan::new(value);
             changed = response_state(&knob, changed);
-            if let Some(muted) = muted {
-                if ui.selectable_label(muted, "Mute").clicked() {
-                    editor.apply(SetTrackSwitch {
-                        track,
-                        switch: TrackSwitch::Mute,
-                        on: !muted,
-                    });
+            let mut switched = None;
+            ui.horizontal(|ui| {
+                for (label, switch, on) in switches.into_iter().flatten() {
+                    if ui.selectable_label(on, label).clicked() {
+                        switched = Some((switch, on));
+                    }
                 }
+            });
+            if let Some((switch, on)) = switched {
+                editor.apply(SetTrackSwitch {
+                    track,
+                    switch,
+                    on: !on,
+                });
             }
         }
     });

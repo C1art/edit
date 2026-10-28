@@ -20,7 +20,7 @@ pub use markers::color as marker_color;
 use scale::TimeScale;
 pub use tool::Tool;
 
-const HEADER_WIDTH: f32 = 150.0;
+const HEADER_WIDTH: f32 = 190.0;
 const RULER_HEIGHT: f32 = 26.0;
 /// Snapping reach in points, so it feels the same at every zoom level.
 const SNAP_POINTS: f32 = 8.0;

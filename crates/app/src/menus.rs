@@ -118,6 +118,11 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             if ui.add(speed).clicked() {
                 editor.speed_duration();
             }
+            let enable =
+                Button::new("Enable").shortcut_text(shortcut(ui, shortcuts::TOGGLE_ENABLED));
+            if ui.add(enable).clicked() {
+                editor.toggle_enabled();
+            }
         });
         ui.menu_button("Markers", |ui| {
             crate::marker_dialog::menu(editor, ui);
