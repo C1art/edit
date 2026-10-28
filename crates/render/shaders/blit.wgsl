@@ -25,11 +25,20 @@ struct Placement {
     tint_white: vec4<f32>,
     // Vignette midpoint and feather.
     vignette: vec4<f32>,
+    // Whites, blacks, vibrance.
+    finish: vec4<f32>,
+    // Shadow, midtone and highlight wheels: push toward blue and red, then level.
+    wheels: array<vec4<f32>, 3>,
 };
 
 const MID_GREY: f32 = 0.18;
 const LUMA: vec3<f32> = vec3<f32>(0.2126, 0.7152, 0.0722);
 const GAMMA: f32 = 2.2;
+// How far blacks at their limit lift pure black, in linear light.
+const BLACK_LIFT: f32 = 0.03;
+// Stops a wheel at its rim pushes its range toward the hue, and its level brightens it.
+const WHEEL_STOPS: f32 = 1.0;
+const LEVEL_STOPS: f32 = 1.0;
 // The largest chroma distance between saturated colors is about this.
 const CHROMA_RANGE: f32 = 0.5;
 
@@ -75,7 +84,44 @@ fn correct(rgb_in: vec3<f32>) -> vec3<f32> {
     let highlight_weight = smoothstep(MID_GREY, 1.0, luma);
     let shadow_weight = 1.0 - smoothstep(0.0, MID_GREY * 2.0, luma);
     rgb *= exp2(tone.z * highlight_weight + tone.w * shadow_weight);
-    return mix(vec3<f32>(dot(rgb, LUMA)), rgb, balance.z);
+    rgb = finish(rgb);
+    return saturate_color(rgb, balance.z, placement.finish.z);
+}
+
+// Whites scale the top of the range; blacks move the black point, so raising them
+// lifts pure black to grey.
+fn finish(rgb_in: vec3<f32>) -> vec3<f32> {
+    let ends = placement.finish;
+    let luma = dot(rgb_in, LUMA);
+    var rgb = rgb_in * exp2(ends.x * smoothstep(0.4, 1.0, luma));
+    rgb = max(rgb + ends.y * BLACK_LIFT * (1.0 - smoothstep(0.0, MID_GREY, luma)), vec3<f32>(0.0));
+    return wheel(rgb);
+}
+
+// Each wheel tints and brightens its tonal range: a gain per channel in stops, along
+// the BT.709 directions of Cb and Cr, weighted by where the pixel's luma falls.
+fn wheel(rgb_in: vec3<f32>) -> vec3<f32> {
+    let luma = dot(rgb_in, LUMA);
+    let shadows = 1.0 - smoothstep(0.0, MID_GREY * 2.0, luma);
+    let highlights = smoothstep(MID_GREY, 1.0, luma);
+    let midtones = max(1.0 - shadows - highlights, 0.0);
+    var weights = array<f32, 3>(shadows, midtones, highlights);
+    var stops = vec3<f32>(0.0);
+    for (var i = 0; i < 3; i++) {
+        let w = placement.wheels[i];
+        let hue = vec3<f32>(1.5748 * w.y, -0.1873 * w.x - 0.4681 * w.y, 1.8556 * w.x);
+        stops += weights[i] * (hue * WHEEL_STOPS + vec3<f32>(w.z * LEVEL_STOPS));
+    }
+    return rgb_in * exp2(stops);
+}
+
+// Vibrance saturates in proportion to how muted a pixel already is.
+fn saturate_color(rgb: vec3<f32>, saturation: f32, vibrance: f32) -> vec3<f32> {
+    let grey = vec3<f32>(dot(rgb, LUMA));
+    let peak = max(max(rgb.r, rgb.g), rgb.b);
+    let spread = (peak - min(min(rgb.r, rgb.g), rgb.b)) / max(peak, 1e-6);
+    let amount = saturation * max(1.0 + vibrance * (1.0 - spread), 0.0);
+    return max(mix(grey, rgb, amount), vec3<f32>(0.0));
 }
 
 fn to_gamma(rgb: vec3<f32>) -> vec3<f32> {

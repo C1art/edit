@@ -5,7 +5,7 @@ use crate::WORKING_FORMAT;
 pub const DISPLAY_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
 /// Five `vec4<f32>`: the placement and color of a blit, or the parameters of a blur.
-pub(crate) const UNIFORM_BYTES: u64 = 176;
+pub(crate) const UNIFORM_BYTES: u64 = 240;
 
 /// The textured-rectangle pipelines and the layout their bindings share.
 pub(crate) struct Blit {

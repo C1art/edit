@@ -34,12 +34,21 @@ pub struct ColorAdjust {
     pub highlights: f32,
     /// -1 to 1.
     pub shadows: f32,
+    /// -1 to 1.
+    pub whites: f32,
+    /// -1 to 1.
+    pub blacks: f32,
+    /// Shadows, midtones and highlights: each a push toward blue and red (Cb and Cr,
+    /// -1 to 1) and a brightness offset (-1 to 1).
+    pub wheels: [[f32; 3]; 3],
     /// -1 (cool) to 1 (warm).
     pub temperature: f32,
     /// -1 (green) to 1 (magenta).
     pub tint: f32,
     /// 1 leaves color as is, 0 is monochrome.
     pub saturation: f32,
+    /// -1 to 1.
+    pub vibrance: f32,
 }
 
 impl ColorAdjust {
@@ -48,9 +57,13 @@ impl ColorAdjust {
         contrast: 0.0,
         highlights: 0.0,
         shadows: 0.0,
+        whites: 0.0,
+        blacks: 0.0,
+        wheels: [[0.0; 3]; 3],
         temperature: 0.0,
         tint: 0.0,
         saturation: 1.0,
+        vibrance: 0.0,
     };
 }
 
@@ -143,6 +156,13 @@ impl Placement {
             .chain([color.temperature, color.tint, color.saturation, self.wash])
             .chain(self.mask)
             .chain(self.effects.uniform())
+            .chain([color.whites, color.blacks, color.vibrance, 0.0])
+            .chain(
+                color
+                    .wheels
+                    .into_iter()
+                    .flat_map(|[blue, red, level]| [blue, red, level, 0.0]),
+            )
             .flat_map(f32::to_le_bytes)
             .collect()
     }
