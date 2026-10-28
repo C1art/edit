@@ -1,5 +1,5 @@
-use render::{ChromaKey, PixelEffects};
-use timeline::{Rgb, Ticks, Timebase, VideoEffect};
+use render::{ChromaKey, ColorKey, LeaveColor, Mirror, PixelEffects, Ramp};
+use timeline::{ColorMatch, RampShape, Rgb, Ticks, Timebase, VideoEffect};
 
 /// The per-pixel part of an effect stack at source time `time`. The shader runs each
 /// kind of effect once, so repeats of a kind combine, the last one's colors winning.
@@ -92,6 +92,59 @@ pub(crate) fn pixel_effects(
                         [x, y, correction.angle, correction.scale].map(|value| value as f32);
                 }
             }
+            VideoEffect::ColorKey {
+                color,
+                tolerance,
+                softness,
+            } => {
+                pixel.recolor.color_key = Some(ColorKey {
+                    color: encoded(*color),
+                    tolerance: unit(tolerance).clamp(0.0, 1.0),
+                    softness: unit(softness).clamp(0.0, 1.0),
+                });
+            }
+            VideoEffect::LeaveColor {
+                color,
+                amount,
+                tolerance,
+                softness,
+                matching,
+            } => {
+                pixel.recolor.leave_color = Some(LeaveColor {
+                    color: encoded(*color),
+                    amount: unit(amount).clamp(0.0, 1.0),
+                    tolerance: unit(tolerance).clamp(0.0, 1.0),
+                    softness: unit(softness).clamp(0.0, 1.0),
+                    by_hue: *matching == ColorMatch::Hue,
+                });
+            }
+            VideoEffect::GradientRamp {
+                start,
+                start_color,
+                end,
+                end_color,
+                shape,
+                blend,
+            } => {
+                pixel.recolor.ramp = Some(Ramp {
+                    start: start.each_ref().map(unit),
+                    end: end.each_ref().map(unit),
+                    start_color: encoded(*start_color),
+                    end_color: encoded(*end_color),
+                    radial: *shape == RampShape::Radial,
+                    blend: unit(blend).clamp(0.0, 1.0),
+                });
+            }
+            VideoEffect::Mirror { center, angle } => {
+                pixel.reshape.mirror = Some(Mirror {
+                    center: center.each_ref().map(unit),
+                    angle: angle.value_at(time).to_radians(),
+                });
+            }
+            VideoEffect::CornerPin { corners } => {
+                pixel.reshape.corner_pin =
+                    Some(corners.each_ref().map(|corner| corner.each_ref().map(unit)));
+            }
             VideoEffect::HorizontalFlip => pixel.flip[0] = !pixel.flip[0],
             VideoEffect::VerticalFlip => pixel.flip[1] = !pixel.flip[1],
             VideoEffect::BlackAndWhite => {
@@ -135,6 +188,10 @@ pub(crate) fn pixel_effects(
         }
     }
     pixel
+}
+
+fn encoded(color: Rgb) -> [f32; 3] {
+    [color.r, color.g, color.b].map(|channel| f32::from(channel) / 255.0)
 }
 
 fn linear(color: Rgb) -> [f32; 3] {
