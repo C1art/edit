@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
-use render::{ColorAdjust, Grade, LayerLook};
+use render::{ColorAdjust, Grade, LayerLook, LayerMask, MAX_MASKS};
 use timeline::{
-    track_layers_at, ClipId, ColorCorrection, Generator, Look, Param, Reveal, Sequence, SourceId,
-    Ticks, Track, TrackRef,
+    track_layers_at, ClipId, ColorCorrection, Generator, Look, Mask, Param, Reveal, Sequence,
+    SourceId, Ticks, Track, TrackRef,
 };
 
 use crate::clip_decoders::ClipDecoders;
@@ -121,12 +121,13 @@ fn video_layers(
 }
 
 /// Applies an adjustment layer's look to the picture of `layers` as one. Below full
-/// opacity the adjusted picture blends over the untouched one, as its opacity is meant to.
+/// opacity, or outside its masks, the adjusted picture blends over the untouched one,
+/// as its opacity is meant to.
 fn adjust(layers: &mut Vec<Layer>, track: TrackRef, look: LayerLook, grade: Option<Arc<Grade>>) {
     if layers.is_empty() {
         return;
     }
-    let below = if look.opacity < 1.0 {
+    let below = if look.opacity < 1.0 || look.opacity_masks.iter().any(Option::is_some) {
         layers.clone()
     } else {
         std::mem::take(layers)
@@ -155,6 +156,7 @@ fn layer_look(look: &Look, time: Ticks, reveal: Reveal, canvas: [f32; 2]) -> Lay
         rotation_degrees: value(&look.motion.rotation),
         crop: [&crop.left, &crop.top, &crop.right, &crop.bottom].map(percent),
         opacity: percent(&look.opacity) * reveal.fade,
+        opacity_masks: opacity_masks(&look.masks, time),
         blur: look.blurriness_at(time) / BLURRINESS_PER_SIGMA,
         color: color_adjust(&look.color, time),
         mask: reveal.mask,
@@ -186,6 +188,24 @@ fn color_adjust(color: &ColorCorrection, time: Ticks) -> ColorAdjust {
     }
 }
 
+/// The first [`MAX_MASKS`] masks; the effect controls offer no more.
+fn opacity_masks(masks: &[Mask], time: Ticks) -> [Option<LayerMask>; MAX_MASKS] {
+    let fraction = |param: &Param| param.value_at(time) / 100.0;
+    let mut layer_masks = [None; MAX_MASKS];
+    for (slot, mask) in layer_masks.iter_mut().zip(masks) {
+        *slot = Some(LayerMask {
+            shape: mask.shape,
+            center: mask.center.each_ref().map(fraction),
+            size: mask.size.each_ref().map(fraction),
+            rotation_degrees: mask.rotation.value_at(time),
+            feather: mask.feather.value_at(time),
+            expansion: mask.expansion.value_at(time),
+            opacity: fraction(&mask.opacity),
+            inverted: mask.inverted,
+        });
+    }
+    layer_masks
+}
 #[cfg(test)]
 mod tests {
     use media::VideoFrame;
