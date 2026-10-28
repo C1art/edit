@@ -48,6 +48,8 @@ impl TimelineView {
             if let Some(pos) = response.interact_pointer_pos() {
                 let hit = layout::hit(sequence, &rows, &scale, pos);
                 self.context_clip = matches!(hit, Hit::Body { .. } | Hit::Edge { .. });
+                self.select_gap(sequence, hit, scale.time(pos.x));
+                self.context_gap = self.gap.is_some();
                 if let Hit::Body { clip, .. } | Hit::Edge { clip, .. } = hit {
                     if !self.selection.contains(&clip) {
                         self.selection = sequence.with_groups(&[clip]);
@@ -80,6 +82,7 @@ impl TimelineView {
                     toggle_volume_key(timeline, owner, grabbed, output);
                 } else {
                     self.click(sequence, hit, shift);
+                    self.select_gap(sequence, hit, scale.time(pos.x));
                 }
             }
             return;
@@ -193,6 +196,17 @@ impl TimelineView {
         let rect = layout::clip_rect(row, scale, clip.start, clip.end()).shrink(1.0);
         let grabbed = rubber_band::hit(rect, scale, &Envelope::clip(clip), pointer)?;
         Some((BandOwner::Clip(clip.id), grabbed, rubber_band::band(rect)))
+    }
+
+    /// Selects the gap a click on an empty stretch of a track lands in.
+    fn select_gap(&mut self, sequence: &Sequence, hit: Hit, at: Ticks) {
+        self.gap = match hit {
+            Hit::Empty { track: Some(track) } => sequence
+                .track(track)
+                .and_then(|found| found.gap_at(at))
+                .map(|_| (track, at)),
+            _ => None,
+        };
     }
 
     fn click(&mut self, sequence: &Sequence, hit: Hit, shift: bool) {

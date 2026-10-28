@@ -92,6 +92,8 @@ pub struct TimelineOutput {
     pub open_clip: Option<ClipId>,
     /// The clip area while a right-click on a clip has its menu open.
     pub clip_menu: Option<egui::Response>,
+    /// The clip area while a right-click on a gap has its menu open.
+    pub gap_menu: Option<egui::Response>,
     pub errors: Vec<String>,
 }
 
@@ -106,6 +108,8 @@ pub struct TimelineView {
     pub tool: Tool,
     pub snapping: bool,
     pub selection: Vec<ClipId>,
+    /// A selected gap: its track and a time inside it.
+    pub gap: Option<(TrackRef, Ticks)>,
     pub targets: Targets,
     scroll: Ticks,
     scroll_y: f32,
@@ -117,6 +121,7 @@ pub struct TimelineView {
     context_marker: Option<MarkerId>,
     /// Whether the last right-click in the clip area landed on a clip.
     context_clip: bool,
+    context_gap: bool,
     /// Audio tracks showing their automation in place of their clips' volume lines.
     automation_shown: BTreeSet<TrackRef>,
     renaming: Option<header::Renaming>,
@@ -131,6 +136,7 @@ impl Default for TimelineView {
             tool: Tool::default(),
             snapping: true,
             selection: Vec::new(),
+            gap: None,
             targets: Targets::default(),
             scroll: Ticks::ZERO,
             scroll_y: 0.0,
@@ -139,6 +145,7 @@ impl Default for TimelineView {
             drag: None,
             context_marker: None,
             context_clip: false,
+            context_gap: false,
             automation_shown: BTreeSet::new(),
             renaming: None,
             heights: TrackHeights::default(),
@@ -168,6 +175,9 @@ impl TimelineView {
     /// Drops selected clips that no longer exist, e.g. after undo.
     pub fn prune_selection(&mut self, sequence: &Sequence) {
         self.selection.retain(|&id| sequence.clip(id).is_some());
+        self.gap = self
+            .gap
+            .filter(|&(track, at)| gap(sequence, track, at).is_some());
         let video = sequence.video.len();
         let audio = sequence.audio.len();
         self.targets.video = self.targets.video.filter(|&index| index < video);
@@ -240,6 +250,7 @@ impl TimelineView {
         let top = tracks.top() - self.scroll_y;
         self.handle_gestures(&response, timeline, scale, top, playhead, &mut output);
         output.clip_menu = self.context_clip.then(|| response.clone());
+        output.gap_menu = self.context_gap.then(|| response.clone());
         let drop_guide = handle_drop(
             &response,
             timeline.sequence(),
@@ -274,6 +285,10 @@ impl TimelineView {
                 art,
                 !automation,
             );
+            let selected_gap = self.gap.filter(|&(track, _)| track == row.track);
+            if let Some(range) = selected_gap.and_then(|(track, at)| gap(sequence, track, at)) {
+                paint::gap(&painter, row, &scale, range);
+            }
             if let Some(track) = sequence.track(row.track).filter(|_| automation) {
                 let end = scale.time(tracks.right());
                 let rect = layout::clip_rect(row, &scale, Ticks::ZERO, end).shrink(1.0);
@@ -454,4 +469,8 @@ fn report(result: Result<(), timeline::TimelineError>, errors: &mut Vec<String>)
         Ok(()) | Err(timeline::TimelineError::NothingToEdit) => {}
         Err(error) => errors.push(error.to_string()),
     }
+}
+
+fn gap(sequence: &Sequence, track: TrackRef, at: Ticks) -> Option<std::ops::Range<Ticks>> {
+    sequence.track(track)?.gap_at(at)
 }

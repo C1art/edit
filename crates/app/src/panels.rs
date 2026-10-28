@@ -98,6 +98,13 @@ impl Editor {
         if let Some(response) = output.clip_menu {
             response.context_menu(|ui| crate::clip_menu::context(self, ui));
         }
+        if let Some(response) = output.gap_menu {
+            response.context_menu(|ui| {
+                if ui.button("Ripple Delete").clicked() {
+                    self.ripple_delete();
+                }
+            });
+        }
         for error in output.errors {
             self.notice(format!("Cannot edit: {error}"));
         }

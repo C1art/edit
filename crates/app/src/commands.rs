@@ -1,6 +1,7 @@
 use timeline::{
-    AddFrameHold, AddTrack, Clipboard, FrameFit, Lift, PasteClips, PlaceMode, Razor, RazorTarget,
-    RippleDelete, SetClipsEnabled, SetGrouped, SetLinked, SetToFrameSize, Timecode, TrackKind,
+    AddFrameHold, AddTrack, Clipboard, CloseGap, FrameFit, Lift, PasteClips, PlaceMode, Razor,
+    RazorTarget, RippleDelete, SetClipsEnabled, SetGrouped, SetLinked, SetToFrameSize, Timecode,
+    TrackKind,
 };
 
 use crate::editor::Editor;
@@ -42,17 +43,29 @@ impl Editor {
         });
     }
 
+    /// Clears the selected clips, or with none selected closes the selected gap, which
+    /// is all clearing a gap can mean.
     pub(crate) fn lift(&mut self) {
         let clips = std::mem::take(&mut self.view.selection);
-        if !clips.is_empty() {
+        if clips.is_empty() {
+            self.close_gap();
+        } else {
             self.apply(Lift { clips });
         }
     }
 
     pub(crate) fn ripple_delete(&mut self) {
         let clips = std::mem::take(&mut self.view.selection);
-        if !clips.is_empty() {
+        if clips.is_empty() {
+            self.close_gap();
+        } else {
             self.apply(RippleDelete { clips });
+        }
+    }
+
+    fn close_gap(&mut self) {
+        if let Some((track, at)) = self.view.gap.take() {
+            self.apply(CloseGap { track, at });
         }
     }
 

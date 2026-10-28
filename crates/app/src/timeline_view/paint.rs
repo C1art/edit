@@ -106,6 +106,18 @@ pub fn row_background(
     );
 }
 
+/// Shades a selected gap like a selected clip's outline.
+pub fn gap(painter: &Painter, row: &Row, scale: &TimeScale, range: std::ops::Range<Ticks>) {
+    let rect = Rect::from_x_y_ranges(scale.x(range.start)..=scale.x(range.end), row.y_range());
+    let selection = painter.ctx().global_style().visuals.selection;
+    painter.rect_filled(
+        rect.shrink(1.0),
+        0.0,
+        selection.bg_fill.gamma_multiply(0.35),
+    );
+    painter.rect_stroke(rect.shrink(1.0), 0.0, selection.stroke, StrokeKind::Inside);
+}
+
 pub fn clips(
     painter: &Painter,
     row: &Row,
