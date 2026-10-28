@@ -135,6 +135,12 @@ struct Placement {
     generate_detail: vec4<f32>,
     generate_four_points: array<vec4<f32>, 2>,
     generate_four_colors: array<vec4<f32>, 4>,
+    // Lens Flare's center, brightness and lens; Magnify's center, magnification and
+    // size; then Magnify's feather, 1 when square and opacity, and how much of the
+    // flare is left out (see optics.wgsl).
+    optics_flare: vec4<f32>,
+    optics_magnify: vec4<f32>,
+    optics_detail: vec4<f32>,
 };
 
 const OUTLINE_VEC4S: u32 = 32u;
@@ -333,11 +339,12 @@ fn in_crop(uv: vec2<f32>) -> bool {
 
 // The picture at the warped `uv`, unpremultiplied and through the input LUT.
 fn source_color(uv: vec2<f32>) -> vec4<f32> {
-    var color = picture_at(uv);
+    var color = picture_at(magnified(uv));
     if placement.axis_y_opacity.w > 0.5 {
         color = vec4<f32>(color.rgb / max(color.a, 1e-6), color.a);
     }
-    return generated(ramped(vec4<f32>(input_grade(color.rgb), color.a), uv), uv);
+    let drawn = generated(ramped(vec4<f32>(input_grade(color.rgb), color.a), uv), uv);
+    return flared(drawn, uv);
 }
 
 // How much of the cropped, keyed picture covers `uv`, which casts the shadow.
