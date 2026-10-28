@@ -27,6 +27,7 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
             (Scope::LumaWaveform, "Luma Waveform"),
             (Scope::RgbParade, "RGB Parade"),
             (Scope::Vectorscope, "Vectorscope"),
+            (Scope::Histogram, "Histogram"),
         ] {
             ui.selectable_value(&mut scope, kind, name);
         }
@@ -57,6 +58,12 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
     let painter = ui.painter_at(rect);
     painter.image(texture, trace, uv, Color32::WHITE);
     let line = Stroke::new(1.0, GRATICULE);
+    if scope == Scope::Histogram {
+        for quarter in 1..4 {
+            let x = trace.left() + trace.width() * quarter as f32 / 4.0;
+            painter.vline(x, trace.y_range(), line);
+        }
+    }
     if scope == Scope::RgbParade {
         for third in 1..3 {
             let x = trace.left() + trace.width() * third as f32 / 3.0;
