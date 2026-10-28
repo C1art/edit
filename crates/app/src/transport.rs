@@ -1,13 +1,21 @@
 use egui::{Button, Color32, Rect, Sense, Stroke};
 use playback::Player;
-use timeline::{Marks, Ticks, Timecode};
+use timeline::{Marks, Ticks, Timebase, Timecode};
 
 /// Height of the scrub bar under each monitor.
 const SCRUB_HEIGHT: f32 = 18.0;
 
+/// How long Play Around plays before the playhead, and after it.
+const PREROLL_SECONDS: u32 = 2;
+
 /// A scrub bar with the playhead and marked range, then buttons and timecode.
 pub fn ui(ui: &mut egui::Ui, player: &mut Player, marks: Option<Marks>) {
-    scrub_bar(ui, player, marks.unwrap_or_default());
+    let marks = marks.unwrap_or_default();
+    if player.is_looping() {
+        // The marks can move while looping, and the loop follows them.
+        player.set_looping(Some(marks.range(player.duration())));
+    }
+    scrub_bar(ui, player, marks);
     let sequence = player.sequence();
     let (timebase, rate) = (sequence.timebase, sequence.format.frame_rate);
     let position = player.position();
@@ -34,15 +42,23 @@ pub fn ui(ui: &mut egui::Ui, player: &mut Player, marks: Option<Marks>) {
         {
             player.step(1);
         }
+        let looping = player.is_looping();
+        if ui
+            .add(Button::new("Loop").selected(looping))
+            .on_hover_text("Loop playback of the marked range, or all of it (Ctrl+Shift+L)")
+            .clicked()
+        {
+            handle_key(player, TransportKey::ToggleLoop, marks);
+        }
         ui.monospace(format!(
             "{} / {}",
             Timecode::new(position, timebase, rate),
             Timecode::new(player.duration(), timebase, rate)
         ));
-        if let Some(Marks {
+        if let Marks {
             mark_in: Some(mark_in),
             mark_out: Some(mark_out),
-        }) = marks
+        } = marks
         {
             ui.monospace(format!(
                 "In-Out {}",
@@ -106,10 +122,33 @@ pub enum TransportKey {
     End,
     PreviousEdit,
     NextEdit,
+    /// Plays the marked range once.
+    PlayInToOut,
+    /// Plays from a little before the playhead to a little after, then goes back to it.
+    PlayAround,
+    ToggleLoop,
 }
 
-pub fn handle_key(player: &mut Player, key: TransportKey) {
+/// Acts on `player`, whose monitor has `marks`.
+pub fn handle_key(player: &mut Player, key: TransportKey, marks: Marks) {
     match key {
+        TransportKey::PlayInToOut => {
+            player.play_range(marks.range(player.duration()), None);
+        }
+        TransportKey::PlayAround => {
+            let timebase = player.sequence().timebase;
+            let second = Timebase::new(1, 1).map_or(Ticks::ZERO, |seconds| {
+                Ticks(i64::from(PREROLL_SECONDS)).rescale(seconds, timebase)
+            });
+            let position = player.position();
+            let start = (position - second).max(Ticks::ZERO);
+            let end = (position + second).min(player.duration());
+            player.play_range(start..end, Some(position));
+        }
+        TransportKey::ToggleLoop => {
+            let range = (!player.is_looping()).then(|| marks.range(player.duration()));
+            player.set_looping(range);
+        }
         TransportKey::Toggle => player.toggle(),
         TransportKey::Forward => player.shuttle(faster(player.rate(), 1)),
         TransportKey::Reverse => player.shuttle(faster(player.rate(), -1)),

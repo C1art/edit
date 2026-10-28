@@ -52,11 +52,17 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
             Focus::Source => editor
                 .source
                 .as_mut()
-                .map(|source| &mut source.viewer.player),
-            Focus::Program => editor.program.as_mut().map(|program| &mut program.player),
+                .map(|source| (&mut source.viewer.player, source.marks)),
+            Focus::Program => {
+                let marks = editor.timeline.sequence().marks;
+                editor
+                    .program
+                    .as_mut()
+                    .map(|program| (&mut program.player, marks))
+            }
         };
-        if let Some(player) = player {
-            transport::handle_key(player, key);
+        if let Some((player, marks)) = player {
+            transport::handle_key(player, key, marks);
         }
         return;
     }

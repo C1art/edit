@@ -98,10 +98,13 @@ pub enum Command {
     GoToEnd,
     PreviousEdit,
     NextEdit,
+    PlayInToOut,
+    PlayAround,
+    ToggleLoop,
 }
 
 impl Command {
-    pub const ALL: [Self; 91] = [
+    pub const ALL: [Self; 94] = [
         Self::NewProject,
         Self::OpenProject,
         Self::Save,
@@ -193,6 +196,9 @@ impl Command {
         Self::GoToEnd,
         Self::PreviousEdit,
         Self::NextEdit,
+        Self::PlayInToOut,
+        Self::PlayAround,
+        Self::ToggleLoop,
     ];
 
     /// How the command is written in the shortcuts file, which must never change or saved
@@ -305,6 +311,9 @@ impl Command {
             Self::GoToEnd => ("go_to_end", "Go to End"),
             Self::PreviousEdit => ("previous_edit", "Go to Previous Edit Point"),
             Self::NextEdit => ("next_edit", "Go to Next Edit Point"),
+            Self::PlayInToOut => ("play_in_to_out", "Play In to Out"),
+            Self::PlayAround => ("play_around", "Play Around"),
+            Self::ToggleLoop => ("toggle_loop", "Loop Playback"),
         }
     }
 
@@ -348,9 +357,8 @@ impl Command {
             | SlipTool
             | SlideTool => "Tools",
             PlayStop | ShuttleLeft | ShuttleStop | ShuttleRight | StepBack | StepForward
-            | StepBackFive | StepForwardFive | GoToStart | GoToEnd | PreviousEdit | NextEdit => {
-                "Playback"
-            }
+            | StepBackFive | StepForwardFive | GoToStart | GoToEnd | PreviousEdit | NextEdit
+            | PlayInToOut | PlayAround | ToggleLoop => "Playback",
         }
     }
 
@@ -455,6 +463,9 @@ impl Command {
             Self::GoToEnd => vec![plain(Key::End)],
             Self::PreviousEdit => vec![plain(Key::ArrowUp)],
             Self::NextEdit => vec![plain(Key::ArrowDown)],
+            Self::PlayInToOut => vec![ctrl_shift(Key::Space)],
+            Self::PlayAround => vec![shift(Key::K)],
+            Self::ToggleLoop => vec![ctrl_shift(Key::L)],
         }
     }
 
@@ -488,6 +499,9 @@ impl Command {
             Self::GoToEnd => TransportKey::End,
             Self::PreviousEdit => TransportKey::PreviousEdit,
             Self::NextEdit => TransportKey::NextEdit,
+            Self::PlayInToOut => TransportKey::PlayInToOut,
+            Self::PlayAround => TransportKey::PlayAround,
+            Self::ToggleLoop => TransportKey::ToggleLoop,
             _ => return None,
         })
     }
