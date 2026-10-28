@@ -1,0 +1,222 @@
+use std::path::Path;
+
+use timeline::{FrameRate, Ticks, Timebase};
+
+use crate::ffi::{
+    Decoder, Frame, InputContext, Packet, Received, SampleConverter, Scaler, OUTPUT_CHANNELS,
+};
+use crate::seek_trim::SeekTrim;
+use crate::{AudioBuffer, DecodedFrame, MediaError, StreamKind, VideoFrame};
+
+/// FFmpeg's `AV_TIME_BASE`, used for container-level start time, duration and seeking.
+const MICROSECONDS: Timebase = match Timebase::new(1, 1_000_000) {
+    Some(timebase) => timebase,
+    None => unreachable!(),
+};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceInfo {
+    /// In the reader's output timebase; `None` when the container doesn't declare it.
+    pub duration: Option<Ticks>,
+    pub video: Option<VideoInfo>,
+    pub has_audio: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VideoInfo {
+    pub frame_rate: Option<FrameRate>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReadState {
+    Reading,
+    Draining,
+    Finished,
+}
+
+struct StreamDecoder<C> {
+    index: usize,
+    timebase: Timebase,
+    decoder: Decoder,
+    converter: C,
+    /// Fallback timestamp for frames the container leaves unstamped.
+    next_pts: Ticks,
+}
+
+impl<C: Default> StreamDecoder<C> {
+    fn open(input: &InputContext, kind: StreamKind) -> Result<Option<Self>, MediaError> {
+        let Some(index) = input.best_stream(kind) else {
+            return Ok(None);
+        };
+        let timebase = input.stream_timebase(index).ok_or(MediaError::NoDecoder)?;
+        Ok(Some(Self {
+            index,
+            timebase,
+            decoder: Decoder::open(input, index)?,
+            converter: C::default(),
+            next_pts: Ticks::ZERO,
+        }))
+    }
+}
+
+/// Demuxes and decodes the best video and audio stream of a file. All calls block on file
+/// I/O and decoding, so the reader belongs on a worker thread.
+pub struct MediaReader {
+    input: InputContext,
+    video: Option<StreamDecoder<Scaler>>,
+    audio: Option<StreamDecoder<SampleConverter>>,
+    packet: Packet,
+    frame: Frame,
+    timebase: Timebase,
+    /// Container start time in `timebase`, subtracted so that media time starts at zero.
+    start: Ticks,
+    trim: SeekTrim,
+    state: ReadState,
+    info: SourceInfo,
+}
+
+impl MediaReader {
+    /// Timestamps of decoded frames, seeks and the reported duration are all in `timebase`.
+    pub fn open(path: &Path, timebase: Timebase) -> Result<Self, MediaError> {
+        let input = InputContext::open(path)?;
+        let video = StreamDecoder::<Scaler>::open(&input, StreamKind::Video)?;
+        let audio = StreamDecoder::<SampleConverter>::open(&input, StreamKind::Audio)?;
+        if video.is_none() && audio.is_none() {
+            return Err(MediaError::NoPlayableStream);
+        }
+        let to_ticks = |micros: i64| Ticks(micros).rescale(MICROSECONDS, timebase);
+        let info = SourceInfo {
+            duration: input.duration().map(to_ticks),
+            video: video.as_ref().map(|video| VideoInfo {
+                frame_rate: input
+                    .frame_rate(video.index)
+                    .and_then(|(num, den)| FrameRate::new(num, den)),
+            }),
+            has_audio: audio.is_some(),
+        };
+        Ok(Self {
+            start: input.start_time().map_or(Ticks::ZERO, to_ticks),
+            input,
+            video,
+            audio,
+            packet: Packet::new()?,
+            frame: Frame::new()?,
+            timebase,
+            trim: SeekTrim::new(timebase),
+            state: ReadState::Reading,
+            info,
+        })
+    }
+
+    pub fn info(&self) -> &SourceInfo {
+        &self.info
+    }
+
+    /// Positions the reader so that the next frames are the picture showing at `position`
+    /// and the audio starting exactly there.
+    pub fn seek(&mut self, position: Ticks) -> Result<(), MediaError> {
+        let target = (position + self.start).rescale(self.timebase, MICROSECONDS);
+        self.input.seek(target.0)?;
+        if let Some(video) = &mut self.video {
+            video.decoder.flush();
+        }
+        if let Some(audio) = &mut self.audio {
+            audio.decoder.flush();
+        }
+        self.trim.reset(position);
+        self.state = ReadState::Reading;
+        Ok(())
+    }
+
+    /// Returns frames in decode order, interleaving video and audio; `None` at end of media.
+    pub fn next_frame(&mut self) -> Result<Option<DecodedFrame>, MediaError> {
+        loop {
+            if let Some(frame) = self.trim.pop() {
+                return Ok(Some(frame));
+            }
+            match self.state {
+                ReadState::Finished => return Ok(None),
+                ReadState::Draining => {
+                    self.decode(None)?;
+                    self.trim.finish();
+                    self.state = ReadState::Finished;
+                }
+                ReadState::Reading => {
+                    if self.input.read_packet(&mut self.packet)? {
+                        let index = self.packet.stream_index();
+                        self.decode(index)?;
+                    } else {
+                        self.state = ReadState::Draining;
+                    }
+                }
+            }
+        }
+    }
+
+    /// Feeds the current packet to the decoder of stream `index`, or drains both decoders
+    /// when `index` is `None`.
+    fn decode(&mut self, index: Option<usize>) -> Result<(), MediaError> {
+        let draining = index.is_none();
+        let packet = (!draining).then_some(&self.packet);
+        let clock = Clock {
+            output: self.timebase,
+            start: self.start,
+        };
+        if let Some(video) = self
+            .video
+            .as_mut()
+            .filter(|v| draining || index == Some(v.index))
+        {
+            video.decoder.send_packet(packet)?;
+            while let Received::Frame = video.decoder.receive_frame(&mut self.frame)? {
+                let pts = clock.pts(&self.frame, video.timebase, video.next_pts);
+                let (width, height, pixels) =
+                    video.converter.convert(&video.decoder, &self.frame)?;
+                self.frame.unref();
+                video.next_pts = pts;
+                self.trim.push_video(VideoFrame {
+                    pts,
+                    width,
+                    height,
+                    pixels,
+                });
+            }
+        }
+        if let Some(audio) = self
+            .audio
+            .as_mut()
+            .filter(|a| draining || index == Some(a.index))
+        {
+            audio.decoder.send_packet(packet)?;
+            while let Received::Frame = audio.decoder.receive_frame(&mut self.frame)? {
+                let pts = clock.pts(&self.frame, audio.timebase, audio.next_pts);
+                let (sample_rate, samples) =
+                    audio.converter.convert(&audio.decoder, &self.frame)?;
+                self.frame.unref();
+                let buffer = AudioBuffer {
+                    pts,
+                    sample_rate,
+                    channels: OUTPUT_CHANNELS,
+                    samples,
+                };
+                audio.next_pts = buffer.end(self.timebase);
+                self.trim.push_audio(buffer);
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy)]
+struct Clock {
+    output: Timebase,
+    start: Ticks,
+}
+
+impl Clock {
+    fn pts(self, frame: &Frame, stream: Timebase, fallback: Ticks) -> Ticks {
+        frame.timestamp().map_or(fallback, |ts| {
+            Ticks(ts).rescale(stream, self.output) - self.start
+        })
+    }
+}

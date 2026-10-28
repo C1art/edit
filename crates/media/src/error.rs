@@ -9,6 +9,10 @@ pub enum MediaError {
         code: i32,
         message: String,
     },
+    NoPlayableStream,
+    NoDecoder,
+    InvalidFrame,
+    OutOfMemory,
 }
 
 impl fmt::Display for MediaError {
@@ -18,6 +22,10 @@ impl fmt::Display for MediaError {
                 write!(f, "path cannot be passed to FFmpeg: {}", path.display())
             }
             Self::Ffmpeg { code, message } => write!(f, "FFmpeg error {code}: {message}"),
+            Self::NoPlayableStream => f.write_str("file has no video or audio stream"),
+            Self::NoDecoder => f.write_str("no decoder available for the stream's codec"),
+            Self::InvalidFrame => f.write_str("decoder produced a frame that cannot be converted"),
+            Self::OutOfMemory => f.write_str("FFmpeg could not allocate memory"),
         }
     }
 }

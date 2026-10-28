@@ -6,10 +6,14 @@ use ffmpeg_sys_next as sys;
 use timeline::{Ticks, Timebase};
 
 use super::error::check;
+use super::Packet;
 use crate::{MediaError, StreamInfo, StreamKind};
 
 /// An opened demuxer whose stream info has been read.
 pub(crate) struct InputContext(NonNull<sys::AVFormatContext>);
+
+// SAFETY: the demuxer is exclusively owned and only mutated through `&mut self`.
+unsafe impl Send for InputContext {}
 
 impl InputContext {
     pub(crate) fn open(path: &Path) -> Result<Self, MediaError> {
@@ -31,27 +35,92 @@ impl InputContext {
         Ok(input)
     }
 
-    pub(crate) fn streams(&self) -> Vec<StreamInfo> {
+    pub(super) fn stream(&self, index: usize) -> Option<*mut sys::AVStream> {
+        self.raw_streams().get(index).copied()
+    }
+
+    fn raw_streams(&self) -> &[*mut sys::AVStream] {
         // SAFETY: the context is open, so `streams` points to `nb_streams` valid,
         // non-null stream pointers that live as long as `self`.
-        let streams = unsafe {
+        unsafe {
             let context = self.0.as_ref();
             if context.streams.is_null() {
-                return Vec::new();
+                return &[];
             }
             std::slice::from_raw_parts(context.streams, context.nb_streams as usize)
+        }
+    }
+
+    pub(crate) fn best_stream(&self, kind: StreamKind) -> Option<usize> {
+        let media_type = match kind {
+            StreamKind::Video => sys::AVMediaType::AVMEDIA_TYPE_VIDEO,
+            StreamKind::Audio => sys::AVMediaType::AVMEDIA_TYPE_AUDIO,
+            StreamKind::Subtitle => sys::AVMediaType::AVMEDIA_TYPE_SUBTITLE,
+            StreamKind::Other => return None,
         };
-        streams
+        // SAFETY: the context is open; passing null for `decoder_ret` is allowed.
+        let index = unsafe {
+            sys::av_find_best_stream(self.0.as_ptr(), media_type, -1, -1, ptr::null_mut(), 0)
+        };
+        usize::try_from(index).ok()
+    }
+
+    pub(crate) fn stream_timebase(&self, index: usize) -> Option<Timebase> {
+        // SAFETY: `stream` returns valid stream pointers owned by the open context.
+        let time_base = unsafe { (*self.stream(index)?).time_base };
+        rational_timebase(time_base)
+    }
+
+    /// The stream's average frame rate as `(num, den)`, when the container declares one.
+    pub(crate) fn frame_rate(&self, index: usize) -> Option<(u32, u32)> {
+        // SAFETY: `stream` returns valid stream pointers owned by the open context.
+        let rate = unsafe { (*self.stream(index)?).avg_frame_rate };
+        Some((u32::try_from(rate.num).ok()?, u32::try_from(rate.den).ok()?))
+    }
+
+    /// In `AV_TIME_BASE` units.
+    pub(crate) fn start_time(&self) -> Option<i64> {
+        // SAFETY: the context is open.
+        let start = unsafe { self.0.as_ref() }.start_time;
+        (start != sys::AV_NOPTS_VALUE).then_some(start)
+    }
+
+    /// In `AV_TIME_BASE` units.
+    pub(crate) fn duration(&self) -> Option<i64> {
+        // SAFETY: the context is open.
+        let duration = unsafe { self.0.as_ref() }.duration;
+        (duration != sys::AV_NOPTS_VALUE && duration > 0).then_some(duration)
+    }
+
+    /// Returns `false` at end of file.
+    pub(crate) fn read_packet(&mut self, packet: &mut Packet) -> Result<bool, MediaError> {
+        packet.unref();
+        // SAFETY: the context is open and `packet` is a valid, blank packet.
+        let code = unsafe { sys::av_read_frame(self.0.as_ptr(), packet.as_mut_ptr()) };
+        if code == sys::AVERROR_EOF {
+            return Ok(false);
+        }
+        check(code).map(|_| true)
+    }
+
+    /// Seeks to the last keyframe at or before `timestamp`, given in `AV_TIME_BASE` units.
+    pub(crate) fn seek(&mut self, timestamp: i64) -> Result<(), MediaError> {
+        // SAFETY: the context is open; stream index -1 selects AV_TIME_BASE units.
+        check(unsafe {
+            sys::avformat_seek_file(self.0.as_ptr(), -1, i64::MIN, timestamp, timestamp, 0)
+        })
+        .map(drop)
+    }
+
+    pub(crate) fn streams(&self) -> Vec<StreamInfo> {
+        self.raw_streams()
             .iter()
             .enumerate()
             .filter_map(|(index, &stream)| {
                 // SAFETY: each entry is a valid stream with non-null `codecpar`, owned
                 // by the context and not mutated while `&self` is held.
                 let (stream, codecpar) = unsafe { (&*stream, &*(*stream).codecpar) };
-                let timebase = Timebase::new(
-                    u32::try_from(stream.time_base.num).ok()?,
-                    u32::try_from(stream.time_base.den).ok()?,
-                )?;
+                let timebase = rational_timebase(stream.time_base)?;
                 Some(StreamInfo {
                     index,
                     kind: stream_kind(codecpar.codec_type),
@@ -70,6 +139,13 @@ impl Drop for InputContext {
         // SAFETY: the context came from avformat_open_input and is closed exactly once here.
         unsafe { sys::avformat_close_input(&mut raw) };
     }
+}
+
+fn rational_timebase(rational: sys::AVRational) -> Option<Timebase> {
+    Timebase::new(
+        u32::try_from(rational.num).ok()?,
+        u32::try_from(rational.den).ok()?,
+    )
 }
 
 fn stream_kind(media_type: sys::AVMediaType) -> StreamKind {
