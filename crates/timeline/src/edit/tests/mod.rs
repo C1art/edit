@@ -518,4 +518,5 @@ mod remap;
 mod replace;
 mod speed;
 mod submix;
+mod through;
 mod track;

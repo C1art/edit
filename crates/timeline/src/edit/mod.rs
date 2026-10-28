@@ -27,6 +27,7 @@ mod speed;
 mod structure;
 mod submix;
 mod sync;
+mod through;
 mod trim;
 
 #[cfg(test)]
@@ -66,6 +67,7 @@ pub use structure::{
 };
 pub use submix::{AddSubmix, RemoveSubmix, SetSubmix, SetTrackOutput};
 pub use sync::{IntoSync, SyncMethod};
+pub use through::{is_through_edit, JoinThroughEdits};
 pub use trim::{Edge, Roll, Slide, Slip, Trim, TrimMode};
 
 use crate::{preview, Edit, Sequence, Ticks};

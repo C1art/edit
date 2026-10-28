@@ -58,20 +58,21 @@ pub use color::{ColorCorrection, ColorWheel};
 pub use curves::{Curve, CurvePoint, Curves, CURVE_RANGE};
 pub use ducking::{active_spans, ducked_volume};
 pub use edit::{
-    clamp_delta, AddBin, AddEdits, AddFrameHold, AddGenerated, AddMarker, AddNest,
+    clamp_delta, is_through_edit, AddBin, AddEdits, AddFrameHold, AddGenerated, AddMarker, AddNest,
     AddSpeedKeyframe, AddSubmix, AddTrack, Attribute, AutoDuck, ClipSound, Clipboard, CloseGap,
     CreateMulticam, Edge, ExtractMarked, FlattenMulticam, FrameFit, ImportMedia, InNest,
-    InterpretFootage, IntoSync, Lift, LiftMarked, MakeSubclip, MarkerOwner, MoveClips, MoveMode,
-    MoveToBin, NestClips, NormalizeClipGains, PasteAttributes, PasteClips, PlaceClip, PlaceMode,
-    RateStretch, Razor, RazorTarget, RelinkMedia, RemoveAttributes, RemoveBin, RemoveMarker,
-    RemoveMedia, RemoveSpeedKeyframe, RemoveSubmix, RemoveTimeRemap, RemoveTrack, RenameBin,
-    RenameMedia, RenameTrack, ReplaceClip, RippleDelete, RippleTrimToPlayhead, Roll, SetCaptions,
-    SetClipAudioEffects, SetClipGain, SetClipLabel, SetClipLook, SetClipSpeed, SetClipVolume,
-    SetClipsEnabled, SetClipsSound, SetGenerator, SetGrouped, SetLinked, SetLinkedSelection,
-    SetMarks, SetMasterEffects, SetMasterGain, SetProxy, SetSegmentSpeed, SetSequenceFormat,
-    SetSubmix, SetTimeInterpolation, SetToFrameSize, SetTrackAutomation, SetTrackEffects,
-    SetTrackMix, SetTrackOutput, SetTrackSwitch, SetTransition, Slide, Slip, SwitchAngle,
-    SyncMethod, TrackSwitch, Trim, TrimMode, Unlinked, UpdateMarker,
+    InterpretFootage, IntoSync, JoinThroughEdits, Lift, LiftMarked, MakeSubclip, MarkerOwner,
+    MoveClips, MoveMode, MoveToBin, NestClips, NormalizeClipGains, PasteAttributes, PasteClips,
+    PlaceClip, PlaceMode, RateStretch, Razor, RazorTarget, RelinkMedia, RemoveAttributes,
+    RemoveBin, RemoveMarker, RemoveMedia, RemoveSpeedKeyframe, RemoveSubmix, RemoveTimeRemap,
+    RemoveTrack, RenameBin, RenameMedia, RenameTrack, ReplaceClip, RippleDelete,
+    RippleTrimToPlayhead, Roll, SetCaptions, SetClipAudioEffects, SetClipGain, SetClipLabel,
+    SetClipLook, SetClipSpeed, SetClipVolume, SetClipsEnabled, SetClipsSound, SetGenerator,
+    SetGrouped, SetLinked, SetLinkedSelection, SetMarks, SetMasterEffects, SetMasterGain, SetProxy,
+    SetSegmentSpeed, SetSequenceFormat, SetSubmix, SetTimeInterpolation, SetToFrameSize,
+    SetTrackAutomation, SetTrackEffects, SetTrackMix, SetTrackOutput, SetTrackSwitch,
+    SetTransition, Slide, Slip, SwitchAngle, SyncMethod, TrackSwitch, Trim, TrimMode, Unlinked,
+    UpdateMarker,
 };
 pub use edl::to_edl;
 pub use effect::{
