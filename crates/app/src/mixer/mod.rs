@@ -1,4 +1,5 @@
 mod automation;
+mod inserts;
 
 use std::collections::HashMap;
 
@@ -42,6 +43,7 @@ pub struct Mixer {
     adjusting: Option<Adjusting>,
     modes: HashMap<TrackRef, AutomationMode>,
     passes: HashMap<TrackRef, Pass>,
+    inserts: inserts::Inserts,
 }
 
 impl Mixer {
@@ -107,11 +109,18 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
             strip(editor, ui, Channel::Master);
         });
     });
+    egui::ScrollArea::vertical()
+        .id_salt("track inserts")
+        .show(ui, |ui| inserts::panel(editor, ui));
 }
 
 fn strip(editor: &mut Editor, ui: &mut egui::Ui, channel: Channel) {
     let sequence = editor.timeline.sequence();
     let playhead = editor.playhead();
+    let insert_count = match channel {
+        Channel::Track(track) => sequence.track(track).map_or(0, |track| track.effects.len()),
+        Channel::Master => 0,
+    };
     let (name, mut volume, mut pan, switches, meter, automation) = match channel {
         Channel::Track(track_ref) => {
             let Some(track) = sequence.track(track_ref) else {
@@ -162,6 +171,7 @@ fn strip(editor: &mut Editor, ui: &mut egui::Ui, channel: Channel) {
         ui.label(title);
         if let Channel::Track(track) = channel {
             mode_picker(ui, &mut editor.mixer, track);
+            inserts::toggle(editor, ui, track, insert_count);
         }
         ui.horizontal(|ui| {
             ui.spacing_mut().slider_width = STRIP_HEIGHT;

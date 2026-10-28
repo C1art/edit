@@ -32,6 +32,7 @@ use look::Rows;
 pub use color::LutSlot;
 pub use mask_overlay::mask_overlay;
 pub use motion_overlay::motion_overlay;
+pub(crate) use sound::track_effect_controls;
 pub use transitions::apply_default_transition;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

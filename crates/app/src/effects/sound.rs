@@ -1,7 +1,8 @@
 use egui::RichText;
-use timeline::{AudioEffect, Gain, Param};
+use timeline::{AudioEffect, Gain, Param, Ticks};
 
 use super::look::{Output, Rows};
+use crate::mixer::Change;
 
 const GAIN_DB: std::ops::RangeInclusive<f32> = -24.0..=24.0;
 const HEARING_HZ: std::ops::RangeInclusive<f32> = 20.0..=20_000.0;
@@ -97,6 +98,17 @@ pub(super) fn effect_controls(
             });
         });
     rows.output
+}
+
+/// Edits a track's inserts, keyframed over sequence time at `time`. Returns the change
+/// made and a keyframe to move the playhead to.
+pub(crate) fn track_effect_controls(
+    ui: &mut egui::Ui,
+    effects: &mut Vec<AudioEffect>,
+    time: Ticks,
+) -> (Option<Change>, Option<Ticks>) {
+    let output = effect_controls(ui, effects, Rows::new(time, None));
+    (output.change, output.seek)
 }
 
 fn effect_rows(ui: &mut egui::Ui, rows: &mut Rows, effect: &mut AudioEffect) {
