@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AudioEffect, AudioType, Bin, Captions, FrameRate, Gain, GroupId, Label, Look, Marker, Marks,
-    MediaItem, Param, SourceId, Speed, Submix, Ticks, TimeInterpolation, TimeRemap, Timebase,
-    Transition,
+    AudioEffect, AudioType, Bin, Captions, FrameRate, Gain, GroupId, Label, LinkedSelection, Look,
+    Marker, Marks, MediaItem, Param, SourceId, Speed, Submix, Ticks, TimeInterpolation, TimeRemap,
+    Timebase, Transition,
 };
 
 pub use crate::track::Track;
@@ -321,6 +321,8 @@ pub struct Sequence {
     #[serde(default)]
     pub captions: Captions,
     #[serde(default)]
+    pub linked_selection: LinkedSelection,
+    #[serde(default)]
     pub(crate) ids: IdGenerator,
 }
 
@@ -339,6 +341,7 @@ impl Sequence {
             markers: Vec::new(),
             marks: Marks::default(),
             captions: Captions::default(),
+            linked_selection: LinkedSelection::default(),
             ids: IdGenerator::default(),
         }
     }
@@ -403,19 +406,6 @@ impl Sequence {
 
     pub fn media_item(&self, id: SourceId) -> Option<&MediaItem> {
         self.media.iter().find(|item| item.id == id)
-    }
-
-    /// `ids` plus every clip linked to one of them, without duplicates.
-    pub fn with_links(&self, ids: &[ClipId]) -> Vec<ClipId> {
-        let links: Vec<LinkId> = ids.iter().filter_map(|&id| self.clip(id)?.1.link).collect();
-        let mut all: Vec<ClipId> = self
-            .tracks()
-            .flat_map(|(_, track)| &track.clips)
-            .filter(|clip| ids.contains(&clip.id) || clip.link.is_some_and(|l| links.contains(&l)))
-            .map(|clip| clip.id)
-            .collect();
-        all.sort_unstable();
-        all
     }
 
     /// This sequence with each media item's proxy in place of its file, for decoding

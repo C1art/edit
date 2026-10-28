@@ -119,7 +119,7 @@ impl Edit for SwitchAngle {
                 return Err(TimelineError::NothingToEdit);
             }
             let tracks: Vec<_> = sequence
-                .with_links(&[self.clip])
+                .links_of(&[self.clip])
                 .into_iter()
                 .filter_map(|id| sequence.clip(id).map(|(track, _)| track))
                 .collect();
@@ -156,7 +156,7 @@ impl Edit for FlattenMulticam {
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
         let mut relinks = HashMap::new();
         let mut flattened = false;
-        for id in sequence.with_links(&self.clips) {
+        for id in sequence.links_of(&self.clips) {
             let Some((track, pieces)) = flat_pieces(sequence, id) else {
                 continue;
             };

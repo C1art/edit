@@ -15,6 +15,7 @@ mod generator;
 mod group;
 mod history;
 mod label;
+mod links;
 mod look;
 mod marker;
 mod marks;
@@ -61,11 +62,11 @@ pub use edit::{
     RemoveSpeedKeyframe, RemoveSubmix, RemoveTimeRemap, RemoveTrack, RenameBin, RenameMedia,
     RenameTrack, ReplaceClip, RippleDelete, RippleTrimToPlayhead, Roll, SetCaptions,
     SetClipAudioEffects, SetClipGain, SetClipLabel, SetClipLook, SetClipSpeed, SetClipVolume,
-    SetClipsEnabled, SetClipsSound, SetGenerator, SetGrouped, SetLinked, SetMarks,
-    SetMasterEffects, SetMasterGain, SetProxy, SetSegmentSpeed, SetSequenceFormat, SetSubmix,
-    SetTimeInterpolation, SetToFrameSize, SetTrackAutomation, SetTrackEffects, SetTrackMix,
-    SetTrackOutput, SetTrackSwitch, SetTransition, Slide, Slip, SwitchAngle, TrackSwitch, Trim,
-    TrimMode, UpdateMarker,
+    SetClipsEnabled, SetClipsSound, SetGenerator, SetGrouped, SetLinked, SetLinkedSelection,
+    SetMarks, SetMasterEffects, SetMasterGain, SetProxy, SetSegmentSpeed, SetSequenceFormat,
+    SetSubmix, SetTimeInterpolation, SetToFrameSize, SetTrackAutomation, SetTrackEffects,
+    SetTrackMix, SetTrackOutput, SetTrackSwitch, SetTransition, Slide, Slip, SwitchAngle,
+    TrackSwitch, Trim, TrimMode, UpdateMarker,
 };
 pub use edl::to_edl;
 pub use effect::{
@@ -76,6 +77,7 @@ pub use generator::{Generator, TextAlign, TextStroke, Title, TitleFont, GENERATE
 pub use group::GroupId;
 pub use history::{preview, Edit, EditCommand, Timeline};
 pub use label::Label;
+pub use links::LinkedSelection;
 pub use look::{Crop, Look, Motion};
 pub use marker::{Marker, MarkerColor, MarkerId};
 pub use marks::Marks;

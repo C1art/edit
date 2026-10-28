@@ -46,7 +46,7 @@ pub use levels::{
     AutoDuck, NormalizeClipGains, SetClipAudioEffects, SetClipGain, SetClipVolume,
     SetMasterEffects, SetMasterGain, SetTrackAutomation, SetTrackEffects, SetTrackMix,
 };
-pub use link::SetLinked;
+pub use link::{SetLinked, SetLinkedSelection};
 pub use look::{SetClipLook, SetTransition};
 pub use marker::{AddMarker, MarkerOwner, RemoveMarker, UpdateMarker};
 pub use media::{MakeSubclip, RelinkMedia, RenameMedia};

@@ -1,4 +1,5 @@
 use super::*;
+use crate::LinkedSelection;
 
 #[test]
 fn unlinking_frees_partners_and_linking_joins_whole_groups() {
@@ -27,4 +28,34 @@ fn unlinking_frees_partners_and_linking_joins_whole_groups() {
     joined.sort_unstable();
     assert_eq!(timeline.sequence().with_links(&[video]), joined);
     assert_eq!(timeline.apply(join), Err(TimelineError::NothingToEdit));
+}
+
+#[test]
+fn with_linked_selection_off_a_clip_moves_alone_and_slips_out_of_sync() {
+    let (mut timeline, source) = timeline();
+    timeline
+        .apply(place(source, 0, 0, 100, PlaceMode::Overwrite))
+        .unwrap();
+    let (video, audio) = (clip_on(&timeline, V1, 0), clip_on(&timeline, A1, 0));
+    timeline
+        .apply(SetLinkedSelection(LinkedSelection::Apart))
+        .unwrap();
+    timeline
+        .apply(MoveClips {
+            clips: vec![video],
+            delta: Ticks(10),
+            video_tracks: 0,
+            audio_tracks: 0,
+        })
+        .unwrap();
+    assert_eq!(spans(&timeline, V1), [(10, 110, 0)]);
+    assert_eq!(spans(&timeline, A1), [(0, 100, 0)]);
+    let offset = |id| {
+        let sequence = timeline.sequence();
+        sequence.sync_offset(sequence.clip(id).unwrap().1)
+    };
+    assert_eq!(
+        (offset(video), offset(audio)),
+        (Some(Ticks(10)), Some(Ticks(-10)))
+    );
 }

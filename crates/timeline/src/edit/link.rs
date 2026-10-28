@@ -1,5 +1,5 @@
 use crate::edit::ops;
-use crate::{ClipId, Edit, LinkId, Sequence, TimelineError};
+use crate::{ClipId, Edit, LinkId, LinkedSelection, Sequence, TimelineError};
 
 /// Links `clips` and the clips already linked to them so they move, trim and delete
 /// together, or unlinks all of those from one another.
@@ -19,7 +19,7 @@ impl Edit for SetLinked {
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
-        let clips = sequence.with_links(&self.clips);
+        let clips = sequence.links_of(&self.clips);
         let mut links = Vec::new();
         for &id in &clips {
             links.push(
@@ -45,6 +45,24 @@ impl Edit for SetLinked {
         for id in clips {
             ops::clip_mut(sequence, id)?.link = link;
         }
+        Ok(())
+    }
+}
+
+/// Turns Premiere's Linked Selection on or off for the sequence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SetLinkedSelection(pub LinkedSelection);
+
+impl Edit for SetLinkedSelection {
+    fn name(&self) -> &'static str {
+        "Linked Selection"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        if sequence.linked_selection == self.0 {
+            return Err(TimelineError::NothingToEdit);
+        }
+        sequence.linked_selection = self.0;
         Ok(())
     }
 }
