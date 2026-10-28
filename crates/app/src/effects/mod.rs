@@ -5,6 +5,7 @@ mod lane;
 mod look;
 mod mask_overlay;
 mod masks;
+mod picture_frame;
 mod remap;
 mod secondary;
 mod sound;

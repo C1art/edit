@@ -3,7 +3,8 @@ use timeline::{
     flatten_path, key_path, path_side_point, split_path_side, Mask, PathVertex, Ticks, VertexAt,
 };
 
-use super::{Grip, PictureFrame, GRAB_RADIUS, HANDLE_RADIUS, OUTLINE};
+use super::{Grip, GRAB_RADIUS, HANDLE_RADIUS, OUTLINE};
+use crate::effects::picture_frame::PictureFrame;
 
 /// Points drawn along each side of a path, and tried when looking for one under the
 /// pointer.
