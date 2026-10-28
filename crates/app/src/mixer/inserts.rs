@@ -1,5 +1,5 @@
 use egui::RichText;
-use timeline::{AudioEffect, Edit, SetTrackEffects};
+use timeline::{AudioEffect, Edit, SetMasterEffects, SetTrackEffects};
 
 use super::{live, submixes, Change, Channel};
 use crate::editor::Editor;
@@ -61,7 +61,7 @@ pub(super) fn panel(editor: &mut Editor, ui: &mut egui::Ui) {
                 settle(editor, change, edit);
             }
         }
-        Channel::Master => {}
+        Channel::Master => settle(editor, change, SetMasterEffects { effects }),
     }
 }
 
@@ -72,7 +72,7 @@ fn settle(editor: &mut Editor, change: Change, edit: impl Edit + 'static) {
     }
 }
 
-/// The strip's name and inserts; none for the master, which has none.
+/// The strip's name and inserts.
 fn owned(editor: &Editor, channel: Channel) -> Option<(String, Vec<AudioEffect>)> {
     match channel {
         Channel::Track(track) => {
@@ -83,6 +83,9 @@ fn owned(editor: &Editor, channel: Channel) -> Option<(String, Vec<AudioEffect>)
             let submix = submixes::find(editor, id)?;
             Some((submix.name.clone(), submix.effects.clone()))
         }
-        Channel::Master => None,
+        Channel::Master => Some((
+            "Master".to_owned(),
+            editor.timeline.sequence().master_effects.clone(),
+        )),
     }
 }

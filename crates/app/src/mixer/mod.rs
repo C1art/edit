@@ -135,7 +135,7 @@ fn strip(editor: &mut Editor, ui: &mut egui::Ui, channel: Channel) {
     let insert_count = match channel {
         Channel::Track(track) => sequence.track(track).map_or(0, |track| track.effects.len()),
         Channel::Submix(id) => submixes::find(editor, id).map_or(0, |submix| submix.effects.len()),
-        Channel::Master => 0,
+        Channel::Master => sequence.master_effects.len(),
     };
     let submix_position = |id| sequence.submixes.iter().position(|submix| submix.id == id);
     let (name, mut volume, mut pan, switches, meter, automation) = match channel {
@@ -221,13 +221,11 @@ fn strip(editor: &mut Editor, ui: &mut egui::Ui, channel: Channel) {
         let missing_rows = match channel {
             Channel::Track(_) => 0.0,
             Channel::Submix(_) => 2.0,
-            Channel::Master => 3.0,
+            Channel::Master => 2.0,
         };
         let spacing = ui.spacing();
         ui.add_space(missing_rows * (spacing.interact_size.y + spacing.item_spacing.y));
-        if channel != Channel::Master {
-            inserts::toggle(editor, ui, channel, insert_count);
-        }
+        inserts::toggle(editor, ui, channel, insert_count);
         ui.horizontal(|ui| {
             ui.spacing_mut().slider_width = STRIP_HEIGHT;
             meter_bar(ui, meter.unwrap_or([METER_FLOOR; 2]));
