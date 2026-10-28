@@ -13,6 +13,7 @@ impl Edit for AddGenerated {
         match self.generator {
             Generator::ColorMatte { .. } => "New Color Matte",
             Generator::Title(_) => "New Title",
+            Generator::AdjustmentLayer => "New Adjustment Layer",
         }
     }
 
@@ -45,6 +46,7 @@ impl Edit for SetGenerator {
         match self.generator {
             Generator::ColorMatte { .. } => "Change Matte Color",
             Generator::Title(_) => "Edit Title",
+            Generator::AdjustmentLayer => "Change Adjustment Layer",
         }
     }
 

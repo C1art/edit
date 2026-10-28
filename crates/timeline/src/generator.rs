@@ -11,8 +11,12 @@ const PLACED_SECONDS: i64 = 5;
 /// Media drawn by the editor instead of read from a file.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Generator {
-    ColorMatte { color: Rgb },
+    ColorMatte {
+        color: Rgb,
+    },
     Title(Title),
+    /// Draws nothing itself; its clips' looks apply to the picture of the tracks below.
+    AdjustmentLayer,
 }
 
 impl Generator {
@@ -20,6 +24,7 @@ impl Generator {
         match self {
             Self::ColorMatte { .. } => "Color Matte",
             Self::Title(_) => "Title",
+            Self::AdjustmentLayer => "Adjustment Layer",
         }
     }
 }
