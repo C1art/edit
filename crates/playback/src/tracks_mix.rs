@@ -1,6 +1,7 @@
 use audio::SampleRate;
 use timeline::{
-    audio_fade, audio_span, clip_level, ClipId, Gain, MediaItem, Sequence, SourceId, Ticks,
+    audio_fade, audio_span, clip_level, track_automation, ClipId, Gain, MediaItem, Sequence,
+    SourceId, Ticks,
 };
 use timeline::{Timebase, Track};
 
@@ -12,7 +13,8 @@ use crate::track_audio::TrackAudio;
 use crate::PlaybackError;
 
 /// Mixes a set of audio tracks, the sequence's own or a nest's, with clip gain, track
-/// volume and balance and a master gain, into interleaved stereo at one output rate.
+/// automation, volume and balance and a master gain, into interleaved stereo at one
+/// output rate.
 pub(crate) struct TracksMix {
     sample_rate: SampleRate,
     /// One tick per output frame.
@@ -154,6 +156,13 @@ impl TracksMix {
                     [1.0, 1.0],
                     &mut self.track_mix[offset..offset + length],
                 );
+            }
+            if track.automation.is_animated() || track.automation.value() != 0.0 {
+                let (pairs, _) = self.track_mix.as_chunks_mut::<2>();
+                for (frame, pair) in (start..end).zip(pairs) {
+                    let level = track_automation(track, Ticks(frame).rescale(self.rate, timebase));
+                    pair.iter_mut().for_each(|sample| *sample *= level);
+                }
             }
             let volume = track.volume.amplitude();
             let [left, right] = track.pan.balance();
