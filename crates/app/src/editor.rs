@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use audio::AudioOutput;
 use egui::{CentralPanel, Key, KeyboardShortcut, MenuBar, Modifiers, Panel, ViewportCommand};
 use playback::Player;
-use timeline::{Sequence, Timebase, Timecode, Timeline};
+use timeline::{Sequence, Timebase, Timecode, Timeline, VideoFormat};
 
 use crate::monitor::Monitor;
 use crate::transport;
@@ -33,7 +33,10 @@ impl Editor {
             notices.push("Video disabled: the window has no wgpu renderer".to_owned());
         }
         let mut editor = Self {
-            timeline: Timeline::new(Sequence::new(Timebase::HZ_90K)),
+            timeline: Timeline::new(Sequence::with_default_tracks(
+                Timebase::HZ_90K,
+                VideoFormat::default(),
+            )),
             audio,
             monitor,
             player: None,
@@ -225,7 +228,10 @@ impl eframe::App for Editor {
             .default_size(280.0)
             .show(ui, |ui| {
                 ui.heading("Timeline");
-                ui.label(format!("{} tracks", self.timeline.sequence().tracks.len()));
+                ui.label(format!(
+                    "{} tracks",
+                    self.timeline.sequence().tracks().count()
+                ));
             });
 
         let timebase = self.timebase();
