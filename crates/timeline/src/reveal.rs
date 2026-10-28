@@ -1,4 +1,6 @@
-use crate::{Side, Transition, TransitionKind, Wipe};
+use std::f32::consts::FRAC_PI_2;
+
+use crate::{BlendMode, Side, Transition, TransitionKind, Wipe};
 
 /// How a transition shows one picture, on top of the clip's own look. Distances are
 /// fractions of the canvas.
@@ -15,6 +17,22 @@ pub struct Reveal {
     pub wipes: [Option<Wipe>; 2],
     /// How far the picture is washed out to white.
     pub wash: f32,
+    /// Turns the picture in depth.
+    pub turn: Option<Turn>,
+    /// Replaces the clip's blend mode.
+    pub blend: Option<BlendMode>,
+}
+
+/// A picture turned in depth by a transition.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Turn {
+    /// Radians: about the vertical axis with the right side coming nearer, or about the
+    /// horizontal one with the bottom coming nearer when `vertical`.
+    pub angle: f32,
+    pub vertical: bool,
+    /// Whether it turns as a face of a cube, about an axis behind its middle by half
+    /// its breadth, rather than about its middle.
+    pub cube: bool,
 }
 
 impl Reveal {
@@ -24,6 +42,8 @@ impl Reveal {
         zoom: 1.0,
         wipes: [None; 2],
         wash: 0.0,
+        turn: None,
+        blend: None,
     };
 
     const HIDDEN: Self = Self {
@@ -48,6 +68,8 @@ impl Reveal {
             zoom: self.zoom * other.zoom,
             wipes: [wipes.next(), wipes.next()],
             wash: self.wash.max(other.wash),
+            turn: self.turn.or(other.turn),
+            blend: self.blend.or(other.blend),
         }
     }
 }
@@ -93,8 +115,45 @@ impl Transition {
                 shifted(toward(from, -progress)),
                 shifted(toward(from, 1.0 - progress)),
             ),
+            TransitionKind::AdditiveDissolve => mingled(progress, BlendMode::LinearDodge),
+            TransitionKind::NonAdditiveDissolve => mingled(progress, BlendMode::Lighten),
+            TransitionKind::FlipOver => (
+                unless(crossed, turned(from, before, false)),
+                unless(!crossed, turned(from, after - 1.0, false)),
+            ),
+            TransitionKind::CubeSpin => (
+                turned(from, progress, true),
+                turned(from, progress - 1.0, true),
+            ),
             _ => incoming(Reveal::faded(progress)),
         }
+    }
+}
+
+/// Each picture at full strength through the middle, the incoming one laid on by
+/// `blend`.
+fn mingled(progress: f32, blend: BlendMode) -> (Reveal, Reveal) {
+    let incoming = Reveal {
+        blend: Some(blend),
+        ..Reveal::faded((2.0 * progress).min(1.0))
+    };
+    (Reveal::faded((2.0 * (1.0 - progress)).min(1.0)), incoming)
+}
+
+/// Turned `quarters` of a right angle away from the side the incoming picture enters
+/// from: positive toward the far side, negative toward that one.
+fn turned(from: Side, quarters: f32, cube: bool) -> Reveal {
+    let toward_far = match from {
+        Side::Right | Side::Bottom => 1.0,
+        Side::Left | Side::Top => -1.0,
+    };
+    Reveal {
+        turn: Some(Turn {
+            angle: quarters * toward_far * FRAC_PI_2,
+            vertical: matches!(from, Side::Top | Side::Bottom),
+            cube,
+        }),
+        ..Reveal::FULL
     }
 }
 
@@ -151,6 +210,26 @@ mod tests {
         assert_eq!(
             (outgoing.shift, incoming.shift),
             ([0.25, 0.0], [-0.75, 0.0])
+        );
+    }
+
+    #[test]
+    fn a_cube_turns_both_faces_away_from_the_side_the_incoming_one_enters() {
+        let spin = Transition {
+            from: Some(Side::Left),
+            ..Transition::new(TransitionKind::CubeSpin, crate::Ticks(10))
+        };
+        let angle = |reveal: Reveal| reveal.turn.map(|turn| turn.angle);
+        let (outgoing, incoming) = spin.reveals(0.5, 0.5);
+        let quarter = FRAC_PI_2 / 2.0;
+        assert_eq!(
+            (angle(outgoing), angle(incoming)),
+            (Some(-quarter), Some(quarter))
+        );
+        let (outgoing, incoming) = spin.reveals(1.0, 0.5);
+        assert_eq!(
+            (angle(outgoing), angle(incoming)),
+            (Some(-FRAC_PI_2), Some(0.0))
         );
     }
 }

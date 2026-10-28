@@ -30,6 +30,8 @@ pub enum WipePattern {
     Inset,
     /// Blocks appearing in a fixed random order.
     Blocks,
+    /// Bands across the picture, each wiping in from the opposite side to the last.
+    Bands,
 }
 
 /// Whether a wipe uncovers the incoming picture as its pattern grows, or as it shrinks:

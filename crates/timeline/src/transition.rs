@@ -33,6 +33,16 @@ pub enum TransitionKind {
     CheckerWipe,
     Inset,
     RandomBlocks,
+    /// Bands across the picture wipe in from alternate sides.
+    BandWipe,
+    /// The incoming picture is added onto the outgoing one, brightening the middle.
+    AdditiveDissolve,
+    /// The brighter of the two pictures shows at each pixel through the middle.
+    NonAdditiveDissolve,
+    /// The outgoing picture turns away edge-on, then the incoming one turns in.
+    FlipOver,
+    /// The pictures turn together as two faces of a cube.
+    CubeSpin,
     /// Audio only: a linear crossfade, which dips in loudness through the middle.
     ConstantGain,
     /// Audio only: a crossfade linear in decibels, quick to fade out and slow to fade in.
@@ -40,11 +50,15 @@ pub enum TransitionKind {
 }
 
 impl TransitionKind {
-    pub const VIDEO: [Self; 20] = [
+    pub const VIDEO: [Self; 25] = [
         Self::CrossDissolve,
+        Self::AdditiveDissolve,
+        Self::NonAdditiveDissolve,
         Self::DipToBlack,
         Self::DipToWhite,
         Self::CrossZoom,
+        Self::FlipOver,
+        Self::CubeSpin,
         Self::IrisBox,
         Self::IrisRound,
         Self::IrisDiamond,
@@ -59,6 +73,7 @@ impl TransitionKind {
         Self::CheckerWipe,
         Self::Inset,
         Self::RandomBlocks,
+        Self::BandWipe,
         Self::Slide,
         Self::Push,
     ];
@@ -91,6 +106,11 @@ impl TransitionKind {
             Self::CheckerWipe => "Checker Wipe",
             Self::Inset => "Inset",
             Self::RandomBlocks => "Random Blocks",
+            Self::BandWipe => "Band Wipe",
+            Self::AdditiveDissolve => "Additive Dissolve",
+            Self::NonAdditiveDissolve => "Non-Additive Dissolve",
+            Self::FlipOver => "Flip Over",
+            Self::CubeSpin => "Cube Spin",
             Self::ConstantGain => "Constant Gain",
             Self::ExponentialFade => "Exponential Fade",
         }
@@ -121,6 +141,7 @@ impl TransitionKind {
             Self::CheckerWipe => WipePattern::Checker,
             Self::Inset => WipePattern::Inset,
             Self::RandomBlocks => WipePattern::Blocks,
+            Self::BandWipe => WipePattern::Bands,
             _ => return None,
         })
     }
@@ -137,12 +158,15 @@ impl TransitionKind {
                 | Self::VenetianBlinds
                 | Self::CheckerWipe
                 | Self::Inset
+                | Self::BandWipe
+                | Self::FlipOver
+                | Self::CubeSpin
         )
     }
 
     pub fn default_side(self) -> Side {
         match self {
-            Self::Slide | Self::Push => Side::Right,
+            Self::Slide | Self::Push | Self::FlipOver | Self::CubeSpin => Side::Right,
             Self::VenetianBlinds => Side::Top,
             _ => Side::Left,
         }

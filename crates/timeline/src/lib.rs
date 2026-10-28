@@ -115,7 +115,7 @@ pub use plan::{cut_window, track_layers_at, PlannedLayer};
 pub use preset::EffectPreset;
 pub use remap::{Anchor, TimeRemap};
 pub use render_segments::{render_segments, segment_content};
-pub use reveal::Reveal;
+pub use reveal::{Reveal, Turn};
 pub use secondary::HslSecondary;
 pub use speed::{Speed, TimeInterpolation};
 pub use srt::{parse_srt, to_srt};
