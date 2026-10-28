@@ -8,6 +8,7 @@ mod editor;
 mod effects;
 mod export;
 mod export_format;
+mod export_frame;
 mod gain_dialog;
 mod history_panel;
 mod import;

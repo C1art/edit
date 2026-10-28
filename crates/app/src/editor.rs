@@ -47,6 +47,7 @@ pub struct Editor {
     pub(crate) multicam_layout: Option<timeline::MulticamLayout>,
     pub(crate) multicam_sync: Option<crate::multicam_sync::SyncJob>,
     pub(crate) scene_job: Option<crate::scene_edits::SceneJob>,
+    pub(crate) still_job: Option<playback::StillJob>,
     pub(crate) hardware_decoding: bool,
     pub(crate) source: Option<SourceMonitor>,
     pub(crate) program: Option<Viewer>,
@@ -143,6 +144,7 @@ impl Editor {
             multicam_layout: None,
             multicam_sync: None,
             scene_job: None,
+            still_job: None,
             hardware_decoding: true,
             source: None,
             program,
@@ -349,6 +351,7 @@ impl eframe::App for Editor {
         self.poll_proxies(&ctx);
         self.poll_multicam_sync(&ctx);
         self.poll_scene_edits(&ctx);
+        self.poll_export_frame(&ctx);
         if self.importer.as_ref().is_some_and(Importer::is_busy) {
             ctx.request_repaint();
         }

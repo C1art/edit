@@ -4,6 +4,7 @@ use timeline::PlaceMode;
 
 use crate::editor::Editor;
 use crate::placing;
+use crate::project_files::PathPurpose;
 use crate::transport;
 
 /// Space below each picture for its scrub bar, transport and buttons.
@@ -160,6 +161,12 @@ fn program(editor: &mut Editor, ui: &mut egui::Ui) {
             editor.extract_marked();
         }
         ui.separator();
+        let export_frame = ui
+            .button("Still")
+            .on_hover_text("Export Frame: save the picture at the playhead as an image (Ctrl+Shift+E)");
+        if export_frame.clicked() {
+            editor.prompt_path(PathPurpose::ExportFrame);
+        }
         ui.menu_button("View", |ui| {
             ui.checkbox(&mut editor.safe_margins, "Safe Margins");
             let mut multicam = editor.multicam_view;

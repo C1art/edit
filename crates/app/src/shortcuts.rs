@@ -33,6 +33,8 @@ pub const TOGGLE_LINK: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMA
 pub const NEW_TITLE: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::T);
 pub const IMPORT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::I);
 pub const EXPORT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::M);
+pub const EXPORT_FRAME: KeyboardShortcut =
+    KeyboardShortcut::new(Modifiers::COMMAND.plus(Modifiers::SHIFT), Key::E);
 pub const UNDO: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::Z);
 pub const REDO: KeyboardShortcut =
     KeyboardShortcut::new(Modifiers::COMMAND.plus(Modifiers::SHIFT), Key::Z);
@@ -68,6 +70,7 @@ enum Action {
     SaveAs,
     Import,
     Export,
+    ExportFrame,
     Undo,
     Redo,
     Copy,
@@ -158,6 +161,7 @@ fn pressed(ctx: &egui::Context) -> Option<Action> {
             (OPEN, Action::OpenProject),
             (SAVE, Action::Save),
             (IMPORT, Action::Import),
+            (EXPORT_FRAME, Action::ExportFrame),
             (EXPORT, Action::Export),
             (ADD_EDIT, Action::AddEdit),
             (SPEED_DURATION, Action::SpeedDuration),
@@ -242,6 +246,7 @@ fn run(editor: &mut Editor, action: Action) {
         Action::SaveAs => editor.prompt_path(PathPurpose::SaveProject),
         Action::Import => editor.prompt_path(PathPurpose::Import),
         Action::Export => crate::export::open(editor),
+        Action::ExportFrame => editor.prompt_path(PathPurpose::ExportFrame),
         Action::Undo => editor.undo(),
         Action::Redo => editor.redo(),
         Action::Copy => editor.copy(),

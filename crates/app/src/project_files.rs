@@ -19,6 +19,8 @@ pub enum PathPurpose {
     SaveProject,
     ImportCaptions,
     ExportCaptions,
+    /// An image of the program at the playhead.
+    ExportFrame,
     /// A `.cube` file for one of a clip's LUTs.
     Lut(ClipId, LutSlot),
 }
@@ -74,6 +76,7 @@ impl Editor {
                 .as_ref()
                 .map(|path| path.with_extension(SUBRIP).display().to_string())
                 .unwrap_or_default(),
+            PathPurpose::ExportFrame => self.default_frame_path().display().to_string(),
             _ => String::new(),
         };
         self.path_prompt = Some(PathPrompt { purpose, text });
@@ -262,6 +265,11 @@ pub fn path_dialog(editor: &mut Editor, ctx: &egui::Context) {
             "Write the sequence's captions as SubRip to:",
             "Export",
         ),
+        PathPurpose::ExportFrame => (
+            "Export Frame",
+            "Save the program's frame at the playhead, at the sequence's size, as .png or .tif:",
+            "Export",
+        ),
         PathPurpose::Lut(_, LutSlot::Input) => (
             "Input LUT",
             "Path to a .cube LUT for the clip's source, such as a log conversion:",
@@ -304,6 +312,7 @@ pub fn path_dialog(editor: &mut Editor, ctx: &egui::Context) {
             PathPurpose::SaveProject => editor.save_project_to(path),
             PathPurpose::ImportCaptions => editor.import_captions(path),
             PathPurpose::ExportCaptions => editor.export_captions(path),
+            PathPurpose::ExportFrame => editor.export_frame(path),
             PathPurpose::Lut(clip, slot) => crate::effects::set_lut(editor, clip, slot, path),
         }
     } else if cancelled {

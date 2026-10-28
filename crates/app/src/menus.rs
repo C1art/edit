@@ -53,6 +53,11 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             if ui.add(export).clicked() {
                 crate::export::open(editor);
             }
+            let frame =
+                Button::new("Export Frame…").shortcut_text(shortcut(ui, shortcuts::EXPORT_FRAME));
+            if ui.add(frame).clicked() {
+                editor.prompt_path(PathPurpose::ExportFrame);
+            }
             ui.separator();
             if ui.button("Quit").clicked() {
                 ui.ctx().send_viewport_cmd(ViewportCommand::Close);
