@@ -92,6 +92,30 @@ impl Rows {
                 self.param(ui, "Direction", direction, -360.0..=360.0, "°");
                 self.param(ui, "Length", length, 0.0..=500.0, " px");
             }
+            VideoEffect::DropShadow {
+                color,
+                opacity,
+                direction,
+                distance,
+                softness,
+            } => {
+                self.color(ui, "Shadow Color", color);
+                self.param(ui, "Opacity", opacity, 0.0..=100.0, "%");
+                self.param(ui, "Direction", direction, -360.0..=360.0, "°");
+                self.param(ui, "Distance", distance, 0.0..=1_000.0, " px");
+                self.param(ui, "Softness", softness, 0.0..=250.0, " px");
+            }
+            VideoEffect::WaveWarp {
+                height,
+                width,
+                direction,
+                speed,
+            } => {
+                self.param(ui, "Wave Height", height, -500.0..=500.0, " px");
+                self.param(ui, "Wave Width", width, 1.0..=2_000.0, " px");
+                self.param(ui, "Direction", direction, -360.0..=360.0, "°");
+                self.param(ui, "Wave Speed", speed, -10.0..=10.0, "/s");
+            }
             VideoEffect::Sharpen { amount } => {
                 self.param(ui, "Amount", amount, 0.0..=500.0, "");
             }
