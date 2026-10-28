@@ -125,7 +125,7 @@ pub fn header(
     action
 }
 
-/// Mute or hide, lock and, for audio, solo and the automation toggle.
+/// Mute or hide, lock, sync lock and, for audio, solo and the automation toggle.
 fn switches(ui: &mut egui::Ui, row: &Row, track: &Track, automation: bool) -> Option<HeaderAction> {
     let mut action = None;
     let mute_label = match row.track.kind {
@@ -137,9 +137,15 @@ fn switches(ui: &mut egui::Ui, row: &Row, track: &Track, automation: bool) -> Op
     let switches = [
         (mute_label, TrackSwitch::Mute, track.muted),
         ("Lock", TrackSwitch::Lock, track.locked),
+        ("Sync", TrackSwitch::SyncLock, !track.sync_unlocked),
     ];
     for (label, switch, on) in switches.into_iter().chain(solo) {
-        if ui.selectable_label(on, label).clicked() {
+        let mut toggle = ui.selectable_label(on, label);
+        if switch == TrackSwitch::SyncLock {
+            toggle = toggle
+                .on_hover_text("Sync lock: inserts and ripples on other tracks shift this one too");
+        }
+        if toggle.clicked() {
             action = Some(HeaderAction::Switch(row.track, switch, !on));
         }
     }
