@@ -1,3 +1,4 @@
+mod apply_effect;
 mod arrange;
 mod attributes;
 mod bin;
@@ -33,6 +34,7 @@ mod trim;
 #[cfg(test)]
 mod tests;
 
+pub use apply_effect::{ApplyEffect, ClipEffect};
 pub use arrange::{CloseGap, Lift, MoveClips, MoveMode, RippleDelete};
 pub use attributes::{Attribute, PasteAttributes, RemoveAttributes};
 pub use bin::{AddBin, MoveToBin, RemoveBin, RenameBin};

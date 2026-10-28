@@ -41,3 +41,22 @@ fn pasted_keyframes_keep_their_distance_from_the_clip_start() {
     assert_eq!(pasted.look.effects.len(), 2);
     assert_eq!(clip(&timeline, A1).volume.keys[0].time, Ticks(520));
 }
+
+#[test]
+fn an_effect_dropped_on_a_linked_clip_reaches_only_the_track_kind_it_suits() {
+    let (mut timeline, source) = timeline();
+    timeline
+        .apply(place(source, 0, 0, 100, PlaceMode::Overwrite))
+        .unwrap();
+    let apply = ApplyEffect {
+        clips: vec![clip_on(&timeline, A1, 0)],
+        effect: ClipEffect::Video(VideoEffect::BlackAndWhite),
+    };
+    timeline.apply(apply).unwrap();
+    let clip = |track| {
+        let id = clip_on(&timeline, track, 0);
+        timeline.sequence().clip(id).unwrap().1.clone()
+    };
+    assert_eq!(clip(V1).look.effects, [VideoEffect::BlackAndWhite]);
+    assert!(clip(A1).audio_effects.is_empty());
+}

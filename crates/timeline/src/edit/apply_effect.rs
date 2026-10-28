@@ -1,0 +1,38 @@
+use crate::edit::attributes::each_clip;
+use crate::{AudioEffect, ClipId, Edit, Sequence, TimelineError, TrackKind, VideoEffect};
+
+/// An effect from the Effects panel, for the clips of its kind.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ClipEffect {
+    Video(VideoEffect),
+    Audio(AudioEffect),
+}
+
+/// Adds an effect after the own effects of `clips` and of the clips linked to them,
+/// wherever it suits the track: a video effect dropped on a clip's audio still reaches
+/// its picture.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApplyEffect {
+    pub clips: Vec<ClipId>,
+    pub effect: ClipEffect,
+}
+
+impl Edit for ApplyEffect {
+    fn name(&self) -> &'static str {
+        "Apply Effect"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        each_clip(sequence, &self.clips, |kind, clip| {
+            match (&self.effect, kind) {
+                (ClipEffect::Video(effect), TrackKind::Video) => {
+                    clip.look.effects.push(effect.clone());
+                }
+                (ClipEffect::Audio(effect), TrackKind::Audio) => {
+                    clip.audio_effects.push(effect.clone());
+                }
+                _ => {}
+            }
+        })
+    }
+}

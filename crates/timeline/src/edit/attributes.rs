@@ -111,7 +111,7 @@ impl Edit for RemoveAttributes {
 }
 
 /// Runs `change` on `clips` and their linked clips, failing when it changes none.
-fn each_clip(
+pub(super) fn each_clip(
     sequence: &mut Sequence,
     clips: &[ClipId],
     mut change: impl FnMut(TrackKind, &mut Clip),
