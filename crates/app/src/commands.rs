@@ -1,7 +1,7 @@
 use timeline::{
-    AddFrameHold, AddTrack, Clipboard, CloseGap, FrameFit, Lift, PasteClips, PlaceMode, Razor,
-    RazorTarget, RippleDelete, SetClipsEnabled, SetGrouped, SetLinked, SetToFrameSize, Timecode,
-    TrackKind,
+    AddFrameHold, AddTrack, Clipboard, CloseGap, FrameFit, Lift, LinkedSelection, PasteClips,
+    PlaceMode, Razor, RazorTarget, RippleDelete, SetClipsEnabled, SetGrouped, SetLinked,
+    SetLinkedSelection, SetToFrameSize, Timecode, TrackKind,
 };
 
 use crate::editor::Editor;
@@ -204,6 +204,14 @@ impl Editor {
         } else if !self.apply(edit) {
             self.notice("Select two or more clips to link");
         }
+    }
+
+    pub(crate) fn toggle_linked_selection(&mut self) {
+        let next = match self.timeline.sequence().linked_selection {
+            LinkedSelection::Together => LinkedSelection::Apart,
+            LinkedSelection::Apart => LinkedSelection::Together,
+        };
+        self.apply(SetLinkedSelection(next));
     }
 
     pub(crate) fn set_grouped(&mut self, grouped: bool) {

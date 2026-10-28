@@ -54,6 +54,7 @@ pub enum Command {
     RippleTrimNext,
     MatchFrame,
     ToggleSnapping,
+    ToggleLinkedSelection,
     ZoomIn,
     ZoomOut,
     ZoomToFit,
@@ -104,7 +105,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Self; 94] = [
+    pub const ALL: [Self; 95] = [
         Self::NewProject,
         Self::OpenProject,
         Self::Save,
@@ -152,6 +153,7 @@ impl Command {
         Self::RippleTrimNext,
         Self::MatchFrame,
         Self::ToggleSnapping,
+        Self::ToggleLinkedSelection,
         Self::ZoomIn,
         Self::ZoomOut,
         Self::ZoomToFit,
@@ -255,6 +257,7 @@ impl Command {
             Self::RippleTrimNext => ("ripple_trim_next", "Ripple Trim Next Edit to Playhead"),
             Self::MatchFrame => ("match_frame", "Match Frame"),
             Self::ToggleSnapping => ("toggle_snapping", "Snap in Timeline"),
+            Self::ToggleLinkedSelection => ("toggle_linked_selection", "Linked Selection"),
             Self::ZoomIn => ("zoom_in", "Zoom In"),
             Self::ZoomOut => ("zoom_out", "Zoom Out"),
             Self::ZoomToFit => ("zoom_to_fit", "Zoom to Sequence"),
@@ -339,11 +342,29 @@ impl Command {
             SpeedDuration | AudioGain | ToggleEnabled | ToggleLink | Group | Ungroup
             | MakeSubclip | Insert | Overwrite | NudgeLeft | NudgeRight | NudgeLeftFive
             | NudgeRightFive | NudgeUp | NudgeDown => "Clip",
-            AddEdit | ExtendEdit | SelectAtPlayhead | VideoTransition | AudioTransition
-            | LiftMarked | ExtractMarked | RippleTrimPrevious | RippleTrimNext | MatchFrame
-            | ToggleSnapping | ZoomIn | ZoomOut | ZoomToFit | IncreaseVideoHeights
-            | DecreaseVideoHeights | IncreaseAudioHeights | DecreaseAudioHeights
-            | ExpandAllTracks | MinimizeAllTracks | MulticamView | RenderInToOut
+            AddEdit
+            | ExtendEdit
+            | SelectAtPlayhead
+            | VideoTransition
+            | AudioTransition
+            | LiftMarked
+            | ExtractMarked
+            | RippleTrimPrevious
+            | RippleTrimNext
+            | MatchFrame
+            | ToggleSnapping
+            | ToggleLinkedSelection
+            | ZoomIn
+            | ZoomOut
+            | ZoomToFit
+            | IncreaseVideoHeights
+            | DecreaseVideoHeights
+            | IncreaseAudioHeights
+            | DecreaseAudioHeights
+            | ExpandAllTracks
+            | MinimizeAllTracks
+            | MulticamView
+            | RenderInToOut
             | DeleteRenderFiles => "Sequence",
             MarkIn | MarkOut | ClearInOut | MarkClip | MarkSelection | GoToIn | GoToOut
             | AddMarker | NextMarker | PreviousMarker | ClearMarker => "Markers",
@@ -430,7 +451,7 @@ impl Command {
             Self::MinimizeAllTracks => vec![shift(Key::Minus)],
             Self::MulticamView => vec![shift(Key::Num0)],
             Self::RenderInToOut => vec![plain(Key::Enter)],
-            Self::DeleteRenderFiles => Vec::new(),
+            Self::DeleteRenderFiles | Self::ToggleLinkedSelection => Vec::new(),
             Self::MarkIn => vec![plain(Key::I)],
             Self::MarkOut => vec![plain(Key::O)],
             Self::ClearInOut => vec![ctrl_shift(Key::X)],

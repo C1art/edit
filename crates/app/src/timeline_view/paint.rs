@@ -11,6 +11,7 @@ pub const PLAYHEAD: Color32 = Color32::from_rgb(230, 70, 60);
 const VIDEO_CLIP: Color32 = Color32::from_rgb(64, 104, 160);
 const AUDIO_CLIP: Color32 = Color32::from_rgb(58, 128, 92);
 const OFFLINE_CLIP: Color32 = Color32::from_rgb(170, 40, 40);
+const OUT_OF_SYNC: Color32 = Color32::from_rgb(200, 30, 30);
 const MIN_LABEL_SPACING: f32 = 90.0;
 
 /// A strip along the foot of the ruler over the segments that need rendering to play
@@ -250,8 +251,9 @@ pub fn clips(
             }
             _ => String::new(),
         };
+        let badge = sync_badge(painter, rect, sequence, clip);
         painter.with_clip_rect(rect.shrink(2.0)).text(
-            rect.left_top() + egui::vec2(5.0, 4.0),
+            rect.left_top() + egui::vec2(5.0 + badge, 4.0),
             Align2::LEFT_TOP,
             format!("{camera}{name}{speed}{link}{gain}"),
             FontId::proportional(11.0),
@@ -261,6 +263,32 @@ pub fn clips(
 }
 
 /// A diamond at the bottom of the clip for each keyframe it shows.
+/// Premiere's red frame count on a clip slipped out of sync with its link; returns the
+/// width it takes so the name can follow it.
+fn sync_badge(painter: &Painter, rect: Rect, sequence: &Sequence, clip: &Clip) -> f32 {
+    let Some(offset) = sequence.sync_offset(clip) else {
+        return 0.0;
+    };
+    let frames = sequence
+        .format
+        .frame_rate
+        .frame_at(Ticks(offset.0.abs()), sequence.timebase);
+    let sign = if offset > Ticks::ZERO { '+' } else { '-' };
+    let painter = painter.with_clip_rect(rect.shrink(1.0));
+    let text = painter.layout_no_wrap(
+        format!("{sign}{frames}"),
+        FontId::proportional(11.0),
+        Color32::WHITE,
+    );
+    let badge = Rect::from_min_size(
+        rect.left_top() + egui::vec2(2.0, 2.0),
+        text.size() + egui::vec2(6.0, 2.0),
+    );
+    painter.rect_filled(badge, 2.0, OUT_OF_SYNC);
+    painter.galley(badge.min + egui::vec2(3.0, 1.0), text, Color32::WHITE);
+    badge.width() + 2.0
+}
+
 fn keyframe_marks(painter: &Painter, rect: Rect, scale: &TimeScale, clip: &Clip) {
     let y = rect.bottom() - 6.0;
     for time in clip.look.key_times() {

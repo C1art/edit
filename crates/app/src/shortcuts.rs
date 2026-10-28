@@ -126,6 +126,7 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         Command::RippleTrimNext => editor.ripple_trim_to_playhead(Edge::Tail),
         Command::MatchFrame => editor.match_frame(),
         Command::ToggleSnapping => editor.view.snapping = !editor.view.snapping,
+        Command::ToggleLinkedSelection => editor.toggle_linked_selection(),
         Command::ZoomIn => editor.view.zoom(2.0, None),
         Command::ZoomOut => editor.view.zoom(0.5, None),
         Command::ZoomToFit => editor.view.zoom_to_fit(editor.timeline.sequence()),

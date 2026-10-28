@@ -1,5 +1,5 @@
 use egui::{Button, MenuBar, ViewportCommand};
-use timeline::{Edge, Generator, PlaceMode, Rgb, Title, TrackKind};
+use timeline::{Edge, Generator, LinkedSelection, PlaceMode, Rgb, Title, TrackKind};
 
 use crate::editor::Editor;
 use crate::keymap::Command;
@@ -350,6 +350,14 @@ pub fn timeline_toolbar(editor: &mut Editor, ui: &mut egui::Ui) {
         ui.separator();
         ui.toggle_value(&mut editor.view.snapping, "Snap")
             .on_hover_text("Snap to clip edges and the playhead (S)");
+        let linked = editor.timeline.sequence().linked_selection == LinkedSelection::Together;
+        if ui
+            .selectable_label(linked, "Linked")
+            .on_hover_text("Pick linked picture and sound together")
+            .clicked()
+        {
+            editor.toggle_linked_selection();
+        }
         ui.separator();
         if ui.button("−").on_hover_text("Zoom out (-)").clicked() {
             editor.view.zoom(0.5, None);
