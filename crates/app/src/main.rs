@@ -25,6 +25,7 @@ mod placing;
 mod project_files;
 mod project_store;
 mod proxies;
+mod safe_margins;
 mod scopes;
 mod sequence_marks;
 mod shortcuts;

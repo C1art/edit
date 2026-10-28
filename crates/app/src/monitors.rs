@@ -1,4 +1,5 @@
 use egui::{Color32, Stroke, StrokeKind};
+use playback::Resolution;
 use timeline::PlaceMode;
 
 use crate::editor::Editor;
@@ -109,6 +110,11 @@ fn program(editor: &mut Editor, ui: &mut egui::Ui) {
     };
     let response = program.picture(ui, picture_size(ui));
     outline(ui, &response, focused);
+    if editor.safe_margins {
+        let format = editor.timeline.sequence().format;
+        let canvas = egui::vec2(format.width as f32, format.height as f32);
+        crate::safe_margins::paint(ui, response.rect, canvas);
+    }
     crate::effects::mask_overlay(editor, ui, response.rect);
     let Some(program) = &mut editor.program else {
         return;
@@ -136,6 +142,21 @@ fn program(editor: &mut Editor, ui: &mut egui::Ui) {
         if ui.button("Extract").on_hover_text("'").clicked() {
             editor.extract_marked();
         }
+        ui.separator();
+        ui.menu_button("View", |ui| {
+            ui.checkbox(&mut editor.safe_margins, "Safe Margins");
+            ui.menu_button("Playback Resolution", |ui| {
+                let Some(program) = &mut editor.program else {
+                    return;
+                };
+                let current = program.player.resolution();
+                for resolution in Resolution::ALL {
+                    if ui.radio(current == resolution, resolution.name()).clicked() {
+                        program.player.set_resolution(resolution);
+                    }
+                }
+            });
+        });
     });
     if pressed_inside(ui) {
         editor.focus = Focus::Program;

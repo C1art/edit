@@ -39,6 +39,8 @@ pub struct Editor {
     pub(crate) clip_art: ClipArt,
     /// Whether the monitors play proxies where media has them.
     pub(crate) use_proxies: bool,
+    /// Outlines the action and title safe areas over the program picture.
+    pub(crate) safe_margins: bool,
     pub(crate) hardware_decoding: bool,
     pub(crate) source: Option<SourceMonitor>,
     pub(crate) program: Option<Viewer>,
@@ -130,6 +132,7 @@ impl Editor {
             proxies,
             clip_art,
             use_proxies: false,
+            safe_margins: false,
             hardware_decoding: true,
             source: None,
             program,
