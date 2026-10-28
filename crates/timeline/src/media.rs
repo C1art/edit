@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::generator::placed_length;
-use crate::{BinId, Generator, Nest, Ticks, Timebase, VideoFormat};
+use crate::{BinId, FrameRate, Generator, Nest, Speed, Ticks, Timebase, VideoFormat};
 
 /// Identifies a media item in the sequence's media pool.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -36,6 +36,10 @@ pub struct MediaItem {
     /// The part of the file a subclip stands for; clips of it start inside this range.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subclip: Option<Range<Ticks>>,
+    /// The frame rate the pictures are played at instead of the file's own, as for
+    /// slowing high-frame-rate footage; the sound follows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interpreted_rate: Option<FrameRate>,
 }
 
 impl MediaItem {
@@ -47,6 +51,28 @@ impl MediaItem {
             (None, Some(range)) => range.clone(),
             (None, None) => Ticks::ZERO..self.duration,
         }
+    }
+
+    /// How much file time passes per second the clips of this item play, from its
+    /// interpreted frame rate.
+    pub fn conform(&self) -> Speed {
+        let (Some(video), Some(assumed)) = (self.video, self.interpreted_rate) else {
+            return Speed::NORMAL;
+        };
+        let native = video.frame_rate;
+        Speed::new(
+            u64::from(assumed.num()) * u64::from(native.den()),
+            u64::from(assumed.den()) * u64::from(native.num()),
+        )
+        .unwrap_or(Speed::NORMAL)
+    }
+
+    /// The item's picture format as it plays, at its interpreted frame rate.
+    pub fn played_format(&self) -> Option<VideoFormat> {
+        self.video.map(|video| VideoFormat {
+            frame_rate: self.interpreted_rate.unwrap_or(video.frame_rate),
+            ..video
+        })
     }
 
     pub fn is_file(&self) -> bool {

@@ -31,6 +31,7 @@ impl Edit for AddGenerated {
             generator: Some(self.generator.clone()),
             nest: None,
             subclip: None,
+            interpreted_rate: None,
         });
         Ok(())
     }

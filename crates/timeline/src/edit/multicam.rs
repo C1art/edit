@@ -81,6 +81,7 @@ impl Edit for CreateMulticam {
             nest: Some(nest),
             bin,
             subclip: None,
+            interpreted_rate: None,
         });
         sequence.fit_nest(id);
         Ok(())
@@ -234,5 +235,5 @@ fn flat_pieces(sequence: &Sequence, id: ClipId) -> Option<(TrackRef, Vec<Clip>)>
 }
 
 fn plays_straight(clip: &Clip) -> bool {
-    clip.speed.is_normal() && !clip.reverse && !clip.hold && clip.remap.is_none()
+    clip.rate().is_normal() && !clip.reverse && !clip.hold && clip.remap.is_none()
 }

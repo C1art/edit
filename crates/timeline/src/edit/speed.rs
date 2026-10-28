@@ -40,7 +40,8 @@ impl Edit for SetClipSpeed {
         for &id in &ids {
             let (track_ref, clip) = sequence.clip(id).ok_or(TimelineError::ClipNotFound(id))?;
             let source = clip.source_out() - clip.source_in;
-            let mut duration = self.speed.sequence_span(source).max(Ticks(1));
+            let rate = self.speed.times(clip.conform);
+            let mut duration = rate.sequence_span(source).max(Ticks(1));
             if !self.ripple {
                 let next = sequence.track(track_ref).and_then(|track| {
                     track
@@ -97,8 +98,9 @@ impl Edit for RateStretch {
             if let Some(remap) = &mut clip.remap {
                 remap.stretch(clip.duration, duration);
             } else if !clip.hold {
-                clip.speed =
+                let rate =
                     Speed::stretch(source, duration).ok_or(TimelineError::NonPositiveDuration)?;
+                clip.speed = rate.over(clip.conform);
             }
             clip.duration = duration;
             if self.edge == Edge::Head {

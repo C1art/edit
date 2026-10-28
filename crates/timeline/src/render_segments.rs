@@ -52,7 +52,7 @@ fn costly_clip(sequence: &Sequence, clip: &Clip) -> bool {
         || look.blend != Look::default().blend
         || clip.transition_in.is_some()
         || clip.transition_out.is_some()
-        || !clip.speed.is_normal()
+        || !clip.rate().is_normal()
         || clip.reverse
         || clip.remap.is_some()
         || !clip.interpolation.is_sampling()

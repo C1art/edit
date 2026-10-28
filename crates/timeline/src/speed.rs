@@ -48,6 +48,22 @@ impl Speed {
         )
     }
 
+    /// Plays at this speed and at `other` on top of it.
+    pub fn times(self, other: Self) -> Self {
+        reduced(
+            u128::from(self.num) * u128::from(other.num),
+            u128::from(self.den) * u128::from(other.den),
+        )
+    }
+
+    /// The speed that, played at `other` on top, makes this one.
+    pub fn over(self, other: Self) -> Self {
+        reduced(
+            u128::from(self.num) * u128::from(other.den),
+            u128::from(self.den) * u128::from(other.num),
+        )
+    }
+
     pub fn is_normal(self) -> bool {
         self == Self::NORMAL
     }
@@ -89,6 +105,25 @@ fn scale(ticks: Ticks, num: u64, den: u64) -> Ticks {
     let product = i128::from(ticks.0) * i128::from(num);
     let quotient = product.div_euclid(i128::from(den.max(1)));
     Ticks(i64::try_from(quotient).unwrap_or(if quotient < 0 { i64::MIN } else { i64::MAX }))
+}
+
+/// `num / den` in lowest terms, rounded to fit when the terms are still too large,
+/// which only stretched durations of many hours come near.
+fn reduced(num: u128, den: u128) -> Speed {
+    let divisor = gcd128(num, den).max(1);
+    let (mut num, mut den) = (num / divisor, den / divisor);
+    while num > u128::from(u64::MAX) || den > u128::from(u64::MAX) {
+        (num, den) = ((num >> 1).max(1), (den >> 1).max(1));
+    }
+    let narrow = |term: u128| u64::try_from(term).unwrap_or(u64::MAX).max(1);
+    Speed::new(narrow(num), narrow(den)).unwrap_or(Speed::NORMAL)
+}
+
+fn gcd128(mut a: u128, mut b: u128) -> u128 {
+    while b != 0 {
+        (a, b) = (b, a % b);
+    }
+    a
 }
 
 fn gcd(mut a: u64, mut b: u64) -> u64 {

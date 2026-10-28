@@ -49,7 +49,7 @@ pub fn thumbnails(
     let frame = format.frame_rate.frame_start(1, timebase).0.max(1);
     // Times snap to a power-of-two count of frames, so the same pictures are reused while
     // scrolling and only zooming past a power of two asks for new ones.
-    let tile_frames = (clip.speed.source_span(scale.span(tile_width)).0 + frame - 1) / frame;
+    let tile_frames = (clip.rate().source_span(scale.span(tile_width)).0 + frame - 1) / frame;
     let step = i64::try_from(
         u64::try_from(tile_frames.max(1))
             .unwrap_or(1)
@@ -110,7 +110,7 @@ pub fn waveform(
     }
     let (middle, half) = (bars.center().y, bars.height() / 2.0);
     let gain = clip.gain.amplitude();
-    let column = clip.speed.source_span(scale.span(1.0));
+    let column = clip.rate().source_span(scale.span(1.0));
     let mut mesh = Mesh::default();
     let mut x = visible.left().floor();
     while x < visible.right() {

@@ -259,6 +259,7 @@ mod tests {
             generator: None,
             nest: None,
             subclip: None,
+            interpreted_rate: None,
         }
     }
 

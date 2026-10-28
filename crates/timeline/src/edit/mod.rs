@@ -6,6 +6,7 @@ mod enable;
 mod frame_size;
 mod generate;
 mod hold;
+mod interpret;
 mod label;
 mod levels;
 mod link;
@@ -35,6 +36,7 @@ pub use enable::SetClipsEnabled;
 pub use frame_size::{FrameFit, SetToFrameSize};
 pub use generate::{AddGenerated, SetGenerator};
 pub use hold::AddFrameHold;
+pub use interpret::InterpretFootage;
 pub use label::SetClipLabel;
 pub use levels::{
     AutoDuck, NormalizeClipGains, SetClipAudioEffects, SetClipGain, SetClipVolume, SetMasterGain,

@@ -69,7 +69,7 @@ impl<'a> Envelope<'a> {
         let Some(clip) = self.clip else {
             return delta;
         };
-        let source_delta = clip.speed.source_span(delta);
+        let source_delta = clip.rate().source_span(delta);
         if clip.reverse {
             Ticks::ZERO - source_delta
         } else {

@@ -14,6 +14,8 @@ pub enum PlaceMode {
 pub struct PlaceClip {
     pub source: SourceId,
     pub source_in: Ticks,
+    /// How much of the media to place; the clips are longer or shorter than this when the
+    /// media is interpreted at another frame rate.
     pub duration: Ticks,
     pub at: Ticks,
     /// Video tracks are ignored for media without video, and audio tracks likewise.
@@ -44,7 +46,9 @@ impl Edit for PlaceClip {
         if targets.is_empty() {
             return Err(TimelineError::NothingToEdit);
         }
-        if self.duration <= Ticks::ZERO {
+        let conform = media.conform();
+        let duration = conform.sequence_span(self.duration);
+        if duration <= Ticks::ZERO {
             return Err(TimelineError::NonPositiveDuration);
         }
         let mut relinks = Relinks::default();
@@ -52,16 +56,11 @@ impl Edit for PlaceClip {
             PlaceMode::Insert => {
                 let tracks = ops::unlocked_tracks(sequence);
                 ops::split(sequence, &tracks, self.at, &mut relinks);
-                ops::shift(sequence, &tracks, self.at, self.duration, &[]);
+                ops::shift(sequence, &tracks, self.at, duration, &[]);
             }
             PlaceMode::Overwrite => {
                 for &track in &targets {
-                    ops::clear(
-                        sequence,
-                        track,
-                        self.at..self.at + self.duration,
-                        &mut relinks,
-                    )?;
+                    ops::clear(sequence, track, self.at..self.at + duration, &mut relinks)?;
                 }
             }
         }
@@ -69,11 +68,12 @@ impl Edit for PlaceClip {
         for track in targets {
             let clip = Clip {
                 link,
+                conform,
                 ..Clip::new(
                     ClipId(sequence.ids.next()),
                     self.source,
                     self.at,
-                    self.duration,
+                    duration,
                     self.source_in,
                 )
             };

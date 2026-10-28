@@ -110,6 +110,14 @@ pub struct Clip {
     pub markers: Vec<Marker>,
     #[serde(default, skip_serializing_if = "TimeInterpolation::is_sampling")]
     pub interpolation: TimeInterpolation,
+    /// How much faster or slower its media plays for being interpreted at another frame
+    /// rate, on top of `speed`.
+    #[serde(default, skip_serializing_if = "is_normal_speed")]
+    pub conform: Speed,
+}
+
+fn is_normal_speed(speed: &Speed) -> bool {
+    speed.is_normal()
 }
 
 fn is_first_angle(angle: &usize) -> bool {
@@ -149,7 +157,14 @@ impl Clip {
             angle: 0,
             markers: Vec::new(),
             interpolation: TimeInterpolation::FrameSampling,
+            conform: Speed::NORMAL,
         }
+    }
+
+    /// How much source time passes per tick of sequence time: the clip's speed and its
+    /// media's interpretation together.
+    pub fn rate(&self) -> Speed {
+        self.speed.times(self.conform)
     }
 
     pub fn end(&self) -> Ticks {
@@ -163,7 +178,7 @@ impl Clip {
         if let Some(remap) = &self.remap {
             return remap.source_at(self.duration);
         }
-        self.source_in + self.speed.source_span(self.duration)
+        self.source_in + self.rate().source_span(self.duration)
     }
 
     pub fn overlaps(&self, other: &Clip) -> bool {
@@ -183,9 +198,9 @@ impl Clip {
         } else if let Some(remap) = &self.remap {
             remap.source_at(position - self.start)
         } else if self.reverse {
-            self.source_in + self.speed.source_span(self.end() - position) - Ticks(1)
+            self.source_in + self.rate().source_span(self.end() - position) - Ticks(1)
         } else {
-            self.source_in + self.speed.source_span(position - self.start)
+            self.source_in + self.rate().source_span(position - self.start)
         }
     }
 
@@ -196,9 +211,12 @@ impl Clip {
         } else if let Some(remap) = &self.remap {
             self.start + remap.offset_of(source)
         } else if self.reverse {
-            self.end() - self.speed.sequence_span(source + Ticks(1) - self.source_in)
+            self.end()
+                - self
+                    .rate()
+                    .sequence_span(source + Ticks(1) - self.source_in)
         } else {
-            self.start + self.speed.sequence_span(source - self.source_in)
+            self.start + self.rate().sequence_span(source - self.source_in)
         }
     }
 
@@ -220,7 +238,7 @@ impl Clip {
             remap.shift(Ticks::ZERO - delta, Ticks::ZERO);
             self.source_in = remap.source_at(Ticks::ZERO);
         } else if !self.reverse && !self.hold {
-            self.source_in = self.source_in + self.speed.source_span(delta);
+            self.source_in = self.source_in + self.rate().source_span(delta);
         }
         self.duration = self.duration - delta;
     }
@@ -231,7 +249,7 @@ impl Clip {
         if self.reverse && !self.hold && self.remap.is_none() {
             let source_out = self.source_out();
             self.duration = self.duration + delta;
-            self.source_in = source_out - self.speed.source_span(self.duration);
+            self.source_in = source_out - self.rate().source_span(self.duration);
         } else {
             self.duration = self.duration + delta;
         }

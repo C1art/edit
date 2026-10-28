@@ -43,6 +43,7 @@ impl PreviewPictures {
                 nest: None,
                 bin: None,
                 subclip: None,
+                interpreted_rate: None,
             });
             let clip = Clip::new(
                 ClipId(index),

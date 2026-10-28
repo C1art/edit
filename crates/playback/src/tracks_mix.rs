@@ -125,7 +125,7 @@ impl TracksMix {
                 let read = ClipRead {
                     source_in: to_frames(clip.source_in),
                     length: to_frames(clip.end()) - to_frames(clip.start),
-                    speed: clip.speed,
+                    speed: clip.rate(),
                     reverse: clip.reverse,
                     maintain_pitch: clip.maintain_pitch,
                 };
