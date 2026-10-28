@@ -1,9 +1,12 @@
 use egui::{Color32, CursorIcon, Pos2, Rect, Sense, Shape, Stroke, Vec2};
 use timeline::{Clip, Look, Mask, MaskShape, Sequence, SetClipLook, Ticks, TrackKind, VideoEffect};
 
+mod pen;
+
 use super::{adjust_look, keyframe_time, shown_look, SideTab};
 use crate::editor::Editor;
 use crate::mixer::Change;
+use pen::PathGeometry;
 
 const OUTLINE: Color32 = Color32::from_rgb(255, 205, 60);
 const HANDLE_RADIUS: f32 = 3.5;
@@ -14,14 +17,36 @@ const ELLIPSE_STEPS: usize = 72;
 /// What a drag on the program picture holds of a mask.
 #[derive(Debug, Clone, Copy)]
 enum Grip {
-    /// The body, grabbed this far from the mask's center in picture pixels.
+    /// The body, grabbed this far in picture pixels from the mask's center, or from a
+    /// path's first vertex.
     Body(Vec2),
     /// The handle on a side across the width (0) or the height (1).
     Side(usize),
+    /// A path's vertex.
+    Vertex(usize),
+    /// A path vertex's handle, by its end out along it (1) or in against it (-1).
+    Handle(usize, f32),
+}
+
+/// A mask at one time, as the overlay draws and grabs it.
+enum Geometry {
+    Shape(MaskGeometry),
+    Path(PathGeometry),
+}
+
+impl Geometry {
+    fn new(mask: &Mask, time: Ticks, fitted: Vec2) -> Self {
+        match mask.shape {
+            MaskShape::Path => Self::Path(PathGeometry::new(mask, time, fitted)),
+            _ => Self::Shape(MaskGeometry::new(mask, time, fitted)),
+        }
+    }
 }
 
 /// Outlines the selected clip's masks over the program picture in `area` while the
-/// effect controls show; dragging a mask moves it and dragging a side handle resizes it.
+/// effect controls show. Dragging a mask moves it and dragging a side handle resizes
+/// it; a path's vertices and handles drag too, and while a path is open each press
+/// adds a vertex to it.
 pub fn mask_overlay(editor: &mut Editor, ui: &egui::Ui, area: Rect) {
     if editor.side_tab != SideTab::EffectControls {
         return;
@@ -36,26 +61,60 @@ pub fn mask_overlay(editor: &mut Editor, ui: &egui::Ui, area: Rect) {
         return;
     };
     let id = ui.make_persistent_id(("mask_overlay", clip.id));
-    let response = ui.interact(frame.shown, id, Sense::drag());
-    let shapes: Vec<MaskGeometry> = look
+    let response = ui.interact(frame.shown, id, Sense::click_and_drag());
+    let shapes: Vec<Geometry> = look
         .masks
         .iter()
-        .map(|mask| MaskGeometry::new(mask, time, frame.fitted))
+        .map(|mask| Geometry::new(mask, time, frame.fitted))
         .collect();
+    let (pressed, down, moved, modifiers) = ui.input(|input| {
+        let pointer = &input.pointer;
+        let moved = pointer.delta() != Vec2::ZERO;
+        let (pressed, down) = (pointer.primary_pressed(), pointer.primary_down());
+        (pressed, down, moved, input.modifiers)
+    });
+    let drawing = look
+        .masks
+        .iter()
+        .position(|mask| mask.shape == MaskShape::Path && !mask.closed);
+    let mut held = ui.data(|data| data.get_temp::<(usize, Grip)>(id));
     let mut change = None;
-    if response.drag_started() {
+    let pointer = response.interact_pointer_pos();
+    if let (Some(index), Some(pointer), true, None) = (drawing, pointer, pressed, held) {
+        if let Geometry::Path(path) = &shapes[index] {
+            held = pen::press(&mut look.masks[index], path, &frame, pointer, time)
+                .map(|grip| (index, grip));
+            change = Some(Change::Live);
+        }
+    } else if drawing.is_none() && held.is_none() && response.drag_started() {
         let origin = ui.input(|input| input.pointer.press_origin());
-        if let Some(grip) = origin.and_then(|origin| grab(&frame, &shapes, origin)) {
-            ui.data_mut(|data| data.insert_temp(id, grip));
+        held = origin.and_then(|origin| grab(&frame, &shapes, origin, modifiers.alt));
+    }
+    if let (true, Some(pointer), None) = (response.clicked(), pointer, drawing) {
+        let clicked = look
+            .masks
+            .iter_mut()
+            .zip(&shapes)
+            .rev()
+            .any(|(mask, shape)| {
+                let Geometry::Path(path) = shape else {
+                    return false;
+                };
+                pen::click(mask, path, &frame, pointer, modifiers, time)
+            });
+        if clicked {
+            change = Some(Change::Commit);
         }
     }
-    let held = ui.data(|data| data.get_temp::<(usize, Grip)>(id));
     if let Some((index, grip)) = held {
-        if response.drag_stopped() {
-            ui.data_mut(|data| data.remove::<(usize, Grip)>(id));
-            change = Some(Change::Commit);
-        } else if let (Some(pointer), Some(mask), Some(shape)) = (
-            response.interact_pointer_pos(),
+        if !down {
+            held = None;
+            if change.is_some() || editor.effects.adjusting.is_some() {
+                change = Some(Change::Commit);
+            }
+        } else if let (true, Some(pointer), Some(mask), Some(shape)) = (
+            moved || change.is_some(),
+            ui.input(|input| input.pointer.latest_pos()),
             look.masks.get_mut(index),
             shapes.get(index),
         ) {
@@ -70,11 +129,19 @@ pub fn mask_overlay(editor: &mut Editor, ui: &egui::Ui, area: Rect) {
             change = Some(Change::Live);
         }
     } else if let Some(pointer) = response.hover_pos() {
-        if grab(&frame, &shapes, pointer).is_some() {
+        if drawing.is_none() && grab(&frame, &shapes, pointer, modifiers.alt).is_some() {
             ui.ctx().set_cursor_icon(CursorIcon::Move);
+        } else if drawing.is_some() {
+            ui.ctx().set_cursor_icon(CursorIcon::Crosshair);
         }
     }
-    paint(ui, &frame, &look, time);
+    ui.data_mut(|data| match held {
+        Some(held) => {
+            data.insert_temp(id, held);
+        }
+        None => data.remove::<(usize, Grip)>(id),
+    });
+    paint(ui, &frame, &look, time, response.hover_pos());
     if change.is_some() {
         let edit = SetClipLook {
             clip: clip.id,
@@ -100,28 +167,52 @@ fn masked_clip(editor: &Editor) -> Option<Clip> {
 
 /// The topmost handle or mask body at `pointer`, handles first so a small mask can
 /// still be resized.
-fn grab(frame: &PictureFrame, shapes: &[MaskGeometry], pointer: Pos2) -> Option<(usize, Grip)> {
-    let handle = shapes.iter().enumerate().rev().find_map(|(index, shape)| {
-        shape
-            .handles()
-            .into_iter()
-            .find(|&(_, local)| {
-                frame.to_screen(shape.to_picture(local)).distance(pointer) <= GRAB_RADIUS
-            })
-            .map(|(axis, _)| (index, Grip::Side(axis)))
-    });
+fn grab(
+    frame: &PictureFrame,
+    shapes: &[Geometry],
+    pointer: Pos2,
+    alt: bool,
+) -> Option<(usize, Grip)> {
+    let handle = shapes
+        .iter()
+        .enumerate()
+        .rev()
+        .find_map(|(index, geometry)| {
+            let grip = match geometry {
+                Geometry::Shape(shape) => shape
+                    .handles()
+                    .into_iter()
+                    .find(|&(_, local)| {
+                        frame.to_screen(shape.to_picture(local)).distance(pointer) <= GRAB_RADIUS
+                    })
+                    .map(|(axis, _)| Grip::Side(axis)),
+                Geometry::Path(path) => path.grab(frame, pointer, alt),
+            };
+            grip.map(|grip| (index, grip))
+        });
     let picture = frame.to_picture(pointer);
     handle.or_else(|| {
         shapes
             .iter()
             .enumerate()
             .rev()
-            .find(|(_, shape)| shape.contains(shape.to_local(picture)))
-            .map(|(index, shape)| (index, Grip::Body(picture - shape.center)))
+            .find_map(|(index, geometry)| {
+                let center = match geometry {
+                    Geometry::Shape(shape) => shape
+                        .contains(shape.to_local(picture))
+                        .then_some(shape.center),
+                    Geometry::Path(path) => path.contains(picture).then(|| path.anchor()).flatten(),
+                };
+                center.map(|center| (index, Grip::Body(picture - center)))
+            })
     })
 }
 
-fn drag(mask: &mut Mask, shape: &MaskGeometry, grip: Grip, to: Vec2, fitted: Vec2, time: Ticks) {
+fn drag(mask: &mut Mask, geometry: &Geometry, grip: Grip, to: Vec2, fitted: Vec2, time: Ticks) {
+    let shape = match geometry {
+        Geometry::Path(path) => return pen::drag(mask, path, grip, to, time),
+        Geometry::Shape(shape) => shape,
+    };
     match grip {
         Grip::Body(offset) => {
             let center = to - offset;
@@ -133,14 +224,21 @@ fn drag(mask: &mut Mask, shape: &MaskGeometry, grip: Grip, to: Vec2, fitted: Vec
             let half = shape.to_local(to)[axis].abs();
             mask.size[axis].set_at(time, 2.0 * half / fitted[axis] * 100.0);
         }
+        Grip::Vertex(_) | Grip::Handle(..) => {}
     }
 }
 
-fn paint(ui: &egui::Ui, frame: &PictureFrame, look: &Look, time: Ticks) {
+fn paint(ui: &egui::Ui, frame: &PictureFrame, look: &Look, time: Ticks, hovered: Option<Pos2>) {
     let painter = ui.painter_at(frame.shown);
     let stroke = Stroke::new(1.5, OUTLINE);
     for mask in &look.masks {
-        let shape = MaskGeometry::new(mask, time, frame.fitted);
+        let shape = match Geometry::new(mask, time, frame.fitted) {
+            Geometry::Path(path) => {
+                path.paint(&painter, frame, hovered);
+                continue;
+            }
+            Geometry::Shape(shape) => shape,
+        };
         let screen = |local: Vec2| frame.to_screen(shape.to_picture(local));
         let outline: Vec<Pos2> = match mask.shape {
             MaskShape::Ellipse => (0..ELLIPSE_STEPS)
@@ -149,9 +247,11 @@ fn paint(ui: &egui::Ui, frame: &PictureFrame, look: &Look, time: Ticks) {
                     screen(Vec2::new(angle.cos(), angle.sin()) * shape.half)
                 })
                 .collect(),
-            MaskShape::Rectangle => [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]
-                .map(|(x, y)| screen(Vec2::new(x, y) * shape.half))
-                .to_vec(),
+            MaskShape::Rectangle | MaskShape::Path => {
+                [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]
+                    .map(|(x, y)| screen(Vec2::new(x, y) * shape.half))
+                    .to_vec()
+            }
         };
         painter.add(Shape::closed_line(outline, stroke));
         for (_, local) in shape.handles() {
@@ -271,7 +371,9 @@ impl MaskGeometry {
         let half = self.half.max(Vec2::splat(f32::EPSILON));
         match self.shape {
             MaskShape::Ellipse => (local / half).length_sq() <= 1.0,
-            MaskShape::Rectangle => local.x.abs() <= half.x && local.y.abs() <= half.y,
+            MaskShape::Rectangle | MaskShape::Path => {
+                local.x.abs() <= half.x && local.y.abs() <= half.y
+            }
         }
     }
 

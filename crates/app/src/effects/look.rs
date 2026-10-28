@@ -333,7 +333,7 @@ fn drag_speed(range: &RangeInclusive<f32>) -> f32 {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Icon {
+pub(super) enum Icon {
     Stopwatch,
     Previous,
     Key(Interpolation),
@@ -341,7 +341,12 @@ enum Icon {
 }
 
 /// A small painted button; the default fonts have no glyphs for these symbols.
-fn icon_button(ui: &mut egui::Ui, icon: Icon, filled: bool, enabled: bool) -> egui::Response {
+pub(super) fn icon_button(
+    ui: &mut egui::Ui,
+    icon: Icon,
+    filled: bool,
+    enabled: bool,
+) -> egui::Response {
     let sense = if enabled {
         egui::Sense::click()
     } else {
