@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AudioEffect, AudioType, Bin, Captions, FrameRate, Gain, Label, Look, Marker, Marks, MediaItem,
-    Param, SourceId, Speed, Submix, Ticks, TimeInterpolation, TimeRemap, Timebase, Transition,
+    AudioEffect, AudioType, Bin, Captions, FrameRate, Gain, GroupId, Label, Look, Marker, Marks,
+    MediaItem, Param, SourceId, Speed, Submix, Ticks, TimeInterpolation, TimeRemap, Timebase,
+    Transition,
 };
 
 pub use crate::track::Track;
@@ -76,6 +77,9 @@ pub struct Clip {
     pub hold: bool,
     #[serde(default)]
     pub link: Option<LinkId>,
+    /// Clips in a group are selected, moved and deleted together, but each trims alone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<GroupId>,
     /// Left out of playback and export but kept on the timeline.
     #[serde(default)]
     pub disabled: bool,
@@ -146,6 +150,7 @@ impl Clip {
             maintain_pitch: false,
             hold: false,
             link: None,
+            group: None,
             disabled: false,
             gain: Gain::UNITY,
             volume: Param::default(),

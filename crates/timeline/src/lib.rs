@@ -11,6 +11,7 @@ mod edit;
 mod effect;
 mod error;
 mod generator;
+mod group;
 mod history;
 mod label;
 mod look;
@@ -59,8 +60,8 @@ pub use edit::{
     RemoveSpeedKeyframe, RemoveSubmix, RemoveTimeRemap, RemoveTrack, RenameBin, RenameMedia,
     RenameTrack, RippleDelete, RippleTrimToPlayhead, Roll, SetCaptions, SetClipAudioEffects,
     SetClipGain, SetClipLabel, SetClipLook, SetClipSpeed, SetClipVolume, SetClipsEnabled,
-    SetClipsSound, SetGenerator, SetLinked, SetMarks, SetMasterEffects, SetMasterGain, SetProxy,
-    SetSegmentSpeed, SetSequenceFormat, SetSubmix, SetTimeInterpolation, SetToFrameSize,
+    SetClipsSound, SetGenerator, SetGrouped, SetLinked, SetMarks, SetMasterEffects, SetMasterGain,
+    SetProxy, SetSegmentSpeed, SetSequenceFormat, SetSubmix, SetTimeInterpolation, SetToFrameSize,
     SetTrackAutomation, SetTrackEffects, SetTrackMix, SetTrackOutput, SetTrackSwitch,
     SetTransition, Slide, Slip, SwitchAngle, TrackSwitch, Trim, TrimMode, UpdateMarker,
 };
@@ -69,6 +70,7 @@ pub use effect::{
 };
 pub use error::TimelineError;
 pub use generator::{Generator, TextAlign, TextStroke, Title, TitleFont, GENERATED_SECONDS};
+pub use group::GroupId;
 pub use history::{preview, Edit, EditCommand, Timeline};
 pub use label::Label;
 pub use look::{Crop, Look, Motion};

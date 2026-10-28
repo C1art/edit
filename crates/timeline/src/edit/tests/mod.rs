@@ -502,6 +502,7 @@ mod caption;
 mod enable;
 mod frame_size;
 mod generate;
+mod group;
 mod hold;
 mod interpret;
 mod link;

@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 use crate::edit::ops::{self, Relinks};
 use crate::{
-    Clip, ClipId, Edit, LinkId, PlaceMode, Sequence, Ticks, TimelineError, TrackKind, TrackRef,
+    Clip, ClipId, Edit, GroupId, LinkId, PlaceMode, Sequence, Ticks, TimelineError, TrackKind,
+    TrackRef,
 };
 
 /// Copied clips with their tracks, timed from the start of the earliest one.
@@ -118,16 +119,23 @@ impl Edit for PasteClips {
             }
         }
         let mut links: HashMap<LinkId, LinkId> = HashMap::new();
+        let mut groups: HashMap<GroupId, GroupId> = HashMap::new();
         for (track, clip) in placed {
             let link = clip.link.map(|link| {
                 *links
                     .entry(link)
                     .or_insert_with(|| LinkId(sequence.ids.next()))
             });
+            let group = clip.group.map(|group| {
+                *groups
+                    .entry(group)
+                    .or_insert_with(|| GroupId(sequence.ids.next()))
+            });
             let pasted = Clip {
                 id: ClipId(sequence.ids.next()),
                 start: self.at + clip.start,
                 link,
+                group,
                 ..clip.clone()
             };
             ops::insert(sequence, track, pasted)?;
