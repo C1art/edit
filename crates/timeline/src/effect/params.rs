@@ -192,6 +192,23 @@ macro_rules! effect_params {
                 opacity,
                 ..
             } => points.$iter().flatten().chain([blend, opacity]).collect(),
+            VideoEffect::LensFlare {
+                center,
+                brightness,
+                blend,
+                ..
+            } => center.$iter().chain([brightness, blend]).collect(),
+            VideoEffect::Magnify {
+                center,
+                magnification,
+                size,
+                feather,
+                opacity,
+                ..
+            } => center
+                .$iter()
+                .chain([magnification, size, feather, opacity])
+                .collect(),
         }
     };
 }

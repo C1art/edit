@@ -90,6 +90,48 @@ impl RampShape {
     }
 }
 
+/// The lens a Lens Flare imitates, which sets how its glare and reflections look.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub enum LensType {
+    /// Streaked glare and a long chain of small reflections.
+    #[default]
+    Zoom50To300,
+    /// A wide halo with a few large reflections.
+    Prime35,
+    /// A tight glare with reflections bunched near the middle.
+    Prime105,
+}
+
+impl LensType {
+    pub const ALL: [Self; 3] = [Self::Zoom50To300, Self::Prime35, Self::Prime105];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Zoom50To300 => "50-300mm Zoom",
+            Self::Prime35 => "35mm Prime",
+            Self::Prime105 => "105mm Prime",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub enum MagnifyShape {
+    #[default]
+    Circle,
+    Square,
+}
+
+impl MagnifyShape {
+    pub const ALL: [Self; 2] = [Self::Circle, Self::Square];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Circle => "Circle",
+            Self::Square => "Square",
+        }
+    }
+}
+
 /// The groups the effects menu lists effects in, as Premiere's Effects panel does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EffectCategory {

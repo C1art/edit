@@ -8,7 +8,9 @@ mod options;
 mod params;
 
 pub use key::{KeyOutput, MatteChannel, ULTRA_KEY_REACH};
-pub use options::{ColorChange, ColorMatch, EffectCategory, RampShape, TimecodeSource};
+pub use options::{
+    ColorChange, ColorMatch, EffectCategory, LensType, MagnifyShape, RampShape, TimecodeSource,
+};
 
 /// An sRGB color as stored in a project.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -381,6 +383,30 @@ pub enum VideoEffect {
         colors: [Rgb; 4],
         /// How smoothly the colors run together, from 1.
         blend: Param,
+        /// Percent.
+        opacity: Param,
+    },
+    /// Adds the glare and reflections of a bright light shining into the lens.
+    LensFlare {
+        /// Percent of the picture's width and height.
+        center: [Param; 2],
+        /// Percent.
+        brightness: Param,
+        lens: LensType,
+        /// Percent of the original showing through.
+        blend: Param,
+    },
+    /// Enlarges the picture within a circle or square about `center`.
+    Magnify {
+        shape: MagnifyShape,
+        /// Percent of the picture's width and height.
+        center: [Param; 2],
+        /// Percent.
+        magnification: Param,
+        /// The shape's radius, or half its side, in the picture's pixels, as is the
+        /// feather softening its edge.
+        size: Param,
+        feather: Param,
         /// Percent.
         opacity: Param,
     },

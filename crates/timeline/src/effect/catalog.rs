@@ -1,12 +1,12 @@
 use super::{
-    ColorChange, ColorMatch, EffectCategory, KeyOutput, MatteChannel, RampShape, Rgb,
-    TimecodeSource, VideoEffect,
+    ColorChange, ColorMatch, EffectCategory, KeyOutput, LensType, MagnifyShape, MatteChannel,
+    RampShape, Rgb, TimecodeSource, VideoEffect,
 };
 use crate::{Param, Stabilizer};
 
 impl VideoEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 48] {
+    pub fn catalog() -> [Self; 50] {
         [
             Self::GaussianBlur {
                 blurriness: Param::from_value(10.0),
@@ -239,6 +239,20 @@ impl VideoEffect {
                 blend: Param::from_value(100.0),
                 opacity: Param::from_value(100.0),
             },
+            Self::LensFlare {
+                center: [25.0, 25.0].map(Param::from_value),
+                brightness: Param::from_value(100.0),
+                lens: LensType::default(),
+                blend: Param::default(),
+            },
+            Self::Magnify {
+                shape: MagnifyShape::default(),
+                center: [50.0; 2].map(Param::from_value),
+                magnification: Param::from_value(200.0),
+                size: Param::from_value(100.0),
+                feather: Param::default(),
+                opacity: Param::from_value(100.0),
+            },
         ]
     }
 
@@ -257,7 +271,8 @@ impl VideoEffect {
             | Self::CornerPin { .. }
             | Self::Transform { .. }
             | Self::Spherize { .. }
-            | Self::TurbulentDisplace { .. } => EffectCategory::Distort,
+            | Self::TurbulentDisplace { .. }
+            | Self::Magnify { .. } => EffectCategory::Distort,
             Self::LeaveColor { .. } | Self::ChannelMixer { .. } | Self::ChangeToColor { .. } => {
                 EffectCategory::ColorCorrection
             }
@@ -265,7 +280,8 @@ impl VideoEffect {
             | Self::Checkerboard { .. }
             | Self::Grid { .. }
             | Self::Circle { .. }
-            | Self::FourColorGradient { .. } => EffectCategory::Generate,
+            | Self::FourColorGradient { .. }
+            | Self::LensFlare { .. } => EffectCategory::Generate,
             Self::DropShadow { .. } | Self::Basic3D { .. } => EffectCategory::Perspective,
             Self::BlackAndWhite | Self::GammaCorrection { .. } | Self::ColorBalanceRgb { .. } => {
                 EffectCategory::ImageControl
@@ -342,6 +358,8 @@ impl VideoEffect {
             Self::Grid { .. } => "Grid",
             Self::Circle { .. } => "Circle",
             Self::FourColorGradient { .. } => "4-Color Gradient",
+            Self::LensFlare { .. } => "Lens Flare",
+            Self::Magnify { .. } => "Magnify",
         }
     }
 }
