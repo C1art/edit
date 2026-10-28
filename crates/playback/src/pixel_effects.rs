@@ -8,7 +8,7 @@ pub(crate) fn pixel_effects(effects: &[VideoEffect], time: Ticks) -> PixelEffect
     let mut pixel = PixelEffects::NONE;
     for effect in effects {
         match effect {
-            VideoEffect::GaussianBlur { .. } => {}
+            VideoEffect::GaussianBlur { .. } | VideoEffect::TrackMatteKey { .. } => {}
             VideoEffect::HorizontalFlip => pixel.flip[0] = !pixel.flip[0],
             VideoEffect::VerticalFlip => pixel.flip[1] = !pixel.flip[1],
             VideoEffect::BlackAndWhite => {

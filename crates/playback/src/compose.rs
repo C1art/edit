@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use render::{ColorAdjust, Grade, LayerLook, LayerMask, MAX_MASKS};
 use timeline::{
-    track_layers_at, ClipId, ColorCorrection, Generator, Look, Mask, Param, Reveal, Sequence,
-    SourceId, Ticks, Track, TrackRef,
+    track_layers_at, BlendMode, ClipId, ColorCorrection, Generator, Look, Mask, MatteChannel,
+    MediaItem, Param, PlannedLayer, Reveal, Sequence, SourceId, Ticks, Track, TrackRef,
+    VideoEffect,
 };
 
 use crate::clip_decoders::ClipDecoders;
@@ -64,10 +65,9 @@ fn video_layers(
     tracks.resize_with(video.len(), || {
         ClipDecoders::new(|| TrackVideo::new(sequence.timebase))
     });
-    let size = [sequence.format.width, sequence.format.height];
-    let canvas = size.map(|side| side as f32);
+    let canvas = [sequence.format.width, sequence.format.height].map(|side| side as f32);
     let mut layers = Vec::new();
-    for ((index, track), decoders) in video.iter().enumerate().zip(tracks) {
+    for (index, track) in video.iter().enumerate() {
         if track.muted {
             continue;
         }
@@ -88,36 +88,151 @@ fn video_layers(
                 adjust(&mut layers, TrackRef::video(index), look, grade);
                 continue;
             }
-            let decoder = decoders.for_clip(plan.clip.id, &showing);
-            let picture = match &media.nest {
-                Some(nest) => {
-                    let (time, nested) = (plan.source_time, &mut decoder.nested);
-                    let inner = video_layers(sequence, &nest.video, time, nested, reported);
-                    (!inner.is_empty()).then_some(LayerPicture::Nest(inner))
-                }
-                None => match decoder.frame_at(media, plan.source_time, size) {
-                    Ok(frame) => frame.map(LayerPicture::Frame),
-                    Err(error) => {
-                        decoder.reset();
-                        if !reported.warned.contains(&media.id) {
-                            reported.warned.push(media.id);
-                            reported.warnings.push(PlaybackError::Media(error));
-                        }
-                        None
-                    }
-                },
-            };
-            if let Some(picture) = picture {
-                layers.push(Layer {
-                    track: TrackRef::video(index),
-                    picture,
-                    look,
-                    grade,
+            // Decoded first, as the clip's own track decoders are borrowed below.
+            let matte = track_matte(&plan.clip.look.effects)
+                .filter(|matte| matte.track != index && matte.track < video.len())
+                .map(|matte| {
+                    let pictures =
+                        matte_layers(sequence, video, matte.track, pts, tracks, reported);
+                    (matte, pictures)
                 });
-            }
+            let decoders = &mut tracks[index];
+            let Some(picture) = clip_picture(sequence, &plan, media, decoders, &showing, reported)
+            else {
+                continue;
+            };
+            let layer = Layer {
+                track: TrackRef::video(index),
+                picture,
+                look,
+                grade,
+            };
+            layers.push(match matte {
+                Some((matte, pictures)) => matted(layer, matte, pictures),
+                None => layer,
+            });
         }
     }
     layers
+}
+
+/// The picture `plan` shows, decoded by the decoders of its track, which also has the
+/// clips in `showing` on screen.
+fn clip_picture(
+    sequence: &Sequence,
+    plan: &PlannedLayer<'_>,
+    media: &MediaItem,
+    decoders: &mut TrackDecoders,
+    showing: &[ClipId],
+    reported: &mut Reported<'_>,
+) -> Option<LayerPicture> {
+    let decoder = decoders.for_clip(plan.clip.id, showing);
+    match &media.nest {
+        Some(nest) => {
+            let (time, nested) = (plan.source_time, &mut decoder.nested);
+            let inner = video_layers(sequence, &nest.video, time, nested, reported);
+            (!inner.is_empty()).then_some(LayerPicture::Nest(inner))
+        }
+        None => {
+            let size = [sequence.format.width, sequence.format.height];
+            match decoder.frame_at(media, plan.source_time, size) {
+                Ok(frame) => frame.map(LayerPicture::Frame),
+                Err(error) => {
+                    decoder.reset();
+                    if !reported.warned.contains(&media.id) {
+                        reported.warned.push(media.id);
+                        reported.warnings.push(PlaybackError::Media(error));
+                    }
+                    None
+                }
+            }
+        }
+    }
+}
+
+/// The track matte a clip's effects ask for; the last Track Matte Key with one wins.
+#[derive(Debug, Clone, Copy)]
+struct TrackMatte {
+    track: usize,
+    channel: MatteChannel,
+    reverse: bool,
+}
+
+fn track_matte(effects: &[VideoEffect]) -> Option<TrackMatte> {
+    effects.iter().rev().find_map(|effect| match *effect {
+        VideoEffect::TrackMatteKey {
+            matte: Some(track),
+            channel,
+            reverse,
+        } => Some(TrackMatte {
+            track,
+            channel,
+            reverse,
+        }),
+        _ => None,
+    })
+}
+
+/// What video track `index` shows at `pts` for use as a matte, hidden or not. Its
+/// adjustment layers and its own track mattes are left out.
+fn matte_layers(
+    sequence: &Sequence,
+    video: &[Track],
+    index: usize,
+    pts: Ticks,
+    tracks: &mut [TrackDecoders],
+    reported: &mut Reported<'_>,
+) -> Vec<Layer> {
+    let canvas = [sequence.format.width, sequence.format.height].map(|side| side as f32);
+    let planned = track_layers_at(sequence, &video[index], pts);
+    let showing: Vec<ClipId> = planned.iter().map(|layer| layer.clip.id).collect();
+    let mut layers = Vec::new();
+    for plan in planned.iter().filter(|plan| !plan.clip.disabled) {
+        let Some(media) = sequence
+            .media_item(plan.clip.source)
+            .filter(|media| media.generator != Some(Generator::AdjustmentLayer))
+        else {
+            continue;
+        };
+        let decoders = &mut tracks[index];
+        if let Some(picture) = clip_picture(sequence, plan, media, decoders, &showing, reported) {
+            let time = plan.clip.source_time(pts);
+            layers.push(Layer {
+                track: TrackRef::video(index),
+                picture,
+                look: layer_look(&plan.clip.look, time, plan.reveal, canvas),
+                grade: grade_for(&plan.clip.look.color, reported.warnings),
+            });
+        }
+    }
+    layers
+}
+
+/// `fill` shown through `pictures`, its blend mode applied once matted.
+fn matted(fill: Layer, matte: TrackMatte, pictures: Vec<Layer>) -> Layer {
+    let look = LayerLook {
+        blend: fill.look.blend,
+        ..LayerLook::IDENTITY
+    };
+    let track = fill.track;
+    let fill = Layer {
+        look: LayerLook {
+            blend: BlendMode::Normal,
+            ..fill.look
+        },
+        ..fill
+    };
+    Layer {
+        track,
+        picture: LayerPicture::Matted {
+            fill: Box::new(fill),
+            matte: pictures,
+            channel: matte.channel,
+            reverse: matte.reverse,
+        },
+        look,
+        grade: None,
+    }
 }
 
 /// Applies an adjustment layer's look to the picture of `layers` as one. Below full

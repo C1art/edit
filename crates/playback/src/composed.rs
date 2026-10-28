@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use media::VideoFrame;
 use render::{Grade, LayerImage, LayerLook, Picture};
-use timeline::{Ticks, TrackRef};
+use timeline::{MatteChannel, Ticks, TrackRef};
 
 /// One picture placed in the program picture.
 #[derive(Debug, Clone)]
@@ -18,6 +18,13 @@ pub enum LayerPicture {
     Frame(Arc<VideoFrame>),
     /// What a nested sequence shows, bottom layer first, composited before the look.
     Nest(Vec<Layer>),
+    /// A clip's layer shown where the layers of its track matte let it.
+    Matted {
+        fill: Box<Layer>,
+        matte: Vec<Layer>,
+        channel: MatteChannel,
+        reverse: bool,
+    },
 }
 
 impl Layer {
@@ -28,7 +35,18 @@ impl Layer {
                 height: frame.height,
                 rgba: &frame.pixels,
             },
-            LayerPicture::Nest(layers) => Picture::Group(layers.iter().map(Layer::image).collect()),
+            LayerPicture::Nest(layers) => Picture::Group(images(layers)),
+            LayerPicture::Matted {
+                fill,
+                matte,
+                channel,
+                reverse,
+            } => Picture::Matted {
+                fill: vec![fill.image()],
+                matte: images(matte),
+                channel: *channel,
+                reverse: *reverse,
+            },
         };
         LayerImage {
             picture,
@@ -36,6 +54,10 @@ impl Layer {
             grade: self.grade.clone(),
         }
     }
+}
+
+fn images(layers: &[Layer]) -> Vec<LayerImage<'_>> {
+    layers.iter().map(Layer::image).collect()
 }
 
 /// Everything visible at one frame of the sequence, bottom layer first.
