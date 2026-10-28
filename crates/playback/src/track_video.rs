@@ -85,6 +85,9 @@ impl TrackVideo {
         if let Some(generator) = &media.generator {
             return Ok(Some(self.generated(generator, canvas)));
         }
+        if media.offline {
+            return Ok(Some(offline_frame(canvas[0], canvas[1])));
+        }
         let same_media = match &self.source {
             Source::Open(id, path, _) => *id == media.id && *path == media.path,
             Source::Failed(id, path, at) => {

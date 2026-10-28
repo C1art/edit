@@ -55,6 +55,9 @@ impl TrackAudio {
         first: i64,
         out: &mut [f32],
     ) -> Result<(), PlaybackError> {
+        if media.offline {
+            return Ok(());
+        }
         let same_media = match &self.source {
             Source::Open(id, path, _) | Source::Failed(id, path) => {
                 *id == media.id && *path == media.path
@@ -145,6 +148,7 @@ mod tests {
             interpreted_aspect: None,
             alpha: Default::default(),
             log: Default::default(),
+            offline: false,
         }
     }
 

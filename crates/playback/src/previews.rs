@@ -47,6 +47,7 @@ impl PreviewPictures {
                 interpreted_aspect: None,
                 alpha: Default::default(),
                 log: Default::default(),
+                offline: false,
             });
             let clip = Clip::new(
                 ClipId(index),
