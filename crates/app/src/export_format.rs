@@ -1,4 +1,4 @@
-use media::{AudioCodec, AudioSettings, RateControl, VideoCodec};
+use media::{AudioCodec, AudioSettings, DnxhrQuality, RateControl, VideoCodec};
 use playback::VideoExport;
 
 /// What kind of file an export makes: its codecs and container.
@@ -9,6 +9,7 @@ pub enum Format {
     ProRes422,
     ProRes422Hq,
     ProRes4444,
+    Dnxhr(DnxhrQuality),
     Aac,
     Mp3,
     Wav,
@@ -16,12 +17,17 @@ pub enum Format {
 }
 
 impl Format {
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 14] = [
         Self::H264,
         Self::Hevc,
         Self::ProRes422,
         Self::ProRes422Hq,
         Self::ProRes4444,
+        Self::Dnxhr(DnxhrQuality::Lb),
+        Self::Dnxhr(DnxhrQuality::Sq),
+        Self::Dnxhr(DnxhrQuality::Hq),
+        Self::Dnxhr(DnxhrQuality::Hqx),
+        Self::Dnxhr(DnxhrQuality::Dnx444),
         Self::Aac,
         Self::Mp3,
         Self::Wav,
@@ -35,6 +41,11 @@ impl Format {
             Self::ProRes422 => "Apple ProRes 422",
             Self::ProRes422Hq => "Apple ProRes 422 HQ",
             Self::ProRes4444 => "Apple ProRes 4444 with Alpha",
+            Self::Dnxhr(DnxhrQuality::Lb) => "Avid DNxHR LB",
+            Self::Dnxhr(DnxhrQuality::Sq) => "Avid DNxHR SQ",
+            Self::Dnxhr(DnxhrQuality::Hq) => "Avid DNxHR HQ",
+            Self::Dnxhr(DnxhrQuality::Hqx) => "Avid DNxHR HQX 10-bit",
+            Self::Dnxhr(DnxhrQuality::Dnx444) => "Avid DNxHR 444 10-bit",
             Self::Aac => "AAC Audio",
             Self::Mp3 => "MP3",
             Self::Wav => "Waveform Audio",
@@ -45,7 +56,7 @@ impl Format {
     pub fn extension(self) -> &'static str {
         match self {
             Self::H264 | Self::Hevc => "mp4",
-            Self::ProRes422 | Self::ProRes422Hq | Self::ProRes4444 => "mov",
+            Self::ProRes422 | Self::ProRes422Hq | Self::ProRes4444 | Self::Dnxhr(_) => "mov",
             Self::Aac => "m4a",
             Self::Mp3 => "mp3",
             Self::Wav => "wav",
@@ -60,6 +71,7 @@ impl Format {
             Self::ProRes422 => Some(VideoCodec::ProRes422),
             Self::ProRes422Hq => Some(VideoCodec::ProRes422Hq),
             Self::ProRes4444 => Some(VideoCodec::ProRes4444),
+            Self::Dnxhr(quality) => Some(VideoCodec::Dnxhr(quality)),
             Self::Aac | Self::Mp3 | Self::Wav | Self::Flac => None,
         }
     }
@@ -68,7 +80,9 @@ impl Format {
         match self {
             Self::H264 | Self::Hevc | Self::Aac => AudioCodec::Aac,
             // Mastering formats carry uncompressed sound, as cameras and Premiere do.
-            Self::ProRes422 | Self::ProRes422Hq | Self::ProRes4444 => AudioCodec::Pcm24,
+            Self::ProRes422 | Self::ProRes422Hq | Self::ProRes4444 | Self::Dnxhr(_) => {
+                AudioCodec::Pcm24
+            }
             Self::Mp3 => AudioCodec::Mp3,
             Self::Wav => AudioCodec::Pcm16,
             Self::Flac => AudioCodec::Flac,
@@ -125,7 +139,7 @@ const fn format_preset(name: &'static str, format: Format) -> Preset {
     }
 }
 
-pub const PRESETS: [Preset; 12] = [
+pub const PRESETS: [Preset; 14] = [
     Preset {
         name: "Match Source - High Bitrate",
         format: MATCH_SOURCE,
@@ -144,6 +158,8 @@ pub const PRESETS: [Preset; 12] = [
     format_preset("Apple ProRes 422", Format::ProRes422),
     format_preset("Apple ProRes 422 HQ", Format::ProRes422Hq),
     format_preset("Apple ProRes 4444 with Alpha", Format::ProRes4444),
+    format_preset("DNxHR HQ", Format::Dnxhr(DnxhrQuality::Hq)),
+    format_preset("DNxHR HQX 10-bit", Format::Dnxhr(DnxhrQuality::Hqx)),
     format_preset("AAC Audio 320 kbps", Format::Aac),
     format_preset("MP3 320 kbps", Format::Mp3),
     format_preset("Waveform Audio 48 kHz 16-bit", Format::Wav),
