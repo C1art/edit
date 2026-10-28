@@ -9,6 +9,7 @@ use timeline::{
     VideoFormat,
 };
 
+use crate::export::ExportDialog;
 use crate::import::Importer;
 use crate::media_pool::{self, PoolAction};
 use crate::mixer::{self, Mixer};
@@ -36,6 +37,7 @@ pub struct Editor {
     pub(crate) gain_prompt: Option<f32>,
     /// The path being typed into the import dialog, while it is showing.
     pub(crate) import_prompt: Option<String>,
+    pub(crate) export: Option<ExportDialog>,
     notices: Vec<String>,
 }
 
@@ -76,6 +78,7 @@ impl Editor {
             mixer: Mixer::default(),
             gain_prompt: None,
             import_prompt: None,
+            export: None,
             notices,
         };
         for path in initial {
@@ -309,5 +312,6 @@ impl eframe::App for Editor {
 
         crate::menus::import_dialog(self, &ctx);
         crate::menus::gain_dialog(self, &ctx);
+        crate::export::dialog(self, &ctx);
     }
 }

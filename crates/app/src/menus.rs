@@ -16,6 +16,11 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             if ui.add(import).clicked() {
                 editor.import_prompt = Some(String::new());
             }
+            let export =
+                Button::new("Export Media…").shortcut_text(shortcut(ui, shortcuts::EXPORT));
+            if ui.add(export).clicked() {
+                crate::export::open(editor);
+            }
             if ui.button("Quit").clicked() {
                 ui.ctx().send_viewport_cmd(ViewportCommand::Close);
             }

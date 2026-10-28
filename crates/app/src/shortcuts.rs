@@ -8,6 +8,7 @@ use crate::timeline_view::Tool;
 use crate::transport;
 
 pub const IMPORT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::I);
+pub const EXPORT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::M);
 pub const UNDO: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::Z);
 pub const REDO: KeyboardShortcut =
     KeyboardShortcut::new(Modifiers::COMMAND.plus(Modifiers::SHIFT), Key::Z);
@@ -17,6 +18,7 @@ pub const ADD_EDIT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND,
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Action {
     Import,
+    Export,
     Undo,
     Redo,
     AddEdit,
@@ -64,6 +66,7 @@ fn pressed(ctx: &egui::Context) -> Option<Action> {
             (REDO_ALT, Action::Redo),
             (UNDO, Action::Undo),
             (IMPORT, Action::Import),
+            (EXPORT, Action::Export),
             (ADD_EDIT, Action::AddEdit),
             (
                 KeyboardShortcut::new(Modifiers::SHIFT, Key::Delete),
@@ -101,6 +104,7 @@ fn pressed(ctx: &egui::Context) -> Option<Action> {
 fn run(editor: &mut Editor, action: Action) {
     match action {
         Action::Import => editor.import_prompt = Some(String::new()),
+        Action::Export => crate::export::open(editor),
         Action::Undo => editor.undo(),
         Action::Redo => editor.redo(),
         Action::AddEdit => editor.add_edit(),

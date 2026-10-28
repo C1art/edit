@@ -1,5 +1,6 @@
 mod commands;
 mod editor;
+mod export;
 mod import;
 mod media_pool;
 mod menus;
