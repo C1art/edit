@@ -116,6 +116,7 @@ pub fn clips(
         };
         painter.rect_stroke(rect, 3.0, stroke, StrokeKind::Inside);
         transition_marks(painter, row, scale, track, clip);
+        keyframe_marks(painter, rect, scale, clip);
         let name = sequence
             .media_item(clip.source)
             .map_or("Missing media", |item| item.name.as_str());
@@ -136,6 +137,26 @@ pub fn clips(
             FontId::proportional(11.0),
             Color32::WHITE,
         );
+    }
+}
+
+/// A diamond at the bottom of the clip for each keyframe it shows.
+fn keyframe_marks(painter: &Painter, rect: Rect, scale: &TimeScale, clip: &Clip) {
+    let y = rect.bottom() - 6.0;
+    for time in clip.look.key_times() {
+        let position = clip.start + (time - clip.source_in);
+        if !clip.covers(position) {
+            continue;
+        }
+        let x = scale.x(position);
+        let points = [(0.0, -4.0), (4.0, 0.0), (0.0, 4.0), (-4.0, 0.0)]
+            .map(|(dx, dy)| egui::pos2(x + dx, y + dy))
+            .to_vec();
+        painter.add(egui::Shape::convex_polygon(
+            points,
+            Color32::from_rgb(250, 210, 60),
+            Stroke::new(1.0, Color32::from_black_alpha(160)),
+        ));
     }
 }
 
