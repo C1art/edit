@@ -1,7 +1,7 @@
 use std::ops::RangeInclusive;
 
 use egui::{Align2, Color32, FontId, Pos2, Rect, Sense, Shape, Stroke};
-use timeline::{Param, Ticks};
+use timeline::{HandleSide, Param, Ticks};
 
 use super::{Lane, REACH};
 use crate::effects::look::{paint_key, Output, ANIMATED};
@@ -42,6 +42,27 @@ impl Scale {
     }
 }
 
+/// What a drag in the graph moves: a keyframe's value, or the slope of one of its Bezier
+/// handles, drawn `reach` from it.
+#[derive(Debug, Clone, Copy)]
+enum Grab {
+    Key(Ticks),
+    Handle {
+        key: Ticks,
+        side: HandleSide,
+        reach: Ticks,
+    },
+}
+
+/// A Bezier handle as drawn, shortened if need be to stay inside the graph.
+struct Handle {
+    key: Ticks,
+    side: HandleSide,
+    reach: Ticks,
+    from: Pos2,
+    at: Pos2,
+}
+
 impl Lane {
     /// Premiere's value graph: the curve `param` takes over the clip, under its lane, where
     /// keyframes drag up and down to change their values and a double-click adds one.
@@ -59,17 +80,25 @@ impl Lane {
             let size = egui::vec2(self.right - left, HEIGHT);
             let (rect, response) = ui.allocate_exact_size(size, Sense::click_and_drag());
             let dragging = response.id;
-            let held: Option<(Ticks, Scale)> = ui.data(|data| data.get_temp(dragging)).flatten();
+            let held: Option<(Grab, Scale)> = ui.data(|data| data.get_temp(dragging)).flatten();
             let scale = held.map_or_else(|| self.fit(rect, param), |(_, scale)| scale);
             let pointer = response.interact_pointer_pos();
             if response.drag_started() {
                 let origin = ui.input(|input| input.pointer.press_origin());
-                let grabbed = origin.and_then(|origin| self.key_at(rect, scale, param, origin));
+                let grabbed = origin.and_then(|origin| self.grab_at(rect, scale, param, origin));
                 let held = grabbed.map(|key| (key, scale));
                 ui.data_mut(|data| data.insert_temp(dragging, held));
             }
             match (held.filter(|_| response.dragged()), pointer) {
-                (Some((key, scale)), Some(pointer)) => {
+                (Some((Grab::Handle { key, side, reach }, scale)), Some(pointer)) => {
+                    if response.drag_delta() != egui::Vec2::ZERO {
+                        let rise = scale.value_at(rect, pointer.y) - param.value_at(key);
+                        let slope = f64::from(rise) * 100.0 / reach.0 as f64;
+                        param.set_handle(key, side, slope);
+                        output.change = output.change.max(Some(Change::Live));
+                    }
+                }
+                (Some((Grab::Key(key), scale)), Some(pointer)) => {
                     let value = scale
                         .value_at(rect, pointer.y)
                         .clamp(*range.start(), *range.end());
@@ -87,7 +116,7 @@ impl Lane {
                 if held.is_some() {
                     output.change = Some(Change::Commit);
                 }
-                ui.data_mut(|data| data.remove::<Option<(Ticks, Scale)>>(dragging));
+                ui.data_mut(|data| data.remove::<Option<(Grab, Scale)>>(dragging));
             }
             if let (true, Some(pointer)) = (response.double_clicked(), pointer) {
                 let source = self.source_at(rect, pointer.x);
@@ -110,6 +139,60 @@ impl Lane {
         let curve = (0..=columns)
             .map(|column| param.value_at(self.source_at(rect, rect.left() + column as f32)));
         Scale::fit(curve.chain(param.keys.iter().map(|key| key.value())))
+    }
+
+    /// The handle or else the keyframe drawn nearest `pointer`, if one is within reach.
+    fn grab_at(&self, rect: Rect, scale: Scale, param: &Param, pointer: Pos2) -> Option<Grab> {
+        let handle = self
+            .handles(rect, scale, param)
+            .into_iter()
+            .map(|handle| (handle.at.distance(pointer), handle))
+            .filter(|&(distance, _)| distance <= REACH)
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|(_, handle)| Grab::Handle {
+                key: handle.key,
+                side: handle.side,
+                reach: handle.reach,
+            });
+        handle.or_else(|| self.key_at(rect, scale, param, pointer).map(Grab::Key))
+    }
+
+    /// Premiere draws a Bezier keyframe's handles a third of the way to its neighbours.
+    fn handles(&self, rect: Rect, scale: Scale, param: &Param) -> Vec<Handle> {
+        let keys = &param.keys;
+        let bezier = keys.iter().enumerate().filter_map(|(index, key)| {
+            let handles = key.handles.filter(|_| key.interpolation.has_handles())?;
+            Some((index, key, handles))
+        });
+        bezier
+            .flat_map(|(index, key, handles)| {
+                let previous = index.checked_sub(1).and_then(|index| keys.get(index));
+                let sides = [
+                    (HandleSide::Incoming, previous),
+                    (HandleSide::Outgoing, keys.get(index + 1)),
+                ];
+                sides.into_iter().filter_map(move |(side, neighbour)| {
+                    let reach = (neighbour?.time - key.time).0 / 3;
+                    let rise = handles.slope(side) * reach as f64 / 100.0;
+                    let from = Pos2::new(self.x_of(rect, key.time), scale.y_of(rect, key.value()));
+                    let y = scale.y_of(rect, key.value() + rise as f32);
+                    let inside = y.clamp(rect.top() + MARGIN, rect.bottom() - MARGIN);
+                    let shortened = if y == from.y {
+                        1.0
+                    } else {
+                        f64::from((inside - from.y) / (y - from.y))
+                    };
+                    let reach = Ticks((reach as f64 * shortened).round() as i64);
+                    (reach != Ticks::ZERO).then(|| Handle {
+                        key: key.time,
+                        side,
+                        reach,
+                        from,
+                        at: Pos2::new(self.x_of(rect, key.time + reach), inside),
+                    })
+                })
+            })
+            .collect()
     }
 
     /// The keyframe drawn nearest `pointer`, if it is within reach.
@@ -157,6 +240,10 @@ impl Lane {
             Stroke::new(1.0, Color32::from_rgb(230, 70, 70)),
         );
         let outline = Stroke::new(1.0, Color32::BLACK);
+        for handle in self.handles(rect, scale, param) {
+            painter.line_segment([handle.from, handle.at], Stroke::new(1.0, ANIMATED));
+            painter.circle(handle.at, 3.0, Color32::WHITE, outline);
+        }
         for key in &param.keys {
             let x = self.x_of(rect, key.time);
             if !(rect.left() - REACH..=rect.right() + REACH).contains(&x) {

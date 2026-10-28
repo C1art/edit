@@ -381,7 +381,8 @@ pub(super) fn icon_button(
     response
 }
 
-/// A diamond for linear keyframes, a square for holds and a circle for eases.
+/// A diamond for linear keyframes, a square for holds, an hourglass for Bezier keyframes
+/// and a circle for eases.
 pub(super) fn paint_key(
     painter: &egui::Painter,
     center: egui::Pos2,
@@ -409,6 +410,15 @@ pub(super) fn paint_key(
                 fill,
                 stroke,
             ));
+        }
+        Interpolation::Bezier | Interpolation::ContinuousBezier => {
+            for tip in [-5.0, 5.0] {
+                painter.add(egui::Shape::convex_polygon(
+                    at(&[(-4.0, tip), (4.0, tip), (0.0, 0.0)]),
+                    fill,
+                    stroke,
+                ));
+            }
         }
         _ => {
             painter.circle(center, 4.5, fill, stroke);
