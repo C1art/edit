@@ -15,6 +15,8 @@ pub(super) struct Output {
     pub(super) seek: Option<Ticks>,
     /// A LUT to ask for the file of.
     pub(super) choose_lut: Option<LutSlot>,
+    /// Whether to analyze the clip's motion for Warp Stabilizer.
+    pub(super) analyze_motion: bool,
 }
 
 /// Edits `look` in `rows`, of a clip among `video_tracks` video tracks.
@@ -111,6 +113,8 @@ pub(super) fn controls(
 pub(super) struct Rows {
     time: Ticks,
     lane: Option<Lane>,
+    /// How much of the clip's motion has been analyzed, while it is being.
+    pub(super) analyzing: Option<f32>,
     pub(super) output: Output,
 }
 
@@ -119,10 +123,12 @@ impl Rows {
         Self {
             time,
             lane,
+            analyzing: None,
             output: Output {
                 change: None,
                 seek: None,
                 choose_lut: None,
+                analyze_motion: false,
             },
         }
     }

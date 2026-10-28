@@ -21,6 +21,7 @@ mod menus;
 mod mixer;
 mod monitor;
 mod monitors;
+mod motion_analysis;
 mod multicam;
 mod multicam_sync;
 mod nesting;

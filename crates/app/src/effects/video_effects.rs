@@ -10,6 +10,9 @@ pub(super) fn add_menu(ui: &mut egui::Ui, rows: &mut Rows, effects: &mut Vec<Vid
                 let catalog = VideoEffect::catalog();
                 for effect in catalog.into_iter().filter(|e| e.category() == category) {
                     if ui.button(effect.name()).clicked() {
+                        // Premiere analyzes as soon as the stabilizer is applied.
+                        rows.output.analyze_motion |=
+                            matches!(effect, VideoEffect::WarpStabilizer(_));
                         effects.push(effect);
                         rows.commit();
                         ui.close();
@@ -172,11 +175,17 @@ impl Rows {
                 });
                 self.choice(ui, "Reverse", |ui| ui.checkbox(reverse, "").changed());
             }
+            VideoEffect::WarpStabilizer(stabilizer) => self.stabilizer(ui, stabilizer),
         }
     }
 
     /// A labelled row of controls that return whether they made a choice.
-    fn choice(&mut self, ui: &mut egui::Ui, label: &str, add: impl FnOnce(&mut egui::Ui) -> bool) {
+    pub(super) fn choice(
+        &mut self,
+        ui: &mut egui::Ui,
+        label: &str,
+        add: impl FnOnce(&mut egui::Ui) -> bool,
+    ) {
         ui.horizontal(|ui| {
             ui.add_space(20.0);
             ui.add_sized([72.0, 18.0], egui::Label::new(label));

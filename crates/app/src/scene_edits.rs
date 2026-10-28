@@ -126,7 +126,7 @@ impl Editor {
 }
 
 /// The source a clip shows, from its earliest time to its latest.
-fn source_span(clip: &Clip) -> Range<Ticks> {
+pub(crate) fn source_span(clip: &Clip) -> Range<Ticks> {
     let ends = [
         clip.source_time(clip.start),
         clip.source_time(clip.end() - Ticks(1)),

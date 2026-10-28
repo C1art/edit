@@ -8,6 +8,7 @@ mod masks;
 mod remap;
 mod secondary;
 mod sound;
+mod stabilizer;
 mod transitions;
 mod video_effects;
 
@@ -101,8 +102,12 @@ fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
         .as_mut()
         .and_then(|generator| generated::controls(ui, generator));
     let video_tracks = editor.timeline.sequence().video.len();
-    let rows = Rows::new(time, lane(editor, ui, clip));
+    let mut rows = Rows::new(time, lane(editor, ui, clip));
+    rows.analyzing = editor.motion_analysis_progress(clip.id);
     let output = look::controls(ui, &mut look, rows, video_tracks);
+    if output.change.is_some() {
+        stabilizer::retune(&mut look, editor.timeline.sequence().timebase);
+    }
     seek_to_key(editor, clip, output.seek);
     if let Some(slot) = output.choose_lut {
         editor.prompt_path(PathPurpose::Lut(clip.id, slot));
@@ -128,6 +133,9 @@ fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
         look,
     };
     adjust_look(editor, edit, output.change);
+    if output.analyze_motion {
+        editor.analyze_motion(clip.id);
+    }
 }
 
 /// The look `clip` is shown with: the one being dragged, if any, else its own.
