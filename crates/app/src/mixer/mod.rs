@@ -1,12 +1,13 @@
 mod automation;
 mod inserts;
+mod submixes;
 
 use std::collections::HashMap;
 
 use egui::{Color32, Rect, RichText, Sense, Slider};
 use timeline::{
     preview, Edit, Gain, Pan, Param, SetMasterGain, SetTrackAutomation, SetTrackMix,
-    SetTrackSwitch, TrackRef, TrackSwitch,
+    SetTrackSwitch, SubmixId, TrackRef, TrackSwitch,
 };
 
 use crate::editor::Editor;
@@ -24,6 +25,7 @@ const RECORDING: Color32 = Color32::from_rgb(235, 80, 70);
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Channel {
     Track(TrackRef),
+    Submix(SubmixId),
     Master,
 }
 
@@ -38,12 +40,16 @@ struct Adjusting {
 /// Meter ballistics, the control being dragged and the automation being recorded.
 #[derive(Debug, Default)]
 pub struct Mixer {
-    /// Displayed meter levels in dB: one pair per audio track, then the master.
+    /// Displayed meter levels in dB: one pair per audio track, then per submix, then
+    /// the master.
     meters: Vec<[f32; 2]>,
     adjusting: Option<Adjusting>,
     modes: HashMap<TrackRef, AutomationMode>,
     passes: HashMap<TrackRef, Pass>,
     inserts: inserts::Inserts,
+    /// The submix being renamed, with the name typed so far and whether the field has
+    /// been given the keyboard yet.
+    renaming: Option<(SubmixId, String, bool)>,
 }
 
 impl Mixer {
@@ -51,13 +57,14 @@ impl Mixer {
         self.modes.get(&track).copied().unwrap_or_default()
     }
 
-    fn update_meters(&mut self, editor_levels: Option<&playback::Levels>, tracks: usize, dt: f32) {
-        self.meters.resize(tracks + 1, [METER_FLOOR; 2]);
+    fn update_meters(&mut self, editor_levels: Option<&playback::Levels>, strips: usize, dt: f32) {
+        self.meters.resize(strips + 1, [METER_FLOOR; 2]);
         let fall = METER_FALL * dt;
         let readings = editor_levels.map(|levels| {
             levels
                 .tracks
                 .iter()
+                .chain(&levels.submixes)
                 .copied()
                 .chain(std::iter::once(levels.master))
                 .collect::<Vec<_>>()
@@ -91,12 +98,15 @@ fn to_db(peak: f32) -> f32 {
 
 pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
     let dt = ui.input(|input| input.stable_dt).min(0.1);
-    let tracks = editor.timeline.sequence().audio.len();
+    let sequence = editor.timeline.sequence();
+    let tracks = sequence.audio.len();
+    let submixes: Vec<SubmixId> = sequence.submixes.iter().map(|submix| submix.id).collect();
     let levels = editor
         .program
         .as_ref()
         .and_then(|program| program.player.levels());
-    editor.mixer.update_meters(levels, tracks, dt);
+    let strips = tracks + submixes.len();
+    editor.mixer.update_meters(levels, strips, dt);
     if editor.mixer.falling() {
         ui.ctx().request_repaint();
     }
@@ -106,9 +116,14 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
                 strip(editor, ui, Channel::Track(TrackRef::audio(index)));
                 ui.add_space(6.0);
             }
+            for id in submixes {
+                strip(editor, ui, Channel::Submix(id));
+                ui.add_space(6.0);
+            }
             strip(editor, ui, Channel::Master);
         });
     });
+    submixes::add_button(editor, ui);
     egui::ScrollArea::vertical()
         .id_salt("track inserts")
         .show(ui, |ui| inserts::panel(editor, ui));
@@ -119,8 +134,10 @@ fn strip(editor: &mut Editor, ui: &mut egui::Ui, channel: Channel) {
     let playhead = editor.playhead();
     let insert_count = match channel {
         Channel::Track(track) => sequence.track(track).map_or(0, |track| track.effects.len()),
+        Channel::Submix(id) => submixes::find(editor, id).map_or(0, |submix| submix.effects.len()),
         Channel::Master => 0,
     };
+    let submix_position = |id| sequence.submixes.iter().position(|submix| submix.id == id);
     let (name, mut volume, mut pan, switches, meter, automation) = match channel {
         Channel::Track(track_ref) => {
             let Some(track) = sequence.track(track_ref) else {
@@ -139,6 +156,25 @@ fn strip(editor: &mut Editor, ui: &mut egui::Ui, channel: Channel) {
                 track.automation.value_at(playhead),
             )
         }
+        Channel::Submix(id) => {
+            let Some(index) = submix_position(id) else {
+                return;
+            };
+            let submix = &sequence.submixes[index];
+            let meter = editor
+                .mixer
+                .meters
+                .get(sequence.audio.len() + index)
+                .copied();
+            (
+                submix.name.clone(),
+                submix.volume,
+                submix.pan,
+                None,
+                meter,
+                0.0,
+            )
+        }
         Channel::Master => (
             "Master".to_owned(),
             sequence.master,
@@ -154,7 +190,11 @@ fn strip(editor: &mut Editor, ui: &mut egui::Ui, channel: Channel) {
     }
     let pass = match channel {
         Channel::Track(track) => editor.mixer.passes.get(&track).and_then(Pass::last),
-        Channel::Master => None,
+        Channel::Submix(_) | Channel::Master => None,
+    };
+    let muted = match channel {
+        Channel::Submix(id) => submixes::find(editor, id).is_some_and(|submix| submix.muted),
+        Channel::Track(_) | Channel::Master => false,
     };
     // The fader shows the level heard: the track's volume through its keyframes, or
     // what the pass being recorded holds.
@@ -164,14 +204,29 @@ fn strip(editor: &mut Editor, ui: &mut egui::Ui, channel: Channel) {
     let mut touched = false;
     ui.vertical(|ui| {
         ui.set_width(60.0);
-        let mut title = RichText::new(&name).strong();
-        if pass.is_some() {
-            title = title.color(RECORDING);
+        if let Channel::Submix(id) = channel {
+            submixes::title(editor, ui, id, &name);
+        } else {
+            let mut title = RichText::new(&name).strong();
+            if pass.is_some() {
+                title = title.color(RECORDING);
+            }
+            ui.label(title);
         }
-        ui.label(title);
         if let Channel::Track(track) = channel {
             mode_picker(ui, &mut editor.mixer, track);
-            inserts::toggle(editor, ui, track, insert_count);
+            submixes::output_picker(editor, ui, track);
+        }
+        // Rows a track strip has above its fader that this one lacks, so faders line up.
+        let missing_rows = match channel {
+            Channel::Track(_) => 0.0,
+            Channel::Submix(_) => 2.0,
+            Channel::Master => 3.0,
+        };
+        let spacing = ui.spacing();
+        ui.add_space(missing_rows * (spacing.interact_size.y + spacing.item_spacing.y));
+        if channel != Channel::Master {
+            inserts::toggle(editor, ui, channel, insert_count);
         }
         ui.horizontal(|ui| {
             ui.spacing_mut().slider_width = STRIP_HEIGHT;
@@ -204,7 +259,7 @@ fn strip(editor: &mut Editor, ui: &mut egui::Ui, channel: Channel) {
             format!("{db:+.1}")
         };
         ui.monospace(label).on_hover_text("dB");
-        if let Channel::Track(track) = channel {
+        if channel != Channel::Master {
             let mut value = pan.value();
             ui.spacing_mut().slider_width = 56.0;
             let knob = ui
@@ -216,14 +271,26 @@ fn strip(editor: &mut Editor, ui: &mut egui::Ui, channel: Channel) {
             pan = Pan::new(value);
             changed = response_state(&knob, changed);
             let mut switched = None;
+            let mut toggle_mute = false;
             ui.horizontal(|ui| {
                 for (label, switch, on) in switches.into_iter().flatten() {
                     if ui.selectable_label(on, label).clicked() {
                         switched = Some((switch, on));
                     }
                 }
+                let submix_muted = matches!(channel, Channel::Submix(_))
+                    .then(|| ui.selectable_label(muted, "Mute").clicked());
+                if submix_muted == Some(true) {
+                    toggle_mute = true;
+                }
             });
-            if let Some((switch, on)) = switched {
+            if let (true, Channel::Submix(id)) = (toggle_mute, channel) {
+                let edit = submixes::changed(editor, id, |submix| submix.muted = !muted);
+                if let Some(edit) = edit {
+                    editor.apply(edit);
+                }
+            }
+            if let (Some((switch, on)), Channel::Track(track)) = (switched, channel) {
                 editor.apply(SetTrackSwitch {
                     track,
                     switch,
@@ -234,7 +301,7 @@ fn strip(editor: &mut Editor, ui: &mut egui::Ui, channel: Channel) {
     });
     let recording = match channel {
         Channel::Track(track) => automate(editor, track, volume, db, touched),
-        Channel::Master => false,
+        Channel::Submix(_) | Channel::Master => false,
     };
     if !recording && fader_change.is_some() {
         volume = if db <= *FADER_RANGE.start() {
@@ -253,6 +320,15 @@ fn strip(editor: &mut Editor, ui: &mut egui::Ui, channel: Channel) {
             });
             match channel {
                 Channel::Track(track) => live(editor, &SetTrackMix { track, volume, pan }),
+                Channel::Submix(id) => {
+                    let edit = submixes::changed(editor, id, |submix| {
+                        submix.volume = volume;
+                        submix.pan = pan;
+                    });
+                    if let Some(edit) = edit {
+                        live(editor, &edit);
+                    }
+                }
                 Channel::Master => live(editor, &SetMasterGain { gain: volume }),
             }
         }
@@ -260,6 +336,15 @@ fn strip(editor: &mut Editor, ui: &mut egui::Ui, channel: Channel) {
             editor.mixer.adjusting = None;
             match channel {
                 Channel::Track(track) => editor.apply_levels(SetTrackMix { track, volume, pan }),
+                Channel::Submix(id) => {
+                    let edit = submixes::changed(editor, id, |submix| {
+                        submix.volume = volume;
+                        submix.pan = pan;
+                    });
+                    if let Some(edit) = edit {
+                        editor.apply_levels(edit);
+                    }
+                }
                 Channel::Master => editor.apply_levels(SetMasterGain { gain: volume }),
             }
         }
