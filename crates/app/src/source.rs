@@ -64,12 +64,20 @@ impl SourceMonitor {
     /// The marked source range as `(source_in, duration)` in the media's time,
     /// defaulting to the whole item.
     pub fn range(&self) -> (Ticks, Ticks) {
-        let marked = self.marks.range(self.viewer.player.duration());
+        self.media_range(self.marks.range(self.duration()))
+    }
+
+    /// The media start and length of a range of the monitor's time.
+    pub fn media_range(&self, monitor: Range<Ticks>) -> (Ticks, Ticks) {
         let to_media = |span| self.conform.source_span(span);
         (
-            self.offset + to_media(marked.start),
-            to_media(marked.end - marked.start),
+            self.offset + to_media(monitor.start),
+            to_media(monitor.end - monitor.start),
         )
+    }
+
+    pub fn duration(&self) -> Ticks {
+        self.viewer.player.duration()
     }
 
     /// Marks the media range `marked` and parks on media time `at`.

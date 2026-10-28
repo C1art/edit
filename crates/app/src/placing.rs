@@ -1,35 +1,62 @@
-use timeline::{AddGenerated, AddTrack, Generator, PlaceClip, PlaceMode, TrackKind};
+use timeline::{
+    edit_points, AddGenerated, AddTrack, FourPoint, Generator, PlaceClip, PlaceMode, TrackKind,
+};
 
 use crate::editor::Editor;
 use crate::timeline_view::MediaDrop;
 
-/// Edits the source monitor's marked range into the sequence at the program playhead,
-/// on the targeted tracks, then parks the playhead after it.
+/// Edits the source monitor's marked range into the sequence on the targeted tracks,
+/// placed by three-point editing, then parks the playhead after it. Marks on both
+/// sides spanning different lengths ask how to fit the clip first.
 pub fn edit_from_source(editor: &mut Editor, mode: PlaceMode) {
+    place_from_source(editor, mode, None);
+}
+
+pub(crate) fn place_from_source(editor: &mut Editor, mode: PlaceMode, fit: Option<FourPoint>) {
     let Some(source) = &editor.source else {
         editor.notice("Open a clip in the source monitor first");
         return;
     };
-    let (source_in, duration) = source.range();
-    let id = source.source;
     let targets = editor.view.targets;
     if targets.video.is_none() && targets.audio.is_none() {
         editor.notice("Target a video or audio track first (click a track name)");
         return;
     }
-    let at = editor.playhead();
+    let sequence_marks = editor.timeline.sequence().marks;
+    let points = edit_points(
+        source.marks,
+        source.duration(),
+        sequence_marks,
+        editor.playhead(),
+        fit,
+    );
+    let points = match points {
+        Ok(Some(points)) => points,
+        Ok(None) => {
+            editor.fit_clip = Some(mode);
+            return;
+        }
+        Err(error) => {
+            editor.notice(format!("Cannot edit: {error}"));
+            return;
+        }
+    };
+    let (source_in, duration) = source.media_range(points.source_in..points.source_out);
+    let id = source.source;
     editor.match_format(id);
     let placed = editor.apply(PlaceClip {
         source: id,
         source_in,
         duration,
-        at,
+        at: points.at,
         video_track: targets.video,
         audio_track: targets.audio,
         mode,
+        fill: points.fill,
     });
     if placed {
-        editor.seek_program(at + duration);
+        let length = points.fill.unwrap_or(points.source_out - points.source_in);
+        editor.seek_program(points.at + length);
     }
 }
 
@@ -55,6 +82,7 @@ pub fn drop_media(editor: &mut Editor, drop: MediaDrop) {
         video_track,
         audio_track,
         mode: PlaceMode::Overwrite,
+        fill: None,
     });
 }
 
@@ -116,6 +144,7 @@ pub fn new_generated(editor: &mut Editor, generator: Generator) {
         video_track: Some(track),
         audio_track: None,
         mode: PlaceMode::Overwrite,
+        fill: None,
     });
     let sequence = editor.timeline.sequence();
     let clip = sequence

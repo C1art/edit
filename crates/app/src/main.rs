@@ -13,6 +13,7 @@ mod export;
 mod export_format;
 mod export_frame;
 mod export_queue;
+mod fit_clip;
 mod gain_dialog;
 mod history_panel;
 mod import;
