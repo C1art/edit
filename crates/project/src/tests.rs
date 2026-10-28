@@ -199,3 +199,16 @@ fn escapes_decode_including_surrogate_pairs() {
     let value = Value::parse(r#""a\"\\\n\u00e9\ud83d\ude00""#).unwrap();
     assert_eq!(value, Value::String("a\"\\\né😀".to_owned()));
 }
+
+#[test]
+fn presets_round_trip_through_text() {
+    let mut blurriness = Param::from_value(4.0);
+    blurriness.keys.push(Keyframe::new(Ticks(9_000), 1_200));
+    let file = PresetsFile::new(vec![timeline::EffectPreset {
+        name: "Soft \"look\"".to_owned(),
+        video: vec![VideoEffect::GaussianBlur { blurriness }],
+        audio: vec![AudioEffect::SwapChannels],
+    }]);
+    let text = file.to_text().unwrap();
+    assert_eq!(PresetsFile::from_text(&text).unwrap(), file);
+}

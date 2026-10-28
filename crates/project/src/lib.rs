@@ -1,5 +1,6 @@
 mod error;
 mod json;
+mod presets;
 
 use std::path::Path;
 
@@ -8,6 +9,7 @@ use timeline::Sequence;
 
 pub use error::ProjectError;
 use json::Value;
+pub use presets::PresetsFile;
 
 /// Bump on every breaking change to the file layout and add a migration from the previous version.
 pub const FORMAT_VERSION: u32 = 1;
@@ -36,15 +38,7 @@ impl ProjectFile {
     /// Reads a project saved by this or any earlier version.
     pub fn from_text(text: &str) -> Result<Self, ProjectError> {
         let mut document = Value::parse(text)?;
-        let version = match document.get(VERSION_FIELD) {
-            Some(Value::Integer(version)) => {
-                u32::try_from(*version).map_err(|_| ProjectError::MissingVersion)?
-            }
-            _ => return Err(ProjectError::MissingVersion),
-        };
-        if version > FORMAT_VERSION {
-            return Err(ProjectError::UnsupportedVersion(version));
-        }
+        let version = format_version(&document, FORMAT_VERSION)?;
         migrate(&mut document, version)?;
         let project: Self = json::from_value(document)?;
         project
@@ -80,6 +74,20 @@ pub fn fingerprint<T: Serialize>(value: &T) -> Result<u64, ProjectError> {
     Ok(text.bytes().fold(FNV_OFFSET, |hash, byte| {
         (hash ^ u64::from(byte)).wrapping_mul(FNV_PRIME)
     }))
+}
+
+/// The format version `document` was written in, if this build reads it.
+fn format_version(document: &Value, newest: u32) -> Result<u32, ProjectError> {
+    let version = match document.get(VERSION_FIELD) {
+        Some(Value::Integer(version)) => {
+            u32::try_from(*version).map_err(|_| ProjectError::MissingVersion)?
+        }
+        _ => return Err(ProjectError::MissingVersion),
+    };
+    if version > newest {
+        return Err(ProjectError::UnsupportedVersion(version));
+    }
+    Ok(version)
 }
 
 /// Brings a document from `version` up to the current layout, one version at a time.
