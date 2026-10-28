@@ -1,4 +1,5 @@
 mod command;
+mod defaults;
 mod window;
 
 use std::fmt;
