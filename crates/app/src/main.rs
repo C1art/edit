@@ -1,6 +1,7 @@
 mod attributes_dialog;
 mod autosave;
 mod captions;
+mod channels_dialog;
 mod clip_art;
 mod clip_menu;
 mod clip_moves;

@@ -27,6 +27,8 @@ pub enum PoolAction {
     DetachProxy(SourceId),
     /// Asks for the frame rate to play the item's pictures at.
     Interpret(SourceId),
+    /// Asks which of the file's channels play on each side.
+    AudioChannels(SourceId),
     /// Adds a bin inside the given one, or at the top, and starts naming it.
     NewBin(Option<BinId>),
     RenameBin(BinId, String),
@@ -312,6 +314,9 @@ impl Pool<'_> {
             }
             if ui.button("Remove from Project").clicked() {
                 self.action = Some(PoolAction::Remove(item.id));
+            }
+            if item.has_audio && item.is_file() && ui.button("Modify Audio Channels…").clicked() {
+                self.action = Some(PoolAction::AudioChannels(item.id));
             }
             if item.video.is_some() && item.is_file() {
                 if ui.button("Interpret Footage…").clicked() {

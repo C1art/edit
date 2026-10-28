@@ -46,6 +46,7 @@ impl Editor {
                 });
             }
             PoolAction::Interpret(id) => self.open_interpret_footage(id),
+            PoolAction::AudioChannels(id) => self.open_audio_channels(id),
             PoolAction::NewBin(parent) => self.new_bin(parent),
             PoolAction::RenameBin(bin, name) => {
                 self.apply_to_pool(RenameBin { bin, name });
