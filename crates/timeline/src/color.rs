@@ -1,10 +1,12 @@
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
 
-use crate::Param;
+use crate::{Curves, Param};
 
-/// Color correction in the manner of a grading panel, applied in linear light before
-/// the clip is placed: white balance, tone, wheels for the shadows, midtones and
-/// highlights, then saturation.
+/// Color correction in the manner of a grading panel, applied before the clip is
+/// placed: an input LUT, then in linear light white balance, tone, wheels for the
+/// shadows, midtones and highlights and saturation, then a creative look LUT and curves.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ColorCorrection {
@@ -31,6 +33,14 @@ pub struct ColorCorrection {
     pub saturation: Param,
     /// -100 to 100: saturates muted colors more than vivid ones.
     pub vibrance: Param,
+    /// A `.cube` file turning the source's encoding into display color, as for log
+    /// footage.
+    pub input_lut: Option<PathBuf>,
+    /// A `.cube` file giving the picture a creative look after the corrections.
+    pub look: Option<PathBuf>,
+    /// Percent of the look applied.
+    pub look_intensity: Param,
+    pub curves: Curves,
 }
 
 /// A shift of one tonal range toward a hue, with a brightness offset.
@@ -61,6 +71,10 @@ impl Default for ColorCorrection {
             highlight_wheel: ColorWheel::default(),
             saturation: Param::new(10_000),
             vibrance: Param::default(),
+            input_lut: None,
+            look: None,
+            look_intensity: Param::new(10_000),
+            curves: Curves::default(),
         }
     }
 }
@@ -83,6 +97,7 @@ impl ColorCorrection {
             &self.blacks,
             &self.saturation,
             &self.vibrance,
+            &self.look_intensity,
         ]
         .into_iter()
         .chain(wheels.into_iter().flat_map(ColorWheel::params))

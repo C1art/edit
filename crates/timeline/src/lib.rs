@@ -2,6 +2,7 @@ mod audio_effect;
 mod audio_plan;
 mod caption;
 mod color;
+mod curves;
 mod edit;
 mod effect;
 mod error;
@@ -28,6 +29,7 @@ pub use audio_effect::AudioEffect;
 pub use audio_plan::{audio_fade, audio_span, clip_level};
 pub use caption::{captions_from_cues, Caption, CaptionStyle, Captions};
 pub use color::{ColorCorrection, ColorWheel};
+pub use curves::{Curve, CurvePoint, Curves, CURVE_RANGE};
 pub use edit::{
     clamp_delta, AddFrameHold, AddGenerated, AddMarker, AddNest, AddTrack, Clipboard, CloseGap,
     Edge, ExtractMarked, ImportMedia, InNest, Lift, LiftMarked, MoveClips, NestClips, PasteClips,
