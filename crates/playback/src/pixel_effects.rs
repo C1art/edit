@@ -1,5 +1,8 @@
-use render::{ChromaKey, ColorKey, LeaveColor, Mirror, PixelEffects, PlaneTransform, Ramp, Warp};
-use timeline::{ColorMatch, RampShape, Rgb, Ticks, Timebase, VideoEffect};
+use render::{
+    ChangeToColor, ChannelMixer, ChromaKey, ColorKey, LeaveColor, Mirror, PixelEffects,
+    PlaneTransform, Ramp, Warp,
+};
+use timeline::{ColorChange, ColorMatch, RampShape, Rgb, Ticks, Timebase, VideoEffect};
 
 /// The per-pixel part of an effect stack at source time `time`. The shader runs each
 /// kind of effect once, so repeats of a kind combine, the last one's colors winning.
@@ -184,6 +187,57 @@ pub(crate) fn pixel_effects(
                 pixel.style.emboss_relief = relief.value_at(time).max(0.0);
                 pixel.style.emboss_contrast = unit(contrast).max(0.0);
                 pixel.style.emboss_mix = 1.0 - unit(blend).clamp(0.0, 1.0);
+            }
+            VideoEffect::TurbulentDisplace {
+                amount,
+                size,
+                offset,
+                complexity,
+                evolution,
+            } => {
+                let size = size.value_at(time).max(1.0);
+                pixel.style.turbulence_amount = unit(amount) * size;
+                pixel.style.turbulence_size = size;
+                pixel.style.turbulence_center = offset.each_ref().map(unit);
+                pixel.style.turbulence_complexity = complexity.value_at(time).clamp(1.0, 10.0);
+                pixel.style.turbulence_evolution = evolution.value_at(time) / 360.0;
+            }
+            VideoEffect::ChannelMixer {
+                red,
+                green,
+                blue,
+                monochrome,
+            } => {
+                let row = |row: &[timeline::Param; 4]| row.each_ref().map(unit);
+                let red = row(red);
+                let rows = if *monochrome {
+                    [red; 3]
+                } else {
+                    [red, row(green), row(blue)]
+                };
+                pixel.recolor.channel_mixer = Some(ChannelMixer { rows });
+            }
+            VideoEffect::ChangeToColor {
+                from,
+                to,
+                change,
+                tolerance,
+                softness,
+            } => {
+                pixel.recolor.change_to_color = Some(ChangeToColor {
+                    from: encoded(*from),
+                    to: encoded(*to),
+                    change: match change {
+                        ColorChange::Hue => render::ColorChange::Hue,
+                        ColorChange::HueLightness => render::ColorChange::HueLightness,
+                        ColorChange::HueLightnessSaturation => {
+                            render::ColorChange::HueLightnessSaturation
+                        }
+                        ColorChange::Colorize => render::ColorChange::Colorize,
+                    },
+                    tolerance: tolerance.each_ref().map(|t| unit(t).clamp(0.0, 1.0)),
+                    softness: unit(softness).max(0.0),
+                });
             }
             VideoEffect::StrobeLight {
                 color,
