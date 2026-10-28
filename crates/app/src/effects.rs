@@ -39,10 +39,7 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
         );
         return;
     };
-    let name = sequence
-        .media_item(clip.source)
-        .map_or("Missing media", |item| item.name.as_str());
-    ui.label(RichText::new(name).strong());
+    ui.label(RichText::new(clip_name(sequence, &clip)).strong());
     let mut look = match &editor.effects.adjusting {
         Some((id, look)) if *id == clip.id => look.clone(),
         _ => clip.look.clone(),
@@ -73,6 +70,12 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
         }
         None => {}
     }
+}
+
+fn clip_name<'a>(sequence: &'a Sequence, clip: &Clip) -> &'a str {
+    sequence
+        .media_item(clip.source)
+        .map_or("Missing media", |item| item.name.as_str())
 }
 
 fn look_controls(ui: &mut egui::Ui, look: &mut Look) -> Option<Change> {
@@ -244,7 +247,8 @@ fn transition_row(
     (chosen != current).then_some(chosen)
 }
 
-/// A one-second cross dissolve, like Premiere's default.
+/// A one-second cross dissolve, like Premiere's default; on audio it is a
+/// constant-power crossfade.
 pub fn default_transition(sequence: &Sequence) -> Transition {
     let rate = sequence.format.frame_rate;
     let frames = i64::from(rate.num().div_ceil(rate.den()));
@@ -255,15 +259,19 @@ pub fn default_transition(sequence: &Sequence) -> Transition {
 }
 
 /// Applies the default transition at the cut or clip end nearest the playhead on the
-/// targeted video track, or on V1 when none is targeted.
-pub fn apply_default_transition(editor: &mut Editor) {
+/// targeted track of `kind`, or on the first such track when none is targeted.
+pub fn apply_default_transition(editor: &mut Editor, kind: TrackKind) {
     let sequence = editor.timeline.sequence();
-    let track = TrackRef::video(editor.view.targets.video.unwrap_or(0));
+    let targets = &editor.view.targets;
+    let track = match kind {
+        TrackKind::Video => TrackRef::video(targets.video.unwrap_or(0)),
+        TrackKind::Audio => TrackRef::audio(targets.audio.unwrap_or(0)),
+    };
     let Some(edge) = sequence
         .track(track)
         .and_then(|clips| nearest_transition_edge(clips, editor.playhead()))
     else {
-        editor.notice("No clip on the targeted video track to add a transition to");
+        editor.notice(format!("No clip on {track} to add a transition to"));
         return;
     };
     let (clip, edge) = edge;

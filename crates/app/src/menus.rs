@@ -68,7 +68,12 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             let transition = Button::new("Apply Video Transition")
                 .shortcut_text(shortcut(ui, shortcuts::TRANSITION));
             if ui.add(transition).clicked() {
-                crate::effects::apply_default_transition(editor);
+                crate::effects::apply_default_transition(editor, TrackKind::Video);
+            }
+            let crossfade = Button::new("Apply Audio Transition")
+                .shortcut_text(shortcut(ui, shortcuts::AUDIO_TRANSITION));
+            if ui.add(crossfade).clicked() {
+                crate::effects::apply_default_transition(editor, TrackKind::Audio);
             }
             if ui
                 .add(Button::new("Lift").shortcut_text("Delete"))
