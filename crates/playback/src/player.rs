@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -8,10 +9,13 @@ use timeline::{FrameRate, Sequence, Ticks, Timebase};
 use crate::clock::PlaybackClock;
 use crate::command::{Command, Event};
 use crate::frame_picker::{FramePicker, TaggedFrame};
-use crate::{audio_worker, video_worker, ComposedFrame, PlaybackError};
+use crate::{audio_worker, video_worker, ComposedFrame, Levels, PlaybackError};
 
 /// Composed frames buffered ahead of the clock, enough to absorb a slow decode.
 const FRAME_QUEUE: usize = 8;
+
+/// Meter readings kept waiting for the clock; more than the device queue ever holds.
+const LEVELS_QUEUE: usize = 256;
 
 const NANOSECONDS: Timebase = match Timebase::new(1, 1_000_000_000) {
     Some(timebase) => timebase,
@@ -37,6 +41,9 @@ pub struct Player {
     playing: bool,
     video_ended: bool,
     warnings: Vec<PlaybackError>,
+    /// Meter readings for audio not yet heard, oldest first.
+    pending_levels: VecDeque<Levels>,
+    levels: Option<Levels>,
 }
 
 impl Player {
@@ -91,6 +98,8 @@ impl Player {
             playing: false,
             video_ended: false,
             warnings: Vec::new(),
+            pending_levels: VecDeque::new(),
+            levels: None,
         };
         player.seek(Ticks::ZERO);
         Ok(player)
@@ -105,6 +114,18 @@ impl Player {
         self.sequence = Arc::clone(&sequence);
         self.send(Command::Sequence(sequence));
         self.seek(self.position());
+    }
+
+    /// Plays `sequence` without seeking, for edits that change only levels, so faders
+    /// can be heard while they move. Audio already queued keeps its old levels.
+    pub fn set_mix(&mut self, sequence: Arc<Sequence>) {
+        self.sequence = Arc::clone(&sequence);
+        self.send(Command::Sequence(sequence));
+    }
+
+    /// The meter reading for the audio being heard, while playing.
+    pub fn levels(&self) -> Option<&Levels> {
+        self.levels.as_ref().filter(|_| self.playing)
     }
 
     pub fn is_playing(&self) -> bool {
@@ -144,6 +165,12 @@ impl Player {
             self.handle(event);
         }
         let position = self.clock.position(self.count());
+        while let Some(levels) = self
+            .pending_levels
+            .pop_front_if(|levels| levels.pts <= position)
+        {
+            self.levels = Some(levels);
+        }
         let frames = &self.frames;
         let changed = self.picker.advance(position, || frames.try_recv().ok());
         if self.playing && self.reached_end(position) {
@@ -207,6 +234,8 @@ impl Player {
         self.clock.jump(position);
         self.playing = was_playing;
         self.picker.reset(self.generation);
+        self.pending_levels.clear();
+        self.levels = None;
         self.send(Command::Seek {
             position,
             generation: self.generation,
@@ -252,6 +281,12 @@ impl Player {
                 self.video_ended = true;
             }
             Event::Warning(error) => self.warnings.push(error),
+            Event::Levels(levels) => {
+                if self.pending_levels.len() == LEVELS_QUEUE {
+                    self.pending_levels.pop_front();
+                }
+                self.pending_levels.push_back(levels);
+            }
             Event::Seeked { .. } | Event::Ended { .. } => {}
         }
     }

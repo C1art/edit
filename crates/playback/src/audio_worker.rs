@@ -7,7 +7,9 @@ use crossbeam::channel::{Receiver, RecvTimeoutError, Sender};
 use timeline::{Sequence, SourceId, Ticks, Timebase};
 
 use crate::command::{coalesce, Coalesced, Command, Event};
+use crate::mixdown;
 use crate::track_audio::TrackAudio;
+use crate::Levels;
 
 /// How long the worker waits for room in the device queue before trying again.
 const BACKOFF: Duration = Duration::from_millis(4);
@@ -34,6 +36,8 @@ pub(crate) fn spawn(
                 tracks: Vec::new(),
                 position: 0,
                 mix: vec![0.0; CHUNK_FRAMES * 2],
+                track_mix: vec![0.0; CHUNK_FRAMES * 2],
+                clip_mix: vec![0.0; CHUNK_FRAMES * 2],
                 out: Vec::new(),
                 sent: 0,
                 running: false,
@@ -56,6 +60,8 @@ struct AudioWorker {
     /// The next output frame to mix, counted from the start of the sequence.
     position: i64,
     mix: Vec<f32>,
+    track_mix: Vec<f32>,
+    clip_mix: Vec<f32>,
     out: Vec<f32>,
     sent: usize,
     /// Nothing is produced until the first seek says where to start.
@@ -130,9 +136,15 @@ impl AudioWorker {
         let to_frames = |ticks: Ticks| ticks.rescale(sequence.timebase, self.rate).0;
         let chunk_start = self.position;
         let chunk_end = chunk_start + CHUNK_FRAMES as i64;
+        let (timebase, rate) = (sequence.timebase, self.writer.format().sample_rate);
+        self.tracks
+            .resize_with(sequence.audio.len(), || TrackAudio::new(timebase, rate));
         self.mix.fill(0.0);
+        let mut track_levels = Vec::with_capacity(sequence.audio.len());
         for (track, decoder) in sequence.audio.iter().zip(&mut self.tracks) {
+            self.track_mix.fill(0.0);
             if track.muted {
+                track_levels.push([0.0; 2]);
                 continue;
             }
             for clip in &track.clips {
@@ -147,15 +159,35 @@ impl AudioWorker {
                 let first = from - clip_start + to_frames(clip.source_in);
                 let offset = usize::try_from(from - chunk_start).unwrap_or(0) * 2;
                 let length = usize::try_from(to - from).unwrap_or(0) * 2;
-                let out = &mut self.mix[offset..offset + length];
-                if let Err(error) = decoder.mix_into(media, first, out) {
+                let clip_mix = &mut self.clip_mix[..length];
+                clip_mix.fill(0.0);
+                if let Err(error) = decoder.mix_into(media, first, clip_mix) {
                     if !self.warned.contains(&media.id) {
                         self.warned.push(media.id);
                         let _ = self.events.send(Event::Warning(error));
                     }
                 }
+                let gain = clip.gain.amplitude();
+                mixdown::add_scaled(
+                    clip_mix,
+                    [gain, gain],
+                    &mut self.track_mix[offset..offset + length],
+                );
             }
+            let volume = track.volume.amplitude();
+            let [left, right] = track.pan.balance();
+            track_levels.push(mixdown::add_scaled(
+                &self.track_mix,
+                [left * volume, right * volume],
+                &mut self.mix,
+            ));
         }
+        let master = mixdown::scale_in_place(&mut self.mix, sequence.master.amplitude());
+        let _ = self.events.send(Event::Levels(Levels {
+            pts: Ticks(chunk_start).rescale(self.rate, sequence.timebase),
+            tracks: track_levels,
+            master,
+        }));
         self.out.clear();
         remix_stereo(&self.mix, self.writer.format().channels, &mut self.out);
         self.sent = 0;

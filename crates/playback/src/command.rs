@@ -2,11 +2,12 @@ use std::sync::Arc;
 
 use timeline::{Sequence, Ticks};
 
-use crate::PlaybackError;
+use crate::{Levels, PlaybackError};
 
 #[derive(Debug, Clone)]
 pub(crate) enum Command {
-    /// Takes effect at the next seek, which the player sends right after.
+    /// Takes effect from the next frame or chunk produced. The player follows it with a
+    /// seek unless only levels changed.
     Sequence(Arc<Sequence>),
     Seek {
         position: Ticks,
@@ -24,6 +25,8 @@ pub(crate) enum Event {
     Ended { generation: u64 },
     /// A problem with one piece of media; playback carries on without it.
     Warning(PlaybackError),
+    /// Peak levels of one mixed chunk, for meters.
+    Levels(Levels),
 }
 
 /// The net effect of a burst of commands.

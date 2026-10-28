@@ -16,3 +16,13 @@ pub struct ComposedFrame {
     pub pts: Ticks,
     pub layers: Vec<Layer>,
 }
+
+/// Peak sample magnitudes, left and right, of one stretch of mixed audio.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Levels {
+    /// Sequence time where the measured audio starts.
+    pub pts: Ticks,
+    /// Post-fader, one entry per audio track.
+    pub tracks: Vec<[f32; 2]>,
+    pub master: [f32; 2],
+}
