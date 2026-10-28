@@ -38,7 +38,7 @@ pub fn thumbnails(
             painter.rect_filled(rect, 2.0, color * tint);
             return;
         }
-        Some(Generator::Title(_)) => return,
+        Some(Generator::Title(_) | Generator::AdjustmentLayer) => return,
         None if item.nest.is_some() => return,
         None => {}
     }

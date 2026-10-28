@@ -5,6 +5,9 @@ use crate::mixer::{response_state, Change};
 /// What a title or color matte draws. Typing previews live and commits when the text
 /// field loses focus.
 pub(super) fn controls(ui: &mut egui::Ui, generator: &mut Generator) -> Option<Change> {
+    if *generator == Generator::AdjustmentLayer {
+        return None;
+    }
     let mut change = None;
     egui::CollapsingHeader::new(generator.kind_name())
         .default_open(true)
@@ -13,6 +16,7 @@ pub(super) fn controls(ui: &mut egui::Ui, generator: &mut Generator) -> Option<C
                 change = color_row(ui, "Color", color);
             }
             Generator::Title(title) => change = title_controls(ui, title),
+            Generator::AdjustmentLayer => {}
         });
     change
 }

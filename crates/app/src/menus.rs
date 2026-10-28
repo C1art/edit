@@ -44,6 +44,9 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                     let color = Rgb::new(32, 32, 48);
                     placing::new_generated(editor, Generator::ColorMatte { color });
                 }
+                if ui.button("Adjustment Layer").clicked() {
+                    placing::new_generated(editor, Generator::AdjustmentLayer);
+                }
             });
             let export =
                 Button::new("Export Media…").shortcut_text(shortcut(ui, shortcuts::EXPORT));
