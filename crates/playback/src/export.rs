@@ -1,3 +1,4 @@
+use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -19,6 +20,8 @@ pub struct ExportSettings {
     pub crf: u8,
     pub sample_rate: u32,
     pub audio_bits_per_second: u32,
+    /// The part of the sequence to export; the whole of it when `None`.
+    pub range: Option<Range<Ticks>>,
 }
 
 #[derive(Debug)]
@@ -128,17 +131,18 @@ impl Worker {
         };
         let mut writer = MediaWriter::create(&self.settings.path, Some(video), Some(audio))?;
 
-        let frames_total = frame_count(&sequence);
+        let frames = frame_span(&sequence, self.settings.range.clone());
+        let frames_total = frames.end - frames.start;
         let mut mix = SequenceMix::new(SampleRate(self.settings.sample_rate));
         let audio_rate = mix.rate();
         let to_audio = |time: Ticks| time.rescale(timebase, audio_rate).0;
-        let audio_total = to_audio(rate.frame_start(frames_total, timebase));
-        let mut audio_written = 0_i64;
+        let audio_total = to_audio(rate.frame_start(frames.end, timebase));
+        let mut audio_written = to_audio(rate.frame_start(frames.start, timebase));
         let mut tracks = Vec::new();
         let mut warned = Vec::new();
         let mut warnings = Vec::new();
 
-        for frame in 0..frames_total {
+        for frame in frames.clone() {
             if self.cancel.load(Ordering::Relaxed) {
                 return Ok(Outcome::Cancelled);
             }
@@ -164,7 +168,7 @@ impl Worker {
                 let _ = self.events.send(ExportEvent::Warning(warning));
             }
             let _ = self.events.send(ExportEvent::Progress {
-                frames_done: frame + 1,
+                frames_done: frame + 1 - frames.start,
                 frames_total,
             });
         }
@@ -173,14 +177,47 @@ impl Worker {
     }
 }
 
-/// Every frame that starts before the end of the last clip.
-fn frame_count(sequence: &Sequence) -> i64 {
+/// Every frame that overlaps `range`, or the sequence up to the end of its last clip.
+fn frame_span(sequence: &Sequence, range: Option<Range<Ticks>>) -> Range<i64> {
     let (rate, timebase) = (sequence.format.frame_rate, sequence.timebase);
-    let duration = sequence.duration();
-    let last = rate.frame_at(duration, timebase);
-    if rate.frame_start(last, timebase) < duration {
+    let range = range.unwrap_or(Ticks::ZERO..sequence.duration());
+    let first = rate.frame_at(range.start, timebase);
+    let last = rate.frame_at(range.end, timebase);
+    let end = if rate.frame_start(last, timebase) < range.end {
         last + 1
     } else {
         last
+    };
+    first..end.max(first)
+}
+
+#[cfg(test)]
+mod tests {
+    use timeline::{Clip, ClipId, FrameRate, SourceId, Timebase, Track, VideoFormat};
+
+    use super::*;
+
+    #[test]
+    fn a_range_exports_every_frame_it_overlaps() {
+        let format = VideoFormat {
+            frame_rate: FrameRate::FPS_25,
+            ..VideoFormat::default()
+        };
+        let mut sequence = Sequence::new(Timebase::HZ_90K, format);
+        let clip = Clip::new(ClipId(1), SourceId(1), Ticks(0), Ticks(36_100), Ticks(0));
+        sequence.video.push(Track {
+            clips: vec![clip],
+            ..Track::default()
+        });
+        // A frame lasts 3,600 ticks; the clip ends 100 ticks into frame 10.
+        assert_eq!(frame_span(&sequence, None), 0..11);
+        assert_eq!(
+            frame_span(&sequence, Some(Ticks(7_200)..Ticks(18_000))),
+            2..5
+        );
+        assert_eq!(
+            frame_span(&sequence, Some(Ticks(7_300)..Ticks(10_900))),
+            2..4
+        );
     }
 }
