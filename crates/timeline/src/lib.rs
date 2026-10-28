@@ -22,6 +22,7 @@ mod marker;
 mod marks;
 mod mask;
 mod mask_path;
+mod mask_track;
 mod media;
 mod mix;
 mod model;
@@ -94,6 +95,7 @@ pub use mask_path::{
     flatten_path, key_path, path_is_animated, path_side_point, split_path_side,
     toggle_path_animation, PathVertex, VertexAt,
 };
+pub use mask_track::{MaskTracking, PictureUnits};
 pub use media::{MediaItem, SourceId};
 pub use mix::{Gain, Pan};
 pub use model::{

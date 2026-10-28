@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::mask_path::{self, PathVertex};
-use crate::{Param, Ticks};
+use crate::{MaskTracking, Param, Ticks};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum MaskShape {
@@ -50,6 +50,7 @@ pub struct Mask {
     /// Whether the pen has joined the path's last vertex to its first; only a closed
     /// path masks anything.
     pub closed: bool,
+    pub tracking: MaskTracking,
 }
 
 impl Default for Mask {
@@ -72,6 +73,7 @@ impl Mask {
             inverted: false,
             path: Vec::new(),
             closed: false,
+            tracking: MaskTracking::default(),
         }
     }
 
