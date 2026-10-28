@@ -1,6 +1,7 @@
 use audio::SampleRate;
 use timeline::{audio_fade, audio_span, ClipId, Sequence, SourceId, Ticks, Timebase};
 
+use crate::clip_audio::ClipAudio;
 use crate::clip_decoders::ClipDecoders;
 use crate::mixdown;
 use crate::track_audio::TrackAudio;
@@ -16,7 +17,7 @@ pub(crate) struct SequenceMix {
     sample_rate: SampleRate,
     /// One tick per output frame.
     rate: Timebase,
-    tracks: Vec<ClipDecoders<TrackAudio>>,
+    tracks: Vec<ClipDecoders<ClipAudio>>,
     /// The last chunk mixed.
     pub(crate) mix: Vec<f32>,
     track_mix: Vec<f32>,
@@ -47,7 +48,7 @@ impl SequenceMix {
         self.tracks
             .iter_mut()
             .flat_map(ClipDecoders::iter_mut)
-            .for_each(TrackAudio::reset);
+            .for_each(ClipAudio::reset);
     }
 
     /// Mixes the chunk starting at output frame `start` into `self.mix` and returns its
@@ -62,7 +63,7 @@ impl SequenceMix {
         let end = start + CHUNK_FRAMES as i64;
         let (timebase, sample_rate) = (sequence.timebase, self.sample_rate);
         self.tracks.resize_with(sequence.audio.len(), || {
-            ClipDecoders::new(|| TrackAudio::new(timebase, sample_rate))
+            ClipDecoders::new(|| ClipAudio::new(TrackAudio::new(timebase, sample_rate)))
         });
         self.mix.fill(0.0);
         let mut track_levels = Vec::with_capacity(sequence.audio.len());
@@ -91,19 +92,16 @@ impl SequenceMix {
                 let Some(media) = sequence.media_item(clip.source) else {
                     continue;
                 };
-                let source_first = from - to_frames(clip.start) + to_frames(clip.source_in);
-                // A crossfade reaching before the media starts is silent there.
-                let skip = (-source_first).max(0);
-                let (from, first) = (from + skip, source_first + skip);
-                if from >= to {
-                    continue;
-                }
                 let offset = usize::try_from(from - start).unwrap_or(0) * 2;
                 let length = usize::try_from(to - from).unwrap_or(0) * 2;
                 let clip_mix = &mut self.clip_mix[..length];
                 clip_mix.fill(0.0);
                 let decoder = decoders.for_clip(clip.id, &keep);
-                if let Err(error) = decoder.mix_into(media, first, clip_mix) {
+                let (source_in, into_clip) =
+                    (to_frames(clip.source_in), from - to_frames(clip.start));
+                if let Err(error) =
+                    decoder.mix_into(media, source_in, into_clip, clip.speed, clip_mix)
+                {
                     if !self.warned.contains(&media.id) {
                         self.warned.push(media.id);
                         warnings.push(error);

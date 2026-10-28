@@ -1,4 +1,5 @@
 mod audio_worker;
+mod clip_audio;
 mod clip_decoders;
 mod clock;
 mod command;
