@@ -20,6 +20,10 @@ pub struct Nest {
     pub marks: Marks,
     #[serde(default)]
     pub captions: Captions,
+    /// A multi-camera source: each video track is a camera, and its clips show only the
+    /// one they pick as their angle.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub multicam: bool,
 }
 
 impl Nest {

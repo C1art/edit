@@ -99,6 +99,13 @@ pub struct Clip {
     /// Replaces `speed` and `reverse` on a video clip whose speed changes over time.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remap: Option<TimeRemap>,
+    /// The video track of a multi-camera source the clip shows; other sources ignore it.
+    #[serde(default, skip_serializing_if = "is_first_angle")]
+    pub angle: usize,
+}
+
+fn is_first_angle(angle: &usize) -> bool {
+    *angle == 0
 }
 
 impl Clip {
@@ -130,6 +137,7 @@ impl Clip {
             transition_out: None,
             label: None,
             remap: None,
+            angle: 0,
         }
     }
 

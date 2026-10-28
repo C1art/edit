@@ -465,6 +465,7 @@ mod hold;
 mod link;
 mod marker;
 mod media;
+mod multicam;
 mod nest;
 mod paste;
 mod range;

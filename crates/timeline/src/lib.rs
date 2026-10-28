@@ -19,6 +19,7 @@ mod mask_path;
 mod media;
 mod mix;
 mod model;
+mod multicam;
 mod nest;
 mod param;
 mod plan;
@@ -41,15 +42,16 @@ pub use color::{ColorCorrection, ColorWheel};
 pub use curves::{Curve, CurvePoint, Curves, CURVE_RANGE};
 pub use edit::{
     clamp_delta, AddBin, AddFrameHold, AddGenerated, AddMarker, AddNest, AddSpeedKeyframe,
-    AddTrack, Attribute, Clipboard, CloseGap, Edge, ExtractMarked, FrameFit, ImportMedia, InNest,
-    Lift, LiftMarked, MoveClips, MoveToBin, NestClips, NormalizeClipGains, PasteAttributes,
-    PasteClips, PlaceClip, PlaceMode, RateStretch, Razor, RazorTarget, RelinkMedia,
-    RemoveAttributes, RemoveBin, RemoveMarker, RemoveMedia, RemoveSpeedKeyframe, RemoveTimeRemap,
-    RemoveTrack, RenameBin, RenameMedia, RippleDelete, RippleTrimToPlayhead, Roll, SetCaptions,
-    SetClipAudioEffects, SetClipGain, SetClipLabel, SetClipLook, SetClipSpeed, SetClipVolume,
-    SetClipsEnabled, SetGenerator, SetLinked, SetMarks, SetMasterGain, SetProxy, SetSegmentSpeed,
-    SetSequenceFormat, SetToFrameSize, SetTrackAutomation, SetTrackMix, SetTrackSwitch,
-    SetTransition, Slide, Slip, TrackSwitch, Trim, TrimMode, UpdateMarker,
+    AddTrack, Attribute, Clipboard, CloseGap, CreateMulticam, Edge, ExtractMarked, FrameFit,
+    ImportMedia, InNest, Lift, LiftMarked, MoveClips, MoveToBin, NestClips, NormalizeClipGains,
+    PasteAttributes, PasteClips, PlaceClip, PlaceMode, RateStretch, Razor, RazorTarget,
+    RelinkMedia, RemoveAttributes, RemoveBin, RemoveMarker, RemoveMedia, RemoveSpeedKeyframe,
+    RemoveTimeRemap, RemoveTrack, RenameBin, RenameMedia, RippleDelete, RippleTrimToPlayhead, Roll,
+    SetCaptions, SetClipAudioEffects, SetClipGain, SetClipLabel, SetClipLook, SetClipSpeed,
+    SetClipVolume, SetClipsEnabled, SetGenerator, SetLinked, SetMarks, SetMasterGain, SetProxy,
+    SetSegmentSpeed, SetSequenceFormat, SetToFrameSize, SetTrackAutomation, SetTrackMix,
+    SetTrackSwitch, SetTransition, Slide, Slip, SwitchAngle, TrackSwitch, Trim, TrimMode,
+    UpdateMarker,
 };
 pub use effect::{EffectCategory, MatteChannel, Rgb, VideoEffect};
 pub use error::TimelineError;
@@ -69,6 +71,7 @@ pub use mix::{Gain, Pan};
 pub use model::{
     Clip, ClipId, IdGenerator, LinkId, Sequence, Track, TrackKind, TrackRef, VideoFormat,
 };
+pub use multicam::MulticamLayout;
 pub use nest::Nest;
 pub use param::{Interpolation, Keyframe, Param};
 pub use plan::{track_layers_at, PlannedLayer};
