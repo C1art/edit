@@ -108,10 +108,11 @@ fn transition_row(
             if transition.kind.has_direction() {
                 let mut side = transition.side();
                 egui::ComboBox::from_id_salt((label, "side"))
-                    .selected_text(side.name())
+                    .selected_text(transition.kind.side_name(side))
                     .show_ui(ui, |ui| {
                         for choice in Side::ALL {
-                            ui.selectable_value(&mut side, choice, choice.name());
+                            let name = transition.kind.side_name(choice);
+                            ui.selectable_value(&mut side, choice, name);
                         }
                     });
                 if side != transition.side() {

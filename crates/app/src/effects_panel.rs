@@ -8,7 +8,15 @@ use crate::editor::Editor;
 use crate::effects::{add_transition, apply_transition, audio_category, AUDIO_CATEGORIES};
 
 /// Premiere's bins for video transitions, as [`TransitionKind::category`] names them.
-const TRANSITION_CATEGORIES: [&str; 6] = ["3D Motion", "Dissolve", "Iris", "Slide", "Wipe", "Zoom"];
+const TRANSITION_CATEGORIES: [&str; 7] = [
+    "3D Motion",
+    "Dissolve",
+    "Iris",
+    "Page Peel",
+    "Slide",
+    "Wipe",
+    "Zoom",
+];
 
 /// An entry of the Effects panel, carried while it is dragged onto the timeline.
 #[derive(Debug, Clone, PartialEq)]
