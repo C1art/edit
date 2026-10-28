@@ -1,7 +1,7 @@
 use audio::SampleRate;
 use timeline::{
     audio_fade, audio_span, clip_level, track_automation, ClipId, Gain, MediaItem, Sequence,
-    SourceId, Ticks,
+    SourceId, Submix, Ticks,
 };
 use timeline::{Timebase, Track};
 
@@ -22,6 +22,9 @@ pub(crate) struct TracksMix {
     tracks: Vec<ClipDecoders<Voice>>,
     /// Each track's inserts, in step with `tracks`.
     inserts: Vec<EffectChain>,
+    /// What the tracks sent to each submix add up to, and its inserts.
+    submix_mix: Vec<Vec<f32>>,
+    submix_inserts: Vec<EffectChain>,
     track_mix: Vec<f32>,
     clip_mix: Vec<f32>,
     /// Media already reported as unreadable.
@@ -41,8 +44,29 @@ impl Voice {
     }
 }
 
-/// Peak levels after the faders: one per track, then the master.
-pub(crate) type MixLevels = (Vec<[f32; 2]>, [f32; 2]);
+/// What a mix adds up: tracks, the submixes they may be sent to, and the master gain.
+pub(crate) struct Bus<'a> {
+    pub(crate) tracks: &'a [Track],
+    pub(crate) submixes: &'a [Submix],
+    pub(crate) master: Gain,
+}
+
+impl<'a> Bus<'a> {
+    pub(crate) fn of(sequence: &'a Sequence) -> Self {
+        Self {
+            tracks: &sequence.audio,
+            submixes: &sequence.submixes,
+            master: sequence.master,
+        }
+    }
+}
+
+/// Peak levels after the faders.
+pub(crate) struct MixLevels {
+    pub(crate) tracks: Vec<[f32; 2]>,
+    pub(crate) submixes: Vec<[f32; 2]>,
+    pub(crate) master: [f32; 2],
+}
 
 impl TracksMix {
     pub(crate) fn new(sample_rate: SampleRate) -> Self {
@@ -51,6 +75,8 @@ impl TracksMix {
             rate: Timebase::new(1, sample_rate.0).unwrap_or(Timebase::HZ_90K),
             tracks: Vec::new(),
             inserts: Vec::new(),
+            submix_mix: Vec::new(),
+            submix_inserts: Vec::new(),
             track_mix: Vec::new(),
             clip_mix: Vec::new(),
             warned: Vec::new(),
@@ -67,19 +93,27 @@ impl TracksMix {
             .iter_mut()
             .flat_map(ClipDecoders::iter_mut)
             .for_each(Voice::reset);
-        self.inserts.iter_mut().for_each(EffectChain::reset);
+        self.inserts
+            .iter_mut()
+            .chain(&mut self.submix_inserts)
+            .for_each(EffectChain::reset);
     }
 
-    /// Writes the mix of `tracks` from output frame `start` over `out`. Clips find
-    /// their media in `pool`; media that can't be read is reported once and left silent.
+    /// Writes the mix of `bus` from output frame `start` over `out`. Clips find their
+    /// media in `pool`; media that can't be read is reported once and left silent.
     pub(crate) fn mix(
         &mut self,
         pool: &Sequence,
-        (tracks, master): (&[Track], Gain),
+        bus: Bus<'_>,
         start: i64,
         out: &mut [f32],
         warnings: &mut Vec<PlaybackError>,
     ) -> MixLevels {
+        let Bus {
+            tracks,
+            submixes,
+            master,
+        } = bus;
         let timebase = pool.timebase;
         let to_frames = |ticks: Ticks| ticks.rescale(timebase, self.rate).0;
         let end = start + (out.len() / 2) as i64;
@@ -92,6 +126,13 @@ impl TracksMix {
         });
         self.inserts
             .resize_with(tracks.len(), || EffectChain::new(sample_rate));
+        self.submix_inserts
+            .resize_with(submixes.len(), || EffectChain::new(sample_rate));
+        self.submix_mix.resize_with(submixes.len(), Vec::new);
+        for mix in &mut self.submix_mix {
+            mix.clear();
+            mix.resize(out.len(), 0.0);
+        }
         self.track_mix.resize(out.len(), 0.0);
         self.clip_mix.resize(out.len(), 0.0);
         out.fill(0.0);
@@ -177,14 +218,41 @@ impl TracksMix {
             }
             let volume = track.volume.amplitude();
             let [left, right] = track.pan.balance();
+            let sent = track
+                .output
+                .and_then(|id| submixes.iter().position(|submix| submix.id == id));
+            let target = match sent {
+                Some(index) => &mut self.submix_mix[index][..],
+                None => &mut *out,
+            };
             track_levels.push(mixdown::add_scaled(
                 &self.track_mix,
                 [left * volume, right * volume],
-                out,
+                target,
             ));
         }
-        let master = mixdown::scale_in_place(out, master.amplitude());
-        (track_levels, master)
+        let at = Ticks(start).rescale(self.rate, timebase);
+        let buses = self.submix_mix.iter_mut().zip(&mut self.submix_inserts);
+        let submix_levels = submixes
+            .iter()
+            .zip(buses)
+            .map(|(submix, (mix, inserts))| {
+                if submix.muted {
+                    return [0.0; 2];
+                }
+                if !submix.effects.is_empty() {
+                    inserts.process(None, &submix.effects, at, mix);
+                }
+                let volume = submix.volume.amplitude();
+                let [left, right] = submix.pan.balance();
+                mixdown::add_scaled(mix, [left * volume, right * volume], out)
+            })
+            .collect();
+        MixLevels {
+            tracks: track_levels,
+            submixes: submix_levels,
+            master: mixdown::scale_in_place(out, master.amplitude()),
+        }
     }
 }
 
@@ -231,11 +299,14 @@ impl FrameSource for MediaAudio {
             })
         });
         nested.out.resize(out.len(), 0.0);
-        let tracks = (nest.audio.as_slice(), nest.master);
+        // A nest has no submixes, so its tracks sent to one go to its master.
+        let bus = Bus {
+            tracks: &nest.audio,
+            submixes: &[],
+            master: nest.master,
+        };
         let warnings = &mut nested.warnings;
-        nested
-            .mix
-            .mix(pool, tracks, first, &mut nested.out, warnings);
+        nested.mix.mix(pool, bus, first, &mut nested.out, warnings);
         mixdown::add_scaled(&nested.out, [1.0, 1.0], out);
         // The clip reports a nest's first unreadable media, as it would a file's.
         match nested.warnings.drain(..).next() {

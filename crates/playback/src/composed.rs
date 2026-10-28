@@ -74,5 +74,7 @@ pub struct Levels {
     pub pts: Ticks,
     /// Post-fader, one entry per audio track.
     pub tracks: Vec<[f32; 2]>,
+    /// Post-fader, one entry per submix.
+    pub submixes: Vec<[f32; 2]>,
     pub master: [f32; 2],
 }

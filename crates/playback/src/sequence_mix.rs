@@ -1,7 +1,7 @@
 use audio::SampleRate;
 use timeline::{Sequence, Ticks, Timebase};
 
-use crate::tracks_mix::TracksMix;
+use crate::tracks_mix::{Bus, TracksMix};
 use crate::{Levels, PlaybackError};
 
 /// Stereo frames mixed per step: small enough to start quickly after a seek, large
@@ -42,14 +42,14 @@ impl SequenceMix {
         start: i64,
         warnings: &mut Vec<PlaybackError>,
     ) -> Levels {
-        let tracks = (sequence.audio.as_slice(), sequence.master);
-        let (tracks, master) = self
+        let levels = self
             .tracks
-            .mix(sequence, tracks, start, &mut self.mix, warnings);
+            .mix(sequence, Bus::of(sequence), start, &mut self.mix, warnings);
         Levels {
             pts: Ticks(start).rescale(self.rate(), sequence.timebase),
-            tracks,
-            master,
+            tracks: levels.tracks,
+            submixes: levels.submixes,
+            master: levels.master,
         }
     }
 }
