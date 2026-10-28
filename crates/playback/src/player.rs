@@ -9,6 +9,7 @@ use timeline::{FrameRate, Sequence, Ticks, Timebase};
 use crate::clock::PlaybackClock;
 use crate::command::{Command, Event};
 use crate::frame_picker::{FramePicker, TaggedFrame};
+use crate::shuttle::Shuttle;
 use crate::{audio_worker, video_worker, ComposedFrame, Levels, PlaybackError};
 
 /// Composed frames buffered ahead of the clock, enough to absorb a slow decode.
@@ -46,6 +47,7 @@ pub struct Player {
     levels: Option<Levels>,
     /// Whether the video worker decodes media items' proxies instead of their files.
     proxies: bool,
+    shuttle: Option<Shuttle>,
 }
 
 impl Player {
@@ -103,6 +105,7 @@ impl Player {
             pending_levels: VecDeque::new(),
             levels: None,
             proxies: false,
+            shuttle: None,
         };
         player.seek(Ticks::ZERO);
         Ok(player)
@@ -150,8 +153,30 @@ impl Player {
         self.levels.as_ref().filter(|_| self.playing)
     }
 
+    /// Whether playing at any speed, including shuttling.
     pub fn is_playing(&self) -> bool {
-        self.playing
+        self.playing || self.shuttle.is_some()
+    }
+
+    /// The speed as a multiple of normal: 0 when paused, negative when backwards.
+    pub fn rate(&self) -> i32 {
+        match self.shuttle {
+            Some(shuttle) => shuttle.rate(),
+            None => i32::from(self.playing),
+        }
+    }
+
+    /// Plays at `rate` times normal speed, backwards when negative. Off normal speed only
+    /// pictures play, as when shuttling a deck.
+    pub fn shuttle(&mut self, rate: i32) {
+        match rate {
+            0 => self.pause(),
+            1 => self.play(),
+            _ => {
+                self.pause();
+                self.shuttle = Some(Shuttle::new(rate, self.position(), Instant::now()));
+            }
+        }
     }
 
     pub fn current_frame(&self) -> Option<&ComposedFrame> {
@@ -165,7 +190,10 @@ impl Player {
 
     /// Whether the UI must keep repainting to pick up output that is still arriving.
     pub fn is_busy(&self) -> bool {
-        self.playing || self.awaiting_seek || self.picker.has_pending() || !self.frames.is_empty()
+        self.is_playing()
+            || self.awaiting_seek
+            || self.picker.has_pending()
+            || !self.frames.is_empty()
     }
 
     pub fn position(&self) -> Ticks {
@@ -195,6 +223,7 @@ impl Player {
         }
         let frames = &self.frames;
         let changed = self.picker.advance(position, || frames.try_recv().ok());
+        self.advance_shuttle();
         if self.playing && self.reached_end(position) {
             self.pause();
         }
@@ -202,6 +231,7 @@ impl Player {
     }
 
     pub fn play(&mut self) {
+        self.shuttle = None;
         if self.playing || self.duration() == Ticks::ZERO {
             return;
         }
@@ -228,6 +258,7 @@ impl Player {
     }
 
     pub fn pause(&mut self) {
+        self.shuttle = None;
         if !self.playing {
             return;
         }
@@ -239,7 +270,7 @@ impl Player {
     }
 
     pub fn toggle(&mut self) {
-        if self.playing {
+        if self.is_playing() {
             self.pause();
         } else {
             self.play();
@@ -247,6 +278,32 @@ impl Player {
     }
 
     pub fn seek(&mut self, position: Ticks) {
+        self.shuttle = None;
+        self.go_to(position);
+    }
+
+    fn advance_shuttle(&mut self) {
+        let Some(mut shuttle) = self.shuttle else {
+            return;
+        };
+        let now = Instant::now();
+        let shown = !self.awaiting_seek && self.picker.is_settled();
+        if !shuttle.wants_seek(shown, now) {
+            return;
+        }
+        let target = shuttle.position(now, self.sequence.timebase, self.duration());
+        let at = self.clock.position(self.count());
+        let frame = |time| self.frame_rate().frame_at(time, self.sequence.timebase);
+        if frame(target) != frame(at) {
+            shuttle.sought(now);
+            self.go_to(target);
+            self.shuttle = Some(shuttle);
+        } else if target == Ticks::ZERO || target == self.duration() {
+            self.shuttle = None;
+        }
+    }
+
+    fn go_to(&mut self, position: Ticks) {
         let position = position.clamp(Ticks::ZERO, self.duration());
         self.generation += 1;
         self.awaiting_seek = true;

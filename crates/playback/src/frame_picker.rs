@@ -27,6 +27,11 @@ impl FramePicker {
         self.current.as_ref()
     }
 
+    /// Whether a frame of the latest seek is on screen.
+    pub(crate) fn is_settled(&self) -> bool {
+        !self.stale
+    }
+
     pub(crate) fn has_pending(&self) -> bool {
         self.next.is_some()
     }
