@@ -1,5 +1,6 @@
 use timeline::{
-    ColorChange, ColorMatch, EffectCategory, RampShape, Rgb, TimecodeSource, VideoEffect,
+    ClipNameSource, ColorChange, ColorMatch, EffectCategory, RampShape, Rgb, TimecodeSource,
+    VideoEffect,
 };
 
 use super::look::Rows;
@@ -152,6 +153,25 @@ impl Rows {
                     source,
                     TimecodeSource::ALL,
                     TimecodeSource::name,
+                );
+            }
+            VideoEffect::ClipName {
+                position: [x, y],
+                size,
+                opacity,
+                source,
+            } => {
+                self.param(ui, "Position X", x, 0.0..=100.0, "%");
+                self.param(ui, "Position Y", y, 0.0..=100.0, "%");
+                self.param(ui, "Size", size, 1.0..=50.0, "%");
+                self.param(ui, "Opacity", opacity, 0.0..=100.0, "%");
+                self.options(
+                    ui,
+                    "Display",
+                    "clip_name_source",
+                    source,
+                    ClipNameSource::ALL,
+                    ClipNameSource::name,
                 );
             }
             VideoEffect::Transform {
