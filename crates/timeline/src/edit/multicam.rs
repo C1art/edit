@@ -82,6 +82,7 @@ impl Edit for CreateMulticam {
             bin,
             subclip: None,
             interpreted_rate: None,
+            log: Default::default(),
         });
         sequence.fit_nest(id);
         Ok(())

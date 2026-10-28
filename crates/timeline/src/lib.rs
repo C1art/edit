@@ -75,8 +75,8 @@ pub use edit::{
     RenderAndReplace, ReplaceClip, RestoreUnrendered, RippleDelete, RippleTrimToPlayhead, Roll,
     SetCaptions, SetClipAudioEffects, SetClipGain, SetClipLabel, SetClipLook, SetClipPan,
     SetClipSpeed, SetClipVolume, SetClipsEnabled, SetClipsSound, SetGenerator, SetGrouped,
-    SetLinked, SetLinkedSelection, SetMarks, SetMasterEffects, SetMasterGain, SetProxy,
-    SetSegmentSpeed, SetSequenceFormat, SetSubmix, SetTimeInterpolation, SetToFrameSize,
+    SetLinked, SetLinkedSelection, SetMarks, SetMasterEffects, SetMasterGain, SetMediaLog,
+    SetProxy, SetSegmentSpeed, SetSequenceFormat, SetSubmix, SetTimeInterpolation, SetToFrameSize,
     SetTrackAutomation, SetTrackEffects, SetTrackMix, SetTrackOutput, SetTrackSwitch,
     SetTransition, Slide, Slip, SwitchAngle, SyncMethod, TrackSwitch, Trim, TrimMode, Unlinked,
     UpdateMarker,
@@ -102,7 +102,7 @@ pub use mask_path::{
     toggle_path_animation, PathVertex, VertexAt,
 };
 pub use mask_track::{MaskTracking, PictureUnits};
-pub use media::{MediaItem, SourceId};
+pub use media::{MediaItem, MediaLog, SourceId};
 pub use mix::{balance, Gain, Pan};
 pub use model::{
     Clip, ClipId, IdGenerator, LinkId, Sequence, Track, TrackKind, TrackRef, VideoFormat,

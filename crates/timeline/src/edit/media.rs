@@ -1,7 +1,7 @@
 use std::ops::Range;
 use std::path::Path;
 
-use crate::{Edit, ImportMedia, MediaItem, Sequence, SourceId, Ticks, TimelineError};
+use crate::{Edit, ImportMedia, MediaItem, MediaLog, Sequence, SourceId, Ticks, TimelineError};
 
 fn media_item(sequence: &mut Sequence, source: SourceId) -> Result<&mut MediaItem, TimelineError> {
     sequence
@@ -29,6 +29,28 @@ impl Edit for RenameMedia {
             return Err(TimelineError::NothingToEdit);
         }
         name.clone_into(&mut item.name);
+        Ok(())
+    }
+}
+
+/// Replaces what is logged about a media item.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetMediaLog {
+    pub source: SourceId,
+    pub log: MediaLog,
+}
+
+impl Edit for SetMediaLog {
+    fn name(&self) -> &'static str {
+        "Edit Metadata"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let item = media_item(sequence, self.source)?;
+        if item.log == self.log {
+            return Err(TimelineError::NothingToEdit);
+        }
+        item.log.clone_from(&self.log);
         Ok(())
     }
 }

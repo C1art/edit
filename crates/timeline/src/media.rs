@@ -40,6 +40,31 @@ pub struct MediaItem {
     /// slowing high-frame-rate footage; the sound follows.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub interpreted_rate: Option<FrameRate>,
+    #[serde(default, skip_serializing_if = "MediaLog::is_empty")]
+    pub log: MediaLog,
+}
+
+/// What the editor has written down about a media item, as Premiere's Metadata panel
+/// keeps it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MediaLog {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub description: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub scene: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub shot: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub log_note: String,
+    /// Marked as a good take.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub good: bool,
+}
+
+impl MediaLog {
+    pub fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
 }
 
 impl MediaItem {

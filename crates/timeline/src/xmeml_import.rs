@@ -353,6 +353,7 @@ impl Edit for ImportXmeml {
                         bin: None,
                         subclip: None,
                         interpreted_rate: None,
+                        log: Default::default(),
                     });
                     id
                 }
@@ -425,6 +426,7 @@ impl Edit for ImportXmeml {
             bin: None,
             subclip: None,
             interpreted_rate: None,
+            log: Default::default(),
         });
         sequence.fit_nest(id);
         Ok(())

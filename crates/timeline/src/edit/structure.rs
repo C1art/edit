@@ -154,6 +154,7 @@ impl Edit for ImportMedia {
             nest: None,
             subclip: None,
             interpreted_rate: None,
+            log: Default::default(),
         });
         Ok(())
     }
