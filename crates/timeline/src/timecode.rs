@@ -12,12 +12,27 @@ pub struct FrameRate {
 }
 
 impl FrameRate {
+    pub const FPS_25: Self = Self { num: 25, den: 1 };
+
     pub const fn new(num: u32, den: u32) -> Option<Self> {
         if num == 0 || den == 0 {
             None
         } else {
             Some(Self { num, den })
         }
+    }
+
+    pub const fn num(self) -> u32 {
+        self.num
+    }
+
+    pub const fn den(self) -> u32 {
+        self.den
+    }
+
+    /// For display only; time math stays rational.
+    pub fn approx_fps(self) -> f64 {
+        f64::from(self.num) / f64::from(self.den)
     }
 
     /// The duration of one frame, which is exactly one tick of this timebase.
