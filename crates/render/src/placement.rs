@@ -13,6 +13,11 @@ pub struct LayerLook {
     /// Gaussian blur standard deviation in canvas pixels.
     pub blur: f32,
     pub color: ColorAdjust,
+    /// Fractions of the canvas hidden from the left, top, right and bottom, whatever the
+    /// picture's placement.
+    pub mask: [f32; 4],
+    /// 0 to 1: how far the picture is washed out to white.
+    pub wash: f32,
 }
 
 /// Color correction in linear light, every field neutral at zero except saturation.
@@ -55,6 +60,8 @@ impl LayerLook {
         opacity: 1.0,
         blur: 0.0,
         color: ColorAdjust::IDENTITY,
+        mask: [0.0; 4],
+        wash: 0.0,
     };
 }
 
@@ -69,6 +76,8 @@ pub(crate) struct Placement {
     pub(crate) crop: [f32; 4],
     pub(crate) opacity: f32,
     pub(crate) color: ColorAdjust,
+    pub(crate) mask: [f32; 4],
+    pub(crate) wash: f32,
 }
 
 impl Placement {
@@ -79,6 +88,8 @@ impl Placement {
         crop: [0.0; 4],
         opacity: 1.0,
         color: ColorAdjust::IDENTITY,
+        mask: [0.0; 4],
+        wash: 0.0,
     };
 
     /// Fits the layer to the canvas keeping its aspect ratio, then applies the look.
@@ -97,6 +108,8 @@ impl Placement {
             crop: look.crop.map(|side| side.clamp(0.0, 1.0)),
             opacity: look.opacity.clamp(0.0, 1.0),
             color: look.color,
+            mask: look.mask.map(|side| side.clamp(0.0, 1.0)),
+            wash: look.wash.clamp(0.0, 1.0),
         }
     }
 
@@ -114,7 +127,8 @@ impl Placement {
                 color.highlights,
                 color.shadows,
             ])
-            .chain([color.temperature, color.tint, color.saturation, 0.0])
+            .chain([color.temperature, color.tint, color.saturation, self.wash])
+            .chain(self.mask)
             .flat_map(f32::to_le_bytes)
             .collect()
     }
