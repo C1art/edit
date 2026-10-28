@@ -1,3 +1,4 @@
+mod adjust;
 mod backdrop;
 mod blit;
 mod blur;
@@ -17,6 +18,7 @@ mod style;
 mod warp;
 mod wipe;
 
+pub use adjust::{Adjust, AlphaAdjust, LumaKey};
 pub use blit::DISPLAY_FORMAT;
 pub use compositor::{Background, Compositor, LayerImage, Picture, Presented};
 pub use error::RenderError;

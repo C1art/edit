@@ -1,5 +1,6 @@
 use timeline::{AlphaInterpretation, KeyOutput};
 
+use crate::adjust::Adjust;
 use crate::recolor::Recolor;
 use crate::reshape::Reshape;
 use crate::style::PictureStyle;
@@ -22,6 +23,7 @@ pub struct PixelEffects {
     pub style: PictureStyle,
     pub reshape: Reshape,
     pub recolor: Recolor,
+    pub adjust: Adjust,
     /// How the source's alpha channel is read.
     pub alpha: AlphaInterpretation,
 }
@@ -88,6 +90,7 @@ impl PixelEffects {
         style: PictureStyle::NONE,
         reshape: Reshape::NONE,
         recolor: Recolor::NONE,
+        adjust: Adjust::NONE,
         alpha: AlphaInterpretation::Straight,
     };
 

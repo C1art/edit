@@ -108,6 +108,13 @@ struct Placement {
     // its output (see key.wgsl), and 1 to ignore the source's alpha or 2 to invert it.
     key_matte: vec4<f32>,
     key_spill: vec4<f32>,
+    // Color Balance (RGB)'s gains, then Replicate's count; Solarize's and Threshold's
+    // levels and Luma Key's threshold and cutoff, each negative when off; then Alpha
+    // Adjust's opacity and 1 to ignore, to invert and to show only the alpha (see
+    // adjust.wgsl).
+    adjust_balance: vec4<f32>,
+    adjust_levels: vec4<f32>,
+    adjust_alpha: vec4<f32>,
 };
 
 const OUTLINE_VEC4S: u32 = 32u;
@@ -461,25 +468,28 @@ fn source_color(uv: vec2<f32>) -> vec4<f32> {
 
 // How much of the cropped, keyed picture covers `uv`, which casts the shadow.
 fn cast_alpha(uv: vec2<f32>) -> f32 {
-    let source = warp(uv);
+    let source = warp(replicated(uv));
     let color = source_color(source);
-    return color.a * key_shown(key_alpha(color.rgb, source)) * f32(in_crop(uv));
+    let keyed = key_shown(key_alpha(color.rgb, source)) * luma_matte(color.rgb);
+    return adjusted_alpha(color.a) * keyed * f32(in_crop(uv));
 }
 
 // The layer's graded, keyed and masked color, not yet premultiplied.
 fn layer_color(in: VertexOutput) -> vec4<f32> {
     let page = folded(in.uv);
     let pinned = unpinned(page.uv);
-    let uv = warp(pinned);
+    let uv = warp(replicated(pinned));
     let color = source_color(uv);
     let wiped = wipe_cover(in.canvas);
     let matte = key_alpha(color.rgb, uv);
     let keyed = key_shown(matte);
     let sharp = sharpen(despill(color.rgb, matte), uv);
-    var rgb = restyle(stylize(secondary(creative_grade(correct(change_to_color(mix_channels(leave_color(sharp)))))), pinned), uv);
+    var rgb = adjusted(restyle(stylize(secondary(creative_grade(correct(change_to_color(mix_channels(leave_color(sharp)))))), pinned), uv));
     rgb = page_side(key_view(rgb, matte), page);
     rgb = mix(rgb, vec3<f32>(1.0), placement.balance.w);
-    let picture = color.a * keyed * f32(in_crop(pinned));
+    let viewed = alpha_view(rgb, adjusted_alpha(color.a) * keyed * luma_matte(color.rgb) * f32(in_crop(pinned)));
+    rgb = viewed.rgb;
+    let picture = viewed.a;
     let shadow = shadow_alpha(pinned);
     let covered = picture + shadow * (1.0 - picture);
     rgb = mix(placement.style_shadow_color.rgb, rgb, picture / max(covered, 1e-6));
