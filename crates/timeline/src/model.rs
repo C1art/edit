@@ -64,6 +64,9 @@ pub struct Clip {
     pub speed: Speed,
     #[serde(default)]
     pub link: Option<LinkId>,
+    /// Left out of playback and export but kept on the timeline.
+    #[serde(default)]
+    pub disabled: bool,
     /// Level of an audio clip; ignored for video.
     #[serde(default)]
     pub gain: Gain,
@@ -93,6 +96,7 @@ impl Clip {
             source_in,
             speed: Speed::NORMAL,
             link: None,
+            disabled: false,
             gain: Gain::UNITY,
             look: Look::default(),
             transition_in: None,
@@ -138,6 +142,9 @@ pub struct Track {
     /// Edits that would change a locked track's clips are rejected.
     #[serde(default)]
     pub locked: bool,
+    /// While any audio track is soloed, only soloed ones are heard.
+    #[serde(default)]
+    pub solo: bool,
     /// Fader level of an audio track; ignored for video.
     #[serde(default)]
     pub volume: Gain,
@@ -228,6 +235,11 @@ impl Sequence {
         sequence.video.resize_with(3, Track::default);
         sequence.audio.resize_with(3, Track::default);
         sequence
+    }
+
+    /// Whether an audio track reaches the mix, given its mute and every track's solo.
+    pub fn is_heard(&self, track: &Track) -> bool {
+        !track.muted && (track.solo || !self.audio.iter().any(|track| track.solo))
     }
 
     pub fn tracks_of(&self, kind: TrackKind) -> &[Track] {
