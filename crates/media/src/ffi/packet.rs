@@ -39,6 +39,18 @@ impl Packet {
         }
     }
 
+    pub(crate) fn data(&self) -> &[u8] {
+        // SAFETY: the packet is valid for the lifetime of `self`.
+        let raw = unsafe { self.0.as_ref() };
+        let size = usize::try_from(raw.size).unwrap_or(0);
+        if raw.data.is_null() || size == 0 {
+            return &[];
+        }
+        // SAFETY: a packet's data holds `size` bytes while the packet is not unreferenced,
+        // which needs `&mut self`.
+        unsafe { std::slice::from_raw_parts(raw.data, size) }
+    }
+
     pub(crate) fn unref(&mut self) {
         // SAFETY: the packet is valid; unref resets it to the blank state and frees its buffer.
         unsafe { sys::av_packet_unref(self.0.as_ptr()) };

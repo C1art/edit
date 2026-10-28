@@ -85,6 +85,24 @@ impl Encoder {
         encoder.open(codec, global_header, &options)
     }
 
+    /// One RGBA picture through an image codec, such as PNG, whose single packet is the
+    /// whole image file.
+    pub(crate) fn still(
+        id: sys::AVCodecID,
+        (width, height): (u32, u32),
+    ) -> Result<Self, MediaError> {
+        let invalid = || MediaError::InvalidSettings("frame size out of range");
+        let codec = find(None, id);
+        let encoder = Self::alloc(codec)?;
+        // SAFETY: the context was just allocated and is exclusively owned.
+        let raw = unsafe { &mut *encoder.0.as_ptr() };
+        raw.width = i32::try_from(width).map_err(|_| invalid())?;
+        raw.height = i32::try_from(height).map_err(|_| invalid())?;
+        raw.time_base = sys::AVRational { num: 1, den: 1 };
+        raw.pix_fmt = sys::AVPixelFormat::AV_PIX_FMT_RGBA;
+        encoder.open(codec, false, &[])
+    }
+
     /// Stereo.
     pub(crate) fn audio(settings: &AudioSettings, global_header: bool) -> Result<Self, MediaError> {
         let invalid = || MediaError::InvalidSettings("sample rate out of range");

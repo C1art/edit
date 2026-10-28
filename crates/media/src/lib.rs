@@ -8,6 +8,7 @@ mod proxy;
 mod reader;
 mod scenes;
 mod seek_trim;
+mod still;
 mod writer;
 
 pub use codec::{AudioCodec, RateControl, VideoCodec};
@@ -29,4 +30,5 @@ pub use probe::{probe, MediaInfo, StreamInfo, StreamKind};
 pub use proxy::{create_proxy, proxy_size};
 pub use reader::{MediaReader, SourceInfo, Streams, VideoInfo};
 pub use scenes::detect_scenes;
+pub use still::{write_still, StillFormat};
 pub use writer::{AudioSettings, EncodeProfile, MediaWriter, VideoSettings};
