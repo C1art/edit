@@ -11,6 +11,7 @@ mod placement;
 mod readback;
 mod scope;
 mod secondary;
+mod style;
 
 pub use blit::DISPLAY_FORMAT;
 pub use compositor::{Compositor, LayerImage, Picture, Presented};
@@ -22,6 +23,7 @@ pub use pixel::{ChromaKey, PixelEffects, Vignette};
 pub use placement::{ColorAdjust, LayerLook};
 pub use scope::Scope;
 pub use secondary::SecondaryAdjust;
+pub use style::PictureStyle;
 
 /// Compositing happens in linear light at half-float precision.
 pub const WORKING_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;

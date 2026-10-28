@@ -49,6 +49,16 @@ struct Placement {
     masks: array<vec4<f32>, 12>,
     // Each mask's path outline as fractions of the picture, two points to a vec4.
     outlines: array<vec4<f32>, 128>,
+    // The picture style (see style.wgsl): brightness, contrast, gamma, posterize levels.
+    style_tone: vec4<f32>,
+    // Noise amount and seed, then how much the outlines show and 1 when inverted.
+    style_grain: vec4<f32>,
+    // The offset as fractions of the picture and its share, then lens curvature.
+    style_warp: vec4<f32>,
+    // Mosaic blocks across and down, then the twirl's angle in radians and its radius.
+    style_shape: vec4<f32>,
+    // The directional blur's reach in pixels and its direction in radians.
+    style_blur: vec4<f32>,
 };
 
 const OUTLINE_VEC4S: u32 = 32u;
@@ -406,7 +416,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
 // The layer's graded, keyed and masked color, not yet premultiplied.
 fn layer_color(in: VertexOutput) -> vec4<f32> {
-    var color = textureSample(source, source_sampler, in.uv);
+    let uv = warp(in.uv);
+    var color = picture_at(uv);
     if placement.axis_y_opacity.w > 0.5 {
         color = vec4<f32>(color.rgb / max(color.a, 1e-6), color.a);
     }
@@ -416,8 +427,8 @@ fn layer_color(in: VertexOutput) -> vec4<f32> {
     let keyed = key_alpha(color.rgb);
     // Desaturating the key's edge suppresses the screen's color spilling onto it.
     let unspilled = mix(vec3<f32>(dot(color.rgb, LUMA)), color.rgb, keyed);
-    let sharp = sharpen(unspilled, in.uv);
-    var rgb = stylize(secondary(creative_grade(correct(sharp))), in.uv);
+    let sharp = sharpen(unspilled, uv);
+    var rgb = restyle(stylize(secondary(creative_grade(correct(sharp))), in.uv), uv);
     rgb = mix(rgb, vec3<f32>(1.0), placement.balance.w);
     let opacity = placement.axis_y_opacity.z * mask_coverage(in.uv);
     return vec4<f32>(rgb, color.a * keyed * opacity * f32(shown));

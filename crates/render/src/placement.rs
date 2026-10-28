@@ -202,6 +202,7 @@ impl Placement {
             .chain(self.grade)
             .chain(SecondaryAdjust::uniform(color.secondary.as_ref()))
             .chain(mask::uniform(&self.opacity_masks, self.fitted))
+            .chain(self.effects.style.uniform())
             .flat_map(f32::to_le_bytes)
             .collect()
     }
@@ -247,9 +248,9 @@ mod tests {
         };
         let bytes = Placement::new((1920, 1080), (1920, 1080), &look).to_bytes();
         // The shader's struct ends with the masks: the header, three vec4s each, then
-        // their outlines at two points a vec4.
+        // their outlines at two points a vec4; then the picture style's five.
         let outlines = MAX_MASKS * MAX_OUTLINE_POINTS / 2;
-        assert_eq!(bytes.len(), (20 + 1 + 3 * MAX_MASKS + outlines) * 16);
+        assert_eq!(bytes.len(), (20 + 1 + 3 * MAX_MASKS + outlines + 5) * 16);
         assert!(bytes.len() as u64 <= crate::blit::UNIFORM_BYTES);
     }
 
