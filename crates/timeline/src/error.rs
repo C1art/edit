@@ -23,6 +23,8 @@ pub enum TimelineError {
     BeforeSequenceStart,
     /// The clip would need source material before the start or after the end of its media.
     OutsideMedia(ClipId),
+    /// The marks ask for more of the source than it has.
+    NotEnoughSource,
     /// The edit has no clip or track to act on.
     NothingToEdit,
     /// The nested sequence would show itself.
@@ -58,6 +60,9 @@ impl fmt::Display for TimelineError {
             Self::NonPositiveDuration => f.write_str("clip duration must be positive"),
             Self::BeforeSequenceStart => f.write_str("nothing can start before the sequence"),
             Self::OutsideMedia(_) => f.write_str("not enough source media for this edit"),
+            Self::NotEnoughSource => {
+                f.write_str("the source has too little media for the sequence marks")
+            }
             Self::NothingToEdit => f.write_str("nothing to edit"),
             Self::NestCycle(_) => f.write_str("a sequence can't contain itself"),
             Self::CaptionOutOfOrder(_) => {

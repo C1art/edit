@@ -45,6 +45,7 @@ fn sequence() -> Arc<Sequence> {
                 video_track: Some(0),
                 audio_track: Some(0),
                 mode: PlaceMode::Overwrite,
+                fill: None,
             })
             .unwrap();
     }

@@ -43,6 +43,7 @@ fn routed() -> Timeline {
             video_track: None,
             audio_track: Some(0),
             mode: PlaceMode::Overwrite,
+            fill: None,
         })
         .unwrap();
     timeline.apply(AddSubmix).unwrap();

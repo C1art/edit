@@ -1,5 +1,7 @@
 use crate::edit::ops::{self, Relinks};
-use crate::{Clip, ClipId, Edit, LinkId, Sequence, SourceId, Ticks, TimelineError, TrackRef};
+use crate::{
+    Clip, ClipId, Edit, LinkId, Sequence, SourceId, Speed, Ticks, TimelineError, TrackRef,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlaceMode {
@@ -22,6 +24,9 @@ pub struct PlaceClip {
     pub video_track: Option<usize>,
     pub audio_track: Option<usize>,
     pub mode: PlaceMode,
+    /// Fit to Fill: how long the clips last, their speed changed to fit `duration` of
+    /// the media into it.
+    pub fill: Option<Ticks>,
 }
 
 impl Edit for PlaceClip {
@@ -47,7 +52,15 @@ impl Edit for PlaceClip {
             return Err(TimelineError::NothingToEdit);
         }
         let conform = media.conform();
-        let duration = conform.sequence_span(self.duration);
+        let duration = self
+            .fill
+            .unwrap_or_else(|| conform.sequence_span(self.duration));
+        let speed = match self.fill {
+            Some(fill) => Speed::stretch(self.duration, fill)
+                .ok_or(TimelineError::NonPositiveDuration)?
+                .over(conform),
+            None => Speed::NORMAL,
+        };
         if duration <= Ticks::ZERO {
             return Err(TimelineError::NonPositiveDuration);
         }
@@ -69,6 +82,7 @@ impl Edit for PlaceClip {
             let clip = Clip {
                 link,
                 conform,
+                speed,
                 ..Clip::new(
                     ClipId(sequence.ids.next()),
                     self.source,

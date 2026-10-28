@@ -161,3 +161,22 @@ fn reversed_clips_play_their_range_backwards_through_trims_and_cuts() {
     assert_eq!(source_at(&timeline, 0, 199), Ticks(300));
     assert_eq!(source_at(&timeline, 1, 200), Ticks(299));
 }
+
+#[test]
+fn fit_to_fill_changes_speed_so_the_source_range_fills_the_sequence_range() {
+    let (mut timeline, source) = timeline();
+    let fit = PlaceClip {
+        fill: Some(Ticks(400)),
+        ..place(source, 100, 50, 200, PlaceMode::Overwrite)
+    };
+    timeline.apply(fit).unwrap();
+    for track in [V1, A1] {
+        let (_, clip) = timeline
+            .sequence()
+            .clip(clip_on(&timeline, track, 0))
+            .unwrap();
+        assert_eq!((clip.start, clip.duration), (Ticks(100), Ticks(400)));
+        assert_eq!((clip.source_in, clip.source_out()), (Ticks(50), Ticks(250)));
+        assert_eq!(clip.speed, Speed::new(1, 2).unwrap());
+    }
+}

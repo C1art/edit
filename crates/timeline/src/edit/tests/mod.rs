@@ -43,6 +43,7 @@ fn place(source: SourceId, at: i64, source_in: i64, duration: i64, mode: PlaceMo
         video_track: Some(0),
         audio_track: Some(0),
         mode,
+        fill: None,
     }
 }
 
