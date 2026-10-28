@@ -6,6 +6,7 @@ use crate::editor::Editor;
 use crate::placing;
 use crate::project_files::PathPurpose;
 use crate::transport;
+use crate::trim_monitor::TrimMonitor;
 
 /// Space below each picture for its scrub bar, transport and buttons.
 const CONTROLS_HEIGHT: f32 = 84.0;
@@ -115,25 +116,15 @@ fn source(editor: &mut Editor, ui: &mut egui::Ui) {
 fn program(editor: &mut Editor, ui: &mut egui::Ui) {
     let focused = editor.focus == Focus::Program;
     title(ui, "Program", focused);
-    let Some(program) = &mut editor.program else {
+    if editor.program.is_none() {
         return;
-    };
-    let response = program.picture(ui, picture_size(ui));
-    outline(ui, &response, focused);
-    if editor.multicam_layout.is_some() {
-        let clicked = response
-            .clicked()
-            .then(|| response.interact_pointer_pos())
-            .flatten();
-        crate::multicam::overlay(editor, ui, response.rect, clicked);
-    } else {
-        if editor.safe_margins {
-            let format = editor.timeline.sequence().format;
-            let canvas = egui::vec2(format.width as f32, format.height as f32);
-            crate::safe_margins::paint(ui, response.rect, canvas);
-        }
-        crate::effects::motion_overlay(editor, ui, response.rect);
-        crate::effects::mask_overlay(editor, ui, response.rect);
+    }
+    if let Some(response) = trim_picture(editor, ui) {
+        outline(ui, &response, focused);
+    } else if let Some(program) = &mut editor.program {
+        let response = program.picture(ui, picture_size(ui));
+        outline(ui, &response, focused);
+        program_overlays(editor, ui, &response);
     }
     let Some(program) = &mut editor.program else {
         return;
@@ -193,6 +184,43 @@ fn program(editor: &mut Editor, ui: &mut egui::Ui) {
     if pressed_inside(ui) {
         editor.focus = Focus::Program;
     }
+}
+
+/// What the program picture shows on top: the camera grid, or safe margins and the
+/// handles of the selected clip's motion and masks.
+fn program_overlays(editor: &mut Editor, ui: &mut egui::Ui, response: &egui::Response) {
+    if editor.multicam_layout.is_some() {
+        let clicked = response
+            .clicked()
+            .then(|| response.interact_pointer_pos())
+            .flatten();
+        crate::multicam::overlay(editor, ui, response.rect, clicked);
+    } else {
+        if editor.safe_margins {
+            let format = editor.timeline.sequence().format;
+            let canvas = egui::vec2(format.width as f32, format.height as f32);
+            crate::safe_margins::paint(ui, response.rect, canvas);
+        }
+        crate::effects::motion_overlay(editor, ui, response.rect);
+        crate::effects::mask_overlay(editor, ui, response.rect);
+    }
+}
+
+/// The trim monitor in place of the program picture while an edit is dragged.
+fn trim_picture(editor: &mut Editor, ui: &mut egui::Ui) -> Option<egui::Response> {
+    let Some(view) = editor.view.trim_view() else {
+        if let Some(trim) = &mut editor.trim_monitor {
+            trim.reset();
+        }
+        return None;
+    };
+    if editor.trim_monitor.is_none() {
+        editor.trim_monitor = editor.render_state.as_ref().and_then(TrimMonitor::new);
+    }
+    let trim = editor.trim_monitor.as_mut()?;
+    let (rect, response) = ui.allocate_exact_size(picture_size(ui), egui::Sense::click());
+    trim.ui(ui, rect, &view);
+    Some(response)
 }
 
 fn pressed_inside(ui: &egui::Ui) -> bool {

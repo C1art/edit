@@ -10,6 +10,7 @@ mod scale;
 mod tool;
 mod track_heights;
 mod track_select;
+mod trim_view;
 
 use std::collections::BTreeSet;
 
@@ -27,6 +28,7 @@ pub use paint::label_color;
 use scale::TimeScale;
 pub use tool::{Direction, Tool};
 pub use track_heights::TrackHeights;
+pub use trim_view::TrimView;
 
 const HEADER_WIDTH: f32 = 290.0;
 const RULER_HEIGHT: f32 = 26.0;

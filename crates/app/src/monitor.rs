@@ -73,6 +73,12 @@ impl Monitor {
     pub fn ui(&self, ui: &mut egui::Ui, size: Vec2) -> Response {
         let (rect, response) = ui.allocate_exact_size(size, Sense::click());
         ui.painter().rect_filled(rect, 0.0, Color32::BLACK);
+        self.paint(ui.painter(), rect);
+        response
+    }
+
+    /// Draws the picture letterboxed into `rect`.
+    pub fn paint(&self, painter: &egui::Painter, rect: Rect) {
         if let (Some(texture), Some((width, height))) =
             (self.texture, self.compositor.output_size())
         {
@@ -80,9 +86,8 @@ impl Monitor {
             let scale = (rect.width() / frame.x).min(rect.height() / frame.y);
             let shown = Rect::from_center_size(rect.center(), frame * scale);
             let uv = Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
-            ui.painter().image(texture, shown, uv, Color32::WHITE);
+            painter.image(texture, shown, uv, Color32::WHITE);
         }
-        response
     }
 }
 

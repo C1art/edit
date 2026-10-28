@@ -51,6 +51,7 @@ mod source;
 mod speed_dialog;
 mod timeline_view;
 mod transport;
+mod trim_monitor;
 mod viewer;
 
 use std::path::PathBuf;

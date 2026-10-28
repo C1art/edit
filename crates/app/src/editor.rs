@@ -25,6 +25,7 @@ use crate::project_store::ProjectStore;
 use crate::proxies::ProxyMaker;
 use crate::source::SourceMonitor;
 use crate::timeline_view::TimelineView;
+use crate::trim_monitor::TrimMonitor;
 use crate::viewer::Viewer;
 
 /// Notices kept for display; older ones are dropped.
@@ -54,6 +55,8 @@ pub struct Editor {
     pub(crate) hardware_decoding: bool,
     pub(crate) source: Option<SourceMonitor>,
     pub(crate) program: Option<Viewer>,
+    /// Shown in place of the program picture while an edit is dragged; made on first use.
+    pub(crate) trim_monitor: Option<TrimMonitor>,
     /// The timeline revision the program viewer is playing.
     pub(crate) shown_revision: u64,
     pub(crate) focus: Focus,
@@ -173,6 +176,7 @@ impl Editor {
             hardware_decoding: true,
             source: None,
             program,
+            trim_monitor: None,
             focus: Focus::Program,
             view: TimelineView::default(),
             mixer: Mixer::default(),
