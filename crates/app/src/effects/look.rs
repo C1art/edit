@@ -1,7 +1,7 @@
 use std::ops::RangeInclusive;
 
 use egui::{DragValue, RichText};
-use timeline::{Gain, Look, Param, Rgb, Ticks, VideoEffect};
+use timeline::{Look, Param, Rgb, Ticks, VideoEffect};
 
 use crate::mixer::{response_state, Change};
 
@@ -102,25 +102,14 @@ pub(super) fn controls(ui: &mut egui::Ui, look: &mut Look, time: Ticks) -> Outpu
     rows.output
 }
 
-/// Edits an audio clip's volume at source time `time`.
-pub(super) fn volume_controls(ui: &mut egui::Ui, volume: &mut Param, time: Ticks) -> Output {
-    let mut rows = Rows::new(time);
-    egui::CollapsingHeader::new("Volume")
-        .default_open(true)
-        .show(ui, |ui| {
-            let range = Gain::SILENT.db()..=Gain::MAX.db();
-            rows.param(ui, "Level", volume, range, " dB");
-        });
-    rows.output
-}
-
-struct Rows {
+/// Parameter rows at one source time, collecting what their edits ask for.
+pub(super) struct Rows {
     time: Ticks,
-    output: Output,
+    pub(super) output: Output,
 }
 
 impl Rows {
-    fn new(time: Ticks) -> Self {
+    pub(super) fn new(time: Ticks) -> Self {
         Self {
             time,
             output: Output {
@@ -130,7 +119,7 @@ impl Rows {
         }
     }
 
-    fn commit(&mut self) {
+    pub(super) fn commit(&mut self) {
         self.output.change = Some(Change::Commit);
     }
 
@@ -192,7 +181,7 @@ impl Rows {
 
     /// A value with its keyframe controls: the first button turns animation on and off,
     /// the arrows jump between keyframes and the diamond adds or removes one here.
-    fn param(
+    pub(super) fn param(
         &mut self,
         ui: &mut egui::Ui,
         label: &str,

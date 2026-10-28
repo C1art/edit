@@ -1,13 +1,15 @@
 mod generated;
 mod look;
+mod sound;
 mod transitions;
 
 use std::sync::Arc;
 
 use egui::RichText;
 use timeline::{
-    preview, Clip, ClipId, Edit, Generator, Look, Param, Sequence, SetClipLook, SetClipVolume,
-    SetGenerator, SourceId, Ticks, TrackKind, TrackRef,
+    preview, AudioEffect, Clip, ClipId, Edit, Generator, Look, Param, Sequence,
+    SetClipAudioEffects, SetClipLook, SetClipVolume, SetGenerator, SourceId, Ticks, TrackKind,
+    TrackRef,
 };
 
 use crate::editor::Editor;
@@ -23,12 +25,13 @@ pub enum SideTab {
     Scopes,
 }
 
-/// The look or volume being dragged, or the title being typed, shown live and
-/// committed on release.
+/// The look, volume or audio effect being dragged, or the title being typed, shown live
+/// and committed on release.
 #[derive(Debug, Default)]
 pub struct EffectControls {
     adjusting: Option<(ClipId, Look)>,
     leveling: Option<(ClipId, Param)>,
+    processing: Option<(ClipId, Vec<AudioEffect>)>,
     drawing: Option<(SourceId, Generator)>,
 }
 
@@ -59,6 +62,7 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
         }
         if let Some((_, clip)) = &sound {
             volume_controls(editor, ui, clip);
+            audio_effect_controls(editor, ui, clip);
         }
         transitions::controls(editor, ui, track, &clip);
     });
@@ -123,7 +127,7 @@ fn volume_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
         Some((id, volume)) if *id == clip.id => volume.clone(),
         _ => clip.volume.clone(),
     };
-    let output = look::volume_controls(ui, &mut volume, time);
+    let output = sound::volume_controls(ui, &mut volume, time);
     seek_to_key(editor, clip, output.seek);
     let edit = SetClipVolume {
         clip: clip.id,
@@ -131,12 +135,37 @@ fn volume_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
     };
     match output.change {
         Some(Change::Live) => {
-            show_live(editor, &edit);
+            hear_live(editor, &edit);
             editor.effects.leveling = Some((edit.clip, edit.volume));
         }
         Some(Change::Commit) => {
             editor.effects.leveling = None;
-            editor.apply(edit);
+            editor.apply_levels(edit);
+        }
+        None => {}
+    }
+}
+
+fn audio_effect_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
+    let time = keyframe_time(editor, clip);
+    let mut effects = match &editor.effects.processing {
+        Some((id, effects)) if *id == clip.id => effects.clone(),
+        _ => clip.audio_effects.clone(),
+    };
+    let output = sound::effect_controls(ui, &mut effects, time);
+    seek_to_key(editor, clip, output.seek);
+    let edit = SetClipAudioEffects {
+        clip: clip.id,
+        effects,
+    };
+    match output.change {
+        Some(Change::Live) => {
+            hear_live(editor, &edit);
+            editor.effects.processing = Some((edit.clip, edit.effects));
+        }
+        Some(Change::Commit) => {
+            editor.effects.processing = None;
+            editor.apply_levels(edit);
         }
         None => {}
     }
@@ -159,6 +188,16 @@ fn show_live(editor: &mut Editor, edit: &impl Edit) {
     if let Ok(sequence) = preview(editor.timeline.sequence(), edit) {
         if let Some(program) = &mut editor.program {
             program.player.set_sequence(Arc::new(sequence));
+        }
+    }
+}
+
+/// Plays the program as `edit` would leave it without seeking, so a change to the
+/// sound is heard while playback carries on.
+fn hear_live(editor: &mut Editor, edit: &impl Edit) {
+    if let Ok(sequence) = preview(editor.timeline.sequence(), edit) {
+        if let Some(program) = &mut editor.program {
+            program.player.set_mix(Arc::new(sequence));
         }
     }
 }
