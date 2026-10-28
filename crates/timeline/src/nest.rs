@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Captions, Clip, Gain, Marker, Marks, Sequence, SourceId, Ticks, TimelineError, Track, TrackRef,
+    AudioEffect, Captions, Clip, Gain, Marker, Marks, Sequence, SourceId, Submix, Ticks,
+    TimelineError, Track, TrackRef,
 };
 
 /// A sequence placed as media in the project's sequence. It has its own tracks, mix and
@@ -14,6 +15,10 @@ pub struct Nest {
     pub audio: Vec<Track>,
     #[serde(default)]
     pub master: Gain,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub master_effects: Vec<AudioEffect>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub submixes: Vec<Submix>,
     #[serde(default)]
     pub markers: Vec<Marker>,
     #[serde(default)]
@@ -66,6 +71,8 @@ impl Sequence {
             video: nest.video.clone(),
             audio: nest.audio.clone(),
             master: nest.master,
+            master_effects: nest.master_effects.clone(),
+            submixes: nest.submixes.clone(),
             markers: nest.markers.clone(),
             marks: nest.marks,
             captions: nest.captions.clone(),
@@ -73,8 +80,8 @@ impl Sequence {
         })
     }
 
-    /// Trades this sequence's tracks, mix, markers, marks and captions for those of nest `id`, so an edit
-    /// of the sequence edits the nest. Swapping again trades them back.
+    /// Trades this sequence's tracks, mix, markers, marks and captions for those of nest
+    /// `id`, so an edit of the sequence edits the nest. Swapping again trades them back.
     pub(crate) fn swap_nest(&mut self, id: SourceId) -> Result<(), TimelineError> {
         let nest = self
             .media
@@ -85,6 +92,8 @@ impl Sequence {
         std::mem::swap(&mut self.video, &mut nest.video);
         std::mem::swap(&mut self.audio, &mut nest.audio);
         std::mem::swap(&mut self.master, &mut nest.master);
+        std::mem::swap(&mut self.master_effects, &mut nest.master_effects);
+        std::mem::swap(&mut self.submixes, &mut nest.submixes);
         std::mem::swap(&mut self.markers, &mut nest.markers);
         std::mem::swap(&mut self.marks, &mut nest.marks);
         std::mem::swap(&mut self.captions, &mut nest.captions);

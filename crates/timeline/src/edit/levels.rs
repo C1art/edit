@@ -201,6 +201,26 @@ impl Edit for SetTrackAutomation {
     }
 }
 
+/// Replaces the master's inserts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetMasterEffects {
+    pub effects: Vec<AudioEffect>,
+}
+
+impl Edit for SetMasterEffects {
+    fn name(&self) -> &'static str {
+        "Master Effects"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        if sequence.master_effects == self.effects {
+            return Err(TimelineError::NothingToEdit);
+        }
+        sequence.master_effects.clone_from(&self.effects);
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SetMasterGain {
     pub gain: Gain,

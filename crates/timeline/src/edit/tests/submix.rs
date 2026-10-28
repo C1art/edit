@@ -37,3 +37,28 @@ fn deleting_a_submix_sends_its_tracks_to_the_master_and_undo_restores_the_route(
     timeline.undo();
     assert_eq!(outputs(&timeline), [Some(first), Some(second)]);
 }
+
+#[test]
+fn a_nest_keeps_its_own_submixes_and_master_effects() {
+    let (mut timeline, source) = timeline();
+    timeline
+        .apply(place(source, 0, 0, 300, PlaceMode::Overwrite))
+        .unwrap();
+    timeline.apply(AddSubmix).unwrap();
+    let clips = vec![clip_on(&timeline, V1, 0)];
+    let name = "Nest".into();
+    timeline.apply(NestClips { clips, name }).unwrap();
+    let nest = timeline.sequence().media[1].id;
+    assert!(timeline.set_open_nest(Some(nest)));
+    assert!(timeline.sequence().submixes.is_empty());
+
+    timeline.apply(AddSubmix).unwrap();
+    let effects = vec![crate::AudioEffect::SwapChannels];
+    timeline.apply(SetMasterEffects { effects }).unwrap();
+
+    let project = timeline.project();
+    let nested = project.media_item(nest).unwrap().nest.as_ref().unwrap();
+    assert_eq!((nested.submixes.len(), nested.master_effects.len()), (1, 1));
+    assert_eq!(project.submixes.len(), 1);
+    assert!(project.master_effects.is_empty());
+}

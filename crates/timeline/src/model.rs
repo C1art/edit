@@ -303,6 +303,9 @@ pub struct Sequence {
     pub audio: Vec<Track>,
     #[serde(default)]
     pub master: Gain,
+    /// Run in order over the whole mix, before the master fader.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub master_effects: Vec<AudioEffect>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub submixes: Vec<Submix>,
     /// Sorted by time.
@@ -326,6 +329,7 @@ impl Sequence {
             video: Vec::new(),
             audio: Vec::new(),
             master: Gain::UNITY,
+            master_effects: Vec::new(),
             submixes: Vec::new(),
             markers: Vec::new(),
             marks: Marks::default(),

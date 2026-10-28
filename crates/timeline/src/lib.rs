@@ -58,10 +58,10 @@ pub use edit::{
     RemoveSpeedKeyframe, RemoveSubmix, RemoveTimeRemap, RemoveTrack, RenameBin, RenameMedia,
     RippleDelete, RippleTrimToPlayhead, Roll, SetCaptions, SetClipAudioEffects, SetClipGain,
     SetClipLabel, SetClipLook, SetClipSpeed, SetClipVolume, SetClipsEnabled, SetClipsSound,
-    SetGenerator, SetLinked, SetMarks, SetMasterGain, SetProxy, SetSegmentSpeed, SetSequenceFormat,
-    SetSubmix, SetTimeInterpolation, SetToFrameSize, SetTrackAutomation, SetTrackEffects,
-    SetTrackMix, SetTrackOutput, SetTrackSwitch, SetTransition, Slide, Slip, SwitchAngle,
-    TrackSwitch, Trim, TrimMode, UpdateMarker,
+    SetGenerator, SetLinked, SetMarks, SetMasterEffects, SetMasterGain, SetProxy, SetSegmentSpeed,
+    SetSequenceFormat, SetSubmix, SetTimeInterpolation, SetToFrameSize, SetTrackAutomation,
+    SetTrackEffects, SetTrackMix, SetTrackOutput, SetTrackSwitch, SetTransition, Slide, Slip,
+    SwitchAngle, TrackSwitch, Trim, TrimMode, UpdateMarker,
 };
 pub use effect::{
     ColorMatch, EffectCategory, MatteChannel, RampShape, Rgb, TimecodeSource, VideoEffect,
