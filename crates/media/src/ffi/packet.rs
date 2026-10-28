@@ -30,6 +30,15 @@ impl Packet {
         usize::try_from(unsafe { self.0.as_ref() }.stream_index).ok()
     }
 
+    /// Sets the duration, in the packet's timebase, unless the encoder already did.
+    pub(crate) fn fill_duration(&mut self, duration: i64) {
+        // SAFETY: the packet is valid and exclusively borrowed.
+        let raw = unsafe { self.0.as_mut() };
+        if raw.duration <= 0 {
+            raw.duration = duration;
+        }
+    }
+
     pub(crate) fn unref(&mut self) {
         // SAFETY: the packet is valid; unref resets it to the blank state and frees its buffer.
         unsafe { sys::av_packet_unref(self.0.as_ptr()) };

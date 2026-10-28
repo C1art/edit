@@ -22,6 +22,11 @@ impl Frame {
         unsafe { self.0.as_ref() }
     }
 
+    pub(super) fn raw_mut(&mut self) -> &mut sys::AVFrame {
+        // SAFETY: the frame is valid and exclusively borrowed.
+        unsafe { self.0.as_mut() }
+    }
+
     pub(super) fn as_mut_ptr(&mut self) -> *mut sys::AVFrame {
         self.0.as_ptr()
     }
