@@ -1,5 +1,7 @@
-use render::LayerLook;
-use timeline::{track_layers_at, ClipId, Look, Param, Sequence, SourceId, Ticks, TrackRef};
+use render::{ColorAdjust, LayerLook};
+use timeline::{
+    track_layers_at, ClipId, ColorCorrection, Look, Param, Sequence, SourceId, Ticks, TrackRef,
+};
 
 use crate::clip_decoders::ClipDecoders;
 use crate::track_video::TrackVideo;
@@ -67,5 +69,19 @@ fn layer_look(look: &Look, time: Ticks, fade: f32) -> LayerLook {
         crop: [&crop.left, &crop.top, &crop.right, &crop.bottom].map(percent),
         opacity: percent(&look.opacity) * fade,
         blur: look.blurriness_at(time) / BLURRINESS_PER_SIGMA,
+        color: color_adjust(&look.color, time),
+    }
+}
+
+fn color_adjust(color: &ColorCorrection, time: Ticks) -> ColorAdjust {
+    let unit = |param: &Param| param.value_at(time) / 100.0;
+    ColorAdjust {
+        exposure: color.exposure.value_at(time),
+        contrast: unit(&color.contrast),
+        highlights: unit(&color.highlights),
+        shadows: unit(&color.shadows),
+        temperature: unit(&color.temperature),
+        tint: unit(&color.tint),
+        saturation: unit(&color.saturation),
     }
 }
