@@ -1,14 +1,19 @@
+use std::iter;
+
 use super::ops::{self, Relinks};
 use crate::{
     Clip, ClipId, Edit, LinkId, MediaItem, Nest, Sequence, SourceId, Ticks, TimelineError, Track,
 };
 
 /// Makes a multi-camera source of media items: each one with a picture becomes a camera
-/// on its own video track, all starting together. Every camera's sound is kept on a track
-/// of its own, but only the first is heard until another track is unmuted.
+/// on its own video track. Every camera's sound is kept on a track of its own, but only
+/// the first is heard until another track is unmuted.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreateMulticam {
     pub sources: Vec<SourceId>,
+    /// Where each source starts relative to the others, so they play in sync; missing
+    /// ones start with the earliest.
+    pub starts: Vec<Ticks>,
     pub name: String,
 }
 
@@ -22,23 +27,27 @@ impl Edit for CreateMulticam {
             multicam: true,
             ..Nest::default()
         };
-        let mut bin = None;
-        for &source in &self.sources {
+        let starts = self.starts.iter().copied().chain(iter::repeat(Ticks::ZERO));
+        let mut cameras = Vec::new();
+        for (&source, start) in self.sources.iter().zip(starts) {
             let item = sequence
                 .media_item(source)
                 .ok_or(TimelineError::MediaNotFound(source))?;
-            if item.video.is_none() || item.nest.is_some() || item.generator.is_some() {
-                continue;
+            if item.video.is_some() && item.is_file() {
+                cameras.push((item.clone(), start));
             }
-            let (duration, has_audio) = (item.duration, item.has_audio);
-            bin = bin.or(item.bin);
-            let link = has_audio.then(|| LinkId(sequence.ids.next()));
+        }
+        let earliest = cameras.iter().map(|&(_, start)| start).min();
+        let bin = cameras.iter().find_map(|(item, _)| item.bin);
+        for (item, start) in cameras {
+            let start = start - earliest.unwrap_or(Ticks::ZERO);
+            let link = item.has_audio.then(|| LinkId(sequence.ids.next()));
             let mut camera = || {
                 let mut clip = Clip::new(
                     ClipId(sequence.ids.next()),
-                    source,
-                    Ticks::ZERO,
-                    duration,
+                    item.id,
+                    start,
+                    item.duration,
                     Ticks::ZERO,
                 );
                 clip.link = link;
@@ -48,7 +57,7 @@ impl Edit for CreateMulticam {
                 }
             };
             nest.video.push(camera());
-            if has_audio {
+            if item.has_audio {
                 let mut sound = camera();
                 sound.muted = !nest.audio.is_empty();
                 nest.audio.push(sound);

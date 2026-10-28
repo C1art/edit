@@ -17,6 +17,7 @@ fn multicam() -> (Timeline, SourceId) {
     timeline
         .apply(CreateMulticam {
             sources: vec![first, second],
+            starts: vec![Ticks(0), Ticks(-300)],
             name: "Cameras".into(),
         })
         .unwrap();
@@ -28,14 +29,21 @@ fn multicam() -> (Timeline, SourceId) {
 }
 
 #[test]
-fn a_multicam_source_has_a_track_per_camera_and_hears_only_the_first() {
+fn a_multicam_source_has_a_synced_track_per_camera_and_hears_only_the_first() {
     let (timeline, cameras) = multicam();
     let item = timeline.sequence().media_item(cameras).unwrap();
     let nest = item.nest.as_ref().unwrap();
     assert_eq!((nest.video.len(), nest.audio.len()), (2, 2));
     let muted: Vec<bool> = nest.audio.iter().map(|track| track.muted).collect();
     assert_eq!(muted, [false, true]);
-    assert_eq!(item.duration, Ticks(1000));
+    // The second camera rolled 300 ticks earlier, so the first starts that far in.
+    let starts: Vec<i64> = nest
+        .video
+        .iter()
+        .map(|track| track.clips[0].start.0)
+        .collect();
+    assert_eq!(starts, [300, 0]);
+    assert_eq!(item.duration, Ticks(1300));
 }
 
 #[test]
