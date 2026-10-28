@@ -61,6 +61,28 @@ fn with_linked_selection_off_a_clip_moves_alone_and_slips_out_of_sync() {
 }
 
 #[test]
+fn an_unlinked_trim_leaves_the_partner_and_linked_selection_as_they_were() {
+    let (mut timeline, source) = timeline();
+    timeline
+        .apply(place(source, 0, 0, 100, PlaceMode::Overwrite))
+        .unwrap();
+    let audio = clip_on(&timeline, A1, 0);
+    let trim = Trim {
+        clips: vec![audio],
+        edge: Edge::Tail,
+        delta: Ticks(-20),
+        mode: TrimMode::Normal,
+    };
+    timeline.apply(Unlinked(trim)).unwrap();
+    assert_eq!(spans(&timeline, V1), [(0, 100, 0)]);
+    assert_eq!(spans(&timeline, A1), [(0, 80, 0)]);
+    assert_eq!(
+        timeline.sequence().linked_selection,
+        LinkedSelection::Together
+    );
+}
+
+#[test]
 fn an_out_of_sync_clip_moves_or_slips_back_into_sync() {
     let (mut timeline, source) = timeline();
     timeline

@@ -66,3 +66,21 @@ impl Edit for SetLinkedSelection {
         Ok(())
     }
 }
+
+/// Runs an edit as though linked selection were off, so it touches only the clips it
+/// names, as an Alt-drag of one side of a linked pair does.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Unlinked<E>(pub E);
+
+impl<E: Edit> Edit for Unlinked<E> {
+    fn name(&self) -> &'static str {
+        self.0.name()
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let links = std::mem::replace(&mut sequence.linked_selection, LinkedSelection::Apart);
+        let result = self.0.edit(sequence);
+        sequence.linked_selection = links;
+        result
+    }
+}
