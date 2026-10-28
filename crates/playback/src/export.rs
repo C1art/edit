@@ -6,7 +6,7 @@ use std::thread;
 
 use audio::SampleRate;
 use crossbeam::channel::{Receiver, Sender};
-use media::{AudioSettings, EncodeProfile, MediaWriter, VideoSettings};
+use media::{AudioSettings, EncodeProfile, MediaWriter, RateControl, VideoCodec, VideoSettings};
 use render::{Compositor, LayerImage};
 use timeline::{Sequence, Ticks};
 
@@ -16,12 +16,21 @@ use crate::{compose, Layer, PlaybackError};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExportSettings {
     pub path: PathBuf,
-    /// x264 constant rate factor; lower is better and larger.
-    pub crf: u8,
-    pub sample_rate: u32,
-    pub audio_bits_per_second: u32,
+    /// None for an audio-only file.
+    pub video: Option<VideoExport>,
+    /// None for a silent file.
+    pub audio: Option<AudioSettings>,
     /// The part of the sequence to export; the whole of it when `None`.
     pub range: Option<Range<Ticks>>,
+}
+
+/// Pictures at the sequence's frame rate, scaled from its frame size to `size`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VideoExport {
+    pub codec: VideoCodec,
+    pub rate_control: RateControl,
+    /// Both even.
+    pub size: (u32, u32),
 }
 
 #[derive(Debug)]
@@ -39,8 +48,7 @@ pub enum ExportEvent {
     Failed(PlaybackError),
 }
 
-/// Renders a sequence to a file on a worker thread, at the sequence's own frame size
-/// and rate. Dropping the job cancels it.
+/// Renders a sequence to a file on a worker thread. Dropping the job cancels it.
 pub struct ExportJob {
     events: Receiver<ExportEvent>,
     cancel: Arc<AtomicBool>,
@@ -118,22 +126,23 @@ impl Worker {
         let sequence = Arc::clone(&self.sequence);
         let format = sequence.format;
         let (rate, timebase) = (format.frame_rate, sequence.timebase);
-        let video = VideoSettings {
-            width: format.width,
-            height: format.height,
+        let video = self.settings.video.map(|video| VideoSettings {
+            input_size: (format.width, format.height),
+            width: video.size.0,
+            height: video.size.1,
             frame_rate: rate,
-            crf: self.settings.crf,
+            codec: video.codec,
+            rate_control: video.rate_control,
             profile: EncodeProfile::Delivery,
-        };
-        let audio = AudioSettings {
-            sample_rate: self.settings.sample_rate,
-            bits_per_second: self.settings.audio_bits_per_second,
-        };
-        let mut writer = MediaWriter::create(&self.settings.path, Some(video), Some(audio))?;
+        });
+        let audio = self.settings.audio;
+        let mut writer = MediaWriter::create(&self.settings.path, video, audio)?;
 
         let frames = frame_span(&sequence, self.settings.range.clone());
         let frames_total = frames.end - frames.start;
-        let mut mix = SequenceMix::new(SampleRate(self.settings.sample_rate));
+        // A silent export never mixes, so its rate doesn't matter.
+        let sample_rate = audio.map_or(48_000, |audio| audio.sample_rate);
+        let mut mix = SequenceMix::new(SampleRate(sample_rate));
         let audio_rate = mix.rate();
         let to_audio = |time: Ticks| time.rescale(timebase, audio_rate).0;
         let audio_total = to_audio(rate.frame_start(frames.end, timebase));
@@ -146,17 +155,19 @@ impl Worker {
             if self.cancel.load(Ordering::Relaxed) {
                 return Ok(Outcome::Cancelled);
             }
-            let pts = rate.frame_start(frame, timebase);
-            let layers =
-                compose::layers_at(&sequence, pts, &mut tracks, &mut warned, &mut warnings);
-            let images: Vec<LayerImage<'_>> = layers.iter().map(Layer::image).collect();
-            self.compositor
-                .composite((format.width, format.height), &images)?;
-            writer.write_video(&self.compositor.read_output()?)?;
+            if video.is_some() {
+                let pts = rate.frame_start(frame, timebase);
+                let layers =
+                    compose::layers_at(&sequence, pts, &mut tracks, &mut warned, &mut warnings);
+                let images: Vec<LayerImage<'_>> = layers.iter().map(Layer::image).collect();
+                self.compositor
+                    .composite((format.width, format.height), &images)?;
+                writer.write_video(&self.compositor.read_output()?)?;
+            }
 
             // Audio keeps pace with the pictures so the muxer can interleave them.
             let audio_end = to_audio(rate.frame_start(frame + 1, timebase)).min(audio_total);
-            while audio_written < audio_end {
+            while audio.is_some() && audio_written < audio_end {
                 mix.mix_chunk(&sequence, audio_written, &mut warnings);
                 let frames = (audio_total - audio_written).min(CHUNK_FRAMES as i64);
                 let samples = usize::try_from(frames).unwrap_or(0) * 2;

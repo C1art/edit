@@ -23,6 +23,6 @@ mod video_worker;
 
 pub use composed::{ComposedFrame, Layer, LayerPicture, Levels};
 pub use error::PlaybackError;
-pub use export::{ExportEvent, ExportJob, ExportSettings};
+pub use export::{ExportEvent, ExportJob, ExportSettings, VideoExport};
 pub use generated::generated_frame;
 pub use player::Player;
