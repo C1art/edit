@@ -3,13 +3,21 @@ use render::{
     Warp, MAX_MASKS, MAX_OUTLINE_POINTS,
 };
 use timeline::{
-    ColorCorrection, HslSecondary, Look, Mask, MaskShape, Param, Reveal, Ticks, Timebase,
+    ColorCorrection, HslSecondary, Look, Mask, MaskShape, MediaItem, Param, Reveal, Ticks, Timebase,
 };
 
 use crate::pixel_effects::{linear, pixel_effects, transform_opacity};
 
 /// Gaussian blur's "blurriness" reaches about two standard deviations.
 const BLURRINESS_PER_SIGMA: f32 = 2.0;
+
+/// `look` for a picture of `media`, drawn with the pixel shape and alpha it's
+/// interpreted with.
+pub(crate) fn interpreted(mut look: LayerLook, media: &MediaItem) -> LayerLook {
+    look.pixel_aspect = media.pixel_aspect().ratio();
+    look.effects.alpha = media.alpha;
+    look
+}
 
 /// The look at source time `time`, where its keyframes are, as a transition reveals it
 /// on a canvas of `canvas` pixels.
@@ -57,6 +65,7 @@ pub(crate) fn layer_look(
             canvas,
         ),
         blend: reveal.blend.unwrap_or(look.blend),
+        pixel_aspect: 1.0,
     }
 }
 

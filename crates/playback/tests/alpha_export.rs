@@ -33,6 +33,7 @@ fn sequence() -> Arc<Sequence> {
         width: 64,
         height: 36,
         frame_rate: FrameRate::FPS_25,
+        ..VideoFormat::default()
     };
     let mut timeline = Timeline::new(Sequence::with_default_tracks(TB, format));
     let shape = Shape {

@@ -9,7 +9,7 @@ use timeline::{
 use crate::clip_decoders::ClipDecoders;
 use crate::generated::{caption_frame, scrolled};
 use crate::grades::grade_for;
-use crate::layer_look::layer_look;
+use crate::layer_look::{interpreted, layer_look};
 use crate::time_effects::{posterized, with_timecode};
 use crate::track_video::TrackVideo;
 use crate::{Layer, LayerPicture, PlaybackError, Resolution};
@@ -81,8 +81,10 @@ fn video_layers(
                 continue;
             };
             let time = plan.clip.source_time(pts);
-            let look_of =
-                |reveal| layer_look(&plan.clip.look, time, reveal, canvas, sequence.timebase);
+            let look_of = |reveal| {
+                let look = layer_look(&plan.clip.look, time, reveal, canvas, sequence.timebase);
+                interpreted(look, media)
+            };
             let grade = grade_for(&plan.clip.look.color, decoding.warnings);
             if media.generator == Some(Generator::AdjustmentLayer) {
                 let whole = Reveal {
@@ -225,7 +227,10 @@ fn matte_layers(
             layers.extend(plan.reveal.pieces().into_iter().map(|piece| Layer {
                 track: TrackRef::video(index),
                 picture: picture.clone(),
-                look: layer_look(&plan.clip.look, time, piece, canvas, sequence.timebase),
+                look: interpreted(
+                    layer_look(&plan.clip.look, time, piece, canvas, sequence.timebase),
+                    media,
+                ),
                 grade: grade.clone(),
             }));
         }
