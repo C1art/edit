@@ -19,6 +19,8 @@ pub const CUT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key:
 pub const PASTE: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::V);
 pub const PASTE_INSERT: KeyboardShortcut =
     KeyboardShortcut::new(Modifiers::COMMAND.plus(Modifiers::SHIFT), Key::V);
+pub const PASTE_ATTRIBUTES: KeyboardShortcut =
+    KeyboardShortcut::new(Modifiers::COMMAND.plus(Modifiers::ALT), Key::V);
 pub const ADD_MARKER: KeyboardShortcut = KeyboardShortcut::new(Modifiers::NONE, Key::M);
 pub const NEXT_MARKER: KeyboardShortcut = KeyboardShortcut::new(Modifiers::SHIFT, Key::M);
 pub const PREVIOUS_MARKER: KeyboardShortcut =
@@ -83,6 +85,7 @@ enum Action {
     SpeedDuration,
     ToggleEnabled,
     ToggleLink,
+    PasteAttributes,
     NewTitle,
 }
 
@@ -117,6 +120,7 @@ fn pressed(ctx: &egui::Context) -> Option<Action> {
         let chords = [
             (NEW, Action::NewProject),
             (SAVE_AS, Action::SaveAs),
+            (PASTE_ATTRIBUTES, Action::PasteAttributes),
             (PASTE_INSERT, Action::Paste(PlaceMode::Insert)),
             (CLEAR_MARKER, Action::ClearMarker),
             (PREVIOUS_MARKER, Action::JumpToMarker { forward: false }),
@@ -208,6 +212,7 @@ fn run(editor: &mut Editor, action: Action) {
         Action::SpeedDuration => editor.speed_duration(),
         Action::ToggleEnabled => editor.toggle_enabled(),
         Action::ToggleLink => editor.toggle_link(),
+        Action::PasteAttributes => editor.paste_attributes(),
         Action::NewTitle => {
             placing::new_generated(editor, Generator::Title(Title::default()));
         }

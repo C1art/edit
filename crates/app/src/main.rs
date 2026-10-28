@@ -1,3 +1,4 @@
+mod attributes_dialog;
 mod autosave;
 mod captions;
 mod clip_art;

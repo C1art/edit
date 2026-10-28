@@ -101,6 +101,14 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             if ui.add_enabled(can_paste, paste_insert).clicked() {
                 editor.paste(PlaceMode::Insert);
             }
+            let paste_attributes = Button::new("Paste Attributes…")
+                .shortcut_text(shortcut(ui, shortcuts::PASTE_ATTRIBUTES));
+            if ui.add_enabled(can_paste, paste_attributes).clicked() {
+                editor.paste_attributes();
+            }
+            if ui.button("Remove Attributes…").clicked() {
+                editor.remove_attributes();
+            }
             ui.separator();
             ui.menu_button("Preferences", |ui| {
                 let decoding = &mut editor.hardware_decoding;
