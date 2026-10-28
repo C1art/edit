@@ -19,6 +19,7 @@ mod paste;
 mod place;
 mod range;
 mod remap;
+mod sound;
 mod speed;
 mod structure;
 mod trim;
@@ -49,6 +50,7 @@ pub use paste::{Clipboard, PasteClips};
 pub use place::{AddEdits, PlaceClip, PlaceMode, Razor, RazorTarget};
 pub use range::{ExtractMarked, LiftMarked, RippleTrimToPlayhead, SetMarks};
 pub use remap::{AddSpeedKeyframe, RemoveSpeedKeyframe, RemoveTimeRemap, SetSegmentSpeed};
+pub use sound::{ClipSound, SetClipsSound};
 pub use speed::{RateStretch, SetClipSpeed, SetTimeInterpolation};
 pub use structure::{
     AddTrack, ImportMedia, RemoveMedia, RemoveTrack, SetProxy, SetSequenceFormat, SetTrackSwitch,

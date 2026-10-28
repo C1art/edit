@@ -1,5 +1,6 @@
 mod audio_effect;
 mod audio_plan;
+mod audio_type;
 mod bin;
 mod blend;
 mod caption;
@@ -38,6 +39,7 @@ mod validate;
 
 pub use audio_effect::AudioEffect;
 pub use audio_plan::{audio_fade, audio_span, clip_level, track_automation};
+pub use audio_type::AudioType;
 pub use bin::{Bin, BinId};
 pub use blend::BlendMode;
 pub use caption::{captions_from_cues, Caption, CaptionStyle, Captions};
@@ -46,17 +48,17 @@ pub use curves::{Curve, CurvePoint, Curves, CURVE_RANGE};
 pub use ducking::{active_spans, ducked_volume};
 pub use edit::{
     clamp_delta, AddBin, AddEdits, AddFrameHold, AddGenerated, AddMarker, AddNest,
-    AddSpeedKeyframe, AddTrack, Attribute, AutoDuck, Clipboard, CloseGap, CreateMulticam, Edge,
-    ExtractMarked, FlattenMulticam, FrameFit, ImportMedia, InNest, Lift, LiftMarked, MakeSubclip,
-    MarkerOwner, MoveClips, MoveToBin, NestClips, NormalizeClipGains, PasteAttributes, PasteClips,
-    PlaceClip, PlaceMode, RateStretch, Razor, RazorTarget, RelinkMedia, RemoveAttributes,
-    RemoveBin, RemoveMarker, RemoveMedia, RemoveSpeedKeyframe, RemoveTimeRemap, RemoveTrack,
-    RenameBin, RenameMedia, RippleDelete, RippleTrimToPlayhead, Roll, SetCaptions,
-    SetClipAudioEffects, SetClipGain, SetClipLabel, SetClipLook, SetClipSpeed, SetClipVolume,
-    SetClipsEnabled, SetGenerator, SetLinked, SetMarks, SetMasterGain, SetProxy, SetSegmentSpeed,
-    SetSequenceFormat, SetTimeInterpolation, SetToFrameSize, SetTrackAutomation, SetTrackMix,
-    SetTrackSwitch, SetTransition, Slide, Slip, SwitchAngle, TrackSwitch, Trim, TrimMode,
-    UpdateMarker,
+    AddSpeedKeyframe, AddTrack, Attribute, AutoDuck, ClipSound, Clipboard, CloseGap,
+    CreateMulticam, Edge, ExtractMarked, FlattenMulticam, FrameFit, ImportMedia, InNest, Lift,
+    LiftMarked, MakeSubclip, MarkerOwner, MoveClips, MoveToBin, NestClips, NormalizeClipGains,
+    PasteAttributes, PasteClips, PlaceClip, PlaceMode, RateStretch, Razor, RazorTarget,
+    RelinkMedia, RemoveAttributes, RemoveBin, RemoveMarker, RemoveMedia, RemoveSpeedKeyframe,
+    RemoveTimeRemap, RemoveTrack, RenameBin, RenameMedia, RippleDelete, RippleTrimToPlayhead, Roll,
+    SetCaptions, SetClipAudioEffects, SetClipGain, SetClipLabel, SetClipLook, SetClipSpeed,
+    SetClipVolume, SetClipsEnabled, SetClipsSound, SetGenerator, SetLinked, SetMarks,
+    SetMasterGain, SetProxy, SetSegmentSpeed, SetSequenceFormat, SetTimeInterpolation,
+    SetToFrameSize, SetTrackAutomation, SetTrackMix, SetTrackSwitch, SetTransition, Slide, Slip,
+    SwitchAngle, TrackSwitch, Trim, TrimMode, UpdateMarker,
 };
 pub use effect::{
     ColorMatch, EffectCategory, MatteChannel, RampShape, Rgb, TimecodeSource, VideoEffect,

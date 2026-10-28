@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AudioEffect, Bin, Captions, FrameRate, Gain, Label, Look, Marker, Marks, MediaItem, Pan, Param,
-    SourceId, Speed, Ticks, TimeInterpolation, TimeRemap, Timebase, Transition,
+    AudioEffect, AudioType, Bin, Captions, FrameRate, Gain, Label, Look, Marker, Marks, MediaItem,
+    Pan, Param, SourceId, Speed, Ticks, TimeInterpolation, TimeRemap, Timebase, Transition,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -86,6 +86,8 @@ pub struct Clip {
     /// Effects on an audio clip's sound; ignored for video.
     #[serde(default)]
     pub audio_effects: Vec<AudioEffect>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio_type: Option<AudioType>,
     #[serde(default)]
     pub look: Look,
     #[serde(default)]
@@ -138,6 +140,7 @@ impl Clip {
             gain: Gain::UNITY,
             volume: Param::default(),
             audio_effects: Vec::new(),
+            audio_type: None,
             look: Look::default(),
             transition_in: None,
             transition_out: None,
