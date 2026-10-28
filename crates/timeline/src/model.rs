@@ -89,6 +89,10 @@ pub struct Clip {
     /// Level of an audio clip in decibels on top of its gain, keyframed over source time.
     #[serde(default)]
     pub volume: Param,
+    /// Stereo balance of an audio clip, -100 (left) to 100 (right), keyframed over
+    /// source time.
+    #[serde(default)]
+    pub pan: Param,
     /// Effects on an audio clip's sound; ignored for video.
     #[serde(default)]
     pub audio_effects: Vec<AudioEffect>,
@@ -154,6 +158,7 @@ impl Clip {
             disabled: false,
             gain: Gain::UNITY,
             volume: Param::default(),
+            pan: Param::default(),
             audio_effects: Vec::new(),
             audio_type: None,
             look: Look::default(),

@@ -217,12 +217,16 @@ fn flat_pieces(sequence: &Sequence, id: ClipId) -> Option<(TrackRef, Vec<Clip>)>
             };
             // Keyframes are kept in source time, which is the camera's now.
             let shift = inner.source_in - inner.start;
-            let params = piece.look.params_mut().chain([&mut piece.volume]).chain(
-                piece
-                    .audio_effects
-                    .iter_mut()
-                    .flat_map(|effect| effect.params_mut()),
-            );
+            let params = piece
+                .look
+                .params_mut()
+                .chain([&mut piece.volume, &mut piece.pan])
+                .chain(
+                    piece
+                        .audio_effects
+                        .iter_mut()
+                        .flat_map(|effect| effect.params_mut()),
+                );
             for param in params {
                 for key in &mut param.keys {
                     key.time = key.time + shift;

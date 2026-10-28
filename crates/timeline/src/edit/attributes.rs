@@ -102,7 +102,10 @@ impl Edit for RemoveAttributes {
                     Attribute::Crop => clip.look.crop = look.crop.clone(),
                     Attribute::Effects => clip.look.effects.clear(),
                     Attribute::Color => clip.look.color = look.color.clone(),
-                    Attribute::Volume => clip.volume = Param::default(),
+                    Attribute::Volume => {
+                        clip.volume = Param::default();
+                        clip.pan = Param::default();
+                    }
                     Attribute::AudioEffects => clip.audio_effects.clear(),
                 }
             }
@@ -175,7 +178,9 @@ fn paste(attribute: Attribute, from: &Clip, to: &mut Clip) {
         }
         Attribute::Volume => {
             to.volume = from.volume.clone();
+            to.pan = from.pan.clone();
             retime(&mut to.volume);
+            retime(&mut to.pan);
         }
         Attribute::AudioEffects => {
             let mut effects = from.audio_effects.clone();

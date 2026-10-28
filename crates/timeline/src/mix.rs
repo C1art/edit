@@ -51,9 +51,14 @@ impl Pan {
     /// Left and right multipliers. A balance control rather than a panner: sources are
     /// stereo, so the centre leaves both sides untouched and turning attenuates one side.
     pub fn balance(self) -> [f32; 2] {
-        let position = f32::from(self.0) / 100.0;
-        [(1.0 - position).min(1.0), (1.0 + position).min(1.0)]
+        balance(f32::from(self.0))
     }
+}
+
+/// Left and right multipliers for a balance from -100 to 100, as [`Pan::balance`].
+pub fn balance(value: f32) -> [f32; 2] {
+    let position = value.clamp(-100.0, 100.0) / 100.0;
+    [(1.0 - position).min(1.0), (1.0 + position).min(1.0)]
 }
 
 #[cfg(test)]

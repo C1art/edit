@@ -29,6 +29,11 @@ pub fn clip_level(clip: &Clip, position: Ticks) -> f32 {
     clip.gain.amplitude() * volume.amplitude()
 }
 
+/// The left and right multipliers of clip's balance at `position`.
+pub fn clip_balance(clip: &Clip, position: Ticks) -> [f32; 2] {
+    crate::balance(clip.pan.value_at(clip.source_time(position)))
+}
+
 /// The amplitude of an audio track's automation at `position`, before its fader.
 pub fn track_automation(track: &Track, position: Ticks) -> f32 {
     Gain::from_db(track.automation.value_at(position)).amplitude()

@@ -92,6 +92,34 @@ impl Edit for SetClipVolume {
     }
 }
 
+/// Replaces an audio clip's balance and its keyframes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetClipPan {
+    pub clip: ClipId,
+    pub pan: Param,
+}
+
+impl Edit for SetClipPan {
+    fn name(&self) -> &'static str {
+        "Balance"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        if sequence
+            .clip(self.clip)
+            .is_some_and(|(track, _)| track.kind != TrackKind::Audio)
+        {
+            return Err(TimelineError::NothingToEdit);
+        }
+        let clip = ops::clip_mut(sequence, self.clip)?;
+        if clip.pan == self.pan {
+            return Err(TimelineError::NothingToEdit);
+        }
+        clip.pan = self.pan.clone();
+        Ok(())
+    }
+}
+
 /// Gives audio clips volume keyframes that lower them under other sound.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AutoDuck {
