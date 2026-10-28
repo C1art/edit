@@ -42,6 +42,35 @@ pub struct Title {
     /// A box behind the text, as lower thirds use.
     #[serde(default)]
     pub background: Option<Rgb>,
+    #[serde(default)]
+    pub bold: bool,
+    #[serde(default)]
+    pub italic: bool,
+    /// Extra space between letters in thousandths of the size, as Premiere's tracking.
+    #[serde(default)]
+    pub tracking: i32,
+    /// Extra space between lines, in sequence pixels.
+    #[serde(default)]
+    pub leading: i32,
+    /// An outline around the letters, outside them.
+    #[serde(default)]
+    pub stroke: Option<TextStroke>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct TextStroke {
+    pub color: Rgb,
+    /// In sequence pixels.
+    pub width: u32,
+}
+
+impl Default for TextStroke {
+    fn default() -> Self {
+        Self {
+            color: Rgb::BLACK,
+            width: 4,
+        }
+    }
 }
 
 impl Default for Title {
@@ -54,6 +83,11 @@ impl Default for Title {
             font: TitleFont::Sans,
             shadow: true,
             background: None,
+            bold: false,
+            italic: false,
+            tracking: 0,
+            leading: 0,
+            stroke: None,
         }
     }
 }

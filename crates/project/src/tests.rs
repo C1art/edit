@@ -2,8 +2,9 @@ use std::path::PathBuf;
 
 use timeline::{
     AudioEffect, Bin, BinId, Caption, Clip, ClipId, CurvePoint, Gain, Generator, Interpolation,
-    Keyframe, Marks, Mask, MaskShape, MediaItem, Nest, Pan, Param, Rgb, SourceId, TextAlign, Ticks,
-    Timebase, Title, TitleFont, Track, Transition, TransitionKind, VideoEffect, VideoFormat,
+    Keyframe, Marks, Mask, MaskShape, MediaItem, Nest, Pan, Param, Rgb, SourceId, TextAlign,
+    TextStroke, Ticks, Timebase, Title, TitleFont, Track, Transition, TransitionKind, VideoEffect,
+    VideoFormat,
 };
 
 use super::*;
@@ -40,6 +41,14 @@ fn sample() -> ProjectFile {
             font: TitleFont::Mono,
             shadow: false,
             background: Some(Rgb::BLACK),
+            bold: true,
+            italic: true,
+            tracking: -40,
+            leading: 12,
+            stroke: Some(TextStroke {
+                color: Rgb::new(20, 30, 40),
+                width: 6,
+            }),
         })),
         nest: None,
         subclip: None,

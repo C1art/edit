@@ -59,7 +59,7 @@ pub use edit::{
 };
 pub use effect::{ColorMatch, EffectCategory, MatteChannel, RampShape, Rgb, VideoEffect};
 pub use error::TimelineError;
-pub use generator::{Generator, TextAlign, Title, TitleFont, GENERATED_SECONDS};
+pub use generator::{Generator, TextAlign, TextStroke, Title, TitleFont, GENERATED_SECONDS};
 pub use history::{preview, Edit, EditCommand, Timeline};
 pub use label::Label;
 pub use look::{Crop, Look, Motion};

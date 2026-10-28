@@ -1,4 +1,4 @@
-use timeline::{Generator, Rgb, TextAlign, Title, TitleFont};
+use timeline::{Generator, Rgb, TextAlign, TextStroke, Title, TitleFont};
 
 use crate::mixer::{response_state, Change};
 
@@ -54,6 +54,26 @@ fn title_controls(ui: &mut egui::Ui, title: &mut Title) -> Option<Change> {
                     }
                 }
             });
+        for (on, label) in [
+            (&mut title.bold, egui::RichText::new("B").strong()),
+            (&mut title.italic, egui::RichText::new("I").italics()),
+        ] {
+            if ui.toggle_value(on, label).changed() {
+                change = Some(Change::Commit);
+            }
+        }
+    });
+    ui.horizontal(|ui| {
+        ui.label("Tracking");
+        let tracking = ui.add(egui::DragValue::new(&mut title.tracking).range(-200..=1000));
+        change = response_state(&tracking, change);
+        ui.label("Leading");
+        let leading = ui.add(
+            egui::DragValue::new(&mut title.leading)
+                .range(-500..=500)
+                .suffix(" px"),
+        );
+        change = response_state(&leading, change);
     });
     ui.horizontal(|ui| {
         ui.label("Align");
@@ -71,6 +91,22 @@ fn title_controls(ui: &mut egui::Ui, title: &mut Title) -> Option<Change> {
         }
     });
     change = color_row(ui, "Fill", &mut title.color).or(change);
+    ui.horizontal(|ui| {
+        let mut stroked = title.stroke.is_some();
+        if ui.checkbox(&mut stroked, "Stroke").changed() {
+            title.stroke = stroked.then(TextStroke::default);
+            change = Some(Change::Commit);
+        }
+        if let Some(stroke) = &mut title.stroke {
+            change = color_button(ui, &mut stroke.color).or(change);
+            let width = ui.add(
+                egui::DragValue::new(&mut stroke.width)
+                    .range(1..=100)
+                    .suffix(" px"),
+            );
+            change = response_state(&width, change);
+        }
+    });
     if ui.checkbox(&mut title.shadow, "Drop shadow").changed() {
         change = Some(Change::Commit);
     }
