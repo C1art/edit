@@ -1,6 +1,7 @@
 use render::{ColorAdjust, LayerLook};
 use timeline::{
-    track_layers_at, ClipId, ColorCorrection, Look, Param, Sequence, SourceId, Ticks, TrackRef,
+    track_layers_at, ClipId, ColorCorrection, Look, Param, Reveal, Sequence, SourceId, Ticks,
+    TrackRef,
 };
 
 use crate::clip_decoders::ClipDecoders;
@@ -25,6 +26,7 @@ pub(crate) fn layers_at(
     tracks.resize_with(sequence.video.len(), || {
         ClipDecoders::new(|| TrackVideo::new(sequence.timebase))
     });
+    let canvas = [sequence.format.width, sequence.format.height].map(|side| side as f32);
     let mut layers = Vec::new();
     for ((index, track), decoders) in sequence.video.iter().enumerate().zip(tracks) {
         if track.muted {
@@ -41,7 +43,12 @@ pub(crate) fn layers_at(
                 Ok(Some(frame)) => layers.push(Layer {
                     track: TrackRef::video(index),
                     frame,
-                    look: layer_look(&plan.clip.look, plan.clip.source_time(pts), plan.fade),
+                    look: layer_look(
+                        &plan.clip.look,
+                        plan.clip.source_time(pts),
+                        plan.reveal,
+                        canvas,
+                    ),
                 }),
                 Ok(None) => {}
                 Err(error) => {
@@ -57,19 +64,26 @@ pub(crate) fn layers_at(
     layers
 }
 
-/// The look at source time `time`, where its keyframes are.
-fn layer_look(look: &Look, time: Ticks, fade: f32) -> LayerLook {
+/// The look at source time `time`, where its keyframes are, as a transition reveals it
+/// on a canvas of `canvas` pixels.
+fn layer_look(look: &Look, time: Ticks, reveal: Reveal, canvas: [f32; 2]) -> LayerLook {
     let value = |param: &Param| param.value_at(time);
     let percent = |param: &Param| param.value_at(time) / 100.0;
     let crop = &look.crop;
+    let position = look.motion.position.each_ref().map(value);
+    // Zooming about the canvas center scales the picture's offset from it too.
+    let offset =
+        [0, 1].map(|axis| (position[axis] + reveal.shift[axis] * canvas[axis]) * reveal.zoom);
     LayerLook {
-        offset: look.motion.position.each_ref().map(value),
-        scale: percent(&look.motion.scale),
+        offset,
+        scale: percent(&look.motion.scale) * reveal.zoom,
         rotation_degrees: value(&look.motion.rotation),
         crop: [&crop.left, &crop.top, &crop.right, &crop.bottom].map(percent),
-        opacity: percent(&look.opacity) * fade,
+        opacity: percent(&look.opacity) * reveal.fade,
         blur: look.blurriness_at(time) / BLURRINESS_PER_SIGMA,
         color: color_adjust(&look.color, time),
+        mask: reveal.mask,
+        wash: reveal.wash,
     }
 }
 
