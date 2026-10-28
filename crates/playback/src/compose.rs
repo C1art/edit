@@ -32,7 +32,7 @@ pub(crate) fn layers_at(
         }
         let planned = track_layers_at(sequence, track, pts);
         let showing: Vec<ClipId> = planned.iter().map(|layer| layer.clip.id).collect();
-        for plan in planned {
+        for plan in planned.into_iter().filter(|plan| !plan.clip.disabled) {
             let Some(media) = sequence.media_item(plan.clip.source) else {
                 continue;
             };

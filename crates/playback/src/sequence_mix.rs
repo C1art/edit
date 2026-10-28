@@ -69,11 +69,12 @@ impl SequenceMix {
         let mut track_levels = Vec::with_capacity(sequence.audio.len());
         for (track, decoders) in sequence.audio.iter().zip(&mut self.tracks) {
             self.track_mix.fill(0.0);
-            if track.muted {
+            if !sequence.is_heard(track) {
                 track_levels.push([0.0; 2]);
                 continue;
             }
             let heard: Vec<(usize, i64, i64)> = (0..track.clips.len())
+                .filter(|&index| !track.clips[index].disabled)
                 .filter_map(|index| {
                     let (span_start, span_end) = audio_span(track, index);
                     let (from, to) = (
