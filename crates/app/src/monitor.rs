@@ -1,14 +1,14 @@
 use eframe::egui_wgpu::{self, wgpu};
 use egui::{Color32, Rect, Response, Sense, TextureId, Vec2};
 use playback::ComposedFrame;
-use render::{Compositor, LayerImage, Presented, RenderError};
+use render::{Compositor, LayerImage, Presented, RenderError, Scope};
 
 /// A video monitor: composites frames on the GPU and shows the result in the UI.
 pub struct Monitor {
     render_state: egui_wgpu::RenderState,
     compositor: Compositor,
     texture: Option<TextureId>,
-    waveform: Option<TextureId>,
+    scope: Option<TextureId>,
 }
 
 impl Monitor {
@@ -17,7 +17,7 @@ impl Monitor {
             compositor: Compositor::new(&render_state.device, &render_state.queue),
             render_state,
             texture: None,
-            waveform: None,
+            scope: None,
         }
     }
 
@@ -48,25 +48,25 @@ impl Monitor {
         Ok(())
     }
 
-    pub fn set_waveform(&mut self, enabled: bool) {
-        if enabled == self.waveform.is_some() {
+    pub fn set_scope(&mut self, scope: Option<Scope>) {
+        self.compositor.set_scope(scope);
+        if scope.is_some() == self.scope.is_some() {
             return;
         }
-        self.compositor.set_waveform(enabled);
         let mut renderer = self.render_state.renderer.write();
-        match (self.waveform.take(), self.compositor.waveform_view()) {
+        match (self.scope.take(), self.compositor.scope_view()) {
             (Some(id), _) => renderer.free_texture(&id),
             (None, Some(view)) => {
                 let device = &self.render_state.device;
-                self.waveform =
+                self.scope =
                     Some(renderer.register_native_texture(device, view, wgpu::FilterMode::Linear));
             }
             (None, None) => {}
         }
     }
 
-    pub fn waveform(&self) -> Option<TextureId> {
-        self.waveform
+    pub fn scope(&self) -> Option<TextureId> {
+        self.scope
     }
 
     /// Draws the picture letterboxed to `size` on a black background.
@@ -89,7 +89,7 @@ impl Monitor {
 impl Drop for Monitor {
     fn drop(&mut self) {
         let mut renderer = self.render_state.renderer.write();
-        for id in [self.texture, self.waveform].into_iter().flatten() {
+        for id in [self.texture, self.scope].into_iter().flatten() {
             renderer.free_texture(&id);
         }
     }

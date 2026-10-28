@@ -391,8 +391,8 @@ impl Editor {
         });
         ui.separator();
         // Measuring costs GPU time, so only while someone is looking.
-        if let Some(program) = &mut self.program {
-            program.set_waveform(self.side_tab == SideTab::Scopes);
+        if let (Some(program), false) = (&mut self.program, self.side_tab == SideTab::Scopes) {
+            program.set_scope(None);
         }
         match self.side_tab {
             SideTab::EffectControls => effects::ui(self, ui),

@@ -4,6 +4,7 @@ use audio::AudioOutput;
 use eframe::egui_wgpu::RenderState;
 use egui::{TextureId, Vec2};
 use playback::{PlaybackError, Player};
+use render::Scope;
 use timeline::Sequence;
 
 use crate::monitor::Monitor;
@@ -48,14 +49,14 @@ impl Viewer {
         notices
     }
 
-    pub fn set_waveform(&mut self, enabled: bool) {
+    pub fn set_scope(&mut self, scope: Option<Scope>) {
         if let Some(monitor) = &mut self.monitor {
-            monitor.set_waveform(enabled);
+            monitor.set_scope(scope);
         }
     }
 
-    pub fn waveform(&self) -> Option<TextureId> {
-        self.monitor.as_ref().and_then(Monitor::waveform)
+    pub fn scope(&self) -> Option<TextureId> {
+        self.monitor.as_ref().and_then(Monitor::scope)
     }
 
     pub fn picture(&self, ui: &mut egui::Ui, size: Vec2) -> egui::Response {
