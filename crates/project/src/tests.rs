@@ -18,7 +18,7 @@ fn sample() -> ProjectFile {
         has_audio: true,
         proxy: Some(PathBuf::from(r"C:\Footage\Proxies\interview_Proxy.mp4")),
     });
-    let mut clip = Clip::new(ClipId(7), SourceId(1), Ticks(0), Ticks(90_000), Ticks(-3));
+    let mut clip = Clip::new(ClipId(7), SourceId(1), Ticks(0), Ticks(90_000), Ticks(3));
     clip.gain = Gain(-600);
     clip.transition_in = Some(Transition {
         kind: TransitionKind::DipToBlack,
@@ -72,6 +72,20 @@ fn newer_or_unversioned_files_are_refused() {
     assert!(matches!(
         ProjectFile::from_text(r#"{"sequence": {}}"#),
         Err(ProjectError::MissingVersion)
+    ));
+}
+
+#[test]
+fn overlapping_clips_are_refused() {
+    let mut project = sample();
+    let mut clip = project.sequence.video[0].clips[0].clone();
+    clip.id = ClipId(8);
+    clip.start = Ticks(45_000);
+    project.sequence.video[0].clips.push(clip);
+    let text = project.to_text().unwrap();
+    assert!(matches!(
+        ProjectFile::from_text(&text),
+        Err(ProjectError::Invalid(_))
     ));
 }
 

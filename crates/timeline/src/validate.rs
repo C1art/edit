@@ -36,3 +36,10 @@ pub(crate) fn check(before: &Sequence, after: &Sequence) -> Result<(), TimelineE
     }
     Ok(())
 }
+
+impl Sequence {
+    /// Checks a sequence that didn't come from edits, such as one read from a file.
+    pub fn validate(&self) -> Result<(), TimelineError> {
+        check(self, self)
+    }
+}

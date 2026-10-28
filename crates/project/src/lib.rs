@@ -46,7 +46,12 @@ impl ProjectFile {
             return Err(ProjectError::UnsupportedVersion(version));
         }
         migrate(&mut document, version)?;
-        json::from_value(document)
+        let project: Self = json::from_value(document)?;
+        project
+            .sequence
+            .validate()
+            .map_err(|error| ProjectError::Invalid(error.to_string()))?;
+        Ok(project)
     }
 
     /// Writes beside `path` first, so a failed save never leaves a half-written project.
