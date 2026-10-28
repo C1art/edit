@@ -10,6 +10,8 @@ pub enum MediaError {
         message: String,
     },
     NoPlayableStream,
+    /// The container doesn't say how long the media is, so it can't be edited yet.
+    UnknownDuration,
     NoDecoder,
     InvalidFrame,
     OutOfMemory,
@@ -23,6 +25,7 @@ impl fmt::Display for MediaError {
             }
             Self::Ffmpeg { code, message } => write!(f, "FFmpeg error {code}: {message}"),
             Self::NoPlayableStream => f.write_str("file has no video or audio stream"),
+            Self::UnknownDuration => f.write_str("file does not declare its duration"),
             Self::NoDecoder => f.write_str("no decoder available for the stream's codec"),
             Self::InvalidFrame => f.write_str("decoder produced a frame that cannot be converted"),
             Self::OutOfMemory => f.write_str("FFmpeg could not allocate memory"),
