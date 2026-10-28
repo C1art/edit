@@ -52,6 +52,7 @@ pub struct Editor {
     pub(crate) scene_job: Option<crate::scene_edits::SceneJob>,
     pub(crate) still_job: Option<playback::StillJob>,
     pub(crate) motion_job: Option<crate::motion_analysis::MotionJob>,
+    pub(crate) mask_track_job: Option<crate::mask_tracking::MaskTrackJob>,
     pub(crate) hardware_decoding: bool,
     pub(crate) source: Option<SourceMonitor>,
     pub(crate) program: Option<Viewer>,
@@ -173,6 +174,7 @@ impl Editor {
             scene_job: None,
             still_job: None,
             motion_job: None,
+            mask_track_job: None,
             hardware_decoding: true,
             source: None,
             program,
@@ -404,6 +406,7 @@ impl eframe::App for Editor {
         self.poll_multicam_sync(&ctx);
         self.poll_scene_edits(&ctx);
         self.poll_motion_analysis(&ctx);
+        self.poll_mask_tracking(&ctx);
         self.poll_export_frame(&ctx);
         self.poll_export_queue(&ctx);
         if self.importer.as_ref().is_some_and(Importer::is_busy) {

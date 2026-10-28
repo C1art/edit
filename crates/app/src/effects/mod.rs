@@ -109,6 +109,7 @@ fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
     let video_tracks = editor.timeline.sequence().video.len();
     let mut rows = Rows::new(time, lane(editor, ui, clip));
     rows.analyzing = editor.motion_analysis_progress(clip.id);
+    rows.tracking = editor.mask_tracking(clip.id);
     let output = look::controls(ui, &mut look, rows, video_tracks);
     if output.change.is_some() {
         stabilizer::retune(&mut look, editor.timeline.sequence().timebase);
@@ -141,6 +142,12 @@ fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
     if output.analyze_motion {
         editor.analyze_motion(clip.id);
     }
+    if let Some((mask, direction, span)) = output.track_mask {
+        editor.track_mask(clip.id, mask, direction, span);
+    }
+    if output.stop_tracking {
+        editor.stop_mask_tracking();
+    }
 }
 
 /// The look `clip` is shown with: the one being dragged, if any, else its own.
@@ -149,6 +156,16 @@ fn shown_look(editor: &Editor, clip: &Clip) -> Look {
         Some((id, look)) if *id == clip.id => look.clone(),
         _ => clip.look.clone(),
     }
+}
+
+/// Shows the clip with the edit's look on the program and here, without keeping it.
+pub(crate) fn preview_look(editor: &mut Editor, edit: SetClipLook) {
+    adjust_look(editor, edit, Some(Change::Live));
+}
+
+/// Keeps the edit's look, ending any shown without being kept.
+pub(crate) fn commit_look(editor: &mut Editor, edit: SetClipLook) {
+    adjust_look(editor, edit, Some(Change::Commit));
 }
 
 fn adjust_look(editor: &mut Editor, edit: SetClipLook, change: Option<Change>) {
@@ -222,7 +239,7 @@ fn lane(editor: &Editor, ui: &egui::Ui, clip: &Clip) -> Option<Lane> {
     Lane::new(ui, editor.timeline.sequence(), clip)
 }
 
-fn keyframe_time(editor: &Editor, clip: &Clip) -> Ticks {
+pub(crate) fn keyframe_time(editor: &Editor, clip: &Clip) -> Ticks {
     clip.source_time(editor.playhead().clamp(clip.start, clip.end() - Ticks(1)))
 }
 

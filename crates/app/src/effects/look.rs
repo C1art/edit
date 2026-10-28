@@ -3,8 +3,11 @@ use std::ops::RangeInclusive;
 use egui::{DragValue, RichText};
 use timeline::{BlendMode, Interpolation, Look, Param, Ticks};
 
+use media::TrackDirection;
+
 use super::lane::Lane;
 use super::LutSlot;
+use crate::mask_tracking::TrackSpan;
 use crate::mixer::{response_state, Change};
 
 pub(super) const ANIMATED: egui::Color32 = egui::Color32::from_rgb(90, 160, 240);
@@ -17,6 +20,9 @@ pub(super) struct Output {
     pub(super) choose_lut: Option<LutSlot>,
     /// Whether to analyze the clip's motion for Warp Stabilizer.
     pub(super) analyze_motion: bool,
+    /// A mask to track through the footage from the playhead.
+    pub(super) track_mask: Option<(usize, TrackDirection, TrackSpan)>,
+    pub(super) stop_tracking: bool,
 }
 
 /// Edits `look` in `rows`, of a clip among `video_tracks` video tracks.
@@ -115,6 +121,8 @@ pub(super) struct Rows {
     lane: Option<Lane>,
     /// How much of the clip's motion has been analyzed, while it is being.
     pub(super) analyzing: Option<f32>,
+    /// Which mask is being tracked and how far along, while one is.
+    pub(super) tracking: Option<(usize, f32)>,
     pub(super) output: Output,
 }
 
@@ -124,11 +132,14 @@ impl Rows {
             time,
             lane,
             analyzing: None,
+            tracking: None,
             output: Output {
                 change: None,
                 seek: None,
                 choose_lut: None,
                 analyze_motion: false,
+                track_mask: None,
+                stop_tracking: false,
             },
         }
     }
@@ -253,6 +264,8 @@ pub(super) enum Icon {
     Previous,
     Key(Interpolation),
     Next,
+    /// A triangle the way it tracks, with a bar after it for a single frame.
+    Track(TrackDirection, TrackSpan),
 }
 
 /// A small painted button; the default fonts have no glyphs for these symbols.
@@ -317,6 +330,24 @@ pub(super) fn icon_button(
             ));
         }
         Icon::Key(interpolation) => paint_key(painter, c, interpolation, fill, stroke),
+        Icon::Track(direction, span) => {
+            let way = match direction {
+                TrackDirection::Forward => 1.0,
+                TrackDirection::Backward => -1.0,
+            };
+            let back = if span == TrackSpan::OneFrame {
+                -1.5
+            } else {
+                0.0
+            };
+            let triangle =
+                [(-3.0, -4.0), (-3.0, 4.0), (3.0, 0.0)].map(|(x, y)| (way * (x + back), y));
+            painter.add(egui::Shape::convex_polygon(at(&triangle), color, stroke));
+            if span == TrackSpan::OneFrame {
+                let x = way * 4.5;
+                painter.line_segment([c + egui::vec2(x, -4.0), c + egui::vec2(x, 4.0)], stroke);
+            }
+        }
     }
     response
 }

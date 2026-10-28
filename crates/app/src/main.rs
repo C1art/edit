@@ -24,6 +24,7 @@ mod link_media;
 mod loudness_window;
 mod marker_dialog;
 mod markers_panel;
+mod mask_tracking;
 mod media_pool;
 mod menus;
 mod mixer;

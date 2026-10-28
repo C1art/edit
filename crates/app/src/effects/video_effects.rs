@@ -294,7 +294,7 @@ impl Rows {
     }
 
     /// A drop-down of `all`, named by `name`.
-    fn options<T: Copy + PartialEq>(
+    pub(super) fn options<T: Copy + PartialEq>(
         &mut self,
         ui: &mut egui::Ui,
         label: &str,

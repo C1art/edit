@@ -1,8 +1,12 @@
 use egui::RichText;
+use media::TrackDirection;
 use render::MAX_MASKS;
-use timeline::{key_path, path_is_animated, toggle_path_animation, Mask, MaskShape, Ticks};
+use timeline::{
+    key_path, path_is_animated, toggle_path_animation, Mask, MaskShape, MaskTracking, Ticks,
+};
 
 use super::look::{icon_button, Icon, Rows, ANIMATED};
+use crate::mask_tracking::TrackSpan;
 
 /// The masks under Opacity: each shape's geometry and edge, and buttons to add more.
 pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, masks: &mut Vec<Mask>) {
@@ -27,6 +31,7 @@ pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, masks: &mut Vec<Mask>
                 rows.param(ui, "Height", height, 0.0..=400.0, "%");
                 rows.param(ui, "Rotation", &mut mask.rotation, -3_600.0..=3_600.0, "°");
             }
+            tracking_rows(ui, rows, index, mask);
             rows.param(ui, "Feather", &mut mask.feather, 0.0..=1_000.0, " px");
             rows.param(ui, "Opacity", &mut mask.opacity, 0.0..=100.0, "%");
             rows.param(
@@ -54,6 +59,52 @@ pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, masks: &mut Vec<Mask>
             }
         }
     });
+}
+
+/// Buttons that key the mask along the picture under it from the playhead, one frame
+/// or to the clip's end either way, and what of the picture's motion it follows.
+fn tracking_rows(ui: &mut egui::Ui, rows: &mut Rows, index: usize, mask: &mut Mask) {
+    ui.horizontal(|ui| {
+        ui.add_space(20.0);
+        ui.add_sized([72.0, 18.0], egui::Label::new("Track"));
+        if let Some((_, done)) = rows.tracking.filter(|(tracked, _)| *tracked == index) {
+            let text = format!("Tracking… {:.0}%", done * 100.0);
+            ui.add(egui::ProgressBar::new(done).desired_width(120.0).text(text));
+            rows.output.stop_tracking = ui.small_button("Stop").clicked();
+            return;
+        }
+        let trackable = rows.tracking.is_none() && (mask.shape != MaskShape::Path || mask.closed);
+        ui.spacing_mut().item_spacing.x = 4.0;
+        let buttons = [
+            (
+                TrackDirection::Backward,
+                TrackSpan::OneFrame,
+                "backward one frame",
+            ),
+            (TrackDirection::Backward, TrackSpan::ToEnd, "backward"),
+            (TrackDirection::Forward, TrackSpan::ToEnd, "forward"),
+            (
+                TrackDirection::Forward,
+                TrackSpan::OneFrame,
+                "forward one frame",
+            ),
+        ];
+        for (direction, span, way) in buttons {
+            let button = icon_button(ui, Icon::Track(direction, span), false, trackable)
+                .on_hover_text(format!("Track the mask {way}"));
+            if button.clicked() {
+                rows.output.track_mask = Some((index, direction, span));
+            }
+        }
+    });
+    rows.options(
+        ui,
+        "Tracking",
+        "mask_tracking",
+        &mut mask.tracking,
+        MaskTracking::ALL,
+        MaskTracking::name,
+    );
 }
 
 /// A path's keyframes, which hold every vertex at once, and how to draw and edit it.
