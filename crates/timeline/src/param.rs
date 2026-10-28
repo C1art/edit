@@ -9,11 +9,67 @@ pub struct Keyframe {
     /// In the clip's source time, in the sequence timebase.
     pub time: Ticks,
     pub hundredths: i32,
+    #[serde(default, skip_serializing_if = "Interpolation::is_linear")]
+    pub interpolation: Interpolation,
+}
+
+impl Keyframe {
+    pub const fn new(time: Ticks, hundredths: i32) -> Self {
+        Self {
+            time,
+            hundredths,
+            interpolation: Interpolation::Linear,
+        }
+    }
+}
+
+/// How the value moves through a keyframe. Easing slows the change arriving at the
+/// keyframe (in), leaving it (out) or both; a hold keeps the value until the next one.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Interpolation {
+    #[default]
+    Linear,
+    Hold,
+    EaseIn,
+    EaseOut,
+    Ease,
+}
+
+impl Interpolation {
+    pub const ALL: [Self; 5] = [
+        Self::Linear,
+        Self::Hold,
+        Self::EaseIn,
+        Self::EaseOut,
+        Self::Ease,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Linear => "Linear",
+            Self::Hold => "Hold",
+            Self::EaseIn => "Ease In",
+            Self::EaseOut => "Ease Out",
+            Self::Ease => "Ease In and Out",
+        }
+    }
+
+    fn is_linear(&self) -> bool {
+        *self == Self::Linear
+    }
+
+    fn eases_in(self) -> bool {
+        matches!(self, Self::EaseIn | Self::Ease)
+    }
+
+    fn eases_out(self) -> bool {
+        matches!(self, Self::EaseOut | Self::Ease)
+    }
 }
 
 /// An adjustable clip property, held in hundredths of its display unit so the model
-/// stays `Eq` and round-trips exactly. With keyframes it is animated and interpolates
-/// linearly between them, holding the first and last beyond them.
+/// stays `Eq` and round-trips exactly. With keyframes it is animated, moving between
+/// them as each one's interpolation says and holding the first and last beyond them.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Param {
     /// The value when there are no keyframes.
@@ -52,9 +108,16 @@ impl Param {
         ) {
             (None, None) => f64::from(self.hundredths),
             (Some(key), None) | (None, Some(key)) => f64::from(key.hundredths),
+            (Some(before), Some(_)) if before.interpolation == Interpolation::Hold => {
+                f64::from(before.hundredths)
+            }
             (Some(before), Some(next)) => {
                 let span = (next.time - before.time).0 as f64;
-                let progress = (time - before.time).0 as f64 / span;
+                let progress = eased(
+                    (time - before.time).0 as f64 / span,
+                    before.interpolation.eases_out(),
+                    next.interpolation.eases_in(),
+                );
                 let (from, to) = (f64::from(before.hundredths), f64::from(next.hundredths));
                 from + (to - from) * progress
             }
@@ -71,7 +134,7 @@ impl Param {
         }
         match self.keys.binary_search_by_key(&time, |key| key.time) {
             Ok(index) => self.keys[index].hundredths = hundredths,
-            Err(index) => self.keys.insert(index, Keyframe { time, hundredths }),
+            Err(index) => self.keys.insert(index, Keyframe::new(time, hundredths)),
         }
     }
 
@@ -82,7 +145,7 @@ impl Param {
             self.keys.clear();
             self.hundredths = hundredths;
         } else {
-            self.keys.push(Keyframe { time, hundredths });
+            self.keys.push(Keyframe::new(time, hundredths));
         }
     }
 
@@ -101,14 +164,23 @@ impl Param {
                     self.hundredths = removed.hundredths;
                 }
             }
-            Err(index) => self.keys.insert(
-                index,
-                Keyframe {
-                    time,
-                    hundredths: to_hundredths(value),
-                },
-            ),
+            Err(index) => self
+                .keys
+                .insert(index, Keyframe::new(time, to_hundredths(value))),
         }
+    }
+
+    pub fn interpolation_at(&self, time: Ticks) -> Option<Interpolation> {
+        self.keys
+            .iter()
+            .find(|key| key.time == time)
+            .map(|key| key.interpolation)
+    }
+
+    /// Returns whether there was a keyframe at `time` to change.
+    pub fn set_interpolation(&mut self, time: Ticks, interpolation: Interpolation) -> bool {
+        let key = self.keys.iter_mut().find(|key| key.time == time);
+        key.map(|key| key.interpolation = interpolation).is_some()
     }
 
     pub fn previous_key(&self, time: Ticks) -> Option<Ticks> {
@@ -122,6 +194,15 @@ impl Param {
     pub fn next_key(&self, time: Ticks) -> Option<Ticks> {
         self.keys.iter().map(|key| key.time).find(|&key| key > time)
     }
+}
+
+/// `progress` through a segment reshaped by a cubic Hermite curve whose slope is zero
+/// at an eased end and one at a linear end, so a segment with neither eased stays linear.
+fn eased(progress: f64, out_of_start: bool, into_end: bool) -> f64 {
+    let slope = |eased: bool| if eased { 0.0 } else { 1.0 };
+    let p = progress;
+    let (p2, p3) = (p * p, p * p * p);
+    (p3 - 2.0 * p2 + p) * slope(out_of_start) + (3.0 * p2 - 2.0 * p3) + (p3 - p2) * slope(into_end)
 }
 
 fn to_hundredths(value: f32) -> i32 {
@@ -156,5 +237,28 @@ mod tests {
         param.toggle_animation(Ticks(50));
         assert!(!param.is_animated());
         assert_eq!(param.value(), 5.0);
+    }
+
+    #[test]
+    fn interpolation_holds_or_eases_each_segment() {
+        let mut param = Param::from_value(0.0);
+        param.toggle_animation(Ticks(0));
+        param.set_at(Ticks(100), 100.0);
+        param.set_at(Ticks(200), 0.0);
+        assert!(param.set_interpolation(Ticks(0), Interpolation::Hold));
+        assert_eq!(param.value_at(Ticks(99)), 0.0);
+        assert_eq!(param.value_at(Ticks(100)), 100.0);
+
+        param.set_interpolation(Ticks(100), Interpolation::Ease);
+        let quarter = param.value_at(Ticks(125));
+        assert!(quarter > 75.0, "{quarter}");
+        assert_eq!(param.value_at(Ticks(150)), 62.5);
+
+        // Easing only into the last key leaves the start of the segment linear.
+        param.set_interpolation(Ticks(100), Interpolation::EaseIn);
+        param.set_interpolation(Ticks(200), Interpolation::EaseIn);
+        let start = param.value_at(Ticks(101));
+        assert!((start - 99.0).abs() < 0.05, "{start}");
+        assert!(param.value_at(Ticks(199)) < 0.05);
     }
 }

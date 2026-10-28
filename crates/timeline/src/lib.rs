@@ -47,7 +47,7 @@ pub use model::{
     Clip, ClipId, IdGenerator, LinkId, Sequence, Track, TrackKind, TrackRef, VideoFormat,
 };
 pub use nest::Nest;
-pub use param::{Keyframe, Param};
+pub use param::{Interpolation, Keyframe, Param};
 pub use plan::{track_layers_at, PlannedLayer};
 pub use reveal::Reveal;
 pub use speed::Speed;

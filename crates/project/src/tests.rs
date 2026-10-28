@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
 use timeline::{
-    AudioEffect, Clip, ClipId, Gain, Generator, Keyframe, Marks, MediaItem, Nest, Pan, Rgb,
-    SourceId, TextAlign, Ticks, Timebase, Title, TitleFont, Track, Transition, TransitionKind,
-    VideoEffect, VideoFormat,
+    AudioEffect, Clip, ClipId, Gain, Generator, Interpolation, Keyframe, Marks, MediaItem, Nest,
+    Pan, Rgb, SourceId, TextAlign, Ticks, Timebase, Title, TitleFont, Track, Transition,
+    TransitionKind, VideoEffect, VideoFormat,
 };
 
 use super::*;
@@ -69,8 +69,8 @@ fn sample() -> ProjectFile {
         duration: Ticks(i64::MAX),
     });
     clip.look.motion.scale.keys.push(Keyframe {
-        time: Ticks(45_000),
-        hundredths: -12_345,
+        interpolation: Interpolation::EaseOut,
+        ..Keyframe::new(Ticks(45_000), -12_345)
     });
     clip.look.effects.push(VideoEffect::GaussianBlur {
         blurriness: clip.look.opacity.clone(),
