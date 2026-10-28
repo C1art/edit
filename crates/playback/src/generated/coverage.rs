@@ -101,6 +101,24 @@ impl Coverage {
         })
     }
 
+    /// `cover` of each pixel center inside `region`, which bounds the shape.
+    pub(super) fn from_fn(
+        width: usize,
+        height: usize,
+        region: (i64, i64, i64, i64),
+        cover: impl Fn(f32, f32) -> f32,
+    ) -> Self {
+        let mut coverage = Self::empty(width, height);
+        coverage.bounds = region;
+        let (left, top, right, bottom) = region;
+        for y in top.max(0)..bottom.min(height as i64) {
+            for x in left.max(0)..right.min(width as i64) {
+                coverage.add(x, y, cover(x as f32 + 0.5, y as f32 + 0.5));
+            }
+        }
+        coverage
+    }
+
     fn empty(width: usize, height: usize) -> Self {
         Self {
             width,

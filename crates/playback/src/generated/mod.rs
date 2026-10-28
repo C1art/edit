@@ -1,12 +1,14 @@
 mod coverage;
+mod shape;
 
 use std::cell::RefCell;
 use std::sync::Arc;
 
 use media::VideoFrame;
-use timeline::{CaptionStyle, Generator, Rgb, TextAlign, Ticks, Title, TitleFont};
+use timeline::{CaptionStyle, Generator, Rgb, Shape, TextAlign, Ticks, Title, TitleFont};
 
 use coverage::Coverage;
+use shape::shape_coverage;
 
 const SHADOW_OPACITY: f32 = 0.7;
 /// Faux bold thickens the strokes of the built-in light face by this fraction of the size
@@ -41,6 +43,7 @@ pub fn generated_frame(generator: &Generator, width: u32, height: u32) -> Arc<Vi
         Generator::ColorMatte { color } => canvas.fill(*color),
         Generator::Title(title) => draw_title(&mut canvas, title, Anchor::Center),
         Generator::AdjustmentLayer => {}
+        Generator::Shape(shape) => draw_shape(&mut canvas, shape),
     }
     Arc::new(VideoFrame {
         pts: Ticks::ZERO,
@@ -187,6 +190,43 @@ fn draw_title(canvas: &mut Canvas, title: &Title, anchor: Anchor) {
         canvas.paint(outline, *color, 1.0);
     }
     canvas.paint(&text, title.color, 1.0);
+}
+
+fn draw_shape(canvas: &mut Canvas, shape: &Shape) {
+    let (width, height) = (canvas.width, canvas.height);
+    let Some(body) = shape_coverage(shape, width, height, 0.0, false) else {
+        return;
+    };
+    let stroke = shape.stroke.filter(|stroke| stroke.width > 0);
+    let outline = stroke.and_then(|stroke| {
+        let ring = shape_coverage(shape, width, height, stroke.width as f32, true)?;
+        Some((ring, stroke.color))
+    });
+    if shape.shadow {
+        let silhouette = stroke.and_then(|stroke| {
+            shape_coverage(
+                shape,
+                width,
+                height,
+                stroke.width as f32,
+                shape.fill.is_none(),
+            )
+        });
+        let silhouette = silhouette.as_ref().unwrap_or(&body);
+        // Scaled to the frame, as a 1080-line sequence offsets it 9 pixels.
+        let offset = (height / 120).max(1) as i64;
+        let blur = (height / 160) as usize;
+        let shadow = silhouette.shifted(offset, offset).blurred(blur);
+        canvas.paint(&shadow, Rgb::BLACK, SHADOW_OPACITY);
+    } else if let Some(color) = shape.fill.or(stroke.map(|stroke| stroke.color)) {
+        canvas.bleed(color);
+    }
+    if let Some(fill) = shape.fill {
+        canvas.paint(&body, fill, 1.0);
+    }
+    if let Some((ring, color)) = &outline {
+        canvas.paint(ring, *color, 1.0);
+    }
 }
 
 /// Straight-alpha RGBA pixels with `f32` channels while drawing.
