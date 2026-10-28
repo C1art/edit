@@ -41,12 +41,17 @@ impl Sequence {
     /// How much later `clip` plays its media than a clip linked to it plays the same
     /// media; `None` while they are in sync.
     pub fn sync_offset(&self, clip: &Clip) -> Option<Ticks> {
+        self.out_of_sync_with(clip).map(|(_, offset)| offset)
+    }
+
+    /// The linked clip `clip` is out of sync with, and by how much.
+    pub(crate) fn out_of_sync_with(&self, clip: &Clip) -> Option<(&Clip, Ticks)> {
         let link = clip.link?;
         self.tracks()
             .flat_map(|(_, track)| &track.clips)
             .filter(|other| other.id != clip.id && other.link == Some(link))
             .filter(|other| other.source == clip.source)
-            .map(|other| clip.start - other.position_of(clip.source_in))
-            .find(|&offset| offset != Ticks::ZERO)
+            .map(|other| (other, clip.start - other.position_of(clip.source_in)))
+            .find(|&(_, offset)| offset != Ticks::ZERO)
     }
 }

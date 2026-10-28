@@ -59,3 +59,35 @@ fn with_linked_selection_off_a_clip_moves_alone_and_slips_out_of_sync() {
         (Some(Ticks(10)), Some(Ticks(-10)))
     );
 }
+
+#[test]
+fn an_out_of_sync_clip_moves_or_slips_back_into_sync() {
+    let (mut timeline, source) = timeline();
+    timeline
+        .apply(place(source, 0, 20, 100, PlaceMode::Overwrite))
+        .unwrap();
+    let (video, audio) = (clip_on(&timeline, V1, 0), clip_on(&timeline, A1, 0));
+    timeline
+        .apply(SetLinkedSelection(LinkedSelection::Apart))
+        .unwrap();
+    timeline
+        .apply(MoveClips {
+            clips: vec![audio],
+            delta: Ticks(10),
+            video_tracks: 0,
+            audio_tracks: 0,
+        })
+        .unwrap();
+    let into_sync = |method| IntoSync {
+        clip: audio,
+        method,
+    };
+
+    timeline.apply(into_sync(SyncMethod::Move)).unwrap();
+    assert_eq!(spans(&timeline, A1), [(0, 100, 20)]);
+    timeline.undo();
+    timeline.apply(into_sync(SyncMethod::Slip)).unwrap();
+    assert_eq!(spans(&timeline, A1), [(10, 110, 30)]);
+    let sequence = timeline.sequence();
+    assert_eq!(sequence.sync_offset(sequence.clip(video).unwrap().1), None);
+}

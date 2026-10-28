@@ -56,9 +56,9 @@ pub use edit::{
     clamp_delta, AddBin, AddEdits, AddFrameHold, AddGenerated, AddMarker, AddNest,
     AddSpeedKeyframe, AddSubmix, AddTrack, Attribute, AutoDuck, ClipSound, Clipboard, CloseGap,
     CreateMulticam, Edge, ExtractMarked, FlattenMulticam, FrameFit, ImportMedia, InNest,
-    InterpretFootage, Lift, LiftMarked, MakeSubclip, MarkerOwner, MoveClips, MoveToBin, NestClips,
-    NormalizeClipGains, PasteAttributes, PasteClips, PlaceClip, PlaceMode, RateStretch, Razor,
-    RazorTarget, RelinkMedia, RemoveAttributes, RemoveBin, RemoveMarker, RemoveMedia,
+    InterpretFootage, IntoSync, Lift, LiftMarked, MakeSubclip, MarkerOwner, MoveClips, MoveToBin,
+    NestClips, NormalizeClipGains, PasteAttributes, PasteClips, PlaceClip, PlaceMode, RateStretch,
+    Razor, RazorTarget, RelinkMedia, RemoveAttributes, RemoveBin, RemoveMarker, RemoveMedia,
     RemoveSpeedKeyframe, RemoveSubmix, RemoveTimeRemap, RemoveTrack, RenameBin, RenameMedia,
     RenameTrack, ReplaceClip, RippleDelete, RippleTrimToPlayhead, Roll, SetCaptions,
     SetClipAudioEffects, SetClipGain, SetClipLabel, SetClipLook, SetClipSpeed, SetClipVolume,
@@ -66,7 +66,7 @@ pub use edit::{
     SetMarks, SetMasterEffects, SetMasterGain, SetProxy, SetSegmentSpeed, SetSequenceFormat,
     SetSubmix, SetTimeInterpolation, SetToFrameSize, SetTrackAutomation, SetTrackEffects,
     SetTrackMix, SetTrackOutput, SetTrackSwitch, SetTransition, Slide, Slip, SwitchAngle,
-    TrackSwitch, Trim, TrimMode, UpdateMarker,
+    SyncMethod, TrackSwitch, Trim, TrimMode, UpdateMarker,
 };
 pub use edl::to_edl;
 pub use effect::{
