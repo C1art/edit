@@ -61,6 +61,7 @@ impl Editor {
             let tabs = [
                 (SideTab::EffectControls, "Effect Controls"),
                 (SideTab::AudioMixer, "Audio Mixer"),
+                (SideTab::ClipMixer, "Audio Clip Mixer"),
                 (SideTab::EssentialSound, "Essential Sound"),
                 (SideTab::Scopes, "Scopes"),
                 (SideTab::Captions, "Captions"),
@@ -77,6 +78,7 @@ impl Editor {
         match self.side_tab {
             SideTab::EffectControls => effects::ui(self, ui),
             SideTab::AudioMixer => mixer::ui(self, ui),
+            SideTab::ClipMixer => mixer::clip_mixer::ui(self, ui),
             SideTab::EssentialSound => crate::essential_sound::ui(self, ui),
             SideTab::Scopes => crate::scopes::ui(self, ui),
             SideTab::Captions => crate::captions::ui(self, ui),

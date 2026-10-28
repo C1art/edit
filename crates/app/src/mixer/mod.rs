@@ -1,4 +1,5 @@
 mod automation;
+pub mod clip_mixer;
 mod inserts;
 mod submixes;
 
@@ -47,6 +48,7 @@ pub struct Mixer {
     modes: HashMap<TrackRef, AutomationMode>,
     passes: HashMap<TrackRef, Pass>,
     inserts: inserts::Inserts,
+    clips: clip_mixer::ClipMixer,
     /// The submix being renamed, with the name typed so far and whether the field has
     /// been given the keyboard yet.
     renaming: Option<(SubmixId, String, bool)>,
@@ -96,20 +98,26 @@ fn to_db(peak: f32) -> f32 {
     }
 }
 
-pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
+/// Moves the meters toward the levels just heard.
+fn meter(editor: &mut Editor, ui: &egui::Ui) {
     let dt = ui.input(|input| input.stable_dt).min(0.1);
     let sequence = editor.timeline.sequence();
-    let tracks = sequence.audio.len();
-    let submixes: Vec<SubmixId> = sequence.submixes.iter().map(|submix| submix.id).collect();
+    let strips = sequence.audio.len() + sequence.submixes.len();
     let levels = editor
         .program
         .as_ref()
         .and_then(|program| program.player.levels());
-    let strips = tracks + submixes.len();
     editor.mixer.update_meters(levels, strips, dt);
     if editor.mixer.falling() {
         ui.ctx().request_repaint();
     }
+}
+
+pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
+    meter(editor, ui);
+    let sequence = editor.timeline.sequence();
+    let tracks = sequence.audio.len();
+    let submixes: Vec<SubmixId> = sequence.submixes.iter().map(|submix| submix.id).collect();
     egui::ScrollArea::horizontal().show(ui, |ui| {
         ui.horizontal_top(|ui| {
             for index in 0..tracks {

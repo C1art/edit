@@ -19,8 +19,8 @@ use std::path::PathBuf;
 use egui::RichText;
 use timeline::{
     preview, AudioEffect, Clip, ClipId, Edit, Generator, Look, Param, Sequence,
-    SetClipAudioEffects, SetClipLook, SetClipVolume, SetGenerator, SourceId, Ticks, TrackKind,
-    TrackRef,
+    SetClipAudioEffects, SetClipLook, SetClipPan, SetClipVolume, SetGenerator, SourceId, Ticks,
+    TrackKind, TrackRef,
 };
 
 use crate::editor::Editor;
@@ -42,6 +42,7 @@ pub enum SideTab {
     #[default]
     EffectControls,
     AudioMixer,
+    ClipMixer,
     EssentialSound,
     Scopes,
     Captions,
@@ -52,7 +53,7 @@ pub enum SideTab {
 #[derive(Debug, Default)]
 pub struct EffectControls {
     adjusting: Option<(ClipId, Look)>,
-    leveling: Option<(ClipId, Param)>,
+    leveling: Option<(ClipId, Param, Param)>,
     processing: Option<(ClipId, Vec<AudioEffect>)>,
     drawing: Option<(SourceId, Generator)>,
     /// The clip, segment and speed in percent of a time remapping drag.
@@ -203,27 +204,37 @@ fn adjust_look(editor: &mut Editor, edit: SetClipLook, change: Option<Change>) {
 
 fn volume_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
     let time = keyframe_time(editor, clip);
-    let mut volume = match &editor.effects.leveling {
-        Some((id, volume)) if *id == clip.id => volume.clone(),
-        _ => clip.volume.clone(),
+    let (mut volume, mut pan) = match &editor.effects.leveling {
+        Some((id, volume, pan)) if *id == clip.id => (volume.clone(), pan.clone()),
+        _ => (clip.volume.clone(), clip.pan.clone()),
     };
     let rows = Rows::new(time, lane(editor, ui, clip));
-    let output = sound::volume_controls(ui, &mut volume, rows);
+    let output = sound::volume_controls(ui, &mut volume, &mut pan, rows);
     seek_to_key(editor, clip, output.seek);
-    let edit = SetClipVolume {
-        clip: clip.id,
-        volume,
+    let Some(change) = output.change else {
+        return;
     };
-    match output.change {
-        Some(Change::Live) => {
-            hear_live(editor, &edit);
-            editor.effects.leveling = Some((edit.clip, edit.volume));
-        }
-        Some(Change::Commit) => {
-            editor.effects.leveling = None;
-            editor.apply_levels(edit);
-        }
-        None => {}
+    editor.effects.leveling = match change {
+        Change::Live => Some((clip.id, volume.clone(), pan.clone())),
+        Change::Commit => None,
+    };
+    if volume != clip.volume {
+        let edit = SetClipVolume {
+            clip: clip.id,
+            volume,
+        };
+        adjust_levels(editor, edit, change);
+    }
+    if pan != clip.pan {
+        adjust_levels(editor, SetClipPan { clip: clip.id, pan }, change);
+    }
+}
+
+/// Plays a change to a clip's sound while it is dragged, and keeps it on release.
+pub(crate) fn adjust_levels(editor: &mut Editor, edit: impl Edit, change: Change) {
+    match change {
+        Change::Live => hear_live(editor, &edit),
+        Change::Commit => editor.apply_levels(edit),
     }
 }
 

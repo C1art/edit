@@ -45,13 +45,23 @@ pub(crate) fn category(effect: &AudioEffect) -> &'static str {
     }
 }
 
-/// Edits an audio clip's volume in `rows`.
-pub(super) fn volume_controls(ui: &mut egui::Ui, volume: &mut Param, mut rows: Rows) -> Output {
+/// Edits an audio clip's volume and balance in `rows`.
+pub(super) fn volume_controls(
+    ui: &mut egui::Ui,
+    volume: &mut Param,
+    pan: &mut Param,
+    mut rows: Rows,
+) -> Output {
     egui::CollapsingHeader::new("Volume")
         .default_open(true)
         .show(ui, |ui| {
             let range = Gain::SILENT.db()..=Gain::MAX.db();
             rows.param(ui, "Level", volume, range, " dB");
+        });
+    egui::CollapsingHeader::new("Panner")
+        .default_open(true)
+        .show(ui, |ui| {
+            rows.param(ui, "Balance", pan, -100.0..=100.0, "");
         });
     rows.output
 }
