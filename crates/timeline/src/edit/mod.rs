@@ -2,6 +2,7 @@ mod arrange;
 mod levels;
 mod look;
 mod ops;
+mod paste;
 mod place;
 mod structure;
 mod trim;
@@ -12,6 +13,7 @@ mod tests;
 pub use arrange::{CloseGap, Lift, MoveClips, RippleDelete};
 pub use levels::{SetClipGain, SetMasterGain, SetTrackMix};
 pub use look::{SetClipLook, SetTransition};
+pub use paste::{Clipboard, PasteClips};
 pub use place::{PlaceClip, PlaceMode, Razor, RazorTarget};
 pub use structure::{
     AddTrack, ImportMedia, RemoveMedia, RemoveTrack, SetProxy, SetSequenceFormat, SetTrackSwitch,

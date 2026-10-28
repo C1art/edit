@@ -17,10 +17,10 @@ mod validate;
 pub use audio_plan::{audio_fade, audio_span};
 pub use color::ColorCorrection;
 pub use edit::{
-    clamp_delta, AddTrack, CloseGap, Edge, ImportMedia, Lift, MoveClips, PlaceClip, PlaceMode,
-    Razor, RazorTarget, RemoveMedia, RemoveTrack, RippleDelete, Roll, SetClipGain, SetClipLook,
-    SetMasterGain, SetProxy, SetSequenceFormat, SetTrackMix, SetTrackSwitch, SetTransition, Slide,
-    Slip, TrackSwitch, Trim, TrimMode,
+    clamp_delta, AddTrack, Clipboard, CloseGap, Edge, ImportMedia, Lift, MoveClips, PasteClips,
+    PlaceClip, PlaceMode, Razor, RazorTarget, RemoveMedia, RemoveTrack, RippleDelete, Roll,
+    SetClipGain, SetClipLook, SetMasterGain, SetProxy, SetSequenceFormat, SetTrackMix,
+    SetTrackSwitch, SetTransition, Slide, Slip, TrackSwitch, Trim, TrimMode,
 };
 pub use error::TimelineError;
 pub use history::{preview, Edit, EditCommand, Timeline};

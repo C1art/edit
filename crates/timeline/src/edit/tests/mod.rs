@@ -428,3 +428,5 @@ fn proxy_replaces_only_the_decoded_path_and_undoes() {
     assert!(timeline.undo());
     assert_eq!(timeline.sequence().media[0].proxy, None);
 }
+
+mod paste;
