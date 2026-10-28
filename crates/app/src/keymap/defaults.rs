@@ -77,9 +77,10 @@ impl Command {
             Self::MinimizeAllTracks => vec![shift(Key::Minus)],
             Self::MulticamView => vec![shift(Key::Num0)],
             Self::RenderInToOut => vec![plain(Key::Enter)],
-            Self::DeleteRenderFiles | Self::ToggleLinkedSelection | Self::JoinThroughEdits => {
-                Vec::new()
-            }
+            Self::DeleteRenderFiles
+            | Self::ToggleLinkedSelection
+            | Self::JoinThroughEdits
+            | Self::ComparisonView => Vec::new(),
             Self::MarkIn => vec![plain(Key::I)],
             Self::MarkOut => vec![plain(Key::O)],
             Self::ClearInOut => vec![ctrl_shift(Key::X)],

@@ -58,6 +58,8 @@ pub struct Editor {
     pub(crate) program: Option<Viewer>,
     /// Shown in place of the program picture while an edit is dragged; made on first use.
     pub(crate) trim_monitor: Option<TrimMonitor>,
+    /// A reference frame shown beside the program picture, while comparing.
+    pub(crate) comparison: Option<crate::comparison::Comparison>,
     /// The timeline revision the program viewer is playing.
     pub(crate) shown_revision: u64,
     pub(crate) focus: Focus,
@@ -183,6 +185,7 @@ impl Editor {
             source: None,
             program,
             trim_monitor: None,
+            comparison: None,
             focus: Focus::Program,
             view: TimelineView::default(),
             mixer: Mixer::default(),

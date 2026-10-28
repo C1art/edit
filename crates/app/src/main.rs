@@ -5,6 +5,7 @@ mod clip_art;
 mod clip_menu;
 mod clip_moves;
 mod commands;
+mod comparison;
 mod duck_dialog;
 mod editor;
 mod effect_presets;

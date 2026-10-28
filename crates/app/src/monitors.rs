@@ -121,6 +121,8 @@ fn program(editor: &mut Editor, ui: &mut egui::Ui) {
     }
     if let Some(response) = trim_picture(editor, ui) {
         outline(ui, &response, focused);
+    } else if let Some(response) = crate::comparison::ui(editor, ui, picture_size(ui)) {
+        outline(ui, &response, focused);
     } else if let Some(program) = &mut editor.program {
         let response = program.picture(ui, picture_size(ui));
         outline(ui, &response, focused);
@@ -167,6 +169,13 @@ fn program(editor: &mut Editor, ui: &mut egui::Ui) {
                 .on_hover_text("Every camera of the multi-camera clips beside the program; click one or press 1–9 to switch (Shift+0)");
             if toggle.clicked() {
                 editor.toggle_multicam_view();
+            }
+            let mut comparing = editor.comparison.is_some();
+            let toggle = ui
+                .checkbox(&mut comparing, "Comparison View")
+                .on_hover_text("A reference frame of the sequence beside the program, for matching shots");
+            if toggle.clicked() {
+                editor.toggle_comparison_view();
             }
             ui.menu_button("Playback Resolution", |ui| {
                 let Some(program) = &mut editor.program else {

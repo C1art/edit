@@ -69,6 +69,7 @@ pub enum Command {
     ExpandAllTracks,
     MinimizeAllTracks,
     MulticamView,
+    ComparisonView,
     RenderInToOut,
     DeleteRenderFiles,
     MarkIn,
@@ -109,7 +110,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Self; 102] = [
+    pub const ALL: [Self; 103] = [
         Self::NewProject,
         Self::OpenProject,
         Self::Save,
@@ -175,6 +176,7 @@ impl Command {
         Self::ExpandAllTracks,
         Self::MinimizeAllTracks,
         Self::MulticamView,
+        Self::ComparisonView,
         Self::RenderInToOut,
         Self::DeleteRenderFiles,
         Self::MarkIn,
@@ -296,6 +298,7 @@ impl Command {
             Self::ExpandAllTracks => ("expand_all_tracks", "Expand All Tracks"),
             Self::MinimizeAllTracks => ("minimize_all_tracks", "Minimize All Tracks"),
             Self::MulticamView => ("multicam_view", "Multi-Camera View"),
+            Self::ComparisonView => ("comparison_view", "Comparison View"),
             Self::RenderInToOut => ("render_in_to_out", "Render In to Out"),
             Self::DeleteRenderFiles => ("delete_render_files", "Delete Render Files"),
             Self::MarkIn => ("mark_in", "Mark In"),
@@ -390,6 +393,7 @@ impl Command {
             | ExpandAllTracks
             | MinimizeAllTracks
             | MulticamView
+            | ComparisonView
             | RenderInToOut
             | DeleteRenderFiles => "Sequence",
             MarkIn | MarkOut | ClearInOut | MarkClip | MarkSelection | GoToIn | GoToOut

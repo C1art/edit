@@ -59,6 +59,13 @@ impl Viewer {
         self.monitor.as_ref().and_then(Monitor::scope)
     }
 
+    /// Draws the picture letterboxed into `rect`.
+    pub fn paint(&self, painter: &egui::Painter, rect: egui::Rect) {
+        if let Some(monitor) = &self.monitor {
+            monitor.paint(painter, rect);
+        }
+    }
+
     pub fn picture(&self, ui: &mut egui::Ui, size: Vec2) -> egui::Response {
         match &self.monitor {
             Some(monitor) => monitor.ui(ui, size),
