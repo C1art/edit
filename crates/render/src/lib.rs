@@ -4,6 +4,7 @@ mod compositor;
 mod error;
 mod placement;
 mod readback;
+mod waveform;
 
 pub use blit::DISPLAY_FORMAT;
 pub use compositor::{Compositor, LayerImage, Presented};

@@ -1,6 +1,7 @@
 use crate::blit::{self, Blit, DISPLAY_FORMAT};
 use crate::blur::BlurTargets;
 use crate::placement::{fit_scale, LayerLook, Placement};
+use crate::waveform::Waveform;
 use crate::{RenderError, WORKING_FORMAT};
 
 /// Decoded frames arrive gamma-encoded. BT.709 video is treated as sRGB, which matches
@@ -63,6 +64,7 @@ pub struct Compositor {
     blit: Blit,
     slots: Vec<Slot>,
     targets: Option<Targets>,
+    waveform: Option<Waveform>,
 }
 
 impl Compositor {
@@ -79,6 +81,7 @@ impl Compositor {
             queue: queue.clone(),
             slots: Vec::new(),
             targets: None,
+            waveform: None,
         }
     }
 
@@ -91,6 +94,37 @@ impl Compositor {
         self.targets
             .as_ref()
             .map(|targets| (targets.width, targets.height))
+    }
+
+    /// Measures a luma waveform of every presented frame while enabled, starting with
+    /// the one already shown.
+    pub fn set_waveform(&mut self, enabled: bool) {
+        if !enabled {
+            self.waveform = None;
+            return;
+        }
+        if self.waveform.is_some() {
+            return;
+        }
+        let mut waveform = Waveform::new(&self.device);
+        if let Some(targets) = &self.targets {
+            let size = (targets.width, targets.height);
+            waveform.bind(&self.device, &self.queue, &targets.output, size);
+            let mut encoder = self
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("waveform"),
+                });
+            waveform.record(&mut encoder);
+            self.queue.submit([encoder.finish()]);
+        }
+        self.waveform = Some(waveform);
+    }
+
+    /// The waveform texture: columns across the frame, black at the bottom and white at
+    /// the top. The view lasts until the waveform is disabled.
+    pub fn waveform_view(&self) -> Option<&wgpu::TextureView> {
+        self.waveform.as_ref().map(|waveform| &waveform.view)
     }
 
     /// Draws `layers` bottom first over black, each fitted to `canvas` and then moved,
@@ -126,6 +160,9 @@ impl Compositor {
         let Some(targets) = &self.targets else {
             unreachable!("targets were created above");
         };
+        if let (Presented::NewTarget, Some(waveform)) = (presented, &mut self.waveform) {
+            waveform.bind(&self.device, &self.queue, &targets.output, canvas);
+        }
 
         let mut encoder = self
             .device
@@ -151,6 +188,9 @@ impl Compositor {
             &self.blit.to_display,
             &[&targets.working_binding],
         );
+        if let Some(waveform) = &self.waveform {
+            waveform.record(&mut encoder);
+        }
         self.queue.submit([encoder.finish()]);
         Ok(presented)
     }
