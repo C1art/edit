@@ -5,6 +5,7 @@ use egui::{Color32, Pos2, RichText, Sense, Stroke, Vec2};
 use timeline::{ColorCorrection, ColorWheel};
 
 use super::look::Rows;
+use crate::color_match::ToneGoal;
 use crate::mixer::response_state;
 
 const WHEEL_SIZE: f32 = 78.0;
@@ -12,6 +13,16 @@ const WHEEL_SIZE: f32 = 78.0;
 const RIM: f32 = 100.0;
 /// Segments around a wheel's rim.
 const SEGMENTS: usize = 48;
+
+/// Whether Auto and Match can read the picture now.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ToneState {
+    #[default]
+    Ready,
+    /// The Comparison View is open, with a reference to match.
+    ReadyToMatch,
+    Analyzing,
+}
 
 /// Which of a clip's LUTs a file is for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,6 +43,7 @@ pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorr
     );
     rows.param(ui, "Tint", &mut color.tint, -100.0..=100.0, "");
     ui.label(RichText::new("Tone").weak());
+    tone_buttons(ui, rows);
     rows.param(ui, "Exposure", &mut color.exposure, -5.0..=5.0, "");
     rows.param(ui, "Contrast", &mut color.contrast, -100.0..=100.0, "");
     rows.param(ui, "Highlights", &mut color.highlights, -100.0..=100.0, "");
@@ -72,6 +84,30 @@ pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorr
         });
     }
     super::secondary::controls(ui, rows, &mut color.secondary);
+}
+
+fn tone_buttons(ui: &mut egui::Ui, rows: &mut Rows) {
+    ui.horizontal(|ui| {
+        let ready = rows.tone != ToneState::Analyzing;
+        let auto = ui.add_enabled(ready, egui::Button::new("Auto"));
+        if auto
+            .on_hover_text("Set white balance and tone from the picture at the playhead")
+            .clicked()
+        {
+            rows.output.analyze_tone = Some(ToneGoal::Auto);
+        }
+        let can_match = rows.tone == ToneState::ReadyToMatch;
+        let matched = ui
+            .add_enabled(can_match, egui::Button::new("Apply Match"))
+            .on_hover_text("Match the Comparison View's reference frame")
+            .on_disabled_hover_text("Open the Comparison View to choose a reference frame");
+        if matched.clicked() {
+            rows.output.analyze_tone = Some(ToneGoal::Match);
+        }
+        if !ready {
+            ui.spinner();
+        }
+    });
 }
 
 fn lut_row(

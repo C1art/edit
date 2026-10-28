@@ -5,8 +5,10 @@ use timeline::{BlendMode, Interpolation, Look, Param, Ticks};
 
 use media::TrackDirection;
 
+use super::color::ToneState;
 use super::lane::Lane;
 use super::LutSlot;
+use crate::color_match::ToneGoal;
 use crate::mask_tracking::TrackSpan;
 use crate::mixer::{response_state, Change};
 
@@ -23,6 +25,8 @@ pub(super) struct Output {
     /// A mask to track through the footage from the playhead.
     pub(super) track_mask: Option<(usize, TrackDirection, TrackSpan)>,
     pub(super) stop_tracking: bool,
+    /// What to set the Basic Correction for from the picture.
+    pub(super) analyze_tone: Option<ToneGoal>,
 }
 
 /// Edits `look` in `rows`, of a clip among `video_tracks` video tracks.
@@ -123,6 +127,7 @@ pub(super) struct Rows {
     pub(super) analyzing: Option<f32>,
     /// Which mask is being tracked and how far along, while one is.
     pub(super) tracking: Option<(usize, f32)>,
+    pub(super) tone: ToneState,
     pub(super) output: Output,
 }
 
@@ -133,6 +138,7 @@ impl Rows {
             lane,
             analyzing: None,
             tracking: None,
+            tone: ToneState::default(),
             output: Output {
                 change: None,
                 seek: None,
@@ -140,6 +146,7 @@ impl Rows {
                 analyze_motion: false,
                 track_mask: None,
                 stop_tracking: false,
+                analyze_tone: None,
             },
         }
     }

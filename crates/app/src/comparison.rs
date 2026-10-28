@@ -71,6 +71,10 @@ impl Comparison {
         })
     }
 
+    pub(crate) fn reference_time(&self) -> Ticks {
+        self.time
+    }
+
     /// Keeps the reference frame up to date with `sequence` and the reference time.
     fn refresh(&mut self, sequence: &Arc<Sequence>) {
         let fresh = self

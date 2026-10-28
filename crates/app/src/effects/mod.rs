@@ -26,6 +26,7 @@ use timeline::{
 use crate::editor::Editor;
 use crate::mixer::Change;
 use crate::project_files::PathPurpose;
+use color::ToneState;
 use lane::Lane;
 use look::Rows;
 
@@ -120,6 +121,11 @@ fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
     let mut rows = Rows::new(time, lane(editor, ui, clip));
     rows.analyzing = editor.motion_analysis_progress(clip.id);
     rows.tracking = editor.mask_tracking(clip.id);
+    rows.tone = match (editor.analyzing_tone(clip.id), &editor.comparison) {
+        (true, _) => ToneState::Analyzing,
+        (false, Some(_)) => ToneState::ReadyToMatch,
+        (false, None) => ToneState::Ready,
+    };
     let output = look::controls(ui, &mut look, rows, video_tracks);
     if output.change.is_some() {
         stabilizer::retune(&mut look, editor.timeline.sequence().timebase);
@@ -149,6 +155,9 @@ fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
         look,
     };
     adjust_look(editor, edit, output.change);
+    if let Some(goal) = output.analyze_tone {
+        editor.analyze_tone(clip.id, goal, time);
+    }
     if output.analyze_motion {
         editor.analyze_motion(clip.id);
     }

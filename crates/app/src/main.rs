@@ -4,6 +4,7 @@ mod captions;
 mod clip_art;
 mod clip_menu;
 mod clip_moves;
+mod color_match;
 mod commands;
 mod comparison;
 mod duck_dialog;

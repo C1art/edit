@@ -52,6 +52,7 @@ pub struct Editor {
     pub(crate) scene_job: Option<crate::scene_edits::SceneJob>,
     pub(crate) still_job: Option<playback::StillJob>,
     pub(crate) motion_job: Option<crate::motion_analysis::MotionJob>,
+    pub(crate) tone_analysis: Option<crate::color_match::ToneAnalysis>,
     pub(crate) mask_track_job: Option<crate::mask_tracking::MaskTrackJob>,
     pub(crate) hardware_decoding: bool,
     pub(crate) source: Option<SourceMonitor>,
@@ -180,6 +181,7 @@ impl Editor {
             scene_job: None,
             still_job: None,
             motion_job: None,
+            tone_analysis: None,
             mask_track_job: None,
             hardware_decoding: true,
             source: None,
@@ -416,6 +418,7 @@ impl eframe::App for Editor {
         self.poll_multicam_sync(&ctx);
         self.poll_scene_edits(&ctx);
         self.poll_motion_analysis(&ctx);
+        self.poll_tone_analysis(&ctx);
         self.poll_mask_tracking(&ctx);
         self.poll_export_frame(&ctx);
         self.poll_export_queue(&ctx);
