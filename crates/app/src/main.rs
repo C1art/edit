@@ -3,6 +3,7 @@ mod editor;
 mod import;
 mod media_pool;
 mod menus;
+mod mixer;
 mod monitor;
 mod monitors;
 mod placing;

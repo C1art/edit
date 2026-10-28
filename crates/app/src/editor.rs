@@ -11,6 +11,7 @@ use timeline::{
 
 use crate::import::Importer;
 use crate::media_pool::{self, PoolAction};
+use crate::mixer::{self, Mixer};
 use crate::monitors::{self, Focus};
 use crate::source::SourceMonitor;
 use crate::timeline_view::TimelineView;
@@ -30,6 +31,9 @@ pub struct Editor {
     shown_revision: u64,
     pub(crate) focus: Focus,
     pub(crate) view: TimelineView,
+    pub(crate) mixer: Mixer,
+    /// The gain in dB being typed into the clip gain dialog, while it is showing.
+    pub(crate) gain_prompt: Option<f32>,
     /// The path being typed into the import dialog, while it is showing.
     pub(crate) import_prompt: Option<String>,
     notices: Vec<String>,
@@ -69,6 +73,8 @@ impl Editor {
             program,
             focus: Focus::Program,
             view: TimelineView::default(),
+            mixer: Mixer::default(),
+            gain_prompt: None,
             import_prompt: None,
             notices,
         };
@@ -92,6 +98,20 @@ impl Editor {
                 self.notice(format!("Cannot edit: {error}"));
                 false
             }
+        }
+    }
+
+    /// Applies an edit that changes only levels, handing it to the program player without
+    /// the seek a structural edit needs, so playback carries on uninterrupted.
+    pub(crate) fn apply_levels(&mut self, edit: impl Edit) {
+        if !self.apply(edit) {
+            return;
+        }
+        self.shown_revision = self.timeline.revision();
+        if let Some(program) = &mut self.program {
+            program
+                .player
+                .set_mix(Arc::new(self.timeline.sequence().clone()));
         }
     }
 
@@ -277,6 +297,10 @@ impl eframe::App for Editor {
             .resizable(true)
             .default_size(260.0)
             .show(ui, |ui| self.media_panel(ui));
+        Panel::right("mixer")
+            .resizable(true)
+            .default_size(290.0)
+            .show(ui, |ui| mixer::ui(self, ui));
         Panel::bottom("timeline")
             .resizable(true)
             .default_size(340.0)
@@ -284,5 +308,6 @@ impl eframe::App for Editor {
         CentralPanel::default().show(ui, |ui| monitors::ui(self, ui));
 
         crate::menus::import_dialog(self, &ctx);
+        crate::menus::gain_dialog(self, &ctx);
     }
 }

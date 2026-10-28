@@ -3,7 +3,7 @@ use std::sync::Arc;
 use audio::AudioOutput;
 use eframe::egui_wgpu::RenderState;
 use playback::PlaybackError;
-use timeline::{Clip, ClipId, MediaItem, Sequence, SourceId, Ticks, Timebase, Track};
+use timeline::{Clip, ClipId, Gain, MediaItem, Sequence, SourceId, Ticks, Timebase, Track};
 
 use crate::transport::Marks;
 use crate::viewer::Viewer;
@@ -74,6 +74,7 @@ fn source_sequence(item: &MediaItem, timebase: Timebase) -> Sequence {
             duration: item.duration,
             source_in: Ticks::ZERO,
             link: None,
+            gain: Gain::UNITY,
         }],
         ..Track::default()
     };

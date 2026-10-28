@@ -49,3 +49,21 @@ impl Editor {
         self.apply(AddTrack { kind });
     }
 }
+
+impl Editor {
+    /// Opens the gain dialog for the selected clips, starting from the first audio
+    /// clip's gain.
+    pub(crate) fn prompt_clip_gain(&mut self) {
+        let sequence = self.timeline.sequence();
+        let audio_gain = sequence
+            .with_links(&self.view.selection)
+            .into_iter()
+            .filter_map(|id| sequence.clip(id))
+            .find(|(track, _)| track.kind == TrackKind::Audio)
+            .map(|(_, clip)| clip.gain);
+        match audio_gain {
+            Some(gain) => self.gain_prompt = Some(gain.db()),
+            None => self.notice("Select a clip with audio first"),
+        }
+    }
+}

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use egui::{Button, Key, MenuBar, ViewportCommand};
-use timeline::{PlaceMode, TrackKind};
+use timeline::{Gain, PlaceMode, SetClipGain, TrackKind};
 
 use crate::editor::Editor;
 use crate::placing;
@@ -150,5 +150,41 @@ pub fn import_dialog(editor: &mut Editor, ctx: &egui::Context) {
         editor.import(path);
     } else if cancelled {
         editor.import_prompt = None;
+    }
+}
+
+pub fn gain_dialog(editor: &mut Editor, ctx: &egui::Context) {
+    let Some(db) = &mut editor.gain_prompt else {
+        return;
+    };
+    let mut apply = false;
+    let mut cancelled = false;
+    egui::Window::new("Audio Gain")
+        .collapsible(false)
+        .resizable(false)
+        .show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.label("Set gain to");
+                ui.add(
+                    egui::DragValue::new(db)
+                        .range(Gain::SILENT.db()..=Gain::MAX.db())
+                        .speed(0.1)
+                        .suffix(" dB"),
+                );
+            });
+            ui.horizontal(|ui| {
+                apply =
+                    ui.button("OK").clicked() || ui.input(|input| input.key_pressed(Key::Enter));
+                cancelled = ui.button("Cancel").clicked()
+                    || ui.input(|input| input.key_pressed(Key::Escape));
+            });
+        });
+    if apply {
+        let gain = Gain::from_db(*db);
+        editor.gain_prompt = None;
+        let clips = editor.view.selection.clone();
+        editor.apply_levels(SetClipGain { clips, gain });
+    } else if cancelled {
+        editor.gain_prompt = None;
     }
 }

@@ -1,5 +1,5 @@
 use egui::{Align2, Color32, FontId, Painter, Rect, Stroke, StrokeKind};
-use timeline::{ClipId, Sequence, Ticks, Timecode, TrackKind};
+use timeline::{ClipId, Gain, Sequence, Ticks, Timecode, TrackKind};
 
 use super::layout::{clip_rect, Row};
 use super::scale::{label_interval, TimeScale};
@@ -123,10 +123,15 @@ pub fn clips(
         } else {
             " [unlinked]"
         };
+        let gain = if row.track.kind == TrackKind::Audio && clip.gain != Gain::UNITY {
+            format!(" {:+.1} dB", clip.gain.db())
+        } else {
+            String::new()
+        };
         painter.with_clip_rect(rect.shrink(2.0)).text(
             rect.left_top() + egui::vec2(5.0, 4.0),
             Align2::LEFT_TOP,
-            format!("{name}{link}"),
+            format!("{name}{link}{gain}"),
             FontId::proportional(11.0),
             Color32::WHITE,
         );

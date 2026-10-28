@@ -31,6 +31,7 @@ enum Action {
     ZoomOut,
     ZoomToFit,
     CancelDrag,
+    ClipGain,
 }
 
 /// Editor-wide keys. Skipped while a text field has focus so typing isn't hijacked.
@@ -89,6 +90,7 @@ fn pressed(ctx: &egui::Context) -> Option<Action> {
             (Key::Minus, Action::ZoomOut),
             (Key::Backslash, Action::ZoomToFit),
             (Key::Escape, Action::CancelDrag),
+            (Key::G, Action::ClipGain),
         ];
         keys.into_iter()
             .chain(tools)
@@ -120,5 +122,6 @@ fn run(editor: &mut Editor, action: Action) {
         Action::ZoomOut => editor.view.zoom(0.5, None),
         Action::ZoomToFit => editor.view.zoom_to_fit(editor.timeline.sequence()),
         Action::CancelDrag => editor.view.cancel_drag(),
+        Action::ClipGain => editor.prompt_clip_gain(),
     }
 }
