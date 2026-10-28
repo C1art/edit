@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{ColorCorrection, Mask, Param, Ticks, VideoEffect};
+use crate::{BlendMode, ColorCorrection, Mask, Param, Ticks, VideoEffect};
 
 /// Where the clip's picture sits in the frame, after it is fitted to the frame.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -40,6 +40,8 @@ pub struct Look {
     /// Percent.
     #[serde(default = "full_opacity")]
     pub opacity: Param,
+    #[serde(default)]
+    pub blend: BlendMode,
     /// What of the picture the opacity applies to; none keeps all of it.
     #[serde(default)]
     pub masks: Vec<Mask>,
@@ -61,6 +63,7 @@ impl Default for Look {
         Self {
             motion: Motion::default(),
             opacity: full_opacity(),
+            blend: BlendMode::Normal,
             masks: Vec::new(),
             crop: Crop::default(),
             effects: Vec::new(),
