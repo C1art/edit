@@ -61,6 +61,7 @@ pub struct Editor {
     /// The history step last scrolled into view, so the list follows new edits only.
     pub(crate) history_scrolled: Option<usize>,
     pub(crate) marker_filter: crate::markers_panel::MarkerFilter,
+    pub(crate) pool: media_pool::PoolView,
     pub(crate) gain_dialog: Option<crate::gain_dialog::GainDialog>,
     pub(crate) loudness: Option<crate::loudness_window::LoudnessWindow>,
     pub(crate) speed_prompt: Option<crate::speed_dialog::SpeedPrompt>,
@@ -147,6 +148,7 @@ impl Editor {
             media_tab: MediaTab::Project,
             history_scrolled: None,
             marker_filter: Default::default(),
+            pool: Default::default(),
             gain_dialog: None,
             loudness: None,
             speed_prompt: None,
@@ -339,10 +341,10 @@ impl Editor {
         match self.media_tab {
             MediaTab::Project => {
                 let importing = self.importer.as_ref().is_some_and(Importer::is_busy);
-                let sequence = self.timeline.sequence();
+                let sequence = self.timeline.project();
                 let proxies = self.proxies.as_ref();
                 if let Some(action) =
-                    media_pool::ui(ui, &sequence.media, sequence.timebase, importing, proxies)
+                    media_pool::ui(ui, &mut self.pool, sequence, importing, proxies)
                 {
                     self.pool_action(action);
                 }
