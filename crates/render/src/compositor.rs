@@ -1,7 +1,6 @@
+use crate::blit::{self, Blit, DISPLAY_FORMAT};
+use crate::placement::NdcRect;
 use crate::{RenderError, WORKING_FORMAT};
-
-/// The UI samples the output as an ordinary sRGB texture.
-pub const DISPLAY_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
 /// Decoded frames arrive gamma-encoded. BT.709 video is treated as sRGB, which matches
 /// the display-referred look of other editors on an sRGB monitor.
@@ -11,15 +10,31 @@ const SOURCE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 pub enum Presented {
     /// The frame went into the existing output texture.
     SameTarget,
-    /// The frame size changed, so the output texture was recreated and must be rebound.
+    /// The canvas size changed, so the output texture was recreated and must be rebound.
     NewTarget,
+}
+
+/// A source picture to composite: tightly packed RGBA8 in the source transfer function.
+#[derive(Debug, Clone, Copy)]
+pub struct LayerImage<'a> {
+    pub width: u32,
+    pub height: u32,
+    pub rgba: &'a [u8],
+    pub opacity: f32,
+}
+
+/// Upload texture and placement for one layer, reused while the layer's size holds.
+struct Slot {
+    width: u32,
+    height: u32,
+    texture: wgpu::Texture,
+    placement: wgpu::Buffer,
+    binding: wgpu::BindGroup,
 }
 
 struct Targets {
     width: u32,
     height: u32,
-    source: wgpu::Texture,
-    source_binding: wgpu::BindGroup,
     working: wgpu::TextureView,
     working_binding: wgpu::BindGroup,
     output: wgpu::TextureView,
@@ -30,81 +45,18 @@ struct Targets {
 pub struct Compositor {
     device: wgpu::Device,
     queue: wgpu::Queue,
-    layout: wgpu::BindGroupLayout,
-    sampler: wgpu::Sampler,
-    to_working: wgpu::RenderPipeline,
-    to_display: wgpu::RenderPipeline,
+    blit: Blit,
+    slots: Vec<Slot>,
     targets: Option<Targets>,
 }
 
 impl Compositor {
     pub fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
-        let shader = device.create_shader_module(wgpu::include_wgsl!("../shaders/blit.wgsl"));
-        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("blit_layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
-        });
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("blit_pipeline_layout"),
-            bind_group_layouts: &[Some(&layout)],
-            immediate_size: 0,
-        });
-        let pipeline = |format| {
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some("blit_pipeline"),
-                layout: Some(&pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: &shader,
-                    entry_point: Some("vs_main"),
-                    buffers: &[],
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                },
-                primitive: wgpu::PrimitiveState::default(),
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader,
-                    entry_point: Some("fs_main"),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format,
-                        blend: None,
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                }),
-                multiview_mask: None,
-                cache: None,
-            })
-        };
         Self {
-            to_working: pipeline(WORKING_FORMAT),
-            to_display: pipeline(DISPLAY_FORMAT),
-            sampler: device.create_sampler(&wgpu::SamplerDescriptor {
-                label: Some("blit_sampler"),
-                mag_filter: wgpu::FilterMode::Linear,
-                min_filter: wgpu::FilterMode::Linear,
-                ..Default::default()
-            }),
+            blit: Blit::new(device),
             device: device.clone(),
             queue: queue.clone(),
-            layout,
+            slots: Vec::new(),
             targets: None,
         }
     }
@@ -120,126 +72,156 @@ impl Compositor {
             .map(|targets| (targets.width, targets.height))
     }
 
-    /// Takes tightly packed RGBA8 pixels in the source transfer function.
-    pub fn present_frame(
+    /// Draws `layers` bottom first over black, each scaled to fit `canvas`.
+    pub fn composite(
         &mut self,
-        width: u32,
-        height: u32,
-        rgba: &[u8],
+        canvas: (u32, u32),
+        layers: &[LayerImage<'_>],
     ) -> Result<Presented, RenderError> {
-        let expected = width as usize * height as usize * 4;
-        if rgba.len() != expected || width == 0 || height == 0 {
-            return Err(RenderError::FrameSize {
-                width,
-                height,
-                bytes: rgba.len(),
-            });
-        }
-        let max = self.device.limits().max_texture_dimension_2d;
-        if width > max || height > max {
-            return Err(RenderError::FrameTooLarge { width, height, max });
+        self.check_size(canvas.0, canvas.1)?;
+        for layer in layers {
+            self.check_size(layer.width, layer.height)?;
+            let expected = layer.width as usize * layer.height as usize * 4;
+            if layer.rgba.len() != expected {
+                return Err(RenderError::FrameSize {
+                    width: layer.width,
+                    height: layer.height,
+                    bytes: layer.rgba.len(),
+                });
+            }
         }
 
         let presented = match &self.targets {
-            Some(targets) if (targets.width, targets.height) == (width, height) => {
-                Presented::SameTarget
-            }
+            Some(targets) if (targets.width, targets.height) == canvas => Presented::SameTarget,
             _ => {
-                self.targets = Some(self.create_targets(width, height));
+                self.targets = Some(self.create_targets(canvas.0, canvas.1));
                 Presented::NewTarget
             }
         };
+        for (index, layer) in layers.iter().enumerate() {
+            self.upload(index, layer, canvas);
+        }
         let Some(targets) = &self.targets else {
             unreachable!("targets were created above");
         };
-
-        self.queue.write_texture(
-            wgpu::TexelCopyTextureInfo {
-                texture: &targets.source,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            rgba,
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(width * 4),
-                rows_per_image: Some(height),
-            },
-            extent(width, height),
-        );
 
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("compositor"),
             });
-        blit(
+        let layer_bindings: Vec<&wgpu::BindGroup> = self.slots[..layers.len()]
+            .iter()
+            .map(|slot| &slot.binding)
+            .collect();
+        blit::draw(
             &mut encoder,
-            &self.to_working,
-            &targets.source_binding,
             &targets.working,
+            &self.blit.to_working,
+            &layer_bindings,
         );
-        blit(
+        blit::draw(
             &mut encoder,
-            &self.to_display,
-            &targets.working_binding,
             &targets.output,
+            &self.blit.to_display,
+            &[&targets.working_binding],
         );
         self.queue.submit([encoder.finish()]);
         Ok(presented)
     }
 
-    fn create_targets(&self, width: u32, height: u32) -> Targets {
-        let texture = |label, format, usage| {
-            self.device.create_texture(&wgpu::TextureDescriptor {
-                label: Some(label),
-                size: extent(width, height),
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format,
-                usage,
-                view_formats: &[],
-            })
-        };
-        let sampled_target =
-            wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING;
-        let source = texture(
-            "source_frame",
+    fn check_size(&self, width: u32, height: u32) -> Result<(), RenderError> {
+        let max = self.device.limits().max_texture_dimension_2d;
+        if width == 0 || height == 0 || width > max || height > max {
+            return Err(RenderError::FrameTooLarge { width, height, max });
+        }
+        Ok(())
+    }
+
+    fn upload(&mut self, index: usize, layer: &LayerImage<'_>, canvas: (u32, u32)) {
+        let fits = self
+            .slots
+            .get(index)
+            .is_some_and(|slot| (slot.width, slot.height) == (layer.width, layer.height));
+        if !fits {
+            let slot = self.create_slot(layer.width, layer.height);
+            match self.slots.get_mut(index) {
+                Some(existing) => *existing = slot,
+                None => self.slots.push(slot),
+            }
+        }
+        let slot = &self.slots[index];
+        self.queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &slot.texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            layer.rgba,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(layer.width * 4),
+                rows_per_image: Some(layer.height),
+            },
+            extent(layer.width, layer.height),
+        );
+        let rect = NdcRect::fit((layer.width, layer.height), canvas);
+        Blit::write_placement(&self.queue, &slot.placement, rect, layer.opacity);
+    }
+
+    fn create_slot(&self, width: u32, height: u32) -> Slot {
+        let texture = self.texture(
+            "layer",
+            (width, height),
             SOURCE_FORMAT,
             wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
         );
-        let working = texture("working_frame", WORKING_FORMAT, sampled_target)
-            .create_view(&wgpu::TextureViewDescriptor::default());
-        let output = texture("output_frame", DISPLAY_FORMAT, sampled_target)
-            .create_view(&wgpu::TextureViewDescriptor::default());
-        let source_view = source.create_view(&wgpu::TextureViewDescriptor::default());
-        Targets {
+        let placement = Blit::placement_buffer(&self.device);
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        Slot {
             width,
             height,
-            source_binding: self.bind(&source_view),
-            working_binding: self.bind(&working),
-            source,
-            working,
-            output,
+            binding: self.blit.bind(&self.device, &view, &placement),
+            texture,
+            placement,
         }
     }
 
-    fn bind(&self, view: &wgpu::TextureView) -> wgpu::BindGroup {
-        self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("blit_bind_group"),
-            layout: &self.layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self.sampler),
-                },
-            ],
+    fn create_targets(&self, width: u32, height: u32) -> Targets {
+        let usage = wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING;
+        let view = |label, format| {
+            self.texture(label, (width, height), format, usage)
+                .create_view(&wgpu::TextureViewDescriptor::default())
+        };
+        let working = view("working_frame", WORKING_FORMAT);
+        let placement = Blit::placement_buffer(&self.device);
+        Blit::write_placement(&self.queue, &placement, NdcRect::FULL, 1.0);
+        Targets {
+            width,
+            height,
+            working_binding: self.blit.bind(&self.device, &working, &placement),
+            working,
+            output: view("output_frame", DISPLAY_FORMAT),
+        }
+    }
+
+    fn texture(
+        &self,
+        label: &str,
+        (width, height): (u32, u32),
+        format: wgpu::TextureFormat,
+        usage: wgpu::TextureUsages,
+    ) -> wgpu::Texture {
+        self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some(label),
+            size: extent(width, height),
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage,
+            view_formats: &[],
         })
     }
 }
@@ -250,31 +232,4 @@ fn extent(width: u32, height: u32) -> wgpu::Extent3d {
         height,
         depth_or_array_layers: 1,
     }
-}
-
-fn blit(
-    encoder: &mut wgpu::CommandEncoder,
-    pipeline: &wgpu::RenderPipeline,
-    source: &wgpu::BindGroup,
-    target: &wgpu::TextureView,
-) {
-    let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-        label: Some("blit_pass"),
-        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-            view: target,
-            depth_slice: None,
-            resolve_target: None,
-            ops: wgpu::Operations {
-                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                store: wgpu::StoreOp::Store,
-            },
-        })],
-        depth_stencil_attachment: None,
-        timestamp_writes: None,
-        occlusion_query_set: None,
-        multiview_mask: None,
-    });
-    pass.set_pipeline(pipeline);
-    pass.set_bind_group(0, source, &[]);
-    pass.draw(0..3, 0..1);
 }

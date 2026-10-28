@@ -1,7 +1,10 @@
+mod blit;
 mod compositor;
 mod error;
+mod placement;
 
-pub use compositor::{Compositor, Presented, DISPLAY_FORMAT};
+pub use blit::DISPLAY_FORMAT;
+pub use compositor::{Compositor, LayerImage, Presented};
 pub use error::RenderError;
 
 /// Compositing happens in linear light at half-float precision.
