@@ -1,5 +1,5 @@
 use super::*;
-use crate::{Keyframe, VideoEffect};
+use crate::{AudioEffect, EffectPreset, Keyframe, Param, VideoEffect};
 
 #[test]
 fn pasted_keyframes_keep_their_distance_from_the_clip_start() {
@@ -59,4 +59,45 @@ fn an_effect_dropped_on_a_linked_clip_reaches_only_the_track_kind_it_suits() {
     };
     assert_eq!(clip(V1).look.effects, [VideoEffect::BlackAndWhite]);
     assert!(clip(A1).audio_effects.is_empty());
+}
+
+#[test]
+fn a_preset_keys_its_effects_as_far_into_the_clip_it_lands_on() {
+    let (mut timeline, source) = timeline();
+    timeline
+        .apply(place(source, 0, 0, 100, PlaceMode::Overwrite))
+        .unwrap();
+    timeline
+        .apply(place(source, 200, 500, 100, PlaceMode::Overwrite))
+        .unwrap();
+    let mut blurriness = Param::from_value(0.0);
+    blurriness.keys.push(Keyframe::new(Ticks(10), 2_000));
+    let keyed = ApplyEffect {
+        clips: vec![clip_on(&timeline, V1, 0)],
+        effect: ClipEffect::Video(VideoEffect::GaussianBlur { blurriness }),
+    };
+    timeline.apply(keyed).unwrap();
+    let gain = Param::from_value(6.0);
+    let amplify = ApplyEffect {
+        clips: vec![clip_on(&timeline, A1, 0)],
+        effect: ClipEffect::Audio(AudioEffect::Amplify { gain }),
+    };
+    timeline.apply(amplify).unwrap();
+    let saved = clip_on(&timeline, V1, 0);
+    let preset = EffectPreset::from_clip("Blurred".into(), timeline.sequence(), saved).unwrap();
+
+    let apply = ApplyEffect {
+        clips: vec![clip_on(&timeline, V1, 1)],
+        effect: ClipEffect::Preset(preset),
+    };
+    timeline.apply(apply).unwrap();
+    let clip = |track| {
+        let id = clip_on(&timeline, track, 1);
+        timeline.sequence().clip(id).unwrap().1.clone()
+    };
+    let VideoEffect::GaussianBlur { blurriness } = &clip(V1).look.effects[0] else {
+        panic!("the preset's blur is missing");
+    };
+    assert_eq!(blurriness.keys[0].time, Ticks(510));
+    assert_eq!(clip(A1).audio_effects.len(), 1);
 }

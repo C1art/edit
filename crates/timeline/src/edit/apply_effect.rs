@@ -1,11 +1,14 @@
 use crate::edit::attributes::each_clip;
-use crate::{AudioEffect, ClipId, Edit, Sequence, TimelineError, TrackKind, VideoEffect};
+use crate::{
+    AudioEffect, ClipId, Edit, EffectPreset, Sequence, TimelineError, TrackKind, VideoEffect,
+};
 
-/// An effect from the Effects panel, for the clips of its kind.
+/// An effect or preset from the Effects panel, for the clips of its kind.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClipEffect {
     Video(VideoEffect),
     Audio(AudioEffect),
+    Preset(EffectPreset),
 }
 
 /// Adds an effect after the own effects of `clips` and of the clips linked to them,
@@ -19,7 +22,10 @@ pub struct ApplyEffect {
 
 impl Edit for ApplyEffect {
     fn name(&self) -> &'static str {
-        "Apply Effect"
+        match self.effect {
+            ClipEffect::Preset(_) => "Apply Preset",
+            ClipEffect::Video(_) | ClipEffect::Audio(_) => "Apply Effect",
+        }
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
@@ -31,6 +37,7 @@ impl Edit for ApplyEffect {
                 (ClipEffect::Audio(effect), TrackKind::Audio) => {
                     clip.audio_effects.push(effect.clone());
                 }
+                (ClipEffect::Preset(preset), kind) => preset.apply(kind, clip),
                 _ => {}
             }
         })
