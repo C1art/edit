@@ -4,8 +4,8 @@ use crate::WORKING_FORMAT;
 /// The UI samples the output as an ordinary sRGB texture.
 pub const DISPLAY_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
-/// Three `vec4<f32>`, shared by the placement of a blit and the parameters of a blur.
-pub(crate) const UNIFORM_BYTES: u64 = 48;
+/// Five `vec4<f32>`: the placement and color of a blit, or the parameters of a blur.
+pub(crate) const UNIFORM_BYTES: u64 = 80;
 
 /// The textured-rectangle pipelines and the layout their bindings share.
 pub(crate) struct Blit {

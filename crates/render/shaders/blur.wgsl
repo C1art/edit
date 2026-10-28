@@ -4,8 +4,8 @@
 struct Blur {
     // UV distance between taps, then the sigma and the tap count each side, in taps.
     step_sigma_taps: vec4<f32>,
-    reserved: vec4<f32>,
-    reserved2: vec4<f32>,
+    // The rest of the shared uniform buffer.
+    reserved: array<vec4<f32>, 4>,
 };
 
 struct VertexOutput {

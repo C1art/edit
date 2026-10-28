@@ -10,8 +10,40 @@ pub struct LayerLook {
     /// Fractions of the picture removed from the left, top, right and bottom.
     pub crop: [f32; 4],
     pub opacity: f32,
-    /// Gaussian blur radius in canvas pixels.
+    /// Gaussian blur standard deviation in canvas pixels.
     pub blur: f32,
+    pub color: ColorAdjust,
+}
+
+/// Color correction in linear light, every field neutral at zero except saturation.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ColorAdjust {
+    /// Stops.
+    pub exposure: f32,
+    /// -1 to 1: the slope around mid grey in log space grows by this.
+    pub contrast: f32,
+    /// -1 to 1.
+    pub highlights: f32,
+    /// -1 to 1.
+    pub shadows: f32,
+    /// -1 (cool) to 1 (warm).
+    pub temperature: f32,
+    /// -1 (green) to 1 (magenta).
+    pub tint: f32,
+    /// 1 leaves color as is, 0 is monochrome.
+    pub saturation: f32,
+}
+
+impl ColorAdjust {
+    pub const IDENTITY: Self = Self {
+        exposure: 0.0,
+        contrast: 0.0,
+        highlights: 0.0,
+        shadows: 0.0,
+        temperature: 0.0,
+        tint: 0.0,
+        saturation: 1.0,
+    };
 }
 
 impl LayerLook {
@@ -22,6 +54,7 @@ impl LayerLook {
         crop: [0.0; 4],
         opacity: 1.0,
         blur: 0.0,
+        color: ColorAdjust::IDENTITY,
     };
 }
 
@@ -35,6 +68,7 @@ pub(crate) struct Placement {
     pub(crate) axis_y: [f32; 2],
     pub(crate) crop: [f32; 4],
     pub(crate) opacity: f32,
+    pub(crate) color: ColorAdjust,
 }
 
 impl Placement {
@@ -44,6 +78,7 @@ impl Placement {
         axis_y: [0.0, -2.0],
         crop: [0.0; 4],
         opacity: 1.0,
+        color: ColorAdjust::IDENTITY,
     };
 
     /// Fits the layer to the canvas keeping its aspect ratio, then applies the look.
@@ -61,6 +96,7 @@ impl Placement {
             axis_y: to_ndc(rotate(0.0, height)),
             crop: look.crop.map(|side| side.clamp(0.0, 1.0)),
             opacity: look.opacity.clamp(0.0, 1.0),
+            color: look.color,
         }
     }
 
@@ -68,9 +104,17 @@ impl Placement {
         let [cx, cy] = self.center;
         let [xx, xy] = self.axis_x;
         let [yx, yy] = self.axis_y;
+        let color = &self.color;
         [cx, cy, xx, xy, yx, yy, self.opacity, 0.0]
             .into_iter()
             .chain(self.crop)
+            .chain([
+                color.exposure,
+                color.contrast,
+                color.highlights,
+                color.shadows,
+            ])
+            .chain([color.temperature, color.tint, color.saturation, 0.0])
             .flat_map(f32::to_le_bytes)
             .collect()
     }

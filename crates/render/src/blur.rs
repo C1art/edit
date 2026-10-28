@@ -86,7 +86,7 @@ fn uniform(texel: [f32; 2], sigma: f32) -> Vec<u8> {
         taps,
     ]
     .into_iter()
-    .chain([0.0; 8])
+    .chain([0.0; 16])
     .flat_map(f32::to_le_bytes)
     .collect()
 }
