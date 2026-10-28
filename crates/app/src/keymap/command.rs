@@ -67,6 +67,8 @@ pub enum Command {
     MarkIn,
     MarkOut,
     ClearInOut,
+    MarkClip,
+    MarkSelection,
     GoToIn,
     GoToOut,
     AddMarker,
@@ -97,7 +99,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Self; 87] = [
+    pub const ALL: [Self; 89] = [
         Self::NewProject,
         Self::OpenProject,
         Self::Save,
@@ -158,6 +160,8 @@ impl Command {
         Self::MarkIn,
         Self::MarkOut,
         Self::ClearInOut,
+        Self::MarkClip,
+        Self::MarkSelection,
         Self::GoToIn,
         Self::GoToOut,
         Self::AddMarker,
@@ -262,6 +266,8 @@ impl Command {
             Self::MarkIn => ("mark_in", "Mark In"),
             Self::MarkOut => ("mark_out", "Mark Out"),
             Self::ClearInOut => ("clear_in_out", "Clear In and Out"),
+            Self::MarkClip => ("mark_clip", "Mark Clip"),
+            Self::MarkSelection => ("mark_selection", "Mark Selection"),
             Self::GoToIn => ("go_to_in", "Go to In"),
             Self::GoToOut => ("go_to_out", "Go to Out"),
             Self::AddMarker => ("add_marker", "Add Marker"),
@@ -324,8 +330,8 @@ impl Command {
             | DecreaseVideoHeights | IncreaseAudioHeights | DecreaseAudioHeights
             | ExpandAllTracks | MinimizeAllTracks | MulticamView | RenderInToOut
             | DeleteRenderFiles => "Sequence",
-            MarkIn | MarkOut | ClearInOut | GoToIn | GoToOut | AddMarker | NextMarker
-            | PreviousMarker | ClearMarker => "Markers",
+            MarkIn | MarkOut | ClearInOut | MarkClip | MarkSelection | GoToIn | GoToOut
+            | AddMarker | NextMarker | PreviousMarker | ClearMarker => "Markers",
             SelectionTool
             | TrackSelectForwardTool
             | TrackSelectBackwardTool
@@ -412,6 +418,8 @@ impl Command {
             Self::MarkIn => vec![plain(Key::I)],
             Self::MarkOut => vec![plain(Key::O)],
             Self::ClearInOut => vec![ctrl_shift(Key::X)],
+            Self::MarkClip => vec![plain(Key::X)],
+            Self::MarkSelection => vec![plain(Key::Slash)],
             Self::GoToIn => vec![shift(Key::I)],
             Self::GoToOut => vec![shift(Key::O)],
             Self::AddMarker => vec![plain(Key::M)],

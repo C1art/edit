@@ -20,6 +20,58 @@ impl Editor {
         self.apply_levels(SetMarks { marks });
     }
 
+    /// Marks around what's under the playhead on the targeted tracks, or on every track
+    /// when none is targeted; in the source monitor, around the whole clip.
+    pub(crate) fn mark_clip(&mut self) {
+        if let (Focus::Source, Some(source)) = (self.focus, &mut self.source) {
+            source.marks = Marks {
+                mark_in: Some(Ticks::ZERO),
+                mark_out: Some(source.duration()),
+            };
+            return;
+        }
+        let sequence = self.timeline.sequence();
+        let playhead = self.playhead();
+        let targets = self.view.targets;
+        let any_target = targets.video.is_some() || targets.audio.is_some();
+        let targeted = |kind, index| match kind {
+            TrackKind::Video => targets.video == Some(index),
+            TrackKind::Audio => targets.audio == Some(index),
+        };
+        let spans = sequence
+            .tracks()
+            .filter(|(track, _)| !any_target || targeted(track.kind, track.index))
+            .filter_map(|(_, track)| track.clip_at(playhead))
+            .map(|clip| (clip.start, clip.end()));
+        let around = around(spans);
+        self.mark_around(around, "No clip under the playhead to mark");
+    }
+
+    /// Marks around the selected clips.
+    pub(crate) fn mark_selection(&mut self) {
+        let sequence = self.timeline.sequence();
+        let spans = self
+            .view
+            .selection
+            .iter()
+            .filter_map(|&id| sequence.clip(id))
+            .map(|(_, clip)| (clip.start, clip.end()));
+        let around = around(spans);
+        self.mark_around(around, "Select clips to mark around them");
+    }
+
+    fn mark_around(&mut self, around: Option<(Ticks, Ticks)>, missing: &str) {
+        match around {
+            Some((start, end)) => self.apply_levels(SetMarks {
+                marks: Marks {
+                    mark_in: Some(start),
+                    mark_out: Some(end),
+                },
+            }),
+            None => self.notice(missing),
+        }
+    }
+
     pub(crate) fn clear_sequence_marks(&mut self) {
         self.apply_levels(SetMarks {
             marks: Marks::default(),
@@ -120,4 +172,10 @@ impl Editor {
             source.show_media(clip.source_in..clip.source_out(), clip.source_time(at));
         }
     }
+}
+
+fn around(spans: impl Iterator<Item = (Ticks, Ticks)>) -> Option<(Ticks, Ticks)> {
+    spans.reduce(|(start, end), (other_start, other_end)| {
+        (start.min(other_start), end.max(other_end))
+    })
 }

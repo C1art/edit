@@ -142,6 +142,8 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         Command::RenderInToOut => editor.render_in_to_out(),
         Command::DeleteRenderFiles => editor.delete_render_files(),
         Command::MarkIn | Command::MarkOut | Command::ClearInOut => mark(editor, command),
+        Command::MarkClip => editor.mark_clip(),
+        Command::MarkSelection => editor.mark_selection(),
         Command::GoToIn => editor.go_to_mark(Edge::Head),
         Command::GoToOut => editor.go_to_mark(Edge::Tail),
         Command::AddMarker => editor.add_marker(),

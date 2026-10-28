@@ -257,6 +257,16 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             {
                 editor.mark_sequence_out();
             }
+            for (command, run) in [
+                (Command::MarkClip, Editor::mark_clip as fn(&mut Editor)),
+                (Command::MarkSelection, Editor::mark_selection),
+            ] {
+                let button =
+                    Button::new(command.name()).shortcut_text(editor.keymap.label(command));
+                if ui.add(button).clicked() {
+                    run(editor);
+                }
+            }
             let clear = Button::new("Clear In and Out")
                 .shortcut_text(editor.keymap.label(Command::ClearInOut));
             if ui.add(clear).clicked() {
