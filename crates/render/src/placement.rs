@@ -12,8 +12,11 @@ use crate::wipe::{self, LayerWipe};
 pub struct LayerLook {
     /// From the canvas center to the picture's center, in canvas pixels, +y down.
     pub offset: [f32; 2],
-    /// Relative to the picture fitted to the canvas.
-    pub scale: f32,
+    /// Width and height relative to the picture fitted to the canvas.
+    pub scale: [f32; 2],
+    /// The point of the fitted picture, from its center in canvas pixels, that sits at
+    /// `offset` and that the picture scales and turns about.
+    pub anchor: [f32; 2],
     /// Clockwise.
     pub rotation_degrees: f32,
     /// Fractions of the picture removed from the left, top, right and bottom.
@@ -84,7 +87,8 @@ impl ColorAdjust {
 impl LayerLook {
     pub const IDENTITY: Self = Self {
         offset: [0.0, 0.0],
-        scale: 1.0,
+        scale: [1.0; 2],
+        anchor: [0.0; 2],
         rotation_degrees: 0.0,
         crop: [0.0; 4],
         opacity: 1.0,
@@ -144,14 +148,20 @@ impl Placement {
     pub(crate) fn new(layer: (u32, u32), canvas: (u32, u32), look: &LayerLook) -> Self {
         let (cw, ch) = (canvas.0 as f32, canvas.1 as f32);
         let fitted = [layer.0, layer.1].map(|side| side as f32 * fit_scale(layer, canvas));
-        let [width, height] = fitted.map(|side| side * look.scale);
+        let [width, height] = [0, 1].map(|axis| fitted[axis] * look.scale[axis]);
         let (sin, cos) = look.rotation_degrees.to_radians().sin_cos();
         // Rotating in pixel space, where +y is down, turns positive angles clockwise.
         let rotate = |x: f32, y: f32| [x * cos - y * sin, x * sin + y * cos];
         let [flip_x, flip_y] = look.effects.flip.map(|flip| if flip { -1.0 } else { 1.0 });
         let to_ndc = |[x, y]: [f32; 2]| [x * 2.0 / cw, -y * 2.0 / ch];
         Self {
-            center: to_ndc(look.offset),
+            center: to_ndc({
+                let [ax, ay] = rotate(
+                    look.anchor[0] * look.scale[0],
+                    look.anchor[1] * look.scale[1],
+                );
+                [look.offset[0] - ax, look.offset[1] - ay]
+            }),
             axis_x: to_ndc(rotate(width * flip_x, 0.0)),
             axis_y: to_ndc(rotate(0.0, height * flip_y)),
             crop: look.crop.map(|side| side.clamp(0.0, 1.0)),
@@ -274,7 +284,7 @@ mod tests {
     fn motion_moves_scales_and_turns_clockwise() {
         let look = LayerLook {
             offset: [250.0, 250.0],
-            scale: 0.5,
+            scale: [0.5; 2],
             rotation_degrees: 90.0,
             ..LayerLook::IDENTITY
         };
@@ -284,5 +294,22 @@ mod tests {
         // The top edge now runs down the screen, at half the width.
         assert_eq!(rounded(placement.axis_x), [0.0, -1.0]);
         assert_eq!(rounded(placement.axis_y), [-1.0, 0.0]);
+    }
+
+    #[test]
+    fn the_anchor_stays_put_as_the_picture_scales_and_turns_about_it() {
+        let look = LayerLook {
+            offset: [100.0, 0.0],
+            scale: [2.0, 1.0],
+            anchor: [100.0, 0.0],
+            rotation_degrees: 90.0,
+            ..LayerLook::IDENTITY
+        };
+        let placement = Placement::new((1000, 1000), (1000, 1000), &look);
+        // The anchor, 100 pixels right of center, doubled to 200 and turned to point
+        // down, leaves the center 200 pixels above the anchor's place.
+        assert_eq!(rounded(placement.center), [0.2, 0.4]);
+        assert_eq!(rounded(placement.axis_x), [0.0, -4.0]);
+        assert_eq!(rounded(placement.axis_y), [-2.0, 0.0]);
     }
 }

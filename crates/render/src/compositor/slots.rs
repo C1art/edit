@@ -101,7 +101,8 @@ impl Compositor {
         slot.blend = look.blend;
         let size = (slot.width, slot.height);
         // The blur radius is in canvas pixels, but the blur runs on the layer itself.
-        let sigma = look.blur / (fit_scale(size, canvas) * look.scale.max(0.01));
+        let sigma = look.blur
+            / (fit_scale(size, canvas) * (look.scale[0] * look.scale[1]).abs().sqrt().max(0.01));
         slot.blurred = sigma >= 0.5;
         if slot.blurred && slot.blur.is_none() {
             let blur =

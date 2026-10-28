@@ -13,7 +13,7 @@ fn a_transparent_background_keeps_uncovered_pixels_clear() {
     let mut shrunk = layer(&red, BlendMode::Normal);
     // Covers pixels 1 and 2 each way, half see-through.
     shrunk.look = LayerLook {
-        scale: 0.5,
+        scale: [0.5; 2],
         opacity: 0.5,
         ..shrunk.look
     };

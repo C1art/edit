@@ -13,7 +13,7 @@ fn a_drop_shadow_falls_past_the_picture_it_is_cast_by() {
     // Half size in the middle of the canvas, so the picture covers pixels 1 and 2 each
     // way, and its shadow falls a canvas pixel right and down.
     shrunk.look = LayerLook {
-        scale: 0.5,
+        scale: [0.5; 2],
         effects: PixelEffects {
             style: PictureStyle {
                 shadow_offset: [2.0, 2.0],
