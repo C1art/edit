@@ -1,8 +1,8 @@
-use timeline::{Generator, Rgb, TextAlign, TextStroke, Title, TitleFont};
+use timeline::{Generator, Rgb, Shape, ShapeKind, TextAlign, TextStroke, Title, TitleFont};
 
 use crate::mixer::{response_state, Change};
 
-/// What a title or color matte draws. Typing previews live and commits when the text
+/// What a title, shape or color matte draws. Typing previews live and commits when the text
 /// field loses focus.
 pub(super) fn controls(ui: &mut egui::Ui, generator: &mut Generator) -> Option<Change> {
     if *generator == Generator::AdjustmentLayer {
@@ -17,6 +17,7 @@ pub(super) fn controls(ui: &mut egui::Ui, generator: &mut Generator) -> Option<C
             }
             Generator::Title(title) => change = title_controls(ui, title),
             Generator::AdjustmentLayer => {}
+            Generator::Shape(shape) => change = shape_controls(ui, shape),
         });
     change
 }
@@ -91,22 +92,7 @@ fn title_controls(ui: &mut egui::Ui, title: &mut Title) -> Option<Change> {
         }
     });
     change = color_row(ui, "Fill", &mut title.color).or(change);
-    ui.horizontal(|ui| {
-        let mut stroked = title.stroke.is_some();
-        if ui.checkbox(&mut stroked, "Stroke").changed() {
-            title.stroke = stroked.then(TextStroke::default);
-            change = Some(Change::Commit);
-        }
-        if let Some(stroke) = &mut title.stroke {
-            change = color_button(ui, &mut stroke.color).or(change);
-            let width = ui.add(
-                egui::DragValue::new(&mut stroke.width)
-                    .range(1..=100)
-                    .suffix(" px"),
-            );
-            change = response_state(&width, change);
-        }
-    });
+    change = stroke_row(ui, &mut title.stroke).or(change);
     if ui.checkbox(&mut title.shadow, "Drop shadow").changed() {
         change = Some(Change::Commit);
     }
@@ -118,6 +104,75 @@ fn title_controls(ui: &mut egui::Ui, title: &mut Title) -> Option<Change> {
         }
         if let Some(background) = &mut title.background {
             change = color_button(ui, background).or(change);
+        }
+    });
+    change
+}
+
+fn shape_controls(ui: &mut egui::Ui, shape: &mut Shape) -> Option<Change> {
+    let mut change = None;
+    ui.horizontal(|ui| {
+        for kind in ShapeKind::ALL {
+            if ui
+                .selectable_value(&mut shape.kind, kind, kind.name())
+                .changed()
+            {
+                change = Some(Change::Commit);
+            }
+        }
+    });
+    ui.horizontal(|ui| {
+        for (label, length) in [("Width", &mut shape.width), ("Height", &mut shape.height)] {
+            ui.label(label);
+            let drag = ui.add(egui::DragValue::new(length).range(1..=8000).suffix(" px"));
+            change = response_state(&drag, change);
+        }
+    });
+    if shape.kind == ShapeKind::Rectangle {
+        ui.horizontal(|ui| {
+            ui.label("Corner radius");
+            let limit = shape.width.min(shape.height) / 2;
+            let radius = ui.add(
+                egui::DragValue::new(&mut shape.corner_radius)
+                    .range(0..=limit)
+                    .suffix(" px"),
+            );
+            change = response_state(&radius, change);
+        });
+    }
+    ui.horizontal(|ui| {
+        let mut filled = shape.fill.is_some();
+        if ui.checkbox(&mut filled, "Fill").changed() {
+            shape.fill = filled.then_some(Rgb::WHITE);
+            change = Some(Change::Commit);
+        }
+        if let Some(fill) = &mut shape.fill {
+            change = color_button(ui, fill).or(change);
+        }
+    });
+    change = stroke_row(ui, &mut shape.stroke).or(change);
+    if ui.checkbox(&mut shape.shadow, "Drop shadow").changed() {
+        change = Some(Change::Commit);
+    }
+    change
+}
+
+fn stroke_row(ui: &mut egui::Ui, stroke: &mut Option<TextStroke>) -> Option<Change> {
+    let mut change = None;
+    ui.horizontal(|ui| {
+        let mut stroked = stroke.is_some();
+        if ui.checkbox(&mut stroked, "Stroke").changed() {
+            *stroke = stroked.then(TextStroke::default);
+            change = Some(Change::Commit);
+        }
+        if let Some(stroke) = stroke {
+            change = color_button(ui, &mut stroke.color).or(change);
+            let width = ui.add(
+                egui::DragValue::new(&mut stroke.width)
+                    .range(1..=100)
+                    .suffix(" px"),
+            );
+            change = response_state(&width, change);
         }
     });
     change

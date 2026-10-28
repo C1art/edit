@@ -1,5 +1,7 @@
 use egui::{Button, MenuBar, ViewportCommand};
-use timeline::{Edge, Generator, LinkedSelection, PlaceMode, Rgb, Title, TrackKind};
+use timeline::{
+    Edge, Generator, LinkedSelection, PlaceMode, Rgb, Shape, ShapeKind, Title, TrackKind,
+};
 
 use crate::editor::Editor;
 use crate::keymap::Command;
@@ -49,6 +51,11 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                 }
                 if ui.button("Adjustment Layer").clicked() {
                     placing::new_generated(editor, Generator::AdjustmentLayer);
+                }
+                for kind in ShapeKind::ALL {
+                    if ui.button(kind.name()).clicked() {
+                        placing::new_generated(editor, Generator::Shape(Shape::new(kind)));
+                    }
                 }
             });
             let export = Button::new("Export Media…")
