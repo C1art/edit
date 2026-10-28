@@ -83,7 +83,8 @@ pub use edit::{
 };
 pub use edl::to_edl;
 pub use effect::{
-    ColorMatch, EffectCategory, MatteChannel, RampShape, Rgb, TimecodeSource, VideoEffect,
+    ColorChange, ColorMatch, EffectCategory, MatteChannel, RampShape, Rgb, TimecodeSource,
+    VideoEffect,
 };
 pub use error::TimelineError;
 pub use generator::{

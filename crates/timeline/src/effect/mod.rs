@@ -252,6 +252,67 @@ pub enum VideoEffect {
         /// Percent of the original showing through.
         blend: Param,
     },
+    /// Pushes the picture about along a turbulent noise.
+    TurbulentDisplace {
+        /// How far, in percent of the noise's size.
+        amount: Param,
+        /// Pixels of the clip's picture across one swirl of the noise.
+        size: Param,
+        /// Where the noise is centered, in percent of the picture's width and height.
+        offset: [Param; 2],
+        /// Layers of finer noise, 1 to 10.
+        complexity: Param,
+        /// Degrees; turning it changes the noise smoothly.
+        evolution: Param,
+    },
+    /// Remakes each channel from all three, in percent of each and a constant.
+    ChannelMixer {
+        /// Red from red, green, blue, then the constant.
+        red: [Param; 4],
+        green: [Param; 4],
+        blue: [Param; 4],
+        /// Every channel made as red is.
+        monochrome: bool,
+    },
+    /// Moves the colors near one color's hue to another's.
+    ChangeToColor {
+        from: Rgb,
+        to: Rgb,
+        change: ColorChange,
+        /// Percent of hue, lightness and saturation away from `from` that still match.
+        tolerance: [Param; 3],
+        /// Percent of the tolerance the match fades over.
+        softness: Param,
+    },
+}
+
+/// What Change to Color changes of a matching color.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ColorChange {
+    #[default]
+    Hue,
+    HueLightness,
+    HueLightnessSaturation,
+    /// Takes the target's hue and saturation, keeping its own lightness.
+    Colorize,
+}
+
+impl ColorChange {
+    pub const ALL: [Self; 4] = [
+        Self::Hue,
+        Self::HueLightness,
+        Self::HueLightnessSaturation,
+        Self::Colorize,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Hue => "Hue",
+            Self::HueLightness => "Hue & Lightness",
+            Self::HueLightnessSaturation => "Hue, Lightness & Saturation",
+            Self::Colorize => "Colorize",
+        }
+    }
 }
 
 /// Which time the Timecode effect shows.

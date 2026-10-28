@@ -6,7 +6,7 @@ use crate::{
 /// An effect or preset from the Effects panel, for the clips of its kind.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClipEffect {
-    Video(VideoEffect),
+    Video(Box<VideoEffect>),
     Audio(AudioEffect),
     Preset(EffectPreset),
 }
@@ -32,7 +32,7 @@ impl Edit for ApplyEffect {
         each_clip(sequence, &self.clips, |kind, clip| {
             match (&self.effect, kind) {
                 (ClipEffect::Video(effect), TrackKind::Video) => {
-                    clip.look.effects.push(effect.clone());
+                    clip.look.effects.push(VideoEffect::clone(effect));
                 }
                 (ClipEffect::Audio(effect), TrackKind::Audio) => {
                     clip.audio_effects.push(effect.clone());

@@ -1,11 +1,12 @@
 use super::{
-    ColorMatch, EffectCategory, MatteChannel, RampShape, Rgb, TimecodeSource, VideoEffect,
+    ColorChange, ColorMatch, EffectCategory, MatteChannel, RampShape, Rgb, TimecodeSource,
+    VideoEffect,
 };
 use crate::{Param, Stabilizer};
 
 impl VideoEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 35] {
+    pub fn catalog() -> [Self; 38] {
         [
             Self::GaussianBlur {
                 blurriness: Param::from_value(10.0),
@@ -156,6 +157,26 @@ impl VideoEffect {
                 contrast: Param::from_value(100.0),
                 blend: Param::default(),
             },
+            Self::TurbulentDisplace {
+                amount: Param::from_value(50.0),
+                size: Param::from_value(100.0),
+                offset: [Param::from_value(50.0), Param::from_value(50.0)],
+                complexity: Param::from_value(1.0),
+                evolution: Param::default(),
+            },
+            Self::ChannelMixer {
+                red: [100.0, 0.0, 0.0, 0.0].map(Param::from_value),
+                green: [0.0, 100.0, 0.0, 0.0].map(Param::from_value),
+                blue: [0.0, 0.0, 100.0, 0.0].map(Param::from_value),
+                monochrome: false,
+            },
+            Self::ChangeToColor {
+                from: Rgb::new(255, 0, 0),
+                to: Rgb::new(0, 0, 255),
+                change: ColorChange::Hue,
+                tolerance: [5.0, 50.0, 50.0].map(Param::from_value),
+                softness: Param::from_value(50.0),
+            },
         ]
     }
 
@@ -173,8 +194,11 @@ impl VideoEffect {
             | Self::Mirror { .. }
             | Self::CornerPin { .. }
             | Self::Transform { .. }
-            | Self::Spherize { .. } => EffectCategory::Distort,
-            Self::LeaveColor { .. } => EffectCategory::ColorCorrection,
+            | Self::Spherize { .. }
+            | Self::TurbulentDisplace { .. } => EffectCategory::Distort,
+            Self::LeaveColor { .. } | Self::ChannelMixer { .. } | Self::ChangeToColor { .. } => {
+                EffectCategory::ColorCorrection
+            }
             Self::GradientRamp { .. } => EffectCategory::Generate,
             Self::DropShadow { .. } | Self::Basic3D { .. } => EffectCategory::Perspective,
             Self::BlackAndWhite | Self::GammaCorrection { .. } => EffectCategory::ImageControl,
@@ -232,6 +256,9 @@ impl VideoEffect {
             Self::Basic3D { .. } => "Basic 3D",
             Self::Spherize { .. } => "Spherize",
             Self::Emboss { .. } => "Emboss",
+            Self::TurbulentDisplace { .. } => "Turbulent Displace",
+            Self::ChannelMixer { .. } => "Channel Mixer",
+            Self::ChangeToColor { .. } => "Change to Color",
         }
     }
 }

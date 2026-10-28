@@ -50,7 +50,7 @@ fn an_effect_dropped_on_a_linked_clip_reaches_only_the_track_kind_it_suits() {
         .unwrap();
     let apply = ApplyEffect {
         clips: vec![clip_on(&timeline, A1, 0)],
-        effect: ClipEffect::Video(VideoEffect::BlackAndWhite),
+        effect: ClipEffect::Video(Box::new(VideoEffect::BlackAndWhite)),
     };
     timeline.apply(apply).unwrap();
     let clip = |track| {
@@ -74,7 +74,7 @@ fn a_preset_keys_its_effects_as_far_into_the_clip_it_lands_on() {
     blurriness.keys.push(Keyframe::new(Ticks(10), 2_000));
     let keyed = ApplyEffect {
         clips: vec![clip_on(&timeline, V1, 0)],
-        effect: ClipEffect::Video(VideoEffect::GaussianBlur { blurriness }),
+        effect: ClipEffect::Video(Box::new(VideoEffect::GaussianBlur { blurriness })),
     };
     timeline.apply(keyed).unwrap();
     let gain = Param::from_value(6.0);

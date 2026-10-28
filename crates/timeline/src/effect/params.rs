@@ -122,6 +122,25 @@ impl VideoEffect {
                 contrast,
                 blend,
             } => vec![direction, relief, contrast, blend],
+            Self::TurbulentDisplace {
+                amount,
+                size,
+                offset: [x, y],
+                complexity,
+                evolution,
+            } => vec![amount, size, x, y, complexity, evolution],
+            Self::ChannelMixer {
+                red, green, blue, ..
+            } => red
+                .iter_mut()
+                .chain(green.iter_mut())
+                .chain(blue.iter_mut())
+                .collect(),
+            Self::ChangeToColor {
+                tolerance,
+                softness,
+                ..
+            } => tolerance.iter_mut().chain([softness]).collect(),
         }
     }
 
@@ -245,6 +264,21 @@ impl VideoEffect {
                 contrast,
                 blend,
             } => vec![direction, relief, contrast, blend],
+            Self::TurbulentDisplace {
+                amount,
+                size,
+                offset: [x, y],
+                complexity,
+                evolution,
+            } => vec![amount, size, x, y, complexity, evolution],
+            Self::ChannelMixer {
+                red, green, blue, ..
+            } => red.iter().chain(green.iter()).chain(blue.iter()).collect(),
+            Self::ChangeToColor {
+                tolerance,
+                softness,
+                ..
+            } => tolerance.iter().chain([softness]).collect(),
         }
     }
 }
