@@ -217,7 +217,7 @@ impl Edit for SetSequenceFormat {
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
-        if self.format.width == 0 || self.format.height == 0 {
+        if self.format.width == 0 || self.format.height == 0 || self.format == sequence.format {
             return Err(TimelineError::NothingToEdit);
         }
         sequence.format = self.format;
