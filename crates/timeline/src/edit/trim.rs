@@ -65,7 +65,7 @@ impl Edit for Trim {
     }
 }
 
-/// Shifts each unlocked track from its edit point, or from the primary edit point on
+/// Shifts each edited and sync-locked track from its edit point, or from the primary edit point on
 /// tracks without a trimmed clip.
 pub(super) fn ripple(
     sequence: &mut Sequence,
@@ -76,7 +76,8 @@ pub(super) fn ripple(
     let Some(&(_, primary)) = edit_points.first() else {
         return;
     };
-    for track in ops::unlocked_tracks(sequence) {
+    let edited: Vec<TrackRef> = edit_points.iter().map(|&(track, _)| track).collect();
+    for track in ops::rippled_tracks(sequence, &edited) {
         let from = edit_points
             .iter()
             .find(|(edited, _)| *edited == track)

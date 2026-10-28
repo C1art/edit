@@ -107,7 +107,8 @@ impl Edit for PasteClips {
         }
         match self.mode {
             PlaceMode::Insert => {
-                let tracks = ops::unlocked_tracks(sequence);
+                let edited: Vec<TrackRef> = placed.iter().map(|&(track, _)| track).collect();
+                let tracks = ops::rippled_tracks(sequence, &edited);
                 ops::split(sequence, &tracks, self.at, &mut relinks);
                 ops::shift(sequence, &tracks, self.at, self.clipboard.duration(), &[]);
             }

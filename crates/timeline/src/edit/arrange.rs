@@ -97,13 +97,14 @@ impl Edit for RippleDelete {
                 .map(|(_, clip)| clip.start..clip.end())
                 .collect(),
         );
-        close_gaps(sequence, &gaps);
+        let edited: Vec<TrackRef> = removed.iter().map(|&(track, _)| track).collect();
+        close_gaps(sequence, &gaps, &edited);
         Ok(())
     }
 }
 
 /// Closes the empty space around `at` on `track` by pulling everything after it earlier
-/// on every unlocked track.
+/// on it and every sync-locked track.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CloseGap {
     pub track: TrackRef,
@@ -121,15 +122,15 @@ impl Edit for CloseGap {
             .ok_or(TimelineError::TrackNotFound(self.track))?
             .gap_at(self.at)
             .ok_or(TimelineError::NothingToEdit)?;
-        close_gaps(sequence, &[gap]);
+        close_gaps(sequence, &[gap], &[self.track]);
         Ok(())
     }
 }
 
 /// `gaps` must be sorted and disjoint; they are closed from the last so earlier ones
 /// keep their positions.
-fn close_gaps(sequence: &mut Sequence, gaps: &[Range<Ticks>]) {
-    let tracks = ops::unlocked_tracks(sequence);
+fn close_gaps(sequence: &mut Sequence, gaps: &[Range<Ticks>], edited: &[TrackRef]) {
+    let tracks = ops::rippled_tracks(sequence, edited);
     for gap in gaps.iter().rev() {
         ops::shift(sequence, &tracks, gap.end, gap.start - gap.end, &[]);
     }

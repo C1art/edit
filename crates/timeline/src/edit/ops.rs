@@ -19,6 +19,18 @@ pub(crate) fn unlocked_tracks(sequence: &Sequence) -> Vec<TrackRef> {
         .collect()
 }
 
+/// The tracks an insert or ripple on `edited` shifts: those, and every sync-locked one,
+/// unless locked.
+pub(crate) fn rippled_tracks(sequence: &Sequence, edited: &[TrackRef]) -> Vec<TrackRef> {
+    sequence
+        .tracks()
+        .filter(|(track_ref, track)| {
+            !track.locked && (!track.sync_unlocked || edited.contains(track_ref))
+        })
+        .map(|(track_ref, _)| track_ref)
+        .collect()
+}
+
 pub(crate) fn track_mut(
     sequence: &mut Sequence,
     track: TrackRef,

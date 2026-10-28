@@ -90,7 +90,7 @@ impl Edit for RippleTrimToPlayhead {
 impl RippleTrimToPlayhead {
     /// The span the trim removes.
     pub fn span(&self, sequence: &Sequence) -> Option<Range<Ticks>> {
-        let under: Vec<&Clip> = ops::unlocked_tracks(sequence)
+        let under: Vec<&Clip> = ops::rippled_tracks(sequence, &[])
             .into_iter()
             .filter_map(|track| sequence.track(track)?.clip_at(self.at))
             .filter(|clip| clip.start < self.at)
@@ -126,9 +126,13 @@ fn clear(sequence: &mut Sequence, range: Range<Ticks>) -> Result<(), TimelineErr
     Ok(())
 }
 
+/// Removes `range` from the sync-locked tracks, closing it up.
 fn extract(sequence: &mut Sequence, range: Range<Ticks>) -> Result<(), TimelineError> {
-    clear(sequence, range.clone())?;
-    let tracks = ops::unlocked_tracks(sequence);
+    let tracks = ops::rippled_tracks(sequence, &[]);
+    let mut relinks = Relinks::default();
+    for &track in &tracks {
+        ops::clear(sequence, track, range.clone(), &mut relinks)?;
+    }
     ops::shift(sequence, &tracks, range.end, range.start - range.end, &[]);
     Ok(())
 }

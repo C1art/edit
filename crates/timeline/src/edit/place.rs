@@ -67,7 +67,7 @@ impl Edit for PlaceClip {
         let mut relinks = Relinks::default();
         match self.mode {
             PlaceMode::Insert => {
-                let tracks = ops::unlocked_tracks(sequence);
+                let tracks = ops::rippled_tracks(sequence, &targets);
                 ops::split(sequence, &tracks, self.at, &mut relinks);
                 ops::shift(sequence, &tracks, self.at, duration, &[]);
             }

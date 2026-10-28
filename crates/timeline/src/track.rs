@@ -17,6 +17,9 @@ pub struct Track {
     /// Edits that would change a locked track's clips are rejected.
     #[serde(default)]
     pub locked: bool,
+    /// Sync lock turned off: inserts and ripples on other tracks leave this one be.
+    #[serde(default)]
+    pub sync_unlocked: bool,
     /// While any audio track is soloed, only soloed ones are heard.
     #[serde(default)]
     pub solo: bool,

@@ -80,6 +80,7 @@ pub enum TrackSwitch {
     Mute,
     Lock,
     Solo,
+    SyncLock,
 }
 
 /// Turns a track's mute, lock or solo on or off.
@@ -96,6 +97,7 @@ impl Edit for SetTrackSwitch {
             TrackSwitch::Mute => "Toggle Track Output",
             TrackSwitch::Lock => "Toggle Track Lock",
             TrackSwitch::Solo => "Toggle Track Solo",
+            TrackSwitch::SyncLock => "Toggle Sync Lock",
         }
     }
 
@@ -104,15 +106,17 @@ impl Edit for SetTrackSwitch {
             return Err(TimelineError::NothingToEdit);
         }
         let track = ops::track_mut(sequence, self.track)?;
-        let value = match self.switch {
-            TrackSwitch::Mute => &mut track.muted,
-            TrackSwitch::Lock => &mut track.locked,
-            TrackSwitch::Solo => &mut track.solo,
+        // The track keeps the exception, sync lock being on by default.
+        let (value, on) = match self.switch {
+            TrackSwitch::Mute => (&mut track.muted, self.on),
+            TrackSwitch::Lock => (&mut track.locked, self.on),
+            TrackSwitch::Solo => (&mut track.solo, self.on),
+            TrackSwitch::SyncLock => (&mut track.sync_unlocked, !self.on),
         };
-        if *value == self.on {
+        if *value == on {
             return Err(TimelineError::NothingToEdit);
         }
-        *value = self.on;
+        *value = on;
         Ok(())
     }
 }
