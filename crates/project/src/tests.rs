@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use timeline::{
-    Clip, ClipId, Gain, Keyframe, MediaItem, Pan, SourceId, Ticks, Timebase, Track, Transition,
-    TransitionKind, VideoEffect, VideoFormat,
+    Clip, ClipId, Gain, Generator, Keyframe, MediaItem, Pan, Rgb, SourceId, TextAlign, Ticks,
+    Timebase, Title, TitleFont, Track, Transition, TransitionKind, VideoEffect, VideoFormat,
 };
 
 use super::*;
@@ -17,6 +17,25 @@ fn sample() -> ProjectFile {
         video: Some(VideoFormat::default()),
         has_audio: true,
         proxy: Some(PathBuf::from(r"C:\Footage\Proxies\interview_Proxy.mp4")),
+        generator: None,
+    });
+    sequence.media.push(MediaItem {
+        id: SourceId(2),
+        name: "Title 01".to_owned(),
+        path: PathBuf::new(),
+        duration: Ticks(i64::MAX),
+        video: Some(VideoFormat::default()),
+        has_audio: false,
+        proxy: None,
+        generator: Some(Generator::Title(Title {
+            text: "Line one\n«two»".to_owned(),
+            size: 72,
+            color: Rgb::new(250, 200, 10),
+            align: TextAlign::Right,
+            font: TitleFont::Mono,
+            shadow: false,
+            background: Some(Rgb::BLACK),
+        })),
     });
     let mut clip = Clip::new(ClipId(7), SourceId(1), Ticks(0), Ticks(90_000), Ticks(3));
     clip.gain = Gain(-600);
