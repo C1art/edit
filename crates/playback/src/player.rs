@@ -192,6 +192,7 @@ impl Player {
     pub fn is_busy(&self) -> bool {
         self.is_playing()
             || self.awaiting_seek
+            || (!self.picker.is_settled() && !self.video_ended)
             || self.picker.has_pending()
             || !self.frames.is_empty()
     }
