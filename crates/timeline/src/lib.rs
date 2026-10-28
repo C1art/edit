@@ -25,10 +25,10 @@ pub use color::ColorCorrection;
 pub use edit::{
     clamp_delta, AddGenerated, AddMarker, AddNest, AddTrack, Clipboard, CloseGap, Edge,
     ImportMedia, InNest, Lift, MoveClips, NestClips, PasteClips, PlaceClip, PlaceMode, RateStretch,
-    Razor, RazorTarget, RemoveMarker, RemoveMedia, RemoveTrack, RippleDelete, Roll, SetClipGain,
-    SetClipLook, SetClipSpeed, SetClipVolume, SetClipsEnabled, SetGenerator, SetMasterGain,
-    SetProxy, SetSequenceFormat, SetTrackMix, SetTrackSwitch, SetTransition, Slide, Slip,
-    TrackSwitch, Trim, TrimMode, UpdateMarker,
+    Razor, RazorTarget, RelinkMedia, RemoveMarker, RemoveMedia, RemoveTrack, RenameMedia,
+    RippleDelete, Roll, SetClipGain, SetClipLook, SetClipSpeed, SetClipVolume, SetClipsEnabled,
+    SetGenerator, SetMasterGain, SetProxy, SetSequenceFormat, SetTrackMix, SetTrackSwitch,
+    SetTransition, Slide, Slip, TrackSwitch, Trim, TrimMode, UpdateMarker,
 };
 pub use effect::{Rgb, VideoEffect};
 pub use error::TimelineError;
