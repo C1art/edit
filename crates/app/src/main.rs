@@ -35,6 +35,7 @@ mod placing;
 mod project_files;
 mod project_store;
 mod proxies;
+mod render_previews;
 mod safe_margins;
 mod scene_edits;
 mod scopes;

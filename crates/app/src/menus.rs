@@ -195,6 +195,15 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             if ui.add(add_edit).clicked() {
                 editor.add_edit();
             }
+            let render = Button::new("Render In to Out")
+                .shortcut_text(editor.keymap.label(Command::RenderInToOut));
+            if ui.add(render).clicked() {
+                editor.render_in_to_out();
+            }
+            if ui.button("Delete Render Files").clicked() {
+                editor.delete_render_files();
+            }
+            ui.separator();
             let transition = Button::new("Apply Video Transition")
                 .shortcut_text(editor.keymap.label(Command::VideoTransition));
             if ui.add(transition).clicked() {

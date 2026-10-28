@@ -120,6 +120,8 @@ pub struct TimelineView {
     /// Audio tracks showing their automation in place of their clips' volume lines.
     automation_shown: BTreeSet<TrackRef>,
     pub heights: TrackHeights,
+    /// The costly segments, each with whether a render preview of it is ready.
+    pub render_bar: Vec<(std::ops::Range<Ticks>, bool)>,
 }
 
 impl Default for TimelineView {
@@ -138,6 +140,7 @@ impl Default for TimelineView {
             context_clip: false,
             automation_shown: BTreeSet::new(),
             heights: TrackHeights::default(),
+            render_bar: Vec::new(),
         }
     }
 }
@@ -280,6 +283,7 @@ impl TimelineView {
             paint::guide(&painter, scale.x(at), tracks.top(), tracks.bottom());
         }
         paint::ruler(&ui.painter_at(ruler), ruler, &scale, sequence);
+        paint::render_bar(&ui.painter_at(ruler), ruler, &scale, &self.render_bar);
         markers::paint_in_out(
             &ui.painter_at(ruler.union(tracks)),
             ruler,

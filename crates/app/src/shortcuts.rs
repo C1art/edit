@@ -139,6 +139,8 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
                 .all(editor.timeline.sequence(), expanded);
         }
         Command::MulticamView => editor.toggle_multicam_view(),
+        Command::RenderInToOut => editor.render_in_to_out(),
+        Command::DeleteRenderFiles => editor.delete_render_files(),
         Command::MarkIn | Command::MarkOut | Command::ClearInOut => mark(editor, command),
         Command::GoToIn => editor.go_to_mark(Edge::Head),
         Command::GoToOut => editor.go_to_mark(Edge::Tail),

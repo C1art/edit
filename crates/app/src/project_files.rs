@@ -161,6 +161,9 @@ impl Editor {
         if let Some(offline) = &mut self.offline {
             offline.forget();
         }
+        if let Some(previews) = &mut self.render_previews {
+            previews.forget();
+        }
         // A new timeline restarts its revisions, so the program viewer is updated directly.
         self.shown_revision = revision;
         self.view.prune_selection(self.timeline.sequence());

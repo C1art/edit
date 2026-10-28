@@ -13,6 +13,29 @@ const AUDIO_CLIP: Color32 = Color32::from_rgb(58, 128, 92);
 const OFFLINE_CLIP: Color32 = Color32::from_rgb(170, 40, 40);
 const MIN_LABEL_SPACING: f32 = 90.0;
 
+/// A strip along the foot of the ruler over the segments that need rendering to play
+/// smoothly: red until rendered, green once a preview is ready, as Premiere's.
+pub fn render_bar(
+    painter: &Painter,
+    ruler: Rect,
+    scale: &TimeScale,
+    segments: &[(std::ops::Range<Ticks>, bool)],
+) {
+    for (range, rendered) in segments {
+        let (left, right) = (scale.x(range.start), scale.x(range.end));
+        if right < ruler.left() || left > ruler.right() {
+            continue;
+        }
+        let color = if *rendered {
+            Color32::from_rgb(60, 190, 80)
+        } else {
+            Color32::from_rgb(210, 50, 45)
+        };
+        let strip = Rect::from_x_y_ranges(left..=right, ruler.bottom() - 3.0..=ruler.bottom());
+        painter.rect_filled(strip, 0.0, color);
+    }
+}
+
 pub fn ruler(painter: &Painter, rect: Rect, scale: &TimeScale, sequence: &Sequence) {
     let visuals = painter.ctx().global_style().visuals.clone();
     painter.rect_filled(rect, 0.0, visuals.faint_bg_color);

@@ -62,6 +62,8 @@ pub enum Command {
     ExpandAllTracks,
     MinimizeAllTracks,
     MulticamView,
+    RenderInToOut,
+    DeleteRenderFiles,
     MarkIn,
     MarkOut,
     ClearInOut,
@@ -95,7 +97,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Self; 85] = [
+    pub const ALL: [Self; 87] = [
         Self::NewProject,
         Self::OpenProject,
         Self::Save,
@@ -151,6 +153,8 @@ impl Command {
         Self::ExpandAllTracks,
         Self::MinimizeAllTracks,
         Self::MulticamView,
+        Self::RenderInToOut,
+        Self::DeleteRenderFiles,
         Self::MarkIn,
         Self::MarkOut,
         Self::ClearInOut,
@@ -253,6 +257,8 @@ impl Command {
             Self::ExpandAllTracks => ("expand_all_tracks", "Expand All Tracks"),
             Self::MinimizeAllTracks => ("minimize_all_tracks", "Minimize All Tracks"),
             Self::MulticamView => ("multicam_view", "Multi-Camera View"),
+            Self::RenderInToOut => ("render_in_to_out", "Render In to Out"),
+            Self::DeleteRenderFiles => ("delete_render_files", "Delete Render Files"),
             Self::MarkIn => ("mark_in", "Mark In"),
             Self::MarkOut => ("mark_out", "Mark Out"),
             Self::ClearInOut => ("clear_in_out", "Clear In and Out"),
@@ -316,7 +322,8 @@ impl Command {
             | LiftMarked | ExtractMarked | RippleTrimPrevious | RippleTrimNext | MatchFrame
             | ToggleSnapping | ZoomIn | ZoomOut | ZoomToFit | IncreaseVideoHeights
             | DecreaseVideoHeights | IncreaseAudioHeights | DecreaseAudioHeights
-            | ExpandAllTracks | MinimizeAllTracks | MulticamView => "Sequence",
+            | ExpandAllTracks | MinimizeAllTracks | MulticamView | RenderInToOut
+            | DeleteRenderFiles => "Sequence",
             MarkIn | MarkOut | ClearInOut | GoToIn | GoToOut | AddMarker | NextMarker
             | PreviousMarker | ClearMarker => "Markers",
             SelectionTool
@@ -400,6 +407,8 @@ impl Command {
             Self::ExpandAllTracks => vec![shift(Key::Plus)],
             Self::MinimizeAllTracks => vec![shift(Key::Minus)],
             Self::MulticamView => vec![shift(Key::Num0)],
+            Self::RenderInToOut => vec![plain(Key::Enter)],
+            Self::DeleteRenderFiles => Vec::new(),
             Self::MarkIn => vec![plain(Key::I)],
             Self::MarkOut => vec![plain(Key::O)],
             Self::ClearInOut => vec![ctrl_shift(Key::X)],
