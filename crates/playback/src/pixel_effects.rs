@@ -1,9 +1,11 @@
 use render::{
-    ChangeToColor, ChannelMixer, Checkerboard, ChromaKey, Circle, ColorKey, FourColorGradient,
-    Grid, LeaveColor, LumaKey, Mirror, PixelEffects, PlaneTransform, Ramp, Warp,
+    ChangeToColor, ChannelMixer, Checkerboard, ChromaKey, Circle, ColorKey, FlareLens,
+    FourColorGradient, Grid, LeaveColor, LensFlare, LumaKey, Magnify, Mirror, PixelEffects,
+    PlaneTransform, Ramp, Warp,
 };
 use timeline::{
-    ColorChange, ColorMatch, RampShape, Rgb, Ticks, Timebase, VideoEffect, ULTRA_KEY_REACH,
+    ColorChange, ColorMatch, LensType, MagnifyShape, RampShape, Rgb, Ticks, Timebase, VideoEffect,
+    ULTRA_KEY_REACH,
 };
 
 /// The per-pixel part of an effect stack at source time `time`. The shader runs each
@@ -407,6 +409,40 @@ pub(crate) fn pixel_effects(
                     colors: colors.map(encoded),
                     blend: unit(blend),
                     opacity: unit(opacity).clamp(0.0, 1.0),
+                });
+            }
+            VideoEffect::LensFlare {
+                center,
+                brightness,
+                lens,
+                blend,
+            } => {
+                pixel.optics.lens_flare = Some(LensFlare {
+                    center: center.each_ref().map(unit),
+                    brightness: unit(brightness),
+                    lens: match lens {
+                        LensType::Zoom50To300 => FlareLens::Zoom,
+                        LensType::Prime35 => FlareLens::Prime35,
+                        LensType::Prime105 => FlareLens::Prime105,
+                    },
+                    blend: unit(blend),
+                });
+            }
+            VideoEffect::Magnify {
+                shape,
+                center,
+                magnification,
+                size,
+                feather,
+                opacity,
+            } => {
+                pixel.optics.magnify = Some(Magnify {
+                    center: center.each_ref().map(unit),
+                    magnification: unit(magnification),
+                    size: size.value_at(time),
+                    feather: feather.value_at(time),
+                    opacity: unit(opacity),
+                    square: *shape == MagnifyShape::Square,
                 });
             }
         }
