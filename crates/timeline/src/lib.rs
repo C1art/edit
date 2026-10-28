@@ -53,8 +53,9 @@ pub use edit::{
     RenameBin, RenameMedia, RippleDelete, RippleTrimToPlayhead, Roll, SetCaptions,
     SetClipAudioEffects, SetClipGain, SetClipLabel, SetClipLook, SetClipSpeed, SetClipVolume,
     SetClipsEnabled, SetGenerator, SetLinked, SetMarks, SetMasterGain, SetProxy, SetSegmentSpeed,
-    SetSequenceFormat, SetToFrameSize, SetTrackAutomation, SetTrackMix, SetTrackSwitch,
-    SetTransition, Slide, Slip, SwitchAngle, TrackSwitch, Trim, TrimMode, UpdateMarker,
+    SetSequenceFormat, SetTimeInterpolation, SetToFrameSize, SetTrackAutomation, SetTrackMix,
+    SetTrackSwitch, SetTransition, Slide, Slip, SwitchAngle, TrackSwitch, Trim, TrimMode,
+    UpdateMarker,
 };
 pub use effect::{EffectCategory, MatteChannel, Rgb, VideoEffect};
 pub use error::TimelineError;
@@ -81,7 +82,7 @@ pub use plan::{track_layers_at, PlannedLayer};
 pub use remap::{Anchor, TimeRemap};
 pub use reveal::Reveal;
 pub use secondary::HslSecondary;
-pub use speed::Speed;
+pub use speed::{Speed, TimeInterpolation};
 pub use srt::{parse_srt, to_srt};
 pub use stabilize::{CameraPath, Framing, Pose, Similarity, StabilizeMethod, Stabilizer};
 pub use time::{Ticks, Timebase};

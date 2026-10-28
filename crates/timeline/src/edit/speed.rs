@@ -1,6 +1,8 @@
 use crate::edit::ops;
 use crate::edit::trim::ripple;
-use crate::{ClipId, Edge, Edit, Sequence, Speed, Ticks, TimelineError, TrackRef};
+use crate::{
+    ClipId, Edge, Edit, Sequence, Speed, Ticks, TimeInterpolation, TimelineError, TrackRef,
+};
 
 /// Plays clips at `speed` from the same in point, so their duration changes; reversing
 /// plays the same source range backwards. Without `ripple`, a clip that grows stops at
@@ -104,5 +106,32 @@ impl Edit for RateStretch {
             }
         }
         Ok(())
+    }
+}
+
+/// Sets how clips show the source between their frames.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetTimeInterpolation {
+    pub clips: Vec<ClipId>,
+    pub interpolation: TimeInterpolation,
+}
+
+impl Edit for SetTimeInterpolation {
+    fn name(&self) -> &'static str {
+        "Time Interpolation"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let mut changed = false;
+        for &id in &self.clips {
+            let clip = ops::clip_mut(sequence, id)?;
+            changed |= clip.interpolation != self.interpolation;
+            clip.interpolation = self.interpolation;
+        }
+        if changed {
+            Ok(())
+        } else {
+            Err(TimelineError::NothingToEdit)
+        }
     }
 }

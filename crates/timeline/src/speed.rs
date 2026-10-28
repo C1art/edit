@@ -117,3 +117,28 @@ mod tests {
         assert!(!Speed::new(101, 1).unwrap().is_in_range());
     }
 }
+
+/// How a clip shows source times that fall between its frames, as when slowed down.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum TimeInterpolation {
+    /// Repeats the nearest earlier frame.
+    #[default]
+    FrameSampling,
+    /// Cross-fades from the earlier frame to the later one.
+    FrameBlending,
+}
+
+impl TimeInterpolation {
+    pub const ALL: [Self; 2] = [Self::FrameSampling, Self::FrameBlending];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::FrameSampling => "Frame Sampling",
+            Self::FrameBlending => "Frame Blending",
+        }
+    }
+
+    pub fn is_sampling(&self) -> bool {
+        *self == Self::FrameSampling
+    }
+}

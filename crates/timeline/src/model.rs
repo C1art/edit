@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     AudioEffect, Bin, Captions, FrameRate, Gain, Label, Look, Marker, Marks, MediaItem, Pan, Param,
-    SourceId, Speed, Ticks, TimeRemap, Timebase, Transition,
+    SourceId, Speed, Ticks, TimeInterpolation, TimeRemap, Timebase, Transition,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -106,6 +106,8 @@ pub struct Clip {
     /// trims and slips. Sorted by time.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub markers: Vec<Marker>,
+    #[serde(default, skip_serializing_if = "TimeInterpolation::is_sampling")]
+    pub interpolation: TimeInterpolation,
 }
 
 fn is_first_angle(angle: &usize) -> bool {
@@ -143,6 +145,7 @@ impl Clip {
             remap: None,
             angle: 0,
             markers: Vec::new(),
+            interpolation: TimeInterpolation::FrameSampling,
         }
     }
 

@@ -49,7 +49,7 @@ pub use paste::{Clipboard, PasteClips};
 pub use place::{AddEdits, PlaceClip, PlaceMode, Razor, RazorTarget};
 pub use range::{ExtractMarked, LiftMarked, RippleTrimToPlayhead, SetMarks};
 pub use remap::{AddSpeedKeyframe, RemoveSpeedKeyframe, RemoveTimeRemap, SetSegmentSpeed};
-pub use speed::{RateStretch, SetClipSpeed};
+pub use speed::{RateStretch, SetClipSpeed, SetTimeInterpolation};
 pub use structure::{
     AddTrack, ImportMedia, RemoveMedia, RemoveTrack, SetProxy, SetSequenceFormat, SetTrackSwitch,
     TrackSwitch,
