@@ -24,7 +24,18 @@ pub struct SourceInfo {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VideoInfo {
+    pub width: u32,
+    pub height: u32,
     pub frame_rate: Option<FrameRate>,
+}
+
+/// Which of a file's streams a reader decodes. Timeline playback opens one reader per
+/// stream kind so each can seek on its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Streams {
+    VideoAndAudio,
+    Video,
+    Audio,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,19 +89,38 @@ pub struct MediaReader {
 impl MediaReader {
     /// Timestamps of decoded frames, seeks and the reported duration are all in `timebase`.
     pub fn open(path: &Path, timebase: Timebase) -> Result<Self, MediaError> {
+        Self::open_streams(path, timebase, Streams::VideoAndAudio)
+    }
+
+    pub fn open_streams(
+        path: &Path,
+        timebase: Timebase,
+        streams: Streams,
+    ) -> Result<Self, MediaError> {
         let input = InputContext::open(path)?;
-        let video = StreamDecoder::<Scaler>::open(&input, StreamKind::Video)?;
-        let audio = StreamDecoder::<SampleConverter>::open(&input, StreamKind::Audio)?;
+        let video = match streams {
+            Streams::Audio => None,
+            _ => StreamDecoder::<Scaler>::open(&input, StreamKind::Video)?,
+        };
+        let audio = match streams {
+            Streams::Video => None,
+            _ => StreamDecoder::<SampleConverter>::open(&input, StreamKind::Audio)?,
+        };
         if video.is_none() && audio.is_none() {
             return Err(MediaError::NoPlayableStream);
         }
         let to_ticks = |micros: i64| Ticks(micros).rescale(MICROSECONDS, timebase);
         let info = SourceInfo {
             duration: input.duration().map(to_ticks),
-            video: video.as_ref().map(|video| VideoInfo {
-                frame_rate: input
-                    .frame_rate(video.index)
-                    .and_then(|(num, den)| FrameRate::new(num, den)),
+            video: video.as_ref().map(|video| {
+                let (width, height) = input.frame_size(video.index).unwrap_or((0, 0));
+                VideoInfo {
+                    width,
+                    height,
+                    frame_rate: input
+                        .frame_rate(video.index)
+                        .and_then(|(num, den)| FrameRate::new(num, den)),
+                }
             }),
             has_audio: audio.is_some(),
         };

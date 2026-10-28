@@ -78,6 +78,16 @@ impl InputContext {
         Some((u32::try_from(rate.num).ok()?, u32::try_from(rate.den).ok()?))
     }
 
+    /// The coded picture size declared in the stream header.
+    pub(crate) fn frame_size(&self, index: usize) -> Option<(u32, u32)> {
+        // SAFETY: `stream` returns valid stream pointers owned by the open context, and
+        // every stream has non-null `codecpar`.
+        let codecpar = unsafe { &*(*self.stream(index)?).codecpar };
+        let width = u32::try_from(codecpar.width).ok().filter(|&w| w > 0)?;
+        let height = u32::try_from(codecpar.height).ok().filter(|&h| h > 0)?;
+        Some((width, height))
+    }
+
     /// In `AV_TIME_BASE` units.
     pub(crate) fn start_time(&self) -> Option<i64> {
         // SAFETY: the context is open.
