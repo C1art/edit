@@ -14,6 +14,7 @@ mod frame_picker;
 mod frame_probe;
 mod generated;
 mod grades;
+mod layer_look;
 mod loudness;
 mod mixdown;
 mod optical_flow;

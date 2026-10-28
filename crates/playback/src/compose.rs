@@ -1,25 +1,18 @@
 use std::sync::Arc;
 
-use render::{
-    ColorAdjust, Grade, LayerLook, LayerMask, LayerWipe, Outline, PixelEffects, SecondaryAdjust,
-    Warp, MAX_MASKS, MAX_OUTLINE_POINTS,
-};
+use render::{Grade, LayerLook};
 use timeline::{
-    track_layers_at, BlendMode, ClipId, ColorCorrection, Generator, HslSecondary, Look, Mask,
-    MaskShape, MatteChannel, MediaItem, Param, PlannedLayer, Reveal, Sequence, SourceId, Ticks,
-    TimeInterpolation, Timebase, Track, TrackRef, VideoEffect,
+    track_layers_at, BlendMode, ClipId, Generator, MatteChannel, MediaItem, PlannedLayer, Reveal,
+    Sequence, SourceId, Ticks, TimeInterpolation, Track, TrackRef, VideoEffect,
 };
 
 use crate::clip_decoders::ClipDecoders;
 use crate::generated::{caption_frame, scrolled};
 use crate::grades::grade_for;
-use crate::pixel_effects::{linear, pixel_effects, transform_opacity};
+use crate::layer_look::layer_look;
 use crate::time_effects::{posterized, with_timecode};
 use crate::track_video::TrackVideo;
 use crate::{Layer, LayerPicture, PlaybackError, Resolution};
-
-/// Gaussian blur's "blurriness" reaches about two standard deviations.
-const BLURRINESS_PER_SIGMA: f32 = 2.0;
 
 /// The decoders of one video track.
 pub(crate) type TrackDecoders = ClipDecoders<TrackVideo>;
@@ -88,16 +81,15 @@ fn video_layers(
                 continue;
             };
             let time = plan.clip.source_time(pts);
-            let look = layer_look(
-                &plan.clip.look,
-                time,
-                plan.reveal,
-                canvas,
-                sequence.timebase,
-            );
+            let look_of =
+                |reveal| layer_look(&plan.clip.look, time, reveal, canvas, sequence.timebase);
             let grade = grade_for(&plan.clip.look.color, decoding.warnings);
             if media.generator == Some(Generator::AdjustmentLayer) {
-                adjust(&mut layers, TrackRef::video(index), look, grade);
+                let whole = Reveal {
+                    split: None,
+                    ..plan.reveal
+                };
+                adjust(&mut layers, TrackRef::video(index), look_of(whole), grade);
                 continue;
             }
             // Decoded first, as the clip's own track decoders are borrowed below.
@@ -113,16 +105,19 @@ fn video_layers(
             else {
                 continue;
             };
-            let layer = Layer {
-                track: TrackRef::video(index),
-                picture,
-                look,
-                grade,
-            };
-            layers.push(match matte {
-                Some((matte, pictures)) => matted(layer, matte, pictures),
-                None => layer,
-            });
+            // A split picture is drawn once for each piece, every piece in its place.
+            for piece in plan.reveal.pieces() {
+                let layer = Layer {
+                    track: TrackRef::video(index),
+                    picture: picture.clone(),
+                    look: look_of(piece),
+                    grade: grade.clone(),
+                };
+                layers.push(match &matte {
+                    Some((matte, pictures)) => matted(layer, *matte, pictures.clone()),
+                    None => layer,
+                });
+            }
         }
     }
     layers
@@ -226,18 +221,13 @@ fn matte_layers(
         let decoders = &mut tracks[index];
         if let Some(picture) = clip_picture(sequence, plan, media, decoders, &showing, decoding) {
             let time = plan.clip.source_time(pts);
-            layers.push(Layer {
+            let grade = grade_for(&plan.clip.look.color, decoding.warnings);
+            layers.extend(plan.reveal.pieces().into_iter().map(|piece| Layer {
                 track: TrackRef::video(index),
-                picture,
-                look: layer_look(
-                    &plan.clip.look,
-                    time,
-                    plan.reveal,
-                    canvas,
-                    sequence.timebase,
-                ),
-                grade: grade_for(&plan.clip.look.color, decoding.warnings),
-            });
+                picture: picture.clone(),
+                look: layer_look(&plan.clip.look, time, piece, canvas, sequence.timebase),
+                grade: grade.clone(),
+            }));
         }
     }
     layers
@@ -290,151 +280,10 @@ fn adjust(layers: &mut Vec<Layer>, track: TrackRef, look: LayerLook, grade: Opti
     });
 }
 
-/// The look at source time `time`, where its keyframes are, as a transition reveals it
-/// on a canvas of `canvas` pixels.
-fn layer_look(
-    look: &Look,
-    time: Ticks,
-    reveal: Reveal,
-    canvas: [f32; 2],
-    timebase: Timebase,
-) -> LayerLook {
-    let value = |param: &Param| param.value_at(time);
-    let percent = |param: &Param| param.value_at(time) / 100.0;
-    let crop = &look.crop;
-    let position = look.motion.position.each_ref().map(value);
-    // Zooming about the canvas center scales the picture's offset from it too.
-    let offset =
-        [0, 1].map(|axis| (position[axis] + reveal.shift[axis] * canvas[axis]) * reveal.zoom);
-    LayerLook {
-        offset,
-        scale: look
-            .motion
-            .scale_at(time)
-            .map(|percent| percent / 100.0 * reveal.zoom),
-        anchor: look.motion.anchor.each_ref().map(value),
-        rotation_degrees: value(&look.motion.rotation),
-        crop: [&crop.left, &crop.top, &crop.right, &crop.bottom].map(percent),
-        opacity: percent(&look.opacity) * transform_opacity(&look.effects, time) * reveal.fade,
-        opacity_masks: opacity_masks(&look.masks, time),
-        blur: look.blurriness_at(time) / BLURRINESS_PER_SIGMA,
-        color: color_adjust(&look.color, time),
-        wipes: reveal.wipes.map(|wipe| {
-            wipe.map(|wipe| LayerWipe {
-                pattern: wipe.pattern,
-                from: wipe.from,
-                progress: wipe.progress,
-                sweep: wipe.sweep,
-                border: f32::from(wipe.border.width) / canvas[1],
-                border_color: linear(wipe.border.color),
-            })
-        }),
-        wash: reveal.wash,
-        effects: turned(pixel_effects(&look.effects, time, timebase), reveal, canvas),
-        blend: reveal.blend.unwrap_or(look.blend),
-    }
-}
-
-/// `effects` with the transition's turn last, after the clip's own warps.
-fn turned(mut effects: PixelEffects, reveal: Reveal, [width, height]: [f32; 2]) -> PixelEffects {
-    let Some(turn) = reveal.turn else {
-        return effects;
-    };
-    let aspect = width / height.max(1.0);
-    let pivot = match (turn.cube, turn.vertical) {
-        (false, _) => 0.0,
-        (true, false) => aspect / 2.0,
-        (true, true) => 0.5,
-    };
-    let (swivel, tilt) = match turn.vertical {
-        false => (turn.angle, 0.0),
-        true => (0.0, turn.angle),
-    };
-    // A cube backs away as it turns, keeping its near edge clear of the eye.
-    let distance = pivot * (2.0 * turn.angle).sin().abs() / 2.0;
-    effects.reshape.push(Warp::Turn {
-        swivel,
-        tilt,
-        distance,
-        pivot,
-    });
-    effects
-}
-
-fn color_adjust(color: &ColorCorrection, time: Ticks) -> ColorAdjust {
-    let unit = |param: &Param| param.value_at(time) / 100.0;
-    ColorAdjust {
-        exposure: color.exposure.value_at(time),
-        contrast: unit(&color.contrast),
-        highlights: unit(&color.highlights),
-        shadows: unit(&color.shadows),
-        whites: unit(&color.whites),
-        blacks: unit(&color.blacks),
-        wheels: [
-            &color.shadow_wheel,
-            &color.midtone_wheel,
-            &color.highlight_wheel,
-        ]
-        .map(|wheel| wheel.params().map(unit)),
-        temperature: unit(&color.temperature),
-        tint: unit(&color.tint),
-        saturation: unit(&color.saturation),
-        vibrance: unit(&color.vibrance),
-        look_intensity: unit(&color.look_intensity),
-        secondary: secondary_adjust(&color.secondary, time),
-    }
-}
-
-fn secondary_adjust(secondary: &HslSecondary, time: Ticks) -> Option<SecondaryAdjust> {
-    if !secondary.enabled {
-        return None;
-    }
-    let unit = |param: &Param| param.value_at(time) / 100.0;
-    let turns = |param: &Param| param.value_at(time) / 360.0;
-    Some(SecondaryAdjust {
-        hue: turns(&secondary.hue),
-        hue_width: turns(&secondary.hue_width),
-        saturation_range: secondary.saturation_range.each_ref().map(unit),
-        lightness_range: secondary.lightness_range.each_ref().map(unit),
-        softness: unit(&secondary.softness),
-        inverted: secondary.inverted,
-        show_mask: secondary.show_mask,
-        temperature: unit(&secondary.temperature),
-        tint: unit(&secondary.tint),
-        contrast: unit(&secondary.contrast),
-        saturation: unit(&secondary.saturation),
-        wheel: secondary.wheel.params().map(unit),
-    })
-}
-
-/// The first [`MAX_MASKS`] masks; the effect controls offer no more. A path still being
-/// drawn masks nothing yet.
-fn opacity_masks(masks: &[Mask], time: Ticks) -> [Option<LayerMask>; MAX_MASKS] {
-    let fraction = |param: &Param| param.value_at(time) / 100.0;
-    let mut layer_masks = [None; MAX_MASKS];
-    let shaped = masks.iter().filter_map(|mask| {
-        let outline = Outline::new(&mask.outline_at(time, MAX_OUTLINE_POINTS));
-        (mask.shape != MaskShape::Path || !outline.is_empty()).then_some((mask, outline))
-    });
-    for (slot, (mask, outline)) in layer_masks.iter_mut().zip(shaped) {
-        *slot = Some(LayerMask {
-            shape: mask.shape,
-            center: mask.center.each_ref().map(fraction),
-            size: mask.size.each_ref().map(fraction),
-            rotation_degrees: mask.rotation.value_at(time),
-            feather: mask.feather.value_at(time),
-            expansion: mask.expansion.value_at(time),
-            opacity: fraction(&mask.opacity),
-            inverted: mask.inverted,
-            outline,
-        });
-    }
-    layer_masks
-}
 #[cfg(test)]
 mod tests {
     use media::VideoFrame;
-    use timeline::Param;
+    use timeline::{Look, Param, Timebase};
 
     use super::*;
 
