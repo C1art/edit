@@ -1,9 +1,13 @@
 use render::{ChromaKey, PixelEffects};
-use timeline::{Rgb, Ticks, VideoEffect};
+use timeline::{Rgb, Ticks, Timebase, VideoEffect};
 
 /// The per-pixel part of an effect stack at source time `time`. The shader runs each
 /// kind of effect once, so repeats of a kind combine, the last one's colors winning.
-pub(crate) fn pixel_effects(effects: &[VideoEffect], time: Ticks) -> PixelEffects {
+pub(crate) fn pixel_effects(
+    effects: &[VideoEffect],
+    time: Ticks,
+    timebase: Timebase,
+) -> PixelEffects {
     let unit = |param: &timeline::Param| param.value_at(time) / 100.0;
     let mut pixel = PixelEffects::NONE;
     for effect in effects {
@@ -52,6 +56,34 @@ pub(crate) fn pixel_effects(effects: &[VideoEffect], time: Ticks) -> PixelEffect
             VideoEffect::DirectionalBlur { direction, length } => {
                 pixel.style.blur_direction = direction.value_at(time).to_radians();
                 pixel.style.blur_length = length.value_at(time).max(0.0);
+            }
+            VideoEffect::DropShadow {
+                color,
+                opacity,
+                direction,
+                distance,
+                softness,
+            } => {
+                let toward = direction.value_at(time).to_radians();
+                let distance = distance.value_at(time);
+                pixel.style.shadow_offset = [toward.sin(), -toward.cos()].map(|d| d * distance);
+                pixel.style.shadow_softness = softness.value_at(time).max(0.0);
+                pixel.style.shadow_opacity = unit(opacity).clamp(0.0, 1.0);
+                pixel.style.shadow_color = linear(*color);
+            }
+            VideoEffect::WaveWarp {
+                height,
+                width,
+                direction,
+                speed,
+            } => {
+                pixel.style.wave_height = height.value_at(time);
+                pixel.style.wave_width = width.value_at(time).max(1.0);
+                pixel.style.wave_direction = direction.value_at(time).to_radians();
+                // Kept within a wave of zero, so long clips don't lose precision.
+                let seconds = time.0 as f64 * f64::from(timebase.num()) / f64::from(timebase.den());
+                let waves = seconds * f64::from(speed.value_at(time));
+                pixel.style.wave_phase = waves.rem_euclid(1.0) as f32;
             }
             VideoEffect::HorizontalFlip => pixel.flip[0] = !pixel.flip[0],
             VideoEffect::VerticalFlip => pixel.flip[1] = !pixel.flip[1],

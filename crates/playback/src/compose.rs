@@ -7,7 +7,7 @@ use render::{
 use timeline::{
     track_layers_at, BlendMode, ClipId, ColorCorrection, Generator, HslSecondary, Look, Mask,
     MaskShape, MatteChannel, MediaItem, Param, PlannedLayer, Reveal, Sequence, SourceId, Ticks,
-    Track, TrackRef, VideoEffect,
+    Timebase, Track, TrackRef, VideoEffect,
 };
 
 use crate::clip_decoders::ClipDecoders;
@@ -86,11 +86,13 @@ fn video_layers(
             let Some(media) = sequence.media_item(plan.clip.source) else {
                 continue;
             };
+            let time = plan.clip.source_time(pts);
             let look = layer_look(
                 &plan.clip.look,
-                plan.clip.source_time(pts),
+                time,
                 plan.reveal,
                 canvas,
+                sequence.timebase,
             );
             let grade = grade_for(&plan.clip.look.color, decoding.warnings);
             if media.generator == Some(Generator::AdjustmentLayer) {
@@ -214,7 +216,13 @@ fn matte_layers(
             layers.push(Layer {
                 track: TrackRef::video(index),
                 picture,
-                look: layer_look(&plan.clip.look, time, plan.reveal, canvas),
+                look: layer_look(
+                    &plan.clip.look,
+                    time,
+                    plan.reveal,
+                    canvas,
+                    sequence.timebase,
+                ),
                 grade: grade_for(&plan.clip.look.color, decoding.warnings),
             });
         }
@@ -271,7 +279,13 @@ fn adjust(layers: &mut Vec<Layer>, track: TrackRef, look: LayerLook, grade: Opti
 
 /// The look at source time `time`, where its keyframes are, as a transition reveals it
 /// on a canvas of `canvas` pixels.
-fn layer_look(look: &Look, time: Ticks, reveal: Reveal, canvas: [f32; 2]) -> LayerLook {
+fn layer_look(
+    look: &Look,
+    time: Ticks,
+    reveal: Reveal,
+    canvas: [f32; 2],
+    timebase: Timebase,
+) -> LayerLook {
     let value = |param: &Param| param.value_at(time);
     let percent = |param: &Param| param.value_at(time) / 100.0;
     let crop = &look.crop;
@@ -290,7 +304,7 @@ fn layer_look(look: &Look, time: Ticks, reveal: Reveal, canvas: [f32; 2]) -> Lay
         color: color_adjust(&look.color, time),
         mask: reveal.mask,
         wash: reveal.wash,
-        effects: pixel_effects(&look.effects, time),
+        effects: pixel_effects(&look.effects, time, timebase),
         blend: look.blend,
     }
 }
@@ -382,7 +396,13 @@ mod tests {
         Layer {
             track: TrackRef::video(track),
             picture: LayerPicture::Frame(Arc::new(frame)),
-            look: layer_look(&Look::default(), Ticks::ZERO, Reveal::FULL, [1.0, 1.0]),
+            look: layer_look(
+                &Look::default(),
+                Ticks::ZERO,
+                Reveal::FULL,
+                [1.0, 1.0],
+                Timebase::HZ_90K,
+            ),
             grade: None,
         }
     }
@@ -391,14 +411,26 @@ mod tests {
     fn adjustment_groups_the_picture_below_and_blends_over_it_when_faded() {
         let mut look = Look::default();
         let mut layers = vec![layer(0), layer(1)];
-        let full = layer_look(&look, Ticks::ZERO, Reveal::FULL, [1.0, 1.0]);
+        let full = layer_look(
+            &look,
+            Ticks::ZERO,
+            Reveal::FULL,
+            [1.0, 1.0],
+            Timebase::HZ_90K,
+        );
         adjust(&mut layers, TrackRef::video(2), full, None);
         assert!(
             matches!(&layers[..], [Layer { picture: LayerPicture::Nest(below), .. }] if below.len() == 2)
         );
 
         look.opacity = Param::from_value(50.0);
-        let faded = layer_look(&look, Ticks::ZERO, Reveal::FULL, [1.0, 1.0]);
+        let faded = layer_look(
+            &look,
+            Ticks::ZERO,
+            Reveal::FULL,
+            [1.0, 1.0],
+            Timebase::HZ_90K,
+        );
         let mut layers = vec![layer(0)];
         adjust(&mut layers, TrackRef::video(1), faded, None);
         assert!(matches!(

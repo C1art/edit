@@ -115,6 +115,28 @@ pub enum VideoEffect {
         /// Sequence pixels.
         length: Param,
     },
+    /// A shadow of the picture's shape behind it.
+    DropShadow {
+        color: Rgb,
+        /// Percent.
+        opacity: Param,
+        /// Degrees clockwise from up that the shadow falls toward.
+        direction: Param,
+        /// Pixels of the clip's picture.
+        distance: Param,
+        softness: Param,
+    },
+    /// Ripples the picture with sine waves that travel as the clip plays.
+    WaveWarp {
+        /// Pixels the picture moves each way.
+        height: Param,
+        /// Pixels from one wave to the next.
+        width: Param,
+        /// Degrees clockwise from up that the waves travel toward.
+        direction: Param,
+        /// Waves passing a point each second.
+        speed: Param,
+    },
 }
 
 /// The groups the effects menu lists effects in, as Premiere's Effects panel does.
@@ -125,17 +147,19 @@ pub enum EffectCategory {
     Distort,
     ImageControl,
     Keying,
+    Perspective,
     Stylize,
     Transform,
 }
 
 impl EffectCategory {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::BlurAndSharpen,
         Self::ColorCorrection,
         Self::Distort,
         Self::ImageControl,
         Self::Keying,
+        Self::Perspective,
         Self::Stylize,
         Self::Transform,
     ];
@@ -147,6 +171,7 @@ impl EffectCategory {
             Self::Distort => "Distort",
             Self::ImageControl => "Image Control",
             Self::Keying => "Keying",
+            Self::Perspective => "Perspective",
             Self::Stylize => "Stylize",
             Self::Transform => "Transform",
         }
@@ -175,7 +200,7 @@ impl MatteChannel {
 
 impl VideoEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 20] {
+    pub fn catalog() -> [Self; 22] {
         [
             Self::GaussianBlur {
                 blurriness: Param::from_value(10.0),
@@ -245,6 +270,19 @@ impl VideoEffect {
                 direction: Param::default(),
                 length: Param::from_value(10.0),
             },
+            Self::DropShadow {
+                color: Rgb::BLACK,
+                opacity: Param::from_value(50.0),
+                direction: Param::from_value(135.0),
+                distance: Param::from_value(10.0),
+                softness: Param::from_value(10.0),
+            },
+            Self::WaveWarp {
+                height: Param::from_value(10.0),
+                width: Param::from_value(40.0),
+                direction: Param::from_value(90.0),
+                speed: Param::from_value(1.0),
+            },
         ]
     }
 
@@ -254,9 +292,11 @@ impl VideoEffect {
                 EffectCategory::BlurAndSharpen
             }
             Self::Tint { .. } | Self::BrightnessContrast { .. } => EffectCategory::ColorCorrection,
-            Self::Twirl { .. } | Self::LensDistortion { .. } | Self::Offset { .. } => {
-                EffectCategory::Distort
-            }
+            Self::Twirl { .. }
+            | Self::LensDistortion { .. }
+            | Self::Offset { .. }
+            | Self::WaveWarp { .. } => EffectCategory::Distort,
+            Self::DropShadow { .. } => EffectCategory::Perspective,
             Self::BlackAndWhite | Self::GammaCorrection { .. } => EffectCategory::ImageControl,
             Self::UltraKey { .. } | Self::TrackMatteKey { .. } => EffectCategory::Keying,
             Self::Invert { .. }
@@ -291,6 +331,8 @@ impl VideoEffect {
             Self::Twirl { .. } => "Twirl",
             Self::LensDistortion { .. } => "Lens Distortion",
             Self::DirectionalBlur { .. } => "Directional Blur",
+            Self::DropShadow { .. } => "Drop Shadow",
+            Self::WaveWarp { .. } => "Wave Warp",
         }
     }
 
@@ -339,6 +381,19 @@ impl VideoEffect {
                 softness,
                 ..
             } => vec![tolerance, softness],
+            Self::DropShadow {
+                opacity,
+                direction,
+                distance,
+                softness,
+                ..
+            } => vec![opacity, direction, distance, softness],
+            Self::WaveWarp {
+                height,
+                width,
+                direction,
+                speed,
+            } => vec![height, width, direction, speed],
         }
     }
 
@@ -387,6 +442,19 @@ impl VideoEffect {
                 softness,
                 ..
             } => vec![tolerance, softness],
+            Self::DropShadow {
+                opacity,
+                direction,
+                distance,
+                softness,
+                ..
+            } => vec![opacity, direction, distance, softness],
+            Self::WaveWarp {
+                height,
+                width,
+                direction,
+                speed,
+            } => vec![height, width, direction, speed],
         }
     }
 }
