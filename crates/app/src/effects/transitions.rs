@@ -1,7 +1,7 @@
 use egui::DragValue;
 use timeline::{
     nearest_transition_edge, Alignment, Clip, Edge, Rgb, Sequence, SetTransition, Side, Sweep,
-    TrackKind, TrackRef, Transition, TransitionKind,
+    Ticks, TrackKind, TrackRef, Transition, TransitionKind,
 };
 
 use crate::editor::Editor;
@@ -177,24 +177,41 @@ pub fn default_transition(sequence: &Sequence) -> Transition {
 /// Applies the default transition at the cut or clip end nearest the playhead on the
 /// targeted track of `kind`, or on the first such track when none is targeted.
 pub fn apply_default_transition(editor: &mut Editor, kind: TrackKind) {
-    let sequence = editor.timeline.sequence();
+    apply_transition(editor, kind, TransitionKind::CrossDissolve);
+}
+
+/// Like [`apply_default_transition`], with a transition of `transition` kind.
+pub fn apply_transition(editor: &mut Editor, kind: TrackKind, transition: TransitionKind) {
     let targets = &editor.view.targets;
     let track = match kind {
         TrackKind::Video => TrackRef::video(targets.video.unwrap_or(0)),
         TrackKind::Audio => TrackRef::audio(targets.audio.unwrap_or(0)),
     };
-    let Some(edge) = sequence
+    add_transition(editor, track, editor.playhead(), transition);
+}
+
+/// Puts a `kind` transition at the cut or clip end on `track` nearest `at`, keeping the
+/// settings of one already there.
+pub fn add_transition(editor: &mut Editor, track: TrackRef, at: Ticks, kind: TransitionKind) {
+    let sequence = editor.timeline.sequence();
+    let Some((clip, edge)) = sequence
         .track(track)
-        .and_then(|clips| nearest_transition_edge(clips, editor.playhead()))
+        .and_then(|clips| nearest_transition_edge(clips, at))
     else {
         editor.notice(format!("No clip on {track} to add a transition to"));
         return;
     };
-    let (clip, edge) = edge;
-    let transition = Some(default_transition(sequence));
+    let existing = sequence.clip(clip).and_then(|(_, clip)| match edge {
+        Edge::Head => clip.transition_in,
+        Edge::Tail => clip.transition_out,
+    });
+    let transition = Transition {
+        kind,
+        ..existing.unwrap_or_else(|| default_transition(sequence))
+    };
     editor.apply(SetTransition {
         clip,
         edge,
-        transition,
+        transition: Some(transition),
     });
 }

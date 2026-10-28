@@ -1,4 +1,5 @@
 mod clip_art;
+mod drop;
 mod edit_point;
 mod gesture;
 mod header;
@@ -18,10 +19,13 @@ use std::collections::BTreeSet;
 use egui::{Rect, Sense};
 use timeline::{
     AddTrack, ClipId, LinkedSelection, MarkerId, MarkerOwner, RemoveTrack, RenameTrack, Sequence,
-    SetTrackSwitch, SourceId, Ticks, Timeline, TrackKind, TrackRef,
+    SetTrackSwitch, Ticks, Timeline, TrackKind, TrackRef,
 };
 
 use crate::clip_art::ClipArt;
+use crate::effects_panel::EffectDrop;
+use drop::handle_drop;
+pub use drop::MediaDrop;
 pub use edit_point::{EditPoint, TrimType};
 use gesture::{Gesture, PendingEdit};
 use header::HeaderAction;
@@ -77,14 +81,6 @@ impl Targets {
     }
 }
 
-/// Media dropped from the pool onto a track.
-#[derive(Debug, Clone, Copy)]
-pub struct MediaDrop {
-    pub source: SourceId,
-    pub track: TrackRef,
-    pub at: Ticks,
-}
-
 #[derive(Debug, Default)]
 pub struct TimelineOutput {
     pub seek: Option<Ticks>,
@@ -92,6 +88,7 @@ pub struct TimelineOutput {
     pub edit_marker: Option<(MarkerOwner, MarkerId)>,
     pub clear_marker: Option<(MarkerOwner, MarkerId)>,
     pub drop: Option<MediaDrop>,
+    pub effect_drop: Option<EffectDrop>,
     /// A double-clicked clip, whose media to open.
     pub open_clip: Option<ClipId>,
     /// The clip area while a right-click on a clip has its menu open.
@@ -260,7 +257,7 @@ impl TimelineView {
         self.handle_gestures(&response, timeline, scale, top, playhead, &mut output);
         output.clip_menu = self.context_clip.then(|| response.clone());
         output.gap_menu = self.context_gap.then(|| response.clone());
-        let drop_guide = handle_drop(
+        let drop_hint = handle_drop(
             &response,
             timeline.sequence(),
             &self.heights,
@@ -312,8 +309,8 @@ impl TimelineView {
                 rubber_band::paint(&painter, rect, &scale, &envelope);
             }
         }
-        if let Some(at) = drop_guide {
-            paint::guide(&painter, scale.x(at), tracks.top(), tracks.bottom());
+        if let Some(hint) = drop_hint {
+            drop::paint(&painter, hint, &rows, &scale, sequence, tracks);
         }
         paint::ruler(&ui.painter_at(ruler), ruler, &scale, sequence);
         paint::render_bar(&ui.painter_at(ruler), ruler, &scale, &self.render_bar);
@@ -449,35 +446,6 @@ impl TimelineView {
             self.scroll = (playhead - scale.span(width * 0.1)).max(Ticks::ZERO);
         }
     }
-}
-
-/// Reports a pool item released over a track and returns where a hovered one would land.
-fn handle_drop(
-    response: &egui::Response,
-    sequence: &Sequence,
-    heights: &TrackHeights,
-    scale: TimeScale,
-    top: f32,
-    output: &mut TimelineOutput,
-) -> Option<Ticks> {
-    let pos = response.hover_pos()?;
-    let at = scale::nearest_frame(
-        scale.time(pos.x).max(Ticks::ZERO),
-        sequence.format.frame_rate,
-        sequence.timebase,
-    );
-    let rows = layout::rows(sequence, heights, top);
-    if let (Some(source), Some(row)) = (
-        response.dnd_release_payload::<SourceId>(),
-        layout::row_at(&rows, pos.y),
-    ) {
-        output.drop = Some(MediaDrop {
-            source: *source,
-            track: row.track,
-            at,
-        });
-    }
-    response.dnd_hover_payload::<SourceId>().map(|_| at)
 }
 
 fn report(result: Result<(), timeline::TimelineError>, errors: &mut Vec<String>) {

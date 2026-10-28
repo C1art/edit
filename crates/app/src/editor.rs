@@ -68,6 +68,7 @@ pub struct Editor {
     pub(crate) captions: CaptionPanel,
     pub(crate) side_tab: SideTab,
     pub(crate) media_tab: MediaTab,
+    pub(crate) effects_search: String,
     /// The history step last scrolled into view, so the list follows new edits only.
     pub(crate) history_scrolled: Option<usize>,
     pub(crate) marker_filter: crate::markers_panel::MarkerFilter,
@@ -187,6 +188,7 @@ impl Editor {
             captions: CaptionPanel::default(),
             side_tab: SideTab::default(),
             media_tab: MediaTab::Project,
+            effects_search: String::new(),
             history_scrolled: None,
             marker_filter: Default::default(),
             pool: Default::default(),

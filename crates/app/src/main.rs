@@ -8,6 +8,7 @@ mod commands;
 mod duck_dialog;
 mod editor;
 mod effects;
+mod effects_panel;
 mod essential_sound;
 mod export;
 mod export_format;

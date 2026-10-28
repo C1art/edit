@@ -8,7 +8,7 @@ const GAIN_DB: std::ops::RangeInclusive<f32> = -24.0..=24.0;
 const HEARING_HZ: std::ops::RangeInclusive<f32> = 20.0..=20_000.0;
 
 /// The add menu's groups, as Premiere's Effects panel files them.
-const CATEGORIES: [&str; 8] = [
+pub(crate) const CATEGORIES: [&str; 8] = [
     "Amplitude and Compression",
     "Filter and EQ",
     "Modulation",
@@ -19,7 +19,7 @@ const CATEGORIES: [&str; 8] = [
     "Noise Reduction/Restoration",
 ];
 
-fn category(effect: &AudioEffect) -> &'static str {
+pub(crate) fn category(effect: &AudioEffect) -> &'static str {
     match effect {
         AudioEffect::Amplify { .. }
         | AudioEffect::Compressor { .. }

@@ -13,6 +13,7 @@ pub(crate) enum MediaTab {
     Project,
     Markers,
     History,
+    Effects,
 }
 
 impl Editor {
@@ -21,6 +22,7 @@ impl Editor {
             for (tab, name) in [
                 (MediaTab::Project, "Project"),
                 (MediaTab::Markers, "Markers"),
+                (MediaTab::Effects, "Effects"),
                 (MediaTab::History, "History"),
             ] {
                 ui.selectable_value(&mut self.media_tab, tab, RichText::new(name).heading());
@@ -41,6 +43,7 @@ impl Editor {
             }
             MediaTab::Markers => crate::markers_panel::ui(self, ui),
             MediaTab::History => crate::history_panel::ui(self, ui),
+            MediaTab::Effects => crate::effects_panel::ui(self, ui),
         }
         if !self.notices.is_empty() {
             ui.separator();
@@ -120,6 +123,9 @@ impl Editor {
         }
         if let Some(drop) = output.drop {
             crate::placing::drop_media(self, drop);
+        }
+        if let Some(drop) = output.effect_drop {
+            crate::effects_panel::drop_effect(self, drop);
         }
         if let Some(clip) = output.open_clip {
             self.open_clip(clip);

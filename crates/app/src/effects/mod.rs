@@ -33,7 +33,8 @@ pub use color::LutSlot;
 pub use mask_overlay::mask_overlay;
 pub use motion_overlay::motion_overlay;
 pub(crate) use sound::track_effect_controls;
-pub use transitions::apply_default_transition;
+pub(crate) use sound::{category as audio_category, CATEGORIES as AUDIO_CATEGORIES};
+pub use transitions::{add_transition, apply_default_transition, apply_transition};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SideTab {
