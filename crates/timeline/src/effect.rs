@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::Param;
+use crate::{Param, Stabilizer};
 
 /// An sRGB color as stored in a project.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -137,6 +137,8 @@ pub enum VideoEffect {
         /// Waves passing a point each second.
         speed: Param,
     },
+    /// Steadies a shaky camera from an analysis of the clip's motion.
+    WarpStabilizer(Stabilizer),
 }
 
 /// The groups the effects menu lists effects in, as Premiere's Effects panel does.
@@ -200,7 +202,7 @@ impl MatteChannel {
 
 impl VideoEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 22] {
+    pub fn catalog() -> [Self; 23] {
         [
             Self::GaussianBlur {
                 blurriness: Param::from_value(10.0),
@@ -283,6 +285,7 @@ impl VideoEffect {
                 direction: Param::from_value(90.0),
                 speed: Param::from_value(1.0),
             },
+            Self::WarpStabilizer(Stabilizer::default()),
         ]
     }
 
@@ -295,7 +298,8 @@ impl VideoEffect {
             Self::Twirl { .. }
             | Self::LensDistortion { .. }
             | Self::Offset { .. }
-            | Self::WaveWarp { .. } => EffectCategory::Distort,
+            | Self::WaveWarp { .. }
+            | Self::WarpStabilizer(_) => EffectCategory::Distort,
             Self::DropShadow { .. } => EffectCategory::Perspective,
             Self::BlackAndWhite | Self::GammaCorrection { .. } => EffectCategory::ImageControl,
             Self::UltraKey { .. } | Self::TrackMatteKey { .. } => EffectCategory::Keying,
@@ -333,6 +337,7 @@ impl VideoEffect {
             Self::DirectionalBlur { .. } => "Directional Blur",
             Self::DropShadow { .. } => "Drop Shadow",
             Self::WaveWarp { .. } => "Wave Warp",
+            Self::WarpStabilizer(_) => "Warp Stabilizer",
         }
     }
 
@@ -367,7 +372,8 @@ impl VideoEffect {
             Self::HorizontalFlip
             | Self::VerticalFlip
             | Self::BlackAndWhite
-            | Self::TrackMatteKey { .. } => Vec::new(),
+            | Self::TrackMatteKey { .. }
+            | Self::WarpStabilizer(_) => Vec::new(),
             Self::Tint { amount, .. } | Self::Invert { amount } | Self::Sharpen { amount } => {
                 vec![amount]
             }
@@ -428,7 +434,8 @@ impl VideoEffect {
             Self::HorizontalFlip
             | Self::VerticalFlip
             | Self::BlackAndWhite
-            | Self::TrackMatteKey { .. } => Vec::new(),
+            | Self::TrackMatteKey { .. }
+            | Self::WarpStabilizer(_) => Vec::new(),
             Self::Tint { amount, .. } | Self::Invert { amount } | Self::Sharpen { amount } => {
                 vec![amount]
             }
