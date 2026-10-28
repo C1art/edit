@@ -1,10 +1,13 @@
 use std::sync::Arc;
 
-use render::{ColorAdjust, Grade, LayerLook, LayerMask, SecondaryAdjust, MAX_MASKS};
+use render::{
+    ColorAdjust, Grade, LayerLook, LayerMask, Outline, SecondaryAdjust, MAX_MASKS,
+    MAX_OUTLINE_POINTS,
+};
 use timeline::{
     track_layers_at, BlendMode, ClipId, ColorCorrection, Generator, HslSecondary, Look, Mask,
-    MatteChannel, MediaItem, Param, PlannedLayer, Reveal, Sequence, SourceId, Ticks, Track,
-    TrackRef, VideoEffect,
+    MaskShape, MatteChannel, MediaItem, Param, PlannedLayer, Reveal, Sequence, SourceId, Ticks,
+    Track, TrackRef, VideoEffect,
 };
 
 use crate::clip_decoders::ClipDecoders;
@@ -333,11 +336,16 @@ fn secondary_adjust(secondary: &HslSecondary, time: Ticks) -> Option<SecondaryAd
     })
 }
 
-/// The first [`MAX_MASKS`] masks; the effect controls offer no more.
+/// The first [`MAX_MASKS`] masks; the effect controls offer no more. A path still being
+/// drawn masks nothing yet.
 fn opacity_masks(masks: &[Mask], time: Ticks) -> [Option<LayerMask>; MAX_MASKS] {
     let fraction = |param: &Param| param.value_at(time) / 100.0;
     let mut layer_masks = [None; MAX_MASKS];
-    for (slot, mask) in layer_masks.iter_mut().zip(masks) {
+    let shaped = masks.iter().filter_map(|mask| {
+        let outline = Outline::new(&mask.outline_at(time, MAX_OUTLINE_POINTS));
+        (mask.shape != MaskShape::Path || !outline.is_empty()).then_some((mask, outline))
+    });
+    for (slot, (mask, outline)) in layer_masks.iter_mut().zip(shaped) {
         *slot = Some(LayerMask {
             shape: mask.shape,
             center: mask.center.each_ref().map(fraction),
@@ -347,6 +355,7 @@ fn opacity_masks(masks: &[Mask], time: Ticks) -> [Option<LayerMask>; MAX_MASKS] 
             expansion: mask.expansion.value_at(time),
             opacity: fraction(&mask.opacity),
             inverted: mask.inverted,
+            outline,
         });
     }
     layer_masks
