@@ -5,6 +5,22 @@ use crate::Param;
 /// An effect on an audio clip's sound, applied in list order before its volume.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum AudioEffect {
+    /// Raises or lowers the level by `gain` decibels.
+    Amplify {
+        gain: Param,
+    },
+    /// Turns one side down, from -100 (left only) to 100 (right only).
+    Balance {
+        balance: Param,
+    },
+    /// Boosts or cuts the lows below 200 Hz by `boost` decibels.
+    Bass {
+        boost: Param,
+    },
+    /// Boosts or cuts the highs above 4 kHz by `boost` decibels.
+    Treble {
+        boost: Param,
+    },
     /// A shelf below 100 Hz, a bell at `mid_frequency` hertz and a shelf above 8 kHz,
     /// each boosting or cutting by its gain in decibels.
     Equalizer {
@@ -14,9 +30,19 @@ pub enum AudioEffect {
         high: Param,
     },
     /// Removes what lies below `frequency` hertz, such as rumble and handling noise.
-    HighPass { frequency: Param },
+    HighPass {
+        frequency: Param,
+    },
     /// Removes what lies above `frequency` hertz, such as hiss.
-    LowPass { frequency: Param },
+    LowPass {
+        frequency: Param,
+    },
+    /// Removes a narrow band around `frequency` hertz, such as mains hum; a higher `q`
+    /// narrows it.
+    Notch {
+        frequency: Param,
+        q: Param,
+    },
     /// Turns down what rises above `threshold` decibels to `1 / ratio` of its excess,
     /// reacting over `attack` and `release` milliseconds, then lifts the result by
     /// `makeup` decibels.
@@ -27,6 +53,20 @@ pub enum AudioEffect {
         release: Param,
         makeup: Param,
     },
+    /// Lifts the sound by `boost` decibels and keeps its peaks under `ceiling` decibels,
+    /// recovering over `release` milliseconds.
+    HardLimiter {
+        boost: Param,
+        ceiling: Param,
+        release: Param,
+    },
+    /// Mutes the sound while it stays under `threshold` decibels, opening over `attack`
+    /// and closing over `release` milliseconds.
+    NoiseGate {
+        threshold: Param,
+        attack: Param,
+        release: Param,
+    },
     /// Repeats the sound every `time` milliseconds, each repeat `feedback` percent of the
     /// one before, with the repeats mixed in at `mix` percent.
     Delay {
@@ -34,17 +74,50 @@ pub enum AudioEffect {
         feedback: Param,
         mix: Param,
     },
+    /// A room's reflections: `size`, `damping` and `mix` in percent.
+    Reverb {
+        size: Param,
+        damping: Param,
+        mix: Param,
+    },
+    /// Plays the right side on both.
+    FillLeftWithRight,
+    /// Plays the left side on both.
+    FillRightWithLeft,
+    SwapChannels,
+    /// Flips the polarity of both sides.
+    Invert,
 }
 
 impl AudioEffect {
     pub fn params_mut(&mut self) -> Vec<&mut Param> {
         match self {
+            Self::Amplify { gain: level }
+            | Self::Balance { balance: level }
+            | Self::Bass { boost: level }
+            | Self::Treble { boost: level } => vec![level],
             Self::Equalizer {
                 low,
                 mid,
                 mid_frequency,
                 high,
             } => vec![low, mid, mid_frequency, high],
+            Self::Notch { frequency, q } => vec![frequency, q],
+            Self::HardLimiter {
+                boost,
+                ceiling,
+                release,
+            } => vec![boost, ceiling, release],
+            Self::NoiseGate {
+                threshold,
+                attack,
+                release,
+            } => vec![threshold, attack, release],
+            Self::Reverb { size, damping, mix } => vec![size, damping, mix],
+            Self::FillLeftWithRight
+            | Self::FillRightWithLeft
+            | Self::SwapChannels
+            | Self::Invert => Vec::new(),
             Self::HighPass { frequency } | Self::LowPass { frequency } => vec![frequency],
             Self::Compressor {
                 threshold,
@@ -62,8 +135,20 @@ impl AudioEffect {
     }
 
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 5] {
+    pub fn catalog() -> [Self; 17] {
         [
+            Self::Amplify {
+                gain: Param::default(),
+            },
+            Self::Balance {
+                balance: Param::default(),
+            },
+            Self::Bass {
+                boost: Param::default(),
+            },
+            Self::Treble {
+                boost: Param::default(),
+            },
             Self::Equalizer {
                 low: Param::default(),
                 mid: Param::default(),
@@ -76,6 +161,10 @@ impl AudioEffect {
             Self::LowPass {
                 frequency: Param::from_value(12_000.0),
             },
+            Self::Notch {
+                frequency: Param::from_value(60.0),
+                q: Param::from_value(10.0),
+            },
             Self::Compressor {
                 threshold: Param::from_value(-20.0),
                 ratio: Param::from_value(4.0),
@@ -83,16 +172,47 @@ impl AudioEffect {
                 release: Param::from_value(100.0),
                 makeup: Param::default(),
             },
+            Self::HardLimiter {
+                boost: Param::default(),
+                ceiling: Param::from_value(-0.1),
+                release: Param::from_value(80.0),
+            },
+            Self::NoiseGate {
+                threshold: Param::from_value(-50.0),
+                attack: Param::from_value(2.0),
+                release: Param::from_value(100.0),
+            },
             Self::Delay {
                 time: Param::from_value(300.0),
                 feedback: Param::from_value(30.0),
                 mix: Param::from_value(30.0),
             },
+            Self::Reverb {
+                size: Param::from_value(50.0),
+                damping: Param::from_value(50.0),
+                mix: Param::from_value(25.0),
+            },
+            Self::FillLeftWithRight,
+            Self::FillRightWithLeft,
+            Self::SwapChannels,
+            Self::Invert,
         ]
     }
 
     pub fn name(&self) -> &'static str {
         match self {
+            Self::Amplify { .. } => "Amplify",
+            Self::Balance { .. } => "Balance",
+            Self::Bass { .. } => "Bass",
+            Self::Treble { .. } => "Treble",
+            Self::Notch { .. } => "Notch Filter",
+            Self::HardLimiter { .. } => "Hard Limiter",
+            Self::NoiseGate { .. } => "Noise Gate",
+            Self::Reverb { .. } => "Studio Reverb",
+            Self::FillLeftWithRight => "Fill Left with Right",
+            Self::FillRightWithLeft => "Fill Right with Left",
+            Self::SwapChannels => "Swap Channels",
+            Self::Invert => "Invert",
             Self::Equalizer { .. } => "Parametric Equalizer",
             Self::HighPass { .. } => "Highpass",
             Self::LowPass { .. } => "Lowpass",
