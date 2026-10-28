@@ -4,8 +4,8 @@ use std::path::Path;
 use timeline::{FrameRate, Ticks, Timebase};
 
 use crate::{
-    DecodedFrame, EncodeProfile, MediaError, MediaReader, MediaWriter, Streams, VideoFrame,
-    VideoSettings,
+    DecodedFrame, EncodeProfile, MediaError, MediaReader, MediaWriter, RateControl, Streams,
+    VideoCodec, VideoFrame, VideoSettings,
 };
 
 /// Good enough to judge framing and motion; the original is used for export.
@@ -53,10 +53,12 @@ fn transcode(
     let (width, height) = proxy_size((video.width, video.height), max_height);
     reader.set_video_size(Some((width, height)))?;
     let settings = VideoSettings {
+        input_size: (width, height),
         width,
         height,
         frame_rate: rate,
-        crf: PROXY_CRF,
+        codec: VideoCodec::H264,
+        rate_control: RateControl::Quality(PROXY_CRF),
         profile: EncodeProfile::Editing,
     };
     let mut writer = MediaWriter::create(destination, Some(settings), None)?;

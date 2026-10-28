@@ -3,19 +3,21 @@ use std::path::Path;
 use timeline::FrameRate;
 
 use crate::ffi::{Encoder, Frame, OutputContext, Packet, Received, RgbaToYuv};
-use crate::MediaError;
+use crate::{AudioCodec, MediaError, RateControl, VideoCodec};
 
 const STEREO: usize = 2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct VideoSettings {
+    /// Size of the pictures given to [`MediaWriter::write_video`], scaled to the
+    /// encoded size when it differs.
+    pub input_size: (u32, u32),
     /// Both even, as 4:2:0 chroma needs.
     pub width: u32,
     pub height: u32,
     pub frame_rate: FrameRate,
-    /// x264 constant rate factor: lower is better and larger; 18 looks lossless on
-    /// most material.
-    pub crf: u8,
+    pub codec: VideoCodec,
+    pub rate_control: RateControl,
     pub profile: EncodeProfile,
 }
 
@@ -25,12 +27,15 @@ pub enum EncodeProfile {
     #[default]
     Delivery,
     /// Encodes quickly and seeks cheaply, with a keyframe every half second, for proxies.
+    /// Applies to H.264 only.
     Editing,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AudioSettings {
+    pub codec: AudioCodec,
     pub sample_rate: u32,
+    /// Ignored by lossless codecs.
     pub bits_per_second: u32,
 }
 
@@ -52,8 +57,7 @@ struct AudioStream {
     next_pts: i64,
 }
 
-/// Encodes pictures and sound into a file: H.264 and AAC, in the container the file
-/// extension names. Call [`MediaWriter::finish`] to make the file playable.
+/// Encodes pictures and sound into a file, in the container the file extension names. Call [`MediaWriter::finish`] to make the file playable.
 pub struct MediaWriter {
     output: OutputContext,
     packet: Packet,
@@ -78,32 +82,31 @@ impl MediaWriter {
                     return Err(MediaError::InvalidSettings("frame size must be even"));
                 }
                 let size = (settings.width, settings.height);
-                let rate = (settings.frame_rate.num(), settings.frame_rate.den());
-                let encoder =
-                    Encoder::video(size, rate, settings.crf, settings.profile, global_header)?;
+                let encoder = Encoder::video(&settings, global_header)?;
+                let format = encoder.pixel_format();
                 Ok(VideoStream {
                     index: output.add_stream(&encoder)?,
+                    frame: Frame::for_video(size, format)?,
+                    converter: RgbaToYuv::new(settings.input_size, size, format)?,
                     encoder,
-                    frame: Frame::for_video(size)?,
-                    converter: RgbaToYuv::new(size)?,
                     next_pts: 0,
                 })
             })
             .transpose()?;
         let audio = audio
             .map(|settings| {
-                let encoder = Encoder::audio(
-                    settings.sample_rate,
-                    settings.bits_per_second,
-                    global_header,
-                )?;
+                let encoder = Encoder::audio(&settings, global_header)?;
                 // Encoders taking any size get about 20 ms per frame.
                 let frame_size = encoder
                     .frame_size()
                     .unwrap_or(settings.sample_rate as usize / 50);
                 Ok::<_, MediaError>(AudioStream {
                     index: output.add_stream(&encoder)?,
-                    frame: Frame::for_audio(settings.sample_rate, frame_size)?,
+                    frame: Frame::for_audio(
+                        settings.sample_rate,
+                        frame_size,
+                        encoder.sample_format(),
+                    )?,
                     encoder,
                     frame_size,
                     pending: Vec::with_capacity(frame_size * STEREO * 2),
@@ -244,34 +247,61 @@ mod tests {
     use timeline::{Ticks, Timebase};
 
     #[test]
-    #[ignore = "encodes and decodes a real file with FFmpeg"]
-    fn written_file_reads_back_with_matching_duration() {
-        let dir = std::env::temp_dir().join(format!("media-writer-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("out.mp4");
-        let video = VideoSettings {
-            width: 64,
-            height: 36,
+    #[ignore = "encodes and decodes real files with FFmpeg"]
+    fn every_format_reads_back_with_matching_duration() {
+        let video = |codec, width| VideoSettings {
+            input_size: (64, 36),
+            width,
+            height: width * 9 / 16,
             frame_rate: FrameRate::FPS_25,
-            crf: 23,
+            codec,
+            rate_control: RateControl::Bitrate(500_000),
             profile: EncodeProfile::Delivery,
         };
-        let audio = AudioSettings {
+        let audio = |codec| AudioSettings {
+            codec,
             sample_rate: 48_000,
             bits_per_second: 128_000,
         };
-        let mut writer = MediaWriter::create(&path, Some(video), Some(audio)).unwrap();
-        let picture = vec![128u8; 64 * 36 * 4];
-        for _ in 0..25 {
-            writer.write_video(&picture).unwrap();
-            writer.write_audio(&[0.25; 1920 * STEREO]).unwrap();
+        let cases = [
+            (
+                "h264.mp4",
+                Some(video(VideoCodec::H264, 64)),
+                Some(audio(AudioCodec::Aac)),
+            ),
+            ("hevc.mp4", Some(video(VideoCodec::Hevc, 32)), None),
+            (
+                "prores.mov",
+                Some(video(VideoCodec::ProRes422Hq, 128)),
+                Some(audio(AudioCodec::Pcm24)),
+            ),
+            ("sound.wav", None, Some(audio(AudioCodec::Pcm16))),
+            ("sound.flac", None, Some(audio(AudioCodec::Flac))),
+            ("sound.mp3", None, Some(audio(AudioCodec::Mp3))),
+        ];
+        let dir = std::env::temp_dir().join(format!("media-writer-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        for (name, video, audio) in cases {
+            let path = dir.join(name);
+            let mut writer = MediaWriter::create(&path, video, audio).unwrap();
+            let picture = vec![128u8; 64 * 36 * 4];
+            for _ in 0..25 {
+                if video.is_some() {
+                    writer.write_video(&picture).unwrap();
+                }
+                if audio.is_some() {
+                    writer.write_audio(&[0.25; 1920 * STEREO]).unwrap();
+                }
+            }
+            writer.finish().unwrap();
+            let reader = MediaReader::open(&path, Timebase::HZ_90K).unwrap();
+            let duration = reader.info().duration.unwrap();
+            // One second, give or take encoder priming and frame padding.
+            assert!(
+                (duration - Ticks(90_000)).0.abs() < 4_500,
+                "{name}: {duration:?}"
+            );
         }
-        writer.finish().unwrap();
-
-        let reader = MediaReader::open(&path, Timebase::HZ_90K).unwrap();
-        let duration = reader.info().duration.unwrap();
         std::fs::remove_dir_all(&dir).unwrap();
-        // One second, give or take the AAC priming and frame padding.
-        assert!((duration - Ticks(90_000)).0.abs() < 4_500, "{duration:?}");
     }
 }

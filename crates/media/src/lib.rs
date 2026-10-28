@@ -1,3 +1,4 @@
+mod codec;
 mod error;
 mod ffi;
 mod frames;
@@ -8,6 +9,7 @@ mod reader;
 mod seek_trim;
 mod writer;
 
+pub use codec::{AudioCodec, RateControl, VideoCodec};
 pub use error::MediaError;
 pub use frames::{AudioBuffer, DecodedFrame, VideoFrame};
 /// Decodes video on the GPU where the codec and device allow, from the next file opened.

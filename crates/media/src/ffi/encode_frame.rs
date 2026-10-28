@@ -1,6 +1,5 @@
 use ffmpeg_sys_next as sys;
 
-use super::encoder::{AUDIO_FORMAT, VIDEO_FORMAT};
 use super::error::check;
 use super::Frame;
 use crate::MediaError;
@@ -8,12 +7,15 @@ use crate::MediaError;
 const STEREO: usize = 2;
 
 impl Frame {
-    /// A frame with its own picture buffer, in the encoder's pixel format.
-    pub(crate) fn for_video((width, height): (u32, u32)) -> Result<Self, MediaError> {
+    /// A frame with its own picture buffer.
+    pub(crate) fn for_video(
+        (width, height): (u32, u32),
+        format: sys::AVPixelFormat,
+    ) -> Result<Self, MediaError> {
         let mut frame = Self::new()?;
         let invalid = || MediaError::InvalidSettings("frame size out of range");
         let raw = frame.raw_mut();
-        raw.format = VIDEO_FORMAT as i32;
+        raw.format = format as i32;
         raw.width = i32::try_from(width).map_err(|_| invalid())?;
         raw.height = i32::try_from(height).map_err(|_| invalid())?;
         frame.allocate()?;
@@ -21,11 +23,15 @@ impl Frame {
     }
 
     /// A stereo frame with room for `capacity` samples per channel.
-    pub(crate) fn for_audio(sample_rate: u32, capacity: usize) -> Result<Self, MediaError> {
+    pub(crate) fn for_audio(
+        sample_rate: u32,
+        capacity: usize,
+        format: sys::AVSampleFormat,
+    ) -> Result<Self, MediaError> {
         let mut frame = Self::new()?;
         let invalid = || MediaError::InvalidSettings("audio frame size out of range");
         let raw = frame.raw_mut();
-        raw.format = AUDIO_FORMAT as i32;
+        raw.format = format as i32;
         raw.sample_rate = i32::try_from(sample_rate).map_err(|_| invalid())?;
         raw.nb_samples = i32::try_from(capacity).map_err(|_| invalid())?;
         // SAFETY: the frame is freshly allocated, so its layout owns no memory yet.
@@ -55,7 +61,8 @@ impl Frame {
         raw.duration = duration;
     }
 
-    /// Fills an audio frame from interleaved stereo, which must fit its capacity.
+    /// Fills an audio frame in planar float or packed 16- or 32-bit from interleaved
+    /// stereo, which must fit its capacity.
     pub(crate) fn fill_stereo(
         &mut self,
         interleaved: &[f32],
@@ -68,18 +75,40 @@ impl Frame {
         self.make_writable()?;
         let raw = self.raw_mut();
         raw.nb_samples = i32::try_from(samples).map_err(|_| MediaError::InvalidFrame)?;
-        // SAFETY: the frame is writable and planar float with two planes of at least
-        // `capacity` samples, and `samples <= capacity`.
-        let (left, right) = unsafe {
-            (
-                std::slice::from_raw_parts_mut(raw.data[0].cast::<f32>(), samples),
-                std::slice::from_raw_parts_mut(raw.data[1].cast::<f32>(), samples),
-            )
-        };
-        let (frames, _) = interleaved.as_chunks::<STEREO>();
-        for ((&[l, r], left), right) in frames.iter().zip(left).zip(right) {
-            *left = l;
-            *right = r;
+        let format = raw.format;
+        if format == sys::AVSampleFormat::AV_SAMPLE_FMT_FLTP as i32 {
+            // SAFETY: the frame is writable and planar float with two planes of at least
+            // `capacity` samples, and `samples <= capacity`.
+            let (left, right) = unsafe {
+                (
+                    std::slice::from_raw_parts_mut(raw.data[0].cast::<f32>(), samples),
+                    std::slice::from_raw_parts_mut(raw.data[1].cast::<f32>(), samples),
+                )
+            };
+            let (frames, _) = interleaved.as_chunks::<STEREO>();
+            for ((&[l, r], left), right) in frames.iter().zip(left).zip(right) {
+                *left = l;
+                *right = r;
+            }
+        } else if format == sys::AVSampleFormat::AV_SAMPLE_FMT_S16 as i32 {
+            // SAFETY: the frame is writable and packed 16-bit with room for `capacity`
+            // stereo samples, and `samples <= capacity`.
+            let out = unsafe {
+                std::slice::from_raw_parts_mut(raw.data[0].cast::<i16>(), samples * STEREO)
+            };
+            for (out, &sample) in out.iter_mut().zip(interleaved) {
+                *out = (sample.clamp(-1.0, 1.0) * f32::from(i16::MAX)).round() as i16;
+            }
+        } else if format == sys::AVSampleFormat::AV_SAMPLE_FMT_S32 as i32 {
+            // SAFETY: as above, for packed 32-bit.
+            let out = unsafe {
+                std::slice::from_raw_parts_mut(raw.data[0].cast::<i32>(), samples * STEREO)
+            };
+            for (out, &sample) in out.iter_mut().zip(interleaved) {
+                *out = (f64::from(sample.clamp(-1.0, 1.0)) * f64::from(i32::MAX)).round() as i32;
+            }
+        } else {
+            return Err(MediaError::InvalidFrame);
         }
         Ok(())
     }
