@@ -9,6 +9,7 @@ mod remap;
 mod secondary;
 mod sound;
 mod transitions;
+mod video_effects;
 
 use std::path::PathBuf;
 use std::sync::Arc;

@@ -1,7 +1,7 @@
 use std::ops::RangeInclusive;
 
 use egui::{DragValue, RichText};
-use timeline::{BlendMode, Interpolation, Look, MatteChannel, Param, Rgb, Ticks, VideoEffect};
+use timeline::{BlendMode, Interpolation, Look, Param, Ticks};
 
 use super::lane::Lane;
 use super::LutSlot;
@@ -93,14 +93,7 @@ pub(super) fn controls(
                 look.effects.remove(index);
                 rows.commit();
             }
-            ui.menu_button("Add Effect", |ui| {
-                for effect in VideoEffect::catalog() {
-                    if ui.button(effect.name()).clicked() {
-                        look.effects.push(effect);
-                        rows.commit();
-                    }
-                }
-            });
+            super::video_effects::add_menu(ui, &mut rows, &mut look.effects);
         });
     egui::CollapsingHeader::new("Color").show(ui, |ui| {
         super::color::controls(ui, &mut rows, &mut look.color);
@@ -140,108 +133,6 @@ impl Rows {
 
     pub(super) fn commit(&mut self) {
         self.output.change = Some(Change::Commit);
-    }
-
-    fn effect(&mut self, ui: &mut egui::Ui, effect: &mut VideoEffect, video_tracks: usize) {
-        match effect {
-            VideoEffect::GaussianBlur { blurriness } => {
-                self.param(ui, "Blurriness", blurriness, 0.0..=500.0, "");
-            }
-            VideoEffect::HorizontalFlip
-            | VideoEffect::VerticalFlip
-            | VideoEffect::BlackAndWhite => {}
-            VideoEffect::Tint {
-                black,
-                white,
-                amount,
-            } => {
-                self.color(ui, "Map Black To", black);
-                self.color(ui, "Map White To", white);
-                self.param(ui, "Amount", amount, 0.0..=100.0, "%");
-            }
-            VideoEffect::Invert { amount } => {
-                self.param(ui, "Blend", amount, 0.0..=100.0, "%");
-            }
-            VideoEffect::Sharpen { amount } => {
-                self.param(ui, "Amount", amount, 0.0..=500.0, "");
-            }
-            VideoEffect::Vignette {
-                amount,
-                midpoint,
-                feather,
-            } => {
-                self.param(ui, "Amount", amount, -100.0..=100.0, "");
-                self.param(ui, "Midpoint", midpoint, 0.0..=100.0, "");
-                self.param(ui, "Feather", feather, 0.0..=100.0, "");
-            }
-            VideoEffect::UltraKey {
-                color,
-                tolerance,
-                softness,
-            } => {
-                self.color(ui, "Key Color", color);
-                self.param(ui, "Tolerance", tolerance, 0.0..=100.0, "%");
-                self.param(ui, "Softness", softness, 0.0..=100.0, "%");
-            }
-            VideoEffect::TrackMatteKey {
-                matte,
-                channel,
-                reverse,
-            } => {
-                self.choice(ui, "Matte", |ui| {
-                    let name = |track: Option<usize>| {
-                        track.map_or("None".to_owned(), |index| format!("Video {}", index + 1))
-                    };
-                    let mut chosen = false;
-                    egui::ComboBox::from_id_salt("matte")
-                        .selected_text(name(*matte))
-                        .show_ui(ui, |ui| {
-                            let tracks = std::iter::once(None).chain((0..video_tracks).map(Some));
-                            for track in tracks {
-                                chosen |= ui.selectable_value(matte, track, name(track)).clicked();
-                            }
-                        });
-                    chosen
-                });
-                self.choice(ui, "Composite Using", |ui| {
-                    let mut chosen = false;
-                    egui::ComboBox::from_id_salt("matte_channel")
-                        .selected_text(channel.name())
-                        .show_ui(ui, |ui| {
-                            for option in MatteChannel::ALL {
-                                chosen |= ui
-                                    .selectable_value(channel, option, option.name())
-                                    .clicked();
-                            }
-                        });
-                    chosen
-                });
-                self.choice(ui, "Reverse", |ui| ui.checkbox(reverse, "").changed());
-            }
-        }
-    }
-
-    /// A labelled row of controls that return whether they made a choice.
-    fn choice(&mut self, ui: &mut egui::Ui, label: &str, add: impl FnOnce(&mut egui::Ui) -> bool) {
-        ui.horizontal(|ui| {
-            ui.add_space(20.0);
-            ui.add_sized([72.0, 18.0], egui::Label::new(label));
-            if add(ui) {
-                self.commit();
-            }
-        });
-    }
-
-    fn color(&mut self, ui: &mut egui::Ui, label: &str, color: &mut Rgb) {
-        ui.horizontal(|ui| {
-            ui.add_space(20.0);
-            ui.add_sized([72.0, 18.0], egui::Label::new(label));
-            let mut rgb = [color.r, color.g, color.b];
-            if ui.color_edit_button_srgb(&mut rgb).changed() {
-                *color = Rgb::new(rgb[0], rgb[1], rgb[2]);
-                self.commit();
-            }
-        });
     }
 
     /// A value with its keyframe controls: the first button turns animation on and off,
