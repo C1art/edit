@@ -52,7 +52,7 @@ impl Editor {
                 };
                 self.apply_to_pool(MoveToBin { media, bins, to });
             }
-            PoolAction::CreateMulticam(sources) => self.create_multicam(sources),
+            PoolAction::CreateMulticam(sources, sync) => self.sync_multicam(sources, sync),
         }
     }
 
@@ -105,14 +105,18 @@ impl Editor {
         }
     }
 
-    fn create_multicam(&mut self, sources: Vec<SourceId>) {
+    pub(crate) fn create_multicam(&mut self, sources: Vec<SourceId>, starts: Vec<Ticks>) {
         let pool = self.timeline.project();
         let first = sources.first().and_then(|&id| pool.media_item(id));
         let name = first.map_or_else(
             || "Multicam".to_owned(),
             |item| format!("{} Multicam", item.name),
         );
-        if self.apply_to_pool(CreateMulticam { sources, name }) {
+        if self.apply_to_pool(CreateMulticam {
+            sources,
+            starts,
+            name,
+        }) {
             if let Some(item) = self.timeline.project().media.last() {
                 self.pool.selected = vec![item.id];
                 self.notice(format!(

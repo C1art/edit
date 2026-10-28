@@ -4,6 +4,7 @@ mod rows;
 use egui::{CollapsingHeader, DragAndDrop, Response, RichText, Sense, StrokeKind, TextEdit};
 use timeline::{Bin, BinId, MediaItem, Sequence, SourceId};
 
+use crate::multicam_sync::MulticamSync;
 use crate::proxies::ProxyMaker;
 use rows::{item_row, proxy_menu, rename_field, Field};
 
@@ -24,7 +25,7 @@ pub enum PoolAction {
     RemoveBin(BinId),
     Move(PoolEntry, Option<BinId>),
     /// Makes a multi-camera source sequence of the items, each a camera.
-    CreateMulticam(Vec<SourceId>),
+    CreateMulticam(Vec<SourceId>, MulticamSync),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -211,15 +212,20 @@ impl Pool<'_> {
                 self.action = Some(PoolAction::Open(item.id));
             }
             let can_sync = cameras.len() >= 2 && cameras.contains(&item.id);
-            let multicam = ui
-                .add_enabled(
-                    can_sync,
-                    egui::Button::new("Create Multi-Camera Source Sequence"),
-                )
-                .on_disabled_hover_text("Ctrl+click two or more video clips to use as cameras");
-            if multicam.clicked() {
-                self.action = Some(PoolAction::CreateMulticam(cameras.clone()));
-            }
+            ui.add_enabled_ui(can_sync, |ui| {
+                ui.menu_button("Create Multi-Camera Source Sequence", |ui| {
+                    for (sync, label) in [
+                        (MulticamSync::Start, "Synchronize by Start"),
+                        (MulticamSync::Audio, "Synchronize by Audio"),
+                    ] {
+                        if ui.button(label).clicked() {
+                            self.action = Some(PoolAction::CreateMulticam(cameras.clone(), sync));
+                        }
+                    }
+                })
+            })
+            .response
+            .on_disabled_hover_text("Ctrl+click two or more video clips to use as cameras");
             if item.nest.is_some() && ui.button("Open in Timeline").clicked() {
                 self.action = Some(PoolAction::OpenNest(item.id));
             }

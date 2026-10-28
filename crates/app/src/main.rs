@@ -20,6 +20,7 @@ mod mixer;
 mod monitor;
 mod monitors;
 mod multicam;
+mod multicam_sync;
 mod nesting;
 mod panels;
 mod placing;

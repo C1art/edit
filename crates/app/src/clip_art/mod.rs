@@ -3,6 +3,7 @@ mod waveforms;
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use egui::{ColorImage, TextureHandle, TextureId, TextureOptions};
 use media::{Peaks, VideoFrame};
@@ -17,7 +18,7 @@ const MAX_PICTURES: usize = 480;
 
 enum PeakState {
     Reading,
-    Ready(Peaks),
+    Ready(Arc<Peaks>),
     Failed,
 }
 
@@ -63,7 +64,8 @@ impl ClipArt {
         self.frame += 1;
         if let Some(worker) = &self.waveforms {
             for (path, peaks) in worker.poll() {
-                let state = peaks.map_or(PeakState::Failed, PeakState::Ready);
+                let state =
+                    peaks.map_or(PeakState::Failed, |peaks| PeakState::Ready(Arc::new(peaks)));
                 self.peaks.insert(path, state);
             }
         }
@@ -138,17 +140,29 @@ impl ClipArt {
 
     /// The audio peaks of `path`, starting to read them if they haven't been.
     pub fn peaks(&mut self, path: &Path) -> Option<&Peaks> {
-        if !self.peaks.contains_key(path) {
-            let state = match &self.waveforms {
-                Some(worker) if worker.request(path.to_owned()) => PeakState::Reading,
-                _ => PeakState::Failed,
-            };
-            self.peaks.insert(path.to_owned(), state);
-        }
-        match self.peaks.get(path) {
-            Some(PeakState::Ready(peaks)) => Some(peaks),
+        match self.peak_state(path) {
+            PeakState::Ready(peaks) => Some(peaks),
             _ => None,
         }
+    }
+
+    /// The audio peaks of `path` to hand to another thread: None while they are read,
+    /// then Some(None) for a file without readable sound.
+    pub fn shared_peaks(&mut self, path: &Path) -> Option<Option<Arc<Peaks>>> {
+        match self.peak_state(path) {
+            PeakState::Reading => None,
+            PeakState::Ready(peaks) => Some(Some(Arc::clone(peaks))),
+            PeakState::Failed => Some(None),
+        }
+    }
+
+    fn peak_state(&mut self, path: &Path) -> &PeakState {
+        self.peaks
+            .entry(path.to_owned())
+            .or_insert_with(|| match &self.waveforms {
+                Some(worker) if worker.request(path.to_owned()) => PeakState::Reading,
+                _ => PeakState::Failed,
+            })
     }
 
     /// The picture of `path` at media time `at`, asking for it if needed. Until it
