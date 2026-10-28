@@ -88,6 +88,7 @@ fn clip_markers_show_only_within_the_played_source_at_their_sequence_position() 
             delta: Ticks(50),
             video_tracks: 0,
             audio_tracks: 0,
+            mode: MoveMode::Overwrite,
         })
         .unwrap();
     assert_eq!(shown(&timeline), vec![(200, 250)]);

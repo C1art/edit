@@ -32,7 +32,7 @@ mod trim;
 #[cfg(test)]
 mod tests;
 
-pub use arrange::{CloseGap, Lift, MoveClips, RippleDelete};
+pub use arrange::{CloseGap, Lift, MoveClips, MoveMode, RippleDelete};
 pub use attributes::{Attribute, PasteAttributes, RemoveAttributes};
 pub use bin::{AddBin, MoveToBin, RemoveBin, RenameBin};
 pub use caption::SetCaptions;

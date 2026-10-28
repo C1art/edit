@@ -313,6 +313,7 @@ fn move_overwrites_the_destination_and_creates_missing_tracks() {
             delta: Ticks(250),
             video_tracks: 2,
             audio_tracks: 0,
+            mode: MoveMode::Overwrite,
         })
         .unwrap();
     assert_eq!(spans(&timeline, TrackRef::video(2)), [(250, 350, 0)]);
@@ -512,6 +513,7 @@ mod multicam;
 mod nest;
 mod paste;
 mod range;
+mod rearrange;
 mod remap;
 mod replace;
 mod speed;

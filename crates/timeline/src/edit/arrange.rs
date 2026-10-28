@@ -3,26 +3,59 @@ use std::ops::Range;
 use crate::edit::ops::{self, Relinks};
 use crate::{ClipId, Edit, Sequence, Ticks, TimelineError, TrackKind, TrackRef};
 
-/// Moves clips (and the clips linked to them) in time and across tracks of their kind,
-/// overwriting whatever is at the destination. Tracks are added as needed.
+/// What a move does at either end, as Premiere's plain, Ctrl and Ctrl+Alt drags.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum MoveMode {
+    /// Leaves a gap behind and overwrites the destination.
+    #[default]
+    Overwrite,
+    /// Leaves a gap behind and pushes the destination later to make room.
+    Insert,
+    /// Closes the gap behind, then inserts; neighbouring clips swap places.
+    Rearrange,
+}
+
+/// Moves clips (and the clips linked to them) in time and across tracks of their kind.
+/// Tracks are added as needed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MoveClips {
     pub clips: Vec<ClipId>,
+    /// From where the clips are before the move, even when their gap closes.
     pub delta: Ticks,
     pub video_tracks: isize,
     pub audio_tracks: isize,
+    pub mode: MoveMode,
 }
 
 impl Edit for MoveClips {
     fn name(&self) -> &'static str {
-        "Move"
+        match self.mode {
+            MoveMode::Overwrite => "Move",
+            MoveMode::Insert => "Insert Move",
+            MoveMode::Rearrange => "Rearrange",
+        }
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
         let ids = sequence.with_links(&self.clips);
         let moved = ops::remove(sequence, &ids);
-        if moved.is_empty() {
+        let Some(earliest) = moved.iter().map(|(_, clip)| clip.start).min() else {
             return Err(TimelineError::NothingToEdit);
+        };
+        let mut delta = self.delta;
+        if self.mode == MoveMode::Rearrange {
+            let gaps = ops::merge_ranges(
+                moved
+                    .iter()
+                    .map(|(_, clip)| clip.start..clip.end())
+                    .collect(),
+            );
+            let edited: Vec<TrackRef> = moved.iter().map(|&(track, _)| track).collect();
+            close_gaps(sequence, &gaps, &edited);
+            let destination = earliest + self.delta;
+            for gap in gaps.iter().filter(|gap| gap.start < destination) {
+                delta = delta - (gap.end.min(destination) - gap.start);
+            }
         }
         let mut placed = Vec::with_capacity(moved.len());
         for (from, mut clip) in moved {
@@ -39,12 +72,27 @@ impl Edit for MoveClips {
             if tracks.len() <= index {
                 tracks.resize_with(index + 1, Default::default);
             }
-            clip.start = clip.start + self.delta;
+            clip.start = clip.start + delta;
             placed.push((to, clip));
         }
         let mut relinks = Relinks::default();
-        for (to, clip) in &placed {
-            ops::clear(sequence, *to, clip.start..clip.end(), &mut relinks)?;
+        match self.mode {
+            MoveMode::Overwrite => {
+                for (to, clip) in &placed {
+                    ops::clear(sequence, *to, clip.start..clip.end(), &mut relinks)?;
+                }
+            }
+            MoveMode::Insert | MoveMode::Rearrange => {
+                let start = placed.iter().map(|(_, clip)| clip.start).min();
+                let end = placed.iter().map(|(_, clip)| clip.end()).max();
+                let (Some(start), Some(end)) = (start, end) else {
+                    return Err(TimelineError::NothingToEdit);
+                };
+                let targets: Vec<TrackRef> = placed.iter().map(|&(to, _)| to).collect();
+                let tracks = ops::rippled_tracks(sequence, &targets);
+                ops::split(sequence, &tracks, start, &mut relinks);
+                ops::shift(sequence, &tracks, start, end - start, &[]);
+            }
         }
         for (to, clip) in placed {
             ops::insert(sequence, to, clip)?;

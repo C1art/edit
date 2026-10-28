@@ -46,6 +46,7 @@ fn with_linked_selection_off_a_clip_moves_alone_and_slips_out_of_sync() {
             delta: Ticks(10),
             video_tracks: 0,
             audio_tracks: 0,
+            mode: MoveMode::Overwrite,
         })
         .unwrap();
     assert_eq!(spans(&timeline, V1), [(10, 110, 0)]);
@@ -98,6 +99,7 @@ fn an_out_of_sync_clip_moves_or_slips_back_into_sync() {
             delta: Ticks(10),
             video_tracks: 0,
             audio_tracks: 0,
+            mode: MoveMode::Overwrite,
         })
         .unwrap();
     let into_sync = |method| IntoSync {
