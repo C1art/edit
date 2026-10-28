@@ -35,6 +35,12 @@ pub enum TimelineError {
     InvalidSubtitles {
         line: usize,
     },
+    /// An interchange file isn't well-formed XML at this line, counting from one.
+    InvalidXml {
+        line: usize,
+    },
+    /// An interchange file is XML but holds no sequence this editor can read.
+    UnreadableSequence(String),
 }
 
 impl fmt::Display for TimelineError {
@@ -71,6 +77,8 @@ impl fmt::Display for TimelineError {
             Self::InvalidSubtitles { line } => {
                 write!(f, "subtitle timing on line {line} is not HH:MM:SS,mmm")
             }
+            Self::InvalidXml { line } => write!(f, "the XML is malformed at line {line}"),
+            Self::UnreadableSequence(reason) => write!(f, "cannot read the sequence: {reason}"),
         }
     }
 }

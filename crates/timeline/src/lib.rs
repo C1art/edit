@@ -43,6 +43,8 @@ mod track;
 mod transition;
 mod validate;
 mod xmeml;
+mod xmeml_import;
+mod xml;
 
 pub use audio_effect::AudioEffect;
 pub use audio_plan::{audio_fade, audio_span, clip_level, track_automation};
@@ -109,3 +111,4 @@ pub use time::{Ticks, Timebase};
 pub use timecode::{FrameRate, Timecode};
 pub use transition::{nearest_transition_edge, Transition, TransitionKind};
 pub use xmeml::to_xmeml;
+pub use xmeml_import::{read_xmeml, ImportXmeml};
