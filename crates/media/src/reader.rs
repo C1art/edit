@@ -20,6 +20,8 @@ pub struct SourceInfo {
     pub duration: Option<Ticks>,
     pub video: Option<VideoInfo>,
     pub has_audio: bool,
+    /// A single picture rather than moving video.
+    pub still: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -128,6 +130,7 @@ impl MediaReader {
                 }
             }),
             has_audio: audio.is_some(),
+            still: input.is_image(),
         };
         Ok(Self {
             start: input.start_time().map_or(Ticks::ZERO, to_ticks),
@@ -159,6 +162,12 @@ impl MediaReader {
     /// Positions the reader so that the next frames are the picture showing at `position`
     /// and the audio starting exactly there.
     pub fn seek(&mut self, position: Ticks) -> Result<(), MediaError> {
+        // A picture's only frame shows throughout, but is stamped at its start.
+        let position = if self.info.still {
+            Ticks::ZERO
+        } else {
+            position
+        };
         let target = (position + self.start).rescale(self.timebase, MICROSECONDS);
         self.input.seek(target.0)?;
         if let Some(video) = &mut self.video {

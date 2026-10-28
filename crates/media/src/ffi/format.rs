@@ -112,6 +112,14 @@ impl InputContext {
         names.unwrap_or_default()
     }
 
+    /// Whether the file was opened as a picture, by one of the image demuxers.
+    pub(crate) fn is_image(&self) -> bool {
+        // SAFETY: the context is open, so `iformat` points to a static demuxer whose
+        // name is a static string.
+        let name = unsafe { text((*self.0.as_ref().iformat).name) };
+        name.is_some_and(|name| name == "image2" || name.ends_with("_pipe"))
+    }
+
     /// Bits per second over the whole file, when the container knows it.
     pub(crate) fn bit_rate(&self) -> Option<u64> {
         // SAFETY: the context is open.
