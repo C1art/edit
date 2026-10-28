@@ -19,6 +19,12 @@ pub const CUT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key:
 pub const PASTE: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::V);
 pub const PASTE_INSERT: KeyboardShortcut =
     KeyboardShortcut::new(Modifiers::COMMAND.plus(Modifiers::SHIFT), Key::V);
+pub const ADD_MARKER: KeyboardShortcut = KeyboardShortcut::new(Modifiers::NONE, Key::M);
+pub const NEXT_MARKER: KeyboardShortcut = KeyboardShortcut::new(Modifiers::SHIFT, Key::M);
+pub const PREVIOUS_MARKER: KeyboardShortcut =
+    KeyboardShortcut::new(Modifiers::COMMAND.plus(Modifiers::SHIFT), Key::M);
+pub const CLEAR_MARKER: KeyboardShortcut =
+    KeyboardShortcut::new(Modifiers::COMMAND.plus(Modifiers::ALT), Key::M);
 pub const IMPORT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::I);
 pub const EXPORT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::M);
 pub const UNDO: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::Z);
@@ -42,6 +48,9 @@ enum Action {
     Redo,
     Copy,
     Cut,
+    AddMarker,
+    JumpToMarker { forward: bool },
+    ClearMarker,
     Paste(PlaceMode),
     AddEdit,
     Transition(TrackKind),
@@ -91,6 +100,9 @@ fn pressed(ctx: &egui::Context) -> Option<Action> {
             (NEW, Action::NewProject),
             (SAVE_AS, Action::SaveAs),
             (PASTE_INSERT, Action::Paste(PlaceMode::Insert)),
+            (CLEAR_MARKER, Action::ClearMarker),
+            (PREVIOUS_MARKER, Action::JumpToMarker { forward: false }),
+            (NEXT_MARKER, Action::JumpToMarker { forward: true }),
             (REDO, Action::Redo),
             (REDO_ALT, Action::Redo),
             (AUDIO_TRANSITION, Action::Transition(TrackKind::Audio)),
@@ -127,6 +139,7 @@ fn pressed(ctx: &egui::Context) -> Option<Action> {
             (Key::Backslash, Action::ZoomToFit),
             (Key::Escape, Action::CancelDrag),
             (Key::G, Action::ClipGain),
+            (Key::M, Action::AddMarker),
         ];
         keys.into_iter()
             .chain(tools)
@@ -158,6 +171,13 @@ fn run(editor: &mut Editor, action: Action) {
         Action::Undo => editor.undo(),
         Action::Redo => editor.redo(),
         Action::Copy => editor.copy(),
+        Action::AddMarker => editor.add_marker(),
+        Action::JumpToMarker { forward } => editor.jump_to_marker(forward),
+        Action::ClearMarker => {
+            if let Some(id) = editor.marker_at_playhead() {
+                editor.clear_marker(id);
+            }
+        }
         Action::Cut => editor.cut(),
         Action::Paste(mode) => editor.paste(mode),
         Action::AddEdit => editor.add_edit(),

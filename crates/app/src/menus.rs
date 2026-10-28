@@ -113,6 +113,9 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                 placing::edit_from_source(editor, PlaceMode::Overwrite);
             }
         });
+        ui.menu_button("Markers", |ui| {
+            crate::marker_dialog::menu(editor, ui);
+        });
         ui.menu_button("Sequence", |ui| {
             let add_edit = Button::new("Add Edit").shortcut_text(shortcut(ui, shortcuts::ADD_EDIT));
             if ui.add(add_edit).clicked() {

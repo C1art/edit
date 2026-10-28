@@ -5,8 +5,8 @@ use audio::AudioOutput;
 use eframe::egui_wgpu::RenderState;
 use egui::{CentralPanel, Panel, RichText};
 use timeline::{
-    Clipboard, Edit, Sequence, SetProxy, SetSequenceFormat, SourceId, Ticks, Timebase, Timeline,
-    TimelineError, VideoFormat,
+    Clipboard, Edit, Marker, Sequence, SetProxy, SetSequenceFormat, SourceId, Ticks, Timebase,
+    Timeline, TimelineError, VideoFormat,
 };
 
 use crate::effects::{self, EffectControls, SideTab};
@@ -46,6 +46,8 @@ pub struct Editor {
     /// The gain in dB being typed into the clip gain dialog, while it is showing.
     pub(crate) gain_prompt: Option<f32>,
     pub(crate) clipboard: Option<Clipboard>,
+    /// A copy of the marker being edited, while the marker dialog is showing.
+    pub(crate) marker_dialog: Option<Marker>,
     pub(crate) path_prompt: Option<PathPrompt>,
     pub(crate) store: Option<ProjectStore>,
     /// Where the project was last saved or opened from.
@@ -112,6 +114,7 @@ impl Editor {
             side_tab: SideTab::default(),
             gain_prompt: None,
             clipboard: None,
+            marker_dialog: None,
             path_prompt: None,
             store,
             project_path: None,
@@ -386,6 +389,12 @@ impl Editor {
             self.focus = Focus::Program;
             self.seek_program(position);
         }
+        if let Some(id) = output.edit_marker {
+            self.edit_marker(id);
+        }
+        if let Some(id) = output.clear_marker {
+            self.clear_marker(id);
+        }
         if let Some(drop) = output.drop {
             crate::placing::drop_media(self, drop);
         }
@@ -435,6 +444,7 @@ impl eframe::App for Editor {
 
         crate::project_files::path_dialog(self, &ctx);
         crate::project_files::discard_dialog(self, &ctx);
+        crate::marker_dialog::dialog(self, &ctx);
         crate::menus::gain_dialog(self, &ctx);
         crate::export::dialog(self, &ctx);
     }

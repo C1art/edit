@@ -2,15 +2,19 @@ mod gesture;
 mod header;
 mod interact;
 mod layout;
+mod markers;
 mod paint;
 mod scale;
 mod tool;
 
 use egui::{Rect, Sense};
-use timeline::{ClipId, Sequence, SetTrackSwitch, SourceId, Ticks, Timeline, TrackKind, TrackRef};
+use timeline::{
+    ClipId, MarkerId, Sequence, SetTrackSwitch, SourceId, Ticks, Timeline, TrackKind, TrackRef,
+};
 
 use gesture::{Gesture, PendingEdit};
 use header::HeaderAction;
+pub use markers::color as marker_color;
 use scale::TimeScale;
 pub use tool::Tool;
 
@@ -70,6 +74,9 @@ pub struct MediaDrop {
 #[derive(Debug, Default)]
 pub struct TimelineOutput {
     pub seek: Option<Ticks>,
+    /// A marker to open in the marker dialog.
+    pub edit_marker: Option<MarkerId>,
+    pub clear_marker: Option<MarkerId>,
     pub drop: Option<MediaDrop>,
     pub errors: Vec<String>,
 }
@@ -92,6 +99,8 @@ pub struct TimelineView {
     /// Width of the clip area at the last layout, for zoom-to-fit.
     width: f32,
     drag: Option<Drag>,
+    /// The marker a ruler context menu was opened on.
+    context_marker: Option<MarkerId>,
 }
 
 impl Default for TimelineView {
@@ -106,6 +115,7 @@ impl Default for TimelineView {
             ticks_per_point: DEFAULT_TICKS_PER_POINT,
             width: 1000.0,
             drag: None,
+            context_marker: None,
         }
     }
 }
@@ -175,12 +185,21 @@ impl TimelineView {
 
         let ruler_response =
             ui.interact(ruler, ui.scope_id().with("ruler"), Sense::click_and_drag());
+        self.ruler_markers(&ruler_response, timeline.sequence(), &scale, &mut output);
         if let Some(pointer) = ruler_response.interact_pointer_pos() {
             let sequence = timeline.sequence();
-            let time = scale::nearest_frame(
-                scale.time(pointer.x).max(Ticks::ZERO),
-                sequence.format.frame_rate,
-                sequence.timebase,
+            let marker = markers::hit(&scale, sequence, pointer.x)
+                .filter(|_| !ruler_response.dragged())
+                .and_then(|id| sequence.markers.iter().find(|marker| marker.id == id));
+            let time = marker.map_or_else(
+                || {
+                    scale::nearest_frame(
+                        scale.time(pointer.x).max(Ticks::ZERO),
+                        sequence.format.frame_rate,
+                        sequence.timebase,
+                    )
+                },
+                |marker| marker.at,
             );
             output.seek = Some(time);
         }
@@ -215,6 +234,7 @@ impl TimelineView {
             paint::guide(&painter, scale.x(at), tracks.top(), tracks.bottom());
         }
         paint::ruler(&ui.painter_at(ruler), ruler, &scale, sequence);
+        markers::paint(&ui.painter_at(ruler), ruler, &scale, sequence);
         paint::playhead(
             &ui.painter_at(ruler.union(tracks)),
             ruler,
@@ -241,6 +261,35 @@ impl TimelineView {
             }
         }
         output
+    }
+
+    /// Double-click opens a marker; right-click offers to edit or clear it.
+    fn ruler_markers(
+        &mut self,
+        response: &egui::Response,
+        sequence: &Sequence,
+        scale: &TimeScale,
+        output: &mut TimelineOutput,
+    ) {
+        let hit =
+            |pos: Option<egui::Pos2>| pos.and_then(|pos| markers::hit(scale, sequence, pos.x));
+        if response.double_clicked() {
+            output.edit_marker = hit(response.interact_pointer_pos());
+        }
+        if response.secondary_clicked() {
+            self.context_marker = hit(response.interact_pointer_pos());
+        }
+        let Some(id) = self.context_marker else {
+            return;
+        };
+        response.context_menu(|ui| {
+            if ui.button("Edit Marker…").clicked() {
+                output.edit_marker = Some(id);
+            }
+            if ui.button("Clear Marker").clicked() {
+                output.clear_marker = Some(id);
+            }
+        });
     }
 
     fn handle_scroll(&mut self, ui: &egui::Ui, area: Rect, tracks: Rect, sequence: &Sequence) {

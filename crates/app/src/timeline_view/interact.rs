@@ -72,6 +72,7 @@ impl TimelineView {
                         .filter(|clip| !moving.contains(&clip.id))
                         .flat_map(|clip| [clip.start, clip.end()])
                         .collect();
+                    targets.extend(sequence.markers.iter().map(|marker| marker.at));
                     targets.push(playhead);
                     targets.push(Ticks::ZERO);
                     let edges = drag.gesture.moving_edges(sequence);

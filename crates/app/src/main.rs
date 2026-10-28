@@ -3,6 +3,7 @@ mod editor;
 mod effects;
 mod export;
 mod import;
+mod marker_dialog;
 mod media_pool;
 mod menus;
 mod mixer;
