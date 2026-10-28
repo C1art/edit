@@ -1,8 +1,10 @@
+mod dsp;
 mod error;
 mod output;
 mod remix;
 mod resampler;
 
+pub use dsp::{Biquad, Coefficients, Compressor, CompressorSettings, Delay};
 pub use error::AudioError;
 pub use output::{AudioOutput, AudioWriter, OutputFormat};
 pub use remix::remix_stereo;
