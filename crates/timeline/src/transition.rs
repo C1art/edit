@@ -49,6 +49,15 @@ pub enum TransitionKind {
     ZigZagBlocks,
     RandomWipe,
     PaintSplatter,
+    /// The outgoing picture parts down the middle, its halves sliding away.
+    Split,
+    /// The outgoing picture parts into quarters that slide away to the corners.
+    CenterSplit,
+    /// Bands of the incoming picture slide in from alternate sides.
+    BandSlide,
+    /// The incoming picture whips in, pushing the outgoing one out, both blurred by
+    /// the speed.
+    Whip,
     /// Audio only: a linear crossfade, which dips in loudness through the middle.
     ConstantGain,
     /// Audio only: a crossfade linear in decibels, quick to fade out and slow to fade in.
@@ -56,7 +65,7 @@ pub enum TransitionKind {
 }
 
 impl TransitionKind {
-    pub const VIDEO: [Self; 30] = [
+    pub const VIDEO: [Self; 34] = [
         Self::CrossDissolve,
         Self::AdditiveDissolve,
         Self::NonAdditiveDissolve,
@@ -87,6 +96,10 @@ impl TransitionKind {
         Self::PaintSplatter,
         Self::Slide,
         Self::Push,
+        Self::Split,
+        Self::CenterSplit,
+        Self::BandSlide,
+        Self::Whip,
     ];
     pub const AUDIO: [Self; 4] = [
         Self::CrossDissolve,
@@ -129,6 +142,10 @@ impl TransitionKind {
             Self::ZigZagBlocks => "Zig-Zag Blocks",
             Self::RandomWipe => "Random Wipe",
             Self::PaintSplatter => "Paint Splatter",
+            Self::Split => "Split",
+            Self::CenterSplit => "Center Split",
+            Self::BandSlide => "Band Slide",
+            Self::Whip => "Whip",
         }
     }
 
@@ -137,7 +154,12 @@ impl TransitionKind {
         match self {
             Self::FlipOver | Self::CubeSpin => "3D Motion",
             Self::IrisBox | Self::IrisRound | Self::IrisDiamond | Self::IrisCross => "Iris",
-            Self::Slide | Self::Push => "Slide",
+            Self::Slide
+            | Self::Push
+            | Self::Split
+            | Self::CenterSplit
+            | Self::BandSlide
+            | Self::Whip => "Slide",
             Self::CrossZoom => "Zoom",
             _ if self.pattern().is_some() => "Wipe",
             _ => "Dissolve",
@@ -187,6 +209,9 @@ impl TransitionKind {
                 | Self::BarnDoors
                 | Self::Slide
                 | Self::Push
+                | Self::Split
+                | Self::BandSlide
+                | Self::Whip
                 | Self::RadialWipe
                 | Self::VenetianBlinds
                 | Self::CheckerWipe
@@ -202,10 +227,20 @@ impl TransitionKind {
 
     pub fn default_side(self) -> Side {
         match self {
-            Self::Slide | Self::Push | Self::FlipOver | Self::CubeSpin => Side::Right,
+            Self::Slide
+            | Self::Push
+            | Self::BandSlide
+            | Self::Whip
+            | Self::FlipOver
+            | Self::CubeSpin => Side::Right,
             Self::VenetianBlinds | Self::ZigZagBlocks | Self::RandomWipe => Side::Top,
             _ => Side::Left,
         }
+    }
+
+    /// Whether the outgoing picture is cut into pieces that part to show the incoming one.
+    pub fn splits_outgoing(self) -> bool {
+        matches!(self, Self::Split | Self::CenterSplit)
     }
 
     /// Whether audio goes silent at the cut instead of crossfading through it.

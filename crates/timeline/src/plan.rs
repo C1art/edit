@@ -80,7 +80,14 @@ pub fn track_layers_at<'a>(
             if let (Some(transition), None) = (current.transition_out, next) {
                 let length = transition.duration.min(current.duration);
                 let remaining = fraction(current.end() - position, length).min(1.0);
-                reveal = reveal.and(transition.reveals(remaining, 0.0).1);
+                // A split has nothing of its own to show of the incoming picture, so
+                // the clip parts as an outgoing one would; others play in reverse.
+                let out = if transition.kind.splits_outgoing() {
+                    transition.reveals(1.0 - remaining, 1.0).0
+                } else {
+                    transition.reveals(remaining, 0.0).1
+                };
+                reveal = reveal.and(out);
             }
         }
     }

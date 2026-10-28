@@ -1,6 +1,6 @@
 use std::f32::consts::FRAC_PI_2;
 
-use crate::{BlendMode, Side, Transition, TransitionKind, Wipe};
+use crate::{BlendMode, Side, Split, Transition, TransitionKind, Wipe, WipePattern};
 
 /// How a transition shows one picture, on top of the clip's own look. Distances are
 /// fractions of the canvas.
@@ -21,6 +21,9 @@ pub struct Reveal {
     pub turn: Option<Turn>,
     /// Replaces the clip's blend mode.
     pub blend: Option<BlendMode>,
+    pub split: Option<Split>,
+    /// Motion blur as far as this shift, each way.
+    pub smear: [f32; 2],
 }
 
 /// A picture turned in depth by a transition.
@@ -44,6 +47,8 @@ impl Reveal {
         wash: 0.0,
         turn: None,
         blend: None,
+        split: None,
+        smear: [0.0; 2],
     };
 
     const HIDDEN: Self = Self {
@@ -70,6 +75,8 @@ impl Reveal {
             wash: self.wash.max(other.wash),
             turn: self.turn.or(other.turn),
             blend: self.blend.or(other.blend),
+            split: self.split.or(other.split),
+            smear: [0, 1].map(|axis| self.smear[axis] + other.smear[axis]),
         }
     }
 }
@@ -121,12 +128,82 @@ impl Transition {
                 unless(crossed, turned(from, before, false)),
                 unless(!crossed, turned(from, after - 1.0, false)),
             ),
+            TransitionKind::Split => (
+                Reveal {
+                    split: Some(Split::Halves {
+                        vertical: across(from),
+                        apart: progress / 2.0,
+                    }),
+                    ..Reveal::FULL
+                },
+                uncovered(WipePattern::Split, from, progress),
+            ),
+            TransitionKind::CenterSplit => (
+                Reveal {
+                    split: Some(Split::Quarters {
+                        apart: progress / 2.0,
+                    }),
+                    ..Reveal::FULL
+                },
+                uncovered(WipePattern::Cross, from, progress),
+            ),
+            TransitionKind::BandSlide => incoming(Reveal {
+                split: Some(Split::Bands {
+                    count: SLIDING_BANDS,
+                    vertical: !across(from),
+                    shift: if matches!(from, Side::Left | Side::Top) {
+                        progress - 1.0
+                    } else {
+                        1.0 - progress
+                    },
+                }),
+                ..Reveal::FULL
+            }),
+            TransitionKind::Whip => {
+                // Eased, so the pictures whip through the middle and settle at the ends.
+                let eased = progress * progress * (3.0 - 2.0 * progress);
+                let speed = 6.0 * progress * (1.0 - progress);
+                let smear = toward(from, WHIP_SMEAR * speed).map(f32::abs);
+                let whipped = |shift| Reveal {
+                    smear,
+                    ..shifted(shift)
+                };
+                (
+                    whipped(toward(from, -eased)),
+                    whipped(toward(from, 1.0 - eased)),
+                )
+            }
             TransitionKind::CubeSpin => (
                 turned(from, progress, true),
                 turned(from, progress - 1.0, true),
             ),
             _ => incoming(Reveal::faded(progress)),
         }
+    }
+}
+
+/// Bands a band slide cuts the incoming picture into.
+const SLIDING_BANDS: u8 = 7;
+/// How far, in canvases, a whip blurs the pictures each way at its fastest.
+const WHIP_SMEAR: f32 = 0.06;
+
+/// Whether `side` is the picture's left or right edge.
+fn across(side: Side) -> bool {
+    matches!(side, Side::Left | Side::Right)
+}
+
+/// The outgoing picture as it is, the incoming one shown through `pattern`.
+fn uncovered(pattern: WipePattern, from: Side, progress: f32) -> Reveal {
+    let wipe = Wipe {
+        pattern,
+        from,
+        progress,
+        sweep: crate::Sweep::Forward,
+        border: crate::Border::NONE,
+    };
+    Reveal {
+        wipes: [Some(wipe), None],
+        ..Reveal::FULL
     }
 }
 
