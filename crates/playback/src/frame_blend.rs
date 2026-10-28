@@ -2,7 +2,7 @@ use media::VideoFrame;
 use timeline::Ticks;
 
 /// Steps of the cross-fade between two frames.
-const FULL: u32 = 256;
+pub(crate) const FULL: u32 = 256;
 
 /// How far `time` lies from `earlier` toward `later`, in 256ths.
 pub(crate) fn weight(earlier: Ticks, later: Ticks, time: Ticks) -> u32 {

@@ -157,8 +157,8 @@ fn clip_picture(
             let resolution = decoding.resolution;
             let frame = match plan.clip.interpolation {
                 TimeInterpolation::FrameSampling => decoder.frame_at(media, time, size, resolution),
-                TimeInterpolation::FrameBlending => {
-                    decoder.blended_frame_at(media, time, size, resolution)
+                interpolation => {
+                    decoder.interpolated_frame_at(media, time, size, resolution, interpolation)
                 }
             };
             match frame {

@@ -4,10 +4,11 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use media::{DecodedFrame, MediaError, MediaReader, Streams, VideoFrame};
-use timeline::{Generator, MediaItem, SourceId, Ticks, Timebase};
+use timeline::{Generator, MediaItem, SourceId, Ticks, TimeInterpolation, Timebase};
 
 use crate::compose::TrackDecoders;
 use crate::generated::offline_frame;
+use crate::optical_flow::{self, Flow};
 use crate::{frame_blend, generated_frame, Resolution};
 
 /// Jumps further ahead than this seek instead of decoding through; keyframe intervals
@@ -44,6 +45,9 @@ pub(crate) struct TrackVideo {
     pub(crate) nested: Vec<TrackDecoders>,
     /// What the open reader's pictures are sized for.
     resolution: Resolution,
+    /// The motion between the last pair of frames optical flow was asked between,
+    /// which a slowed clip shows several pictures from.
+    flow: Option<((Ticks, Ticks), Arc<Flow>)>,
 }
 
 impl TrackVideo {
@@ -57,6 +61,7 @@ impl TrackVideo {
             behind: VecDeque::new(),
             nested: Vec::new(),
             resolution: Resolution::Full,
+            flow: None,
         }
     }
 
@@ -65,6 +70,7 @@ impl TrackVideo {
         self.current = None;
         self.next = None;
         self.behind.clear();
+        self.flow = None;
     }
 
     /// The picture showing at `time` in `media`. A file that can't be opened is
@@ -113,6 +119,7 @@ impl TrackVideo {
             self.current = None;
             self.next = None;
             self.behind.clear();
+            self.flow = None;
         }
         let decode_ahead = Timebase::new(1, 1).map_or(Ticks::ZERO, |second| {
             Ticks(MAX_DECODE_AHEAD_SECONDS).rescale(second, self.timebase)
@@ -169,12 +176,15 @@ impl TrackVideo {
 
     /// Like `frame_at`, but faded toward the following frame by how far `time` lies
     /// past the showing one.
-    pub(crate) fn blended_frame_at(
+    /// The picture at `time`, made from the frames either side of it as `interpolation`
+    /// says when it falls between them.
+    pub(crate) fn interpolated_frame_at(
         &mut self,
         media: &MediaItem,
         time: Ticks,
         canvas: [u32; 2],
         resolution: Resolution,
+        interpolation: TimeInterpolation,
     ) -> Result<Option<Arc<VideoFrame>>, MediaError> {
         let Some(earlier) = self.frame_at(media, time, canvas, resolution)? else {
             return Ok(None);
@@ -194,7 +204,22 @@ impl TrackVideo {
         if weight == 0 {
             return Ok(Some(earlier));
         }
-        Ok(Some(Arc::new(frame_blend::blend(&earlier, later, weight))))
+        if interpolation != TimeInterpolation::OpticalFlow {
+            return Ok(Some(Arc::new(frame_blend::blend(&earlier, later, weight))));
+        }
+        let pair = (earlier.pts, later.pts);
+        let flow = match &self.flow {
+            Some((kept, flow)) if *kept == pair => Arc::clone(flow),
+            _ => {
+                let flow = Arc::new(Flow::between(&earlier, later));
+                self.flow = Some((pair, Arc::clone(&flow)));
+                flow
+            }
+        };
+        let fraction = weight as f32 / frame_blend::FULL as f32;
+        Ok(Some(Arc::new(optical_flow::interpolate(
+            &earlier, later, &flow, fraction,
+        ))))
     }
 
     /// The offline picture, when the file followed couldn't be opened.

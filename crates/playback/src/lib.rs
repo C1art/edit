@@ -16,6 +16,7 @@ mod generated;
 mod grades;
 mod loudness;
 mod mixdown;
+mod optical_flow;
 mod pixel_effects;
 mod player;
 mod previews;
