@@ -27,6 +27,7 @@ impl Edit for AddGenerated {
             has_audio: false,
             proxy: None,
             generator: Some(self.generator.clone()),
+            nest: None,
         });
         Ok(())
     }

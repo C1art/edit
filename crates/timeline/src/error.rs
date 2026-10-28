@@ -22,6 +22,8 @@ pub enum TimelineError {
     OutsideMedia(ClipId),
     /// The edit has no clip or track to act on.
     NothingToEdit,
+    /// The nested sequence would show itself.
+    NestCycle(SourceId),
 }
 
 impl fmt::Display for TimelineError {
@@ -46,6 +48,7 @@ impl fmt::Display for TimelineError {
             Self::BeforeSequenceStart => f.write_str("nothing can start before the sequence"),
             Self::OutsideMedia(_) => f.write_str("not enough source media for this edit"),
             Self::NothingToEdit => f.write_str("nothing to edit"),
+            Self::NestCycle(_) => f.write_str("a sequence can't contain itself"),
         }
     }
 }

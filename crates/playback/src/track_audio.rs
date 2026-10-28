@@ -135,6 +135,7 @@ mod tests {
             has_audio: true,
             proxy: None,
             generator: None,
+            nest: None,
         }
     }
 

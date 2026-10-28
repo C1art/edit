@@ -1,14 +1,38 @@
-use crate::{Sequence, Ticks, TimelineError};
+use crate::{Marker, Nest, Sequence, Ticks, TimelineError, Track, TrackRef};
 
 /// Checks the invariants every edit must preserve: on each track clips are sorted,
 /// don't overlap and have positive length, every clip stays within its media, and
-/// locked tracks are untouched since `before`. Markers are in time order.
+/// locked tracks are untouched since `before`. Markers are in time order, and no nested
+/// sequence contains itself. Nested sequences are held to the same rules.
 pub(crate) fn check(before: &Sequence, after: &Sequence) -> Result<(), TimelineError> {
-    for (track_ref, track) in after.tracks() {
+    check_tracks(after, before.tracks(), after.tracks())?;
+    check_markers(&after.markers)?;
+    for item in &after.media {
+        let Some(nest) = &item.nest else {
+            continue;
+        };
+        let old = before.media_item(item.id).and_then(|old| old.nest.as_ref());
+        check_tracks(after, old.into_iter().flat_map(Nest::tracks), nest.tracks())?;
+        check_markers(&nest.markers)?;
+        if after.nest_contains_itself(item.id) {
+            return Err(TimelineError::NestCycle(item.id));
+        }
+    }
+    Ok(())
+}
+
+/// `media` resolves the clips' sources.
+fn check_tracks<'a>(
+    media: &Sequence,
+    before: impl Iterator<Item = (TrackRef, &'a Track)>,
+    after: impl Iterator<Item = (TrackRef, &'a Track)>,
+) -> Result<(), TimelineError> {
+    let before: Vec<(TrackRef, &Track)> = before.collect();
+    for (track_ref, track) in after {
         let was_locked = before
-            .track(track_ref)
-            .filter(|old| old.locked && track.locked);
-        if was_locked.is_some_and(|old| old.clips != track.clips) {
+            .iter()
+            .find(|(old_ref, old)| *old_ref == track_ref && old.locked && track.locked);
+        if was_locked.is_some_and(|(_, old)| old.clips != track.clips) {
             return Err(TimelineError::TrackLocked(track_ref));
         }
         let mut previous_end = Ticks::ZERO;
@@ -25,19 +49,22 @@ pub(crate) fn check(before: &Sequence, after: &Sequence) -> Result<(), TimelineE
                     at: clip.start,
                 });
             }
-            let media = after
+            let item = media
                 .media_item(clip.source)
                 .ok_or(TimelineError::MediaNotFound(clip.source))?;
             if !clip.speed.is_in_range() {
                 return Err(TimelineError::SpeedOutOfRange(clip.id));
             }
-            if clip.source_in < Ticks::ZERO || clip.source_out() > media.duration {
+            if clip.source_in < Ticks::ZERO || clip.source_out() > item.duration {
                 return Err(TimelineError::OutsideMedia(clip.id));
             }
             previous_end = clip.end();
         }
     }
-    let markers = &after.markers;
+    Ok(())
+}
+
+fn check_markers(markers: &[Marker]) -> Result<(), TimelineError> {
     if markers
         .first()
         .is_some_and(|marker| marker.at < Ticks::ZERO)

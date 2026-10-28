@@ -10,6 +10,7 @@ mod marker;
 mod media;
 mod mix;
 mod model;
+mod nest;
 mod param;
 mod plan;
 mod reveal;
@@ -22,11 +23,12 @@ mod validate;
 pub use audio_plan::{audio_fade, audio_span};
 pub use color::ColorCorrection;
 pub use edit::{
-    clamp_delta, AddGenerated, AddMarker, AddTrack, Clipboard, CloseGap, Edge, ImportMedia, Lift,
-    MoveClips, PasteClips, PlaceClip, PlaceMode, RateStretch, Razor, RazorTarget, RemoveMarker,
-    RemoveMedia, RemoveTrack, RippleDelete, Roll, SetClipGain, SetClipLook, SetClipSpeed,
-    SetClipsEnabled, SetGenerator, SetMasterGain, SetProxy, SetSequenceFormat, SetTrackMix,
-    SetTrackSwitch, SetTransition, Slide, Slip, TrackSwitch, Trim, TrimMode, UpdateMarker,
+    clamp_delta, AddGenerated, AddMarker, AddNest, AddTrack, Clipboard, CloseGap, Edge,
+    ImportMedia, InNest, Lift, MoveClips, NestClips, PasteClips, PlaceClip, PlaceMode, RateStretch,
+    Razor, RazorTarget, RemoveMarker, RemoveMedia, RemoveTrack, RippleDelete, Roll, SetClipGain,
+    SetClipLook, SetClipSpeed, SetClipsEnabled, SetGenerator, SetMasterGain, SetProxy,
+    SetSequenceFormat, SetTrackMix, SetTrackSwitch, SetTransition, Slide, Slip, TrackSwitch, Trim,
+    TrimMode, UpdateMarker,
 };
 pub use effect::{Rgb, VideoEffect};
 pub use error::TimelineError;
@@ -39,6 +41,7 @@ pub use mix::{Gain, Pan};
 pub use model::{
     Clip, ClipId, IdGenerator, LinkId, Sequence, Track, TrackKind, TrackRef, VideoFormat,
 };
+pub use nest::Nest;
 pub use param::{Keyframe, Param};
 pub use plan::{track_layers_at, PlannedLayer};
 pub use reveal::Reveal;

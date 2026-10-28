@@ -18,6 +18,7 @@ fn sample() -> ProjectFile {
         has_audio: true,
         proxy: Some(PathBuf::from(r"C:\Footage\Proxies\interview_Proxy.mp4")),
         generator: None,
+        nest: None,
     });
     sequence.media.push(MediaItem {
         id: SourceId(2),
@@ -36,6 +37,7 @@ fn sample() -> ProjectFile {
             shadow: false,
             background: Some(Rgb::BLACK),
         })),
+        nest: None,
     });
     let mut clip = Clip::new(ClipId(7), SourceId(1), Ticks(0), Ticks(90_000), Ticks(3));
     clip.gain = Gain(-600);

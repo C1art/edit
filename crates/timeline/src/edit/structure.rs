@@ -118,6 +118,7 @@ impl Edit for ImportMedia {
             has_audio: self.has_audio,
             proxy: None,
             generator: None,
+            nest: None,
         });
         Ok(())
     }
@@ -135,10 +136,7 @@ impl Edit for RemoveMedia {
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
-        let in_use = sequence
-            .tracks()
-            .flat_map(|(_, track)| &track.clips)
-            .any(|clip| clip.source == self.source);
+        let in_use = sequence.all_clips().any(|clip| clip.source == self.source);
         if in_use {
             return Err(TimelineError::MediaInUse(self.source));
         }
