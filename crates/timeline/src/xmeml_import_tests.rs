@@ -32,6 +32,7 @@ fn an_exported_sequence_reads_back_as_a_nest_of_the_same_cut() {
         duration: Ticks(1000),
         video: Some(format),
         has_audio: true,
+        still: false,
     };
     timeline.apply(import).unwrap();
     let source = timeline.sequence().media[0].id;

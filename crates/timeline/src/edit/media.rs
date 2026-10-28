@@ -81,6 +81,7 @@ impl Edit for RelinkMedia {
         item.duration = self.media.duration;
         item.video = self.media.video;
         item.has_audio = self.media.has_audio;
+        item.still = self.media.still;
         item.proxy = None;
         item.offline = false;
         Ok(())

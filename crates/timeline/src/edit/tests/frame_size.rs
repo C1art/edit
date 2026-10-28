@@ -16,6 +16,7 @@ fn wide_pictures_fit_by_width_and_fill_by_height() {
                 ..VideoFormat::default()
             }),
             has_audio: true,
+            still: false,
         })
         .unwrap();
     let wide = timeline.sequence().media[1].id;

@@ -90,7 +90,8 @@ pub use effect::{
 };
 pub use error::TimelineError;
 pub use generator::{
-    Generator, Shape, ShapeKind, TextAlign, TextStroke, Title, TitleFont, GENERATED_SECONDS,
+    held_length, Generator, Shape, ShapeKind, TextAlign, TextStroke, Title, TitleFont,
+    GENERATED_SECONDS,
 };
 pub use group::GroupId;
 pub use history::{preview, Edit, EditCommand, Timeline};

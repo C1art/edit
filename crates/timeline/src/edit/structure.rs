@@ -129,6 +129,7 @@ pub struct ImportMedia {
     pub duration: Ticks,
     pub video: Option<VideoFormat>,
     pub has_audio: bool,
+    pub still: bool,
 }
 
 impl Edit for ImportMedia {
@@ -158,6 +159,7 @@ impl Edit for ImportMedia {
             alpha: Default::default(),
             log: Default::default(),
             offline: false,
+            still: self.still,
         });
         Ok(())
     }

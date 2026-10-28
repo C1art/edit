@@ -92,6 +92,7 @@ impl Sequence {
             alpha: Default::default(),
             log: Default::default(),
             offline: false,
+            still: false,
         });
         let mut whole = Clip::new(
             ClipId(view.ids.next()),

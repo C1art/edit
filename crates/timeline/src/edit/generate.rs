@@ -37,6 +37,7 @@ impl Edit for AddGenerated {
             alpha: Default::default(),
             log: Default::default(),
             offline: false,
+            still: false,
         });
         Ok(())
     }

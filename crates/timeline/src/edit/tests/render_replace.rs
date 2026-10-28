@@ -24,6 +24,7 @@ fn rendered_title() -> (Timeline, SourceId, SourceId) {
             duration: Ticks(1000),
             video: Some(timeline.sequence().format),
             has_audio: false,
+            still: false,
         })
         .unwrap();
     let rendered = timeline.sequence().media[2].id;
@@ -97,6 +98,7 @@ fn a_render_too_short_for_the_clip_is_refused() {
             duration: Ticks(120),
             video: Some(timeline.sequence().format),
             has_audio: false,
+            still: false,
         })
         .unwrap();
     let short = timeline.sequence().media[3].id;

@@ -29,6 +29,7 @@ fn timeline() -> (Timeline, SourceId) {
             duration: Ticks(1000),
             video: Some(format),
             has_audio: true,
+            still: false,
         })
         .unwrap();
     let source = timeline.sequence().media[0].id;

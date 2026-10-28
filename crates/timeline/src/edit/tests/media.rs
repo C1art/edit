@@ -9,6 +9,7 @@ fn relink(source: SourceId, path: &str, duration: i64) -> RelinkMedia {
             duration: Ticks(duration),
             video: None,
             has_audio: true,
+            still: false,
         },
     }
 }
@@ -93,4 +94,26 @@ fn media_made_offline_comes_back_by_relinking_even_to_the_same_file() {
         timeline.apply(relink(source, "a.mp4", 1000)),
         Err(TimelineError::NothingToEdit)
     );
+}
+
+#[test]
+fn a_still_places_its_usual_length_but_holds_for_as_long_as_a_clip_runs() {
+    let (mut timeline, _) = timeline();
+    let timebase = Timebase::HZ_90K;
+    timeline
+        .apply(ImportMedia {
+            name: "logo.png".into(),
+            path: "logo.png".into(),
+            duration: crate::held_length(timebase),
+            video: Some(VideoFormat::default()),
+            has_audio: false,
+            still: true,
+        })
+        .unwrap();
+    let still = timeline.sequence().media.last().unwrap().clone();
+    assert_eq!(still.default_range(timebase), Ticks::ZERO..Ticks(450_000));
+    timeline
+        .apply(place(still.id, 0, 0, 900_000, PlaceMode::Overwrite))
+        .unwrap();
+    assert_eq!(spans(&timeline, V1), [(0, 900_000, 0)]);
 }

@@ -11,6 +11,7 @@ fn multicam() -> (Timeline, SourceId) {
             duration: Ticks(800),
             video: Some(format),
             has_audio: true,
+            still: false,
         })
         .unwrap();
     let second = timeline.sequence().media[1].id;

@@ -130,6 +130,7 @@ mod tests {
                 duration: Ticks(100),
                 video: None,
                 has_audio: true,
+                still: false,
             };
             timeline.apply(import).unwrap();
         }

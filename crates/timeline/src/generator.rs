@@ -167,6 +167,12 @@ pub(crate) fn seconds(seconds: i64, timebase: Timebase) -> Ticks {
     })
 }
 
+/// How long generated media and still pictures last in the pool, which clips of them
+/// can be trimmed anywhere within.
+pub fn held_length(timebase: Timebase) -> Ticks {
+    seconds(GENERATED_SECONDS, timebase)
+}
+
 pub(crate) fn placed_length(timebase: Timebase) -> Ticks {
     seconds(PLACED_SECONDS, timebase)
 }

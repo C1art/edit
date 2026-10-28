@@ -54,6 +54,9 @@ pub struct MediaItem {
     /// Set by Make Offline: the file is left alone but no longer read, until relinked.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub offline: bool,
+    /// A single picture, held for however long its clips run.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub still: bool,
 }
 
 /// What the editor has written down about a media item, as Premiere's Metadata panel
@@ -80,12 +83,13 @@ impl MediaLog {
 }
 
 impl MediaItem {
-    /// What an edit places when no range is marked: all of a file or subclip, or a
-    /// still's usual length of generated media.
+    /// What an edit places when no range is marked: all of a file or subclip, or the
+    /// usual still length of a picture or generated media.
     pub fn default_range(&self, timebase: Timebase) -> Range<Ticks> {
         match (&self.generator, &self.subclip) {
             (Some(_), _) => Ticks::ZERO..placed_length(timebase).min(self.duration),
             (None, Some(range)) => range.clone(),
+            (None, None) if self.still => Ticks::ZERO..placed_length(timebase).min(self.duration),
             (None, None) => Ticks::ZERO..self.duration,
         }
     }
