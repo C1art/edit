@@ -2,11 +2,12 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Curves, Param};
+use crate::{Curves, HslSecondary, Param};
 
 /// Color correction in the manner of a grading panel, applied before the clip is
 /// placed: an input LUT, then in linear light white balance, tone, wheels for the
-/// shadows, midtones and highlights and saturation, then a creative look LUT and curves.
+/// shadows, midtones and highlights and saturation, then a creative look LUT and curves,
+/// then a secondary correction of the colors a key selects.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ColorCorrection {
@@ -41,6 +42,7 @@ pub struct ColorCorrection {
     /// Percent of the look applied.
     pub look_intensity: Param,
     pub curves: Curves,
+    pub secondary: HslSecondary,
 }
 
 /// A shift of one tonal range toward a hue, with a brightness offset.
@@ -75,6 +77,7 @@ impl Default for ColorCorrection {
             look: None,
             look_intensity: Param::new(10_000),
             curves: Curves::default(),
+            secondary: HslSecondary::default(),
         }
     }
 }
@@ -101,6 +104,7 @@ impl ColorCorrection {
         ]
         .into_iter()
         .chain(wheels.into_iter().flat_map(ColorWheel::params_mut))
+        .chain(self.secondary.params_mut())
     }
 
     pub fn params(&self) -> impl Iterator<Item = &Param> {
@@ -124,6 +128,7 @@ impl ColorCorrection {
         ]
         .into_iter()
         .chain(wheels.into_iter().flat_map(ColorWheel::params))
+        .chain(self.secondary.params())
     }
 }
 
