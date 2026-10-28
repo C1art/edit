@@ -154,6 +154,54 @@ impl Rows {
                     TimecodeSource::name,
                 );
             }
+            VideoEffect::Transform {
+                anchor: [anchor_x, anchor_y],
+                position: [x, y],
+                scale: [width, height],
+                skew,
+                skew_axis,
+                rotation,
+                opacity,
+            } => {
+                self.param(ui, "Anchor Point X", anchor_x, -100.0..=200.0, "%");
+                self.param(ui, "Anchor Point Y", anchor_y, -100.0..=200.0, "%");
+                self.param(ui, "Position X", x, -100.0..=200.0, "%");
+                self.param(ui, "Position Y", y, -100.0..=200.0, "%");
+                self.param(ui, "Scale Width", width, 0.0..=600.0, "%");
+                self.param(ui, "Scale Height", height, 0.0..=600.0, "%");
+                self.param(ui, "Skew", skew, -85.0..=85.0, "°");
+                self.param(ui, "Skew Axis", skew_axis, -360.0..=360.0, "°");
+                self.param(ui, "Rotation", rotation, -360.0..=360.0, "°");
+                self.param(ui, "Opacity", opacity, 0.0..=100.0, "%");
+            }
+            VideoEffect::Basic3D {
+                swivel,
+                tilt,
+                distance,
+            } => {
+                self.param(ui, "Swivel", swivel, -90.0..=90.0, "°");
+                self.param(ui, "Tilt", tilt, -90.0..=90.0, "°");
+                self.param(ui, "Distance to Image", distance, -99.0..=500.0, "%");
+            }
+            VideoEffect::Spherize {
+                radius,
+                center: [x, y],
+            } => {
+                self.param(ui, "Radius", radius, 0.0..=2500.0, "");
+                self.param(ui, "Center X", x, -100.0..=200.0, "%");
+                self.param(ui, "Center Y", y, -100.0..=200.0, "%");
+            }
+            VideoEffect::Emboss {
+                direction,
+                relief,
+                contrast,
+                blend,
+            } => {
+                self.param(ui, "Direction", direction, -360.0..=360.0, "°");
+                self.param(ui, "Relief", relief, 1.0..=10.0, "");
+                self.param(ui, "Contrast", contrast, 0.0..=500.0, "%");
+                self.param(ui, "Blend With Original", blend, 0.0..=100.0, "%");
+            }
             VideoEffect::Sharpen { amount } => {
                 self.param(ui, "Amount", amount, 0.0..=500.0, "");
             }
