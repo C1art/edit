@@ -42,6 +42,7 @@ mod nesting;
 mod offline;
 mod panels;
 mod placing;
+mod program_zoom;
 mod project_files;
 mod project_manager;
 mod project_store;

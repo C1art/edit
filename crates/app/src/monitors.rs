@@ -1,9 +1,10 @@
-use egui::{Color32, Stroke, StrokeKind};
+use egui::{Color32, Rect, Sense, Stroke, StrokeKind, UiBuilder};
 use playback::Resolution;
 use timeline::PlaceMode;
 
 use crate::editor::Editor;
 use crate::placing;
+use crate::program_zoom::MonitorZoom;
 use crate::project_files::PathPurpose;
 use crate::transport;
 use crate::trim_monitor::TrimMonitor;
@@ -123,10 +124,8 @@ fn program(editor: &mut Editor, ui: &mut egui::Ui) {
         outline(ui, &response, focused);
     } else if let Some(response) = crate::comparison::ui(editor, ui, picture_size(ui)) {
         outline(ui, &response, focused);
-    } else if let Some(program) = &mut editor.program {
-        let response = program.picture(ui, picture_size(ui));
-        outline(ui, &response, focused);
-        program_overlays(editor, ui, &response);
+    } else {
+        zoomed_program(editor, ui, focused);
     }
     let Some(program) = &mut editor.program else {
         return;
@@ -177,6 +176,14 @@ fn program(editor: &mut Editor, ui: &mut egui::Ui) {
             if toggle.clicked() {
                 editor.toggle_comparison_view();
             }
+            ui.menu_button("Zoom", |ui| {
+                let current = editor.program_zoom.zoom();
+                for zoom in MonitorZoom::ALL {
+                    if ui.radio(current == zoom, zoom.name()).clicked() {
+                        editor.program_zoom.set_zoom(zoom);
+                    }
+                }
+            });
             ui.menu_button("Playback Resolution", |ui| {
                 let Some(program) = &mut editor.program else {
                     return;
@@ -195,9 +202,38 @@ fn program(editor: &mut Editor, ui: &mut egui::Ui) {
     }
 }
 
+/// The program picture at the chosen zoom, clipped to the monitor.
+fn zoomed_program(editor: &mut Editor, ui: &mut egui::Ui, focused: bool) {
+    let Some(program) = &editor.program else {
+        return;
+    };
+    let (area, response) = ui.allocate_exact_size(picture_size(ui), Sense::click_and_drag());
+    let format = editor.timeline.sequence().format;
+    let canvas = egui::vec2(format.width as f32, format.height as f32);
+    // The camera grid is laid out over the whole monitor.
+    let picture = if editor.multicam_layout.is_some() {
+        area
+    } else {
+        editor.program_zoom.place(ui, &response, canvas)
+    };
+    let painter = ui.painter_at(area);
+    painter.rect_filled(area, 0.0, Color32::BLACK);
+    program.paint(&painter, picture);
+    outline(ui, &response, focused);
+    // Handles past the monitor's edge neither show nor take the pointer.
+    let mut clipped = ui.new_child(UiBuilder::new().id_salt("program_overlays").max_rect(area));
+    clipped.set_clip_rect(area.intersect(ui.clip_rect()));
+    program_overlays(editor, &mut clipped, &response, picture);
+}
+
 /// What the program picture shows on top: the camera grid, or safe margins and the
 /// handles of the selected clip's motion and masks.
-fn program_overlays(editor: &mut Editor, ui: &mut egui::Ui, response: &egui::Response) {
+fn program_overlays(
+    editor: &mut Editor,
+    ui: &mut egui::Ui,
+    response: &egui::Response,
+    picture: Rect,
+) {
     if editor.multicam_layout.is_some() {
         let clicked = response
             .clicked()
@@ -208,11 +244,11 @@ fn program_overlays(editor: &mut Editor, ui: &mut egui::Ui, response: &egui::Res
         if editor.safe_margins {
             let format = editor.timeline.sequence().format;
             let canvas = egui::vec2(format.width as f32, format.height as f32);
-            crate::safe_margins::paint(ui, response.rect, canvas);
+            crate::safe_margins::paint(ui, picture, canvas);
         }
-        if !crate::graphics_tools::overlay(editor, ui, response.rect) {
-            crate::effects::motion_overlay(editor, ui, response.rect);
-            crate::effects::mask_overlay(editor, ui, response.rect);
+        if !crate::graphics_tools::overlay(editor, ui, picture) {
+            crate::effects::motion_overlay(editor, ui, picture);
+            crate::effects::mask_overlay(editor, ui, picture);
         }
     }
 }
