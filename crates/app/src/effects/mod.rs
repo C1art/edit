@@ -1,9 +1,11 @@
 mod color;
+mod curves;
 mod generated;
 mod look;
 mod sound;
 mod transitions;
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use egui::RichText;
@@ -15,7 +17,9 @@ use timeline::{
 
 use crate::editor::Editor;
 use crate::mixer::Change;
+use crate::project_files::PathPurpose;
 
+pub use color::LutSlot;
 pub use transitions::apply_default_transition;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -90,6 +94,9 @@ fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
         .and_then(|generator| generated::controls(ui, generator));
     let output = look::controls(ui, &mut look, time);
     seek_to_key(editor, clip, output.seek);
+    if let Some(slot) = output.choose_lut {
+        editor.prompt_path(PathPurpose::Lut(clip.id, slot));
+    }
     if let (Some(generator), Some(change)) = (drawing, drawing_change) {
         let edit = SetGenerator {
             source: clip.source,
@@ -183,6 +190,23 @@ fn seek_to_key(editor: &mut Editor, clip: &Clip, key: Option<Ticks>) {
         let position = clip.position_of(key);
         editor.seek_program(position.clamp(clip.start, clip.end() - Ticks(1)));
     }
+}
+
+/// Sets one of a clip's LUTs to the file at `path`, which playback reads when drawing.
+pub(crate) fn set_lut(editor: &mut Editor, clip: ClipId, slot: LutSlot, path: PathBuf) {
+    let Some((_, clip)) = editor.timeline.sequence().clip(clip) else {
+        return;
+    };
+    let mut look = clip.look.clone();
+    let lut = match slot {
+        LutSlot::Input => &mut look.color.input_lut,
+        LutSlot::Look => &mut look.color.look,
+    };
+    *lut = Some(path);
+    editor.apply(SetClipLook {
+        clip: clip.id,
+        look,
+    });
 }
 
 /// Shows the program as `edit` would leave it, without adding to the undo history.

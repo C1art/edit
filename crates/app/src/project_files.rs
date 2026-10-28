@@ -2,9 +2,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use egui::{Key, ViewportCommand};
-use timeline::{Captions, Sequence, SetCaptions, SourceId, Timebase, Timeline, VideoFormat};
+use timeline::{
+    Captions, ClipId, Sequence, SetCaptions, SourceId, Timebase, Timeline, VideoFormat,
+};
 
 use crate::editor::Editor;
+use crate::effects::LutSlot;
 use crate::project_store::StoreEvent;
 
 /// What a typed path is for.
@@ -17,6 +20,8 @@ pub enum PathPurpose {
     SaveProject,
     ImportCaptions,
     ExportCaptions,
+    /// A `.cube` file for one of a clip's LUTs.
+    Lut(ClipId, LutSlot),
 }
 
 pub struct PathPrompt {
@@ -262,6 +267,16 @@ pub fn path_dialog(editor: &mut Editor, ctx: &egui::Context) {
             "Write the sequence's captions as SubRip to:",
             "Export",
         ),
+        PathPurpose::Lut(_, LutSlot::Input) => (
+            "Input LUT",
+            "Path to a .cube LUT for the clip's source, such as a log conversion:",
+            "Apply",
+        ),
+        PathPurpose::Lut(_, LutSlot::Look) => (
+            "Creative Look",
+            "Path to a .cube LUT giving the clip its look:",
+            "Apply",
+        ),
     };
     let mut submitted = None;
     let mut cancelled = false;
@@ -294,6 +309,7 @@ pub fn path_dialog(editor: &mut Editor, ctx: &egui::Context) {
             PathPurpose::SaveProject => editor.save_project_to(path),
             PathPurpose::ImportCaptions => editor.import_captions(path),
             PathPurpose::ExportCaptions => editor.export_captions(path),
+            PathPurpose::Lut(clip, slot) => crate::effects::set_lut(editor, clip, slot, path),
         }
     } else if cancelled {
         editor.path_prompt = None;

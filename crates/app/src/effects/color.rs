@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use egui::epaint::{Mesh, Vertex, WHITE_UV};
 use egui::{Color32, Pos2, RichText, Sense, Stroke, Vec2};
 use timeline::{ColorCorrection, ColorWheel};
@@ -11,7 +13,15 @@ const RIM: f32 = 100.0;
 /// Segments around a wheel's rim.
 const SEGMENTS: usize = 48;
 
+/// Which of a clip's LUTs a file is for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LutSlot {
+    Input,
+    Look,
+}
+
 pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorrection) {
+    lut_row(ui, rows, "Input LUT", &mut color.input_lut, LutSlot::Input);
     ui.label(RichText::new("White Balance").weak());
     rows.param(
         ui,
@@ -29,8 +39,15 @@ pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorr
     rows.param(ui, "Whites", &mut color.whites, -100.0..=100.0, "");
     rows.param(ui, "Blacks", &mut color.blacks, -100.0..=100.0, "");
     ui.label(RichText::new("Creative").weak());
+    lut_row(ui, rows, "Look", &mut color.look, LutSlot::Look);
+    if color.look.is_some() {
+        rows.param(ui, "Intensity", &mut color.look_intensity, 0.0..=100.0, "%");
+    }
     rows.param(ui, "Vibrance", &mut color.vibrance, -100.0..=100.0, "");
     rows.param(ui, "Saturation", &mut color.saturation, 0.0..=200.0, "%");
+    egui::CollapsingHeader::new("RGB Curves").show(ui, |ui| {
+        super::curves::controls(ui, rows, &mut color.curves);
+    });
     ui.label(RichText::new("Color Wheels").weak());
     let mut wheels = [
         ("Shadows", &mut color.shadow_wheel),
@@ -54,6 +71,35 @@ pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorr
             });
         });
     }
+}
+
+fn lut_row(
+    ui: &mut egui::Ui,
+    rows: &mut Rows,
+    label: &str,
+    lut: &mut Option<PathBuf>,
+    slot: LutSlot,
+) {
+    ui.horizontal(|ui| {
+        ui.label(label);
+        match lut.as_ref().and_then(|path| path.file_name()) {
+            Some(name) => {
+                let path = lut.as_ref().map(|path| path.display().to_string());
+                ui.label(name.to_string_lossy())
+                    .on_hover_text(path.unwrap_or_default());
+            }
+            None => {
+                ui.label(RichText::new("None").weak());
+            }
+        }
+        if ui.small_button("Browse…").clicked() {
+            rows.output.choose_lut = Some(slot);
+        }
+        if lut.is_some() && ui.small_button("Remove").clicked() {
+            *lut = None;
+            rows.commit();
+        }
+    });
 }
 
 /// A disc of hues with a puck at the wheel's push toward blue (right) and red (up), as

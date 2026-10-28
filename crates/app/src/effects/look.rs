@@ -3,6 +3,7 @@ use std::ops::RangeInclusive;
 use egui::{DragValue, RichText};
 use timeline::{Interpolation, Look, Param, Rgb, Ticks, VideoEffect};
 
+use super::LutSlot;
 use crate::mixer::{response_state, Change};
 
 const ANIMATED: egui::Color32 = egui::Color32::from_rgb(90, 160, 240);
@@ -11,6 +12,8 @@ pub(super) struct Output {
     pub(super) change: Option<Change>,
     /// A keyframe to move the playhead to, in source time.
     pub(super) seek: Option<Ticks>,
+    /// A LUT to ask for the file of.
+    pub(super) choose_lut: Option<LutSlot>,
 }
 
 /// Edits `look` at source time `time`, where animated parameters get their keyframes.
@@ -100,6 +103,7 @@ impl Rows {
             output: Output {
                 change: None,
                 seek: None,
+                choose_lut: None,
             },
         }
     }
