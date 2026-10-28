@@ -39,7 +39,6 @@ impl Coefficients {
         )
     }
 
-    /// A bell boosting or cutting by `gain_db` around `frequency`.
     pub fn notch(rate: SampleRate, frequency: f32, q: f32) -> Self {
         let (cos, alpha) = Self::angle(rate, frequency, f64::from(q));
         Self::normalised(
@@ -48,6 +47,17 @@ impl Coefficients {
         )
     }
 
+    /// Passes every frequency at full level but turns the phase through a half circle
+    /// around `frequency`.
+    pub fn all_pass(rate: SampleRate, frequency: f32, q: f32) -> Self {
+        let (cos, alpha) = Self::angle(rate, frequency, f64::from(q));
+        Self::normalised(
+            [1.0 - alpha, -2.0 * cos, 1.0 + alpha],
+            [1.0 + alpha, -2.0 * cos, 1.0 - alpha],
+        )
+    }
+
+    /// A bell boosting or cutting by `gain_db` around `frequency`.
     pub fn peaking(rate: SampleRate, frequency: f32, q: f32, gain_db: f32) -> Self {
         let (cos, alpha) = Self::angle(rate, frequency, f64::from(q));
         let a = Self::shelf_amplitude(gain_db);
