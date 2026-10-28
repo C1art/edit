@@ -3,7 +3,10 @@ use serde::{Deserialize, Serialize};
 use crate::{Param, Stabilizer};
 
 mod catalog;
+mod key;
 mod params;
+
+pub use key::{KeyOutput, MatteChannel, ULTRA_KEY_REACH};
 
 /// An sRGB color as stored in a project.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -51,11 +54,27 @@ pub enum VideoEffect {
         midpoint: Param,
         feather: Param,
     },
-    /// Keys out colors near `color`, as a green or blue screen.
+    /// Keys out colors near `color`, as a green or blue screen. The matte is then
+    /// cleaned up: `pedestal` clears faint noise from the background, `contrast`
+    /// hardens its partly transparent edge, `choke` shrinks it and `soften` blurs it,
+    /// both in percent of `ULTRA_KEY_REACH`. `spill` takes the key's color out of what
+    /// remains.
     UltraKey {
         color: Rgb,
         tolerance: Param,
         softness: Param,
+        #[serde(default)]
+        output: KeyOutput,
+        #[serde(default)]
+        pedestal: Param,
+        #[serde(default)]
+        contrast: Param,
+        #[serde(default)]
+        choke: Param,
+        #[serde(default)]
+        soften: Param,
+        #[serde(default = "key::default_spill")]
+        spill: Param,
     },
     /// Shows the clip only where the picture of another video track is, as Premiere's
     /// Track Matte Key does. The matte is that track's picture in sequence space, so
@@ -420,26 +439,6 @@ impl EffectCategory {
             Self::Time => "Time",
             Self::Transform => "Transform",
             Self::Video => "Video",
-        }
-    }
-}
-
-/// What of the matte's picture decides how much of the clip shows.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum MatteChannel {
-    #[default]
-    Alpha,
-    /// The brightness of the matte over black.
-    Luma,
-}
-
-impl MatteChannel {
-    pub const ALL: [Self; 2] = [Self::Alpha, Self::Luma];
-
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Alpha => "Matte Alpha",
-            Self::Luma => "Matte Luma",
         }
     }
 }

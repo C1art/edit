@@ -47,8 +47,15 @@ impl VideoEffect {
             Self::UltraKey {
                 tolerance,
                 softness,
+                pedestal,
+                contrast,
+                choke,
+                soften,
+                spill,
                 ..
-            } => vec![tolerance, softness],
+            } => vec![
+                tolerance, softness, pedestal, contrast, choke, soften, spill,
+            ],
             Self::DropShadow {
                 opacity,
                 direction,
@@ -189,8 +196,15 @@ impl VideoEffect {
             Self::UltraKey {
                 tolerance,
                 softness,
+                pedestal,
+                contrast,
+                choke,
+                soften,
+                spill,
                 ..
-            } => vec![tolerance, softness],
+            } => vec![
+                tolerance, softness, pedestal, contrast, choke, soften, spill,
+            ],
             Self::DropShadow {
                 opacity,
                 direction,

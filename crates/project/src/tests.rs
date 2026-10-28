@@ -229,3 +229,19 @@ fn presets_round_trip_through_text() {
     let text = file.to_text().unwrap();
     assert_eq!(PresetsFile::from_text(&text).unwrap(), file);
 }
+
+#[test]
+fn ultra_keys_saved_before_spill_suppression_keep_their_edge_desaturation() {
+    let text = r#"{"format_version": 1, "presets": [{"name": "Key", "video": [
+        {"UltraKey": {"color": {"r": 0, "g": 255, "b": 0},
+            "tolerance": {"hundredths": 3000}, "softness": {"hundredths": 1000}}}
+    ]}]}"#;
+    let file = PresetsFile::from_text(text).unwrap();
+    let VideoEffect::UltraKey {
+        spill, pedestal, ..
+    } = &file.presets[0].video[0]
+    else {
+        panic!("expected an Ultra Key");
+    };
+    assert_eq!((spill.value(), pedestal.value()), (50.0, 0.0));
+}

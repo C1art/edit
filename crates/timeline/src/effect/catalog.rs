@@ -1,6 +1,6 @@
 use super::{
-    ColorChange, ColorMatch, EffectCategory, MatteChannel, RampShape, Rgb, TimecodeSource,
-    VideoEffect,
+    ColorChange, ColorMatch, EffectCategory, KeyOutput, MatteChannel, RampShape, Rgb,
+    TimecodeSource, VideoEffect,
 };
 use crate::{Param, Stabilizer};
 
@@ -34,6 +34,12 @@ impl VideoEffect {
                 color: Rgb::GREEN,
                 tolerance: Param::from_value(30.0),
                 softness: Param::from_value(10.0),
+                output: KeyOutput::Composite,
+                pedestal: Param::from_value(10.0),
+                contrast: Param::default(),
+                choke: Param::default(),
+                soften: Param::default(),
+                spill: Param::from_value(50.0),
             },
             Self::TrackMatteKey {
                 matte: None,
