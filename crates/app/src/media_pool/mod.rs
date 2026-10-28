@@ -21,6 +21,8 @@ pub enum PoolAction {
     Rename(SourceId, String),
     /// Asks for a file to replace the item's.
     Replace(SourceId),
+    /// Stops reading the items' files until they are linked again.
+    MakeOffline(Vec<SourceId>),
     CreateProxy(SourceId),
     DetachProxy(SourceId),
     /// Asks for the frame rate to play the item's pictures at.
@@ -253,6 +255,16 @@ impl Pool<'_> {
             .filter(|item| selected.contains(&item.id) && item.is_file() && item.video.is_some())
             .map(|item| item.id)
             .collect();
+        let to_take_offline: Vec<SourceId> = if selected.contains(&item.id) {
+            self.sequence
+                .media
+                .iter()
+                .filter(|item| selected.contains(&item.id) && item.is_file() && !item.offline)
+                .map(|item| item.id)
+                .collect()
+        } else {
+            vec![item.id]
+        };
         if response.double_clicked() && item.nest.is_some() {
             self.action = Some(PoolAction::OpenNest(item.id));
         }
@@ -294,6 +306,9 @@ impl Pool<'_> {
             };
             if item.is_file() && ui.button(relink).clicked() {
                 self.action = Some(PoolAction::Replace(item.id));
+            }
+            if item.is_file() && !item.offline && ui.button("Make Offline").clicked() {
+                self.action = Some(PoolAction::MakeOffline(to_take_offline));
             }
             if ui.button("Remove from Project").clicked() {
                 self.action = Some(PoolAction::Remove(item.id));

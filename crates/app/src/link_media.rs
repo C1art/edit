@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use egui::{Label, RichText};
 use timeline::SourceId;
 
@@ -9,12 +11,23 @@ const PATH_WIDTH: f32 = 420.0;
 impl Editor {
     /// Keeps the offline set current and relinks media found beside a file just located.
     pub(crate) fn poll_offline(&mut self) {
-        let Some(offline) = &mut self.offline else {
-            return;
+        let pool = self.timeline.project();
+        let mut shown: HashSet<SourceId> = pool
+            .media
+            .iter()
+            .filter(|item| item.offline)
+            .map(|item| item.id)
+            .collect();
+        let found = match &mut self.offline {
+            Some(offline) => {
+                let found = offline.poll(pool);
+                shown.extend(offline.missing());
+                found
+            }
+            None => Vec::new(),
         };
-        let found = offline.poll(self.timeline.project());
-        if self.clip_art.offline != *offline.missing() {
-            self.clip_art.offline = offline.missing().clone();
+        if self.clip_art.offline != shown {
+            self.clip_art.offline = shown;
         }
         for (id, path) in found {
             self.import(path, Some(id));

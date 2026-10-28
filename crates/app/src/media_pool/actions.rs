@@ -1,9 +1,9 @@
 use std::path::{Path, PathBuf};
 
 use timeline::{
-    AddBin, CreateMulticam, DuplicateMedia, Edit, InterpretFootage, MakeSubclip, MoveToBin,
-    RelinkMedia, RemoveBin, RemoveMedia, RenameBin, RenameMedia, SetProxy, SourceId, Ticks,
-    TimelineError,
+    AddBin, CreateMulticam, DuplicateMedia, Edit, InterpretFootage, MakeOffline, MakeSubclip,
+    MoveToBin, RelinkMedia, RemoveBin, RemoveMedia, RenameBin, RenameMedia, SetProxy, SourceId,
+    Ticks, TimelineError,
 };
 
 use super::{PoolAction, PoolEntry};
@@ -29,6 +29,9 @@ impl Editor {
                 self.apply_to_pool(RenameMedia { source, name });
             }
             PoolAction::Replace(id) => self.prompt_path(PathPurpose::Replace(id)),
+            PoolAction::MakeOffline(sources) => {
+                self.apply_to_pool(MakeOffline { sources });
+            }
             PoolAction::CreateProxy(id) => {
                 let sequence = self.timeline.sequence();
                 let path = sequence.media_item(id).map(|item| item.path.clone());

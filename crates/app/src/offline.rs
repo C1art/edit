@@ -139,7 +139,7 @@ impl OfflineMedia {
         let files: Vec<(SourceId, PathBuf)> = sequence
             .media
             .iter()
-            .filter(|item| item.is_file())
+            .filter(|item| item.is_file() && !item.offline)
             .map(|item| (item.id, item.path.clone()))
             .collect();
         let stale = self
