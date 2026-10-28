@@ -27,6 +27,7 @@ pub const CLEAR_MARKER: KeyboardShortcut =
     KeyboardShortcut::new(Modifiers::COMMAND.plus(Modifiers::ALT), Key::M);
 pub const SPEED_DURATION: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::R);
 pub const TOGGLE_ENABLED: KeyboardShortcut = KeyboardShortcut::new(Modifiers::SHIFT, Key::E);
+pub const TOGGLE_LINK: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::L);
 pub const NEW_TITLE: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::T);
 pub const IMPORT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::I);
 pub const EXPORT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::M);
@@ -81,6 +82,7 @@ enum Action {
     ClipGain,
     SpeedDuration,
     ToggleEnabled,
+    ToggleLink,
     NewTitle,
 }
 
@@ -130,6 +132,7 @@ fn pressed(ctx: &egui::Context) -> Option<Action> {
             (ADD_EDIT, Action::AddEdit),
             (SPEED_DURATION, Action::SpeedDuration),
             (TOGGLE_ENABLED, Action::ToggleEnabled),
+            (TOGGLE_LINK, Action::ToggleLink),
             (NEW_TITLE, Action::NewTitle),
             (TRANSITION, Action::Transition(TrackKind::Video)),
             (CLEAR_IN_OUT, Action::ClearInOut),
@@ -204,6 +207,7 @@ fn run(editor: &mut Editor, action: Action) {
         Action::AddMarker => editor.add_marker(),
         Action::SpeedDuration => editor.speed_duration(),
         Action::ToggleEnabled => editor.toggle_enabled(),
+        Action::ToggleLink => editor.toggle_link(),
         Action::NewTitle => {
             placing::new_generated(editor, Generator::Title(Title::default()));
         }

@@ -1,6 +1,6 @@
 use timeline::{
     AddFrameHold, AddTrack, Clipboard, Lift, PasteClips, PlaceMode, Razor, RazorTarget,
-    RippleDelete, SetClipsEnabled, Timecode, TrackKind,
+    RippleDelete, SetClipsEnabled, SetLinked, Timecode, TrackKind,
 };
 
 use crate::editor::Editor;
@@ -123,7 +123,6 @@ impl Editor {
         }
     }
 
-    /// Disables the selected clips, or enables them when all are already disabled.
     /// Freezes the selected video clips, or else the unlocked ones under the playhead,
     /// on the frame at the playhead.
     pub(crate) fn add_frame_hold(&mut self) {
@@ -144,6 +143,7 @@ impl Editor {
         }
     }
 
+    /// Disables the selected clips, or enables them when all are already disabled.
     pub(crate) fn toggle_enabled(&mut self) {
         let sequence = self.timeline.sequence();
         let selected: Vec<_> = self
@@ -161,5 +161,35 @@ impl Editor {
             clips: self.view.selection.clone(),
             enabled,
         });
+    }
+
+    /// Whether every selected clip is linked; `None` when none is selected.
+    pub(crate) fn selection_linked(&self) -> Option<bool> {
+        let sequence = self.timeline.sequence();
+        let mut selected = self
+            .view
+            .selection
+            .iter()
+            .filter_map(|&id| sequence.clip(id))
+            .peekable();
+        selected.peek()?;
+        Some(selected.all(|(_, clip)| clip.link.is_some()))
+    }
+
+    /// Unlinks the selected clips when they are all linked, or else links them.
+    pub(crate) fn toggle_link(&mut self) {
+        let Some(linked) = self.selection_linked() else {
+            self.notice("Select clips to link or unlink");
+            return;
+        };
+        let edit = SetLinked {
+            clips: self.view.selection.clone(),
+            linked: !linked,
+        };
+        if linked {
+            self.apply(edit);
+        } else if !self.apply(edit) {
+            self.notice("Select two or more clips to link");
+        }
     }
 }

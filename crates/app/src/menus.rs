@@ -149,6 +149,15 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             if ui.add(enable).clicked() {
                 editor.toggle_enabled();
             }
+            let link = if editor.selection_linked() == Some(true) {
+                "Unlink"
+            } else {
+                "Link"
+            };
+            let link = Button::new(link).shortcut_text(shortcut(ui, shortcuts::TOGGLE_LINK));
+            if ui.add(link).clicked() {
+                editor.toggle_link();
+            }
             let gain = Button::new("Audio Gain…").shortcut_text("G");
             if ui.add(gain).clicked() {
                 editor.prompt_clip_gain();
