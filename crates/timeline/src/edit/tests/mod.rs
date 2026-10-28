@@ -460,6 +460,7 @@ mod caption;
 mod enable;
 mod generate;
 mod hold;
+mod link;
 mod marker;
 mod media;
 mod nest;

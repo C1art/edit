@@ -41,9 +41,10 @@ pub use edit::{
     NestClips, NormalizeClipGains, PasteClips, PlaceClip, PlaceMode, RateStretch, Razor,
     RazorTarget, RelinkMedia, RemoveBin, RemoveMarker, RemoveMedia, RemoveTrack, RenameBin,
     RenameMedia, RippleDelete, RippleTrimToPlayhead, Roll, SetCaptions, SetClipAudioEffects,
-    SetClipGain, SetClipLook, SetClipSpeed, SetClipVolume, SetClipsEnabled, SetGenerator, SetMarks,
-    SetMasterGain, SetProxy, SetSequenceFormat, SetTrackAutomation, SetTrackMix, SetTrackSwitch,
-    SetTransition, Slide, Slip, TrackSwitch, Trim, TrimMode, UpdateMarker,
+    SetClipGain, SetClipLook, SetClipSpeed, SetClipVolume, SetClipsEnabled, SetGenerator,
+    SetLinked, SetMarks, SetMasterGain, SetProxy, SetSequenceFormat, SetTrackAutomation,
+    SetTrackMix, SetTrackSwitch, SetTransition, Slide, Slip, TrackSwitch, Trim, TrimMode,
+    UpdateMarker,
 };
 pub use effect::{MatteChannel, Rgb, VideoEffect};
 pub use error::TimelineError;

@@ -5,6 +5,7 @@ mod enable;
 mod generate;
 mod hold;
 mod levels;
+mod link;
 mod look;
 mod marker;
 mod media;
@@ -30,6 +31,7 @@ pub use levels::{
     NormalizeClipGains, SetClipAudioEffects, SetClipGain, SetClipVolume, SetMasterGain,
     SetTrackAutomation, SetTrackMix,
 };
+pub use link::SetLinked;
 pub use look::{SetClipLook, SetTransition};
 pub use marker::{AddMarker, RemoveMarker, UpdateMarker};
 pub use media::{RelinkMedia, RenameMedia};
