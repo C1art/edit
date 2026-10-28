@@ -14,6 +14,7 @@ impl Edit for AddGenerated {
             Generator::ColorMatte { .. } => "New Color Matte",
             Generator::Title(_) => "New Title",
             Generator::AdjustmentLayer => "New Adjustment Layer",
+            Generator::Shape(_) => "New Shape",
         }
     }
 
@@ -50,6 +51,7 @@ impl Edit for SetGenerator {
             Generator::ColorMatte { .. } => "Change Matte Color",
             Generator::Title(_) => "Edit Title",
             Generator::AdjustmentLayer => "Change Adjustment Layer",
+            Generator::Shape(_) => "Edit Shape",
         }
     }
 

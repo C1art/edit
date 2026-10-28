@@ -79,7 +79,9 @@ pub use effect::{
     ColorMatch, EffectCategory, MatteChannel, RampShape, Rgb, TimecodeSource, VideoEffect,
 };
 pub use error::TimelineError;
-pub use generator::{Generator, TextAlign, TextStroke, Title, TitleFont, GENERATED_SECONDS};
+pub use generator::{
+    Generator, Shape, ShapeKind, TextAlign, TextStroke, Title, TitleFont, GENERATED_SECONDS,
+};
 pub use group::GroupId;
 pub use history::{preview, Edit, EditCommand, Timeline};
 pub use label::Label;

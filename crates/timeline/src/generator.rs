@@ -17,6 +17,7 @@ pub enum Generator {
     Title(Title),
     /// Draws nothing itself; its clips' looks apply to the picture of the tracks below.
     AdjustmentLayer,
+    Shape(Shape),
 }
 
 impl Generator {
@@ -25,6 +26,7 @@ impl Generator {
             Self::ColorMatte { .. } => "Color Matte",
             Self::Title(_) => "Title",
             Self::AdjustmentLayer => "Adjustment Layer",
+            Self::Shape(shape) => shape.kind.name(),
         }
     }
 }
@@ -88,6 +90,57 @@ impl Default for Title {
             tracking: 0,
             leading: 0,
             stroke: None,
+        }
+    }
+}
+
+/// A shape centered on a transparent canvas the size of the sequence, as Essential
+/// Graphics draws them; Motion places it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Shape {
+    pub kind: ShapeKind,
+    /// In sequence pixels.
+    pub width: u32,
+    pub height: u32,
+    /// Rounds a rectangle's corners, in sequence pixels.
+    #[serde(default)]
+    pub corner_radius: u32,
+    /// None leaves only the stroke.
+    pub fill: Option<Rgb>,
+    /// Drawn outside the shape, as on titles.
+    #[serde(default)]
+    pub stroke: Option<TextStroke>,
+    #[serde(default)]
+    pub shadow: bool,
+}
+
+impl Shape {
+    pub fn new(kind: ShapeKind) -> Self {
+        Self {
+            kind,
+            width: 600,
+            height: 300,
+            corner_radius: 0,
+            fill: Some(Rgb::new(200, 60, 60)),
+            stroke: None,
+            shadow: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ShapeKind {
+    Rectangle,
+    Ellipse,
+}
+
+impl ShapeKind {
+    pub const ALL: [Self; 2] = [Self::Rectangle, Self::Ellipse];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Rectangle => "Rectangle",
+            Self::Ellipse => "Ellipse",
         }
     }
 }
