@@ -43,7 +43,8 @@ pub(crate) struct ScopeTrace {
     /// The binding of the frame being measured and its size.
     source: Option<(wgpu::BindGroup, (u32, u32))>,
     scope: Scope,
-    pub(crate) view: wgpu::TextureView,
+    view: wgpu::TextureView,
+    pub(crate) ui_view: wgpu::TextureView,
 }
 
 impl ScopeTrace {
@@ -97,19 +98,17 @@ impl ScopeTrace {
                 },
             ],
         });
-        let view = device
-            .create_texture(&wgpu::TextureDescriptor {
-                label: Some("scope"),
-                size: extent(TRACE_SIZE, TRACE_SIZE),
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: DISPLAY_FORMAT,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                    | wgpu::TextureUsages::TEXTURE_BINDING,
-                view_formats: &[],
-            })
-            .create_view(&wgpu::TextureViewDescriptor::default());
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("scope"),
+            size: extent(TRACE_SIZE, TRACE_SIZE),
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: DISPLAY_FORMAT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: crate::blit::UI_VIEW_FORMATS,
+        });
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         Self {
             bin: bin_pipeline(device, &bin_layout),
             draw: draw_pipeline(device, &draw_layout),
@@ -120,6 +119,7 @@ impl ScopeTrace {
             source: None,
             scope,
             view,
+            ui_view: crate::blit::ui_view(&texture),
         }
     }
 

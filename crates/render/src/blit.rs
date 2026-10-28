@@ -4,8 +4,19 @@ use crate::grade::GradeLayout;
 use crate::placement::Placement;
 use crate::WORKING_FORMAT;
 
-/// The UI samples the output as an ordinary sRGB texture.
+/// Presenting to an sRGB texture encodes the linear composite for display.
 pub const DISPLAY_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
+
+/// egui samples textures as already gamma-encoded and does no conversion of its own, so
+/// it reads display textures through a view that skips the sRGB decode.
+pub(crate) const UI_VIEW_FORMATS: &[wgpu::TextureFormat] = &[wgpu::TextureFormat::Rgba8Unorm];
+
+pub(crate) fn ui_view(texture: &wgpu::Texture) -> wgpu::TextureView {
+    texture.create_view(&wgpu::TextureViewDescriptor {
+        format: UI_VIEW_FORMATS.first().copied(),
+        ..Default::default()
+    })
+}
 
 /// Room for the placement, color and masks of a blit, or the parameters of a blur.
 pub(crate) const UNIFORM_BYTES: u64 = 512;

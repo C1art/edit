@@ -77,6 +77,7 @@ struct Targets {
     backdrop: Backdrop,
     output_texture: wgpu::Texture,
     output: wgpu::TextureView,
+    ui_output: wgpu::TextureView,
 }
 
 /// Uploads source frames, composites them in linear light and presents the result to a
@@ -110,7 +111,7 @@ impl Compositor {
 
     /// The presented frame, valid until the next [`Presented::NewTarget`].
     pub fn output_view(&self) -> Option<&wgpu::TextureView> {
-        self.targets.as_ref().map(|targets| &targets.output)
+        self.targets.as_ref().map(|targets| &targets.ui_output)
     }
 
     pub fn output_size(&self) -> Option<(u32, u32)> {
@@ -152,7 +153,7 @@ impl Compositor {
 
     /// The scope's square texture. The view lasts until the scope is turned off.
     pub fn scope_view(&self) -> Option<&wgpu::TextureView> {
-        self.scope.as_ref().map(|trace| &trace.view)
+        self.scope.as_ref().map(|trace| &trace.ui_view)
     }
 
     /// Draws `layers` bottom first over black, each fitted to `canvas` and then moved,
@@ -397,6 +398,7 @@ impl Compositor {
             working_texture,
             backdrop: Backdrop::new(&self.device, &self.blit, (width, height)),
             output: output_texture.create_view(&wgpu::TextureViewDescriptor::default()),
+            ui_output: blit::ui_view(&output_texture),
             output_texture,
         }
     }
@@ -416,7 +418,11 @@ impl Compositor {
             dimension: wgpu::TextureDimension::D2,
             format,
             usage,
-            view_formats: &[],
+            view_formats: if format == DISPLAY_FORMAT {
+                blit::UI_VIEW_FORMATS
+            } else {
+                &[]
+            },
         })
     }
 }
