@@ -57,6 +57,7 @@ impl Encoder {
             }
             VideoCodec::Dnxhr(DnxhrQuality::Hqx) => sys::AVPixelFormat::AV_PIX_FMT_YUV422P10LE,
             VideoCodec::Dnxhr(DnxhrQuality::Dnx444) => sys::AVPixelFormat::AV_PIX_FMT_YUV444P10LE,
+            VideoCodec::Gif => sys::AVPixelFormat::AV_PIX_FMT_PAL8,
         };
         raw.colorspace = sys::AVColorSpace::AVCOL_SPC_BT709;
         raw.color_primaries = sys::AVColorPrimaries::AVCOL_PRI_BT709;
@@ -102,6 +103,7 @@ impl Encoder {
                 };
                 options.push((c"profile", profile.to_owned()));
             }
+            (VideoCodec::Gif, _) => {}
         }
         if settings.codec.is_prores() {
             // Apple's vendor code, which some players check before trusting the stream.
@@ -253,6 +255,7 @@ fn find_video(codec: VideoCodec) -> *const sys::AVCodec {
             find(Some(c"prores_ks"), sys::AVCodecID::AV_CODEC_ID_PRORES)
         }
         VideoCodec::Dnxhr(_) => find(None, sys::AVCodecID::AV_CODEC_ID_DNXHD),
+        VideoCodec::Gif => find(None, sys::AVCodecID::AV_CODEC_ID_GIF),
     }
 }
 

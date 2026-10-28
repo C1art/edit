@@ -2,7 +2,7 @@ use std::path::Path;
 
 use timeline::{Chapter, FrameRate, Timebase};
 
-use crate::ffi::{Encoder, Frame, OutputContext, Packet, Received, RgbaToYuv};
+use crate::ffi::{Converter, Encoder, Frame, OutputContext, Packet, Received};
 use crate::{AudioCodec, MediaError, RateControl, VideoCodec};
 
 const STEREO: usize = 2;
@@ -43,7 +43,7 @@ struct VideoStream {
     encoder: Encoder,
     index: usize,
     frame: Frame,
-    converter: RgbaToYuv,
+    converter: Converter,
     next_pts: i64,
 }
 
@@ -94,11 +94,10 @@ impl MediaWriter {
                 }
                 let size = (settings.width, settings.height);
                 let encoder = Encoder::video(&settings, global_header)?;
-                let format = encoder.pixel_format();
                 Ok(VideoStream {
                     index: output.add_stream(&encoder)?,
-                    frame: Frame::for_video(size, format)?,
-                    converter: RgbaToYuv::new(settings.input_size, size, format)?,
+                    frame: Frame::for_video(size, encoder.pixel_format())?,
+                    converter: Converter::new(&settings, &encoder)?,
                     encoder,
                     next_pts: 0,
                 })
@@ -292,6 +291,7 @@ mod tests {
                 Some(video(VideoCodec::Dnxhr(crate::DnxhrQuality::Hqx), 256)),
                 Some(audio(AudioCodec::Pcm24)),
             ),
+            ("animated.gif", Some(video(VideoCodec::Gif, 32)), None),
             ("sound.wav", None, Some(audio(AudioCodec::Pcm16))),
             ("sound.flac", None, Some(audio(AudioCodec::Flac))),
             ("sound.mp3", None, Some(audio(AudioCodec::Mp3))),
@@ -320,6 +320,43 @@ mod tests {
             );
         }
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    #[ignore = "encodes and decodes a real file with FFmpeg"]
+    fn gif_frames_keep_their_own_colors() {
+        let video = VideoSettings {
+            input_size: (64, 36),
+            width: 64,
+            height: 36,
+            frame_rate: FrameRate::FPS_25,
+            codec: VideoCodec::Gif,
+            rate_control: RateControl::Quality(0),
+            profile: EncodeProfile::Delivery,
+        };
+        let path = std::env::temp_dir().join(format!("media-gif-{}.gif", std::process::id()));
+        let mut writer = MediaWriter::create(&path, Some(video), None).unwrap();
+        let colors = [
+            [200u8, 30, 30],
+            [30, 30, 200],
+            [30, 30, 200],
+            [240, 240, 60],
+        ];
+        for [r, g, b] in colors {
+            writer.write_video(&[r, g, b, 255].repeat(64 * 36)).unwrap();
+        }
+        writer.finish().unwrap();
+        let mut reader = MediaReader::open(&path, Timebase::HZ_90K).unwrap();
+        for wanted in colors {
+            let Some(crate::DecodedFrame::Video(frame)) = reader.next_frame().unwrap() else {
+                panic!("too few pictures");
+            };
+            let middle = (18 * 64 + 32) * 4;
+            let got = &frame.pixels[middle..middle + 3];
+            let off = got.iter().zip(wanted).map(|(&a, b)| a.abs_diff(b)).max();
+            assert!(off < Some(4), "{got:?} for {wanted:?}");
+        }
+        std::fs::remove_file(&path).unwrap();
     }
 
     #[test]

@@ -21,6 +21,8 @@ pub enum VideoCodec {
     ProRes4444,
     /// Avid DNxHR, which works at any frame size from 256 × 120 up.
     Dnxhr(DnxhrQuality),
+    /// Animated GIF: 256 colors a frame, dithered, looping forever, without sound.
+    Gif,
 }
 
 /// DNxHR's profiles, from smallest to best.

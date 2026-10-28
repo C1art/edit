@@ -10,6 +10,7 @@ mod packet;
 mod sample_format;
 mod scale;
 mod still;
+mod to_palette;
 mod to_yuv;
 
 pub(crate) use decoder::{Decoder, Received};
@@ -24,4 +25,5 @@ pub(crate) use packet::Packet;
 pub(crate) use sample_format::{SampleConverter, OUTPUT_CHANNELS};
 pub(crate) use scale::Scaler;
 pub(crate) use still::encode_rgba;
+pub(crate) use to_palette::Converter;
 pub(crate) use to_yuv::RgbaToYuv;

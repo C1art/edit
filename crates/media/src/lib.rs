@@ -8,6 +8,7 @@ mod motion;
 mod peaks;
 mod probe;
 mod proxy;
+mod quantize;
 mod reader;
 mod region_track;
 mod scenes;
