@@ -59,8 +59,8 @@ pub struct Editor {
     media_tab: MediaTab,
     /// The history step last scrolled into view, so the list follows new edits only.
     pub(crate) history_scrolled: Option<usize>,
-    /// The gain in dB being typed into the clip gain dialog, while it is showing.
-    pub(crate) gain_prompt: Option<f32>,
+    pub(crate) gain_dialog: Option<crate::gain_dialog::GainDialog>,
+    pub(crate) loudness: Option<crate::loudness_window::LoudnessWindow>,
     pub(crate) speed_prompt: Option<crate::speed_dialog::SpeedPrompt>,
     pub(crate) clipboard: Option<Clipboard>,
     /// A copy of the marker being edited, while the marker dialog is showing.
@@ -144,7 +144,8 @@ impl Editor {
             side_tab: SideTab::default(),
             media_tab: MediaTab::Project,
             history_scrolled: None,
-            gain_prompt: None,
+            gain_dialog: None,
+            loudness: None,
             speed_prompt: None,
             clipboard: None,
             marker_dialog: None,
@@ -462,7 +463,8 @@ impl eframe::App for Editor {
         crate::project_files::path_dialog(self, &ctx);
         crate::project_files::discard_dialog(self, &ctx);
         crate::marker_dialog::dialog(self, &ctx);
-        crate::menus::gain_dialog(self, &ctx);
+        crate::gain_dialog::dialog(self, &ctx);
+        crate::loudness_window::window(self, &ctx);
         crate::speed_dialog::dialog(self, &ctx);
         crate::export::dialog(self, &ctx);
     }

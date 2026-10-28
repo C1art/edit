@@ -4,6 +4,7 @@ use timeline::{
 };
 
 use crate::editor::Editor;
+use crate::gain_dialog::GainDialog;
 
 /// Editor operations shared by the menus and keyboard shortcuts.
 impl Editor {
@@ -117,7 +118,7 @@ impl Editor {
             .find(|(track, _)| track.kind == TrackKind::Audio)
             .map(|(_, clip)| clip.gain);
         match audio_gain {
-            Some(gain) => self.gain_prompt = Some(gain.db()),
+            Some(gain) => self.gain_dialog = Some(GainDialog::new(gain.db())),
             None => self.notice("Select a clip with audio first"),
         }
     }

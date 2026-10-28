@@ -1,5 +1,5 @@
-use egui::{Button, Key, MenuBar, ViewportCommand};
-use timeline::{Edge, Gain, Generator, PlaceMode, Rgb, SetClipGain, Title, TrackKind};
+use egui::{Button, MenuBar, ViewportCommand};
+use timeline::{Edge, Generator, PlaceMode, Rgb, Title, TrackKind};
 
 use crate::editor::Editor;
 use crate::placing;
@@ -149,6 +149,10 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             if ui.add(enable).clicked() {
                 editor.toggle_enabled();
             }
+            let gain = Button::new("Audio Gain…").shortcut_text("G");
+            if ui.add(gain).clicked() {
+                editor.prompt_clip_gain();
+            }
             if ui.button("Add Frame Hold").clicked() {
                 editor.add_frame_hold();
             }
@@ -196,6 +200,10 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                 .clicked()
             {
                 editor.ripple_delete();
+            }
+            ui.separator();
+            if ui.button("Measure Loudness…").clicked() {
+                crate::loudness_window::measure(editor);
             }
             ui.separator();
             if ui.button("Import Captions…").clicked() {
@@ -302,40 +310,4 @@ pub fn timeline_toolbar(editor: &mut Editor, ui: &mut egui::Ui) {
             editor.add_track(TrackKind::Audio);
         }
     });
-}
-
-pub fn gain_dialog(editor: &mut Editor, ctx: &egui::Context) {
-    let Some(db) = &mut editor.gain_prompt else {
-        return;
-    };
-    let mut apply = false;
-    let mut cancelled = false;
-    egui::Window::new("Audio Gain")
-        .collapsible(false)
-        .resizable(false)
-        .show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.label("Set gain to");
-                ui.add(
-                    egui::DragValue::new(db)
-                        .range(Gain::SILENT.db()..=Gain::MAX.db())
-                        .speed(0.1)
-                        .suffix(" dB"),
-                );
-            });
-            ui.horizontal(|ui| {
-                apply =
-                    ui.button("OK").clicked() || ui.input(|input| input.key_pressed(Key::Enter));
-                cancelled = ui.button("Cancel").clicked()
-                    || ui.input(|input| input.key_pressed(Key::Escape));
-            });
-        });
-    if apply {
-        let gain = Gain::from_db(*db);
-        editor.gain_prompt = None;
-        let clips = editor.view.selection.clone();
-        editor.apply_levels(SetClipGain { clips, gain });
-    } else if cancelled {
-        editor.gain_prompt = None;
-    }
 }
