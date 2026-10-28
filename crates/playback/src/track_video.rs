@@ -124,6 +124,8 @@ impl TrackVideo {
             self.behind.clear();
             self.flow = None;
         }
+        // A picture is decoded once and held, as seeking past its only frame finds none.
+        let time = if media.still { Ticks::ZERO } else { time };
         let decode_ahead = Timebase::new(1, 1).map_or(Ticks::ZERO, |second| {
             Ticks(MAX_DECODE_AHEAD_SECONDS).rescale(second, self.timebase)
         });

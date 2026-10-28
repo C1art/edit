@@ -31,6 +31,7 @@ fn routed() -> Timeline {
             duration,
             video: None,
             has_audio: true,
+            still: false,
         })
         .unwrap();
     let source = timeline.sequence().media[0].id;

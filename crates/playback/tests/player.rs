@@ -33,6 +33,7 @@ fn sequence() -> Arc<Sequence> {
             duration: info.duration.unwrap(),
             video: Some(format),
             has_audio: true,
+            still: false,
         })
         .unwrap();
     let source = timeline.sequence().media[0].id;

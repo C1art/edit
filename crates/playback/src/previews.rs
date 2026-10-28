@@ -48,6 +48,7 @@ impl PreviewPictures {
                 alpha: Default::default(),
                 log: Default::default(),
                 offline: false,
+                still: false,
             });
             let clip = Clip::new(
                 ClipId(index),
