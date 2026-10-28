@@ -19,6 +19,34 @@ pub enum VideoCodec {
     /// Apple ProRes 4:4:4:4 with a 16-bit alpha channel, for graphics laid over
     /// other footage.
     ProRes4444,
+    /// Avid DNxHR, which works at any frame size from 256 × 120 up.
+    Dnxhr(DnxhrQuality),
+}
+
+/// DNxHR's profiles, from smallest to best.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DnxhrQuality {
+    Lb,
+    Sq,
+    Hq,
+    /// 10-bit.
+    Hqx,
+    /// 10-bit 4:4:4.
+    Dnx444,
+}
+
+impl DnxhrQuality {
+    pub const ALL: [Self; 5] = [Self::Lb, Self::Sq, Self::Hq, Self::Hqx, Self::Dnx444];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Lb => "LB",
+            Self::Sq => "SQ",
+            Self::Hq => "HQ",
+            Self::Hqx => "HQX 10-bit",
+            Self::Dnx444 => "444 10-bit",
+        }
+    }
 }
 
 impl VideoCodec {

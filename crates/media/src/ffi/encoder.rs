@@ -6,8 +6,12 @@ use ffmpeg_sys_next as sys;
 use super::error::check;
 use super::{Frame, Packet, Received};
 use crate::{
-    AudioCodec, AudioSettings, EncodeProfile, MediaError, RateControl, VideoCodec, VideoSettings,
+    AudioCodec, AudioSettings, DnxhrQuality, EncodeProfile, MediaError, RateControl, VideoCodec,
+    VideoSettings,
 };
+
+/// The smallest frame DNxHR encodes.
+const DNXHR_SMALLEST: (u32, u32) = (256, 120);
 
 pub(crate) struct Encoder(NonNull<sys::AVCodecContext>);
 
@@ -21,6 +25,13 @@ impl Encoder {
     /// BT.709, through x264, x265 or prores_ks when FFmpeg has them.
     pub(crate) fn video(settings: &VideoSettings, global_header: bool) -> Result<Self, MediaError> {
         let invalid = || MediaError::InvalidSettings("frame size or rate out of range");
+        let (smallest_width, smallest_height) = DNXHR_SMALLEST;
+        let too_small = settings.width < smallest_width || settings.height < smallest_height;
+        if matches!(settings.codec, VideoCodec::Dnxhr(_)) && too_small {
+            return Err(MediaError::InvalidSettings(
+                "DNxHR needs a frame at least 256 × 120",
+            ));
+        }
         let codec = find_video(settings.codec);
         let encoder = Self::alloc(codec)?;
         // SAFETY: the context was just allocated and is exclusively owned.
@@ -41,6 +52,11 @@ impl Encoder {
                 sys::AVPixelFormat::AV_PIX_FMT_YUV422P10LE
             }
             VideoCodec::ProRes4444 => sys::AVPixelFormat::AV_PIX_FMT_YUVA444P10LE,
+            VideoCodec::Dnxhr(DnxhrQuality::Lb | DnxhrQuality::Sq | DnxhrQuality::Hq) => {
+                sys::AVPixelFormat::AV_PIX_FMT_YUV422P
+            }
+            VideoCodec::Dnxhr(DnxhrQuality::Hqx) => sys::AVPixelFormat::AV_PIX_FMT_YUV422P10LE,
+            VideoCodec::Dnxhr(DnxhrQuality::Dnx444) => sys::AVPixelFormat::AV_PIX_FMT_YUV444P10LE,
         };
         raw.colorspace = sys::AVColorSpace::AVCOL_SPC_BT709;
         raw.color_primaries = sys::AVColorPrimaries::AVCOL_PRI_BT709;
@@ -76,6 +92,16 @@ impl Encoder {
             (VideoCodec::ProRes422, _) => options.push((c"profile", c"standard".to_owned())),
             (VideoCodec::ProRes422Hq, _) => options.push((c"profile", c"hq".to_owned())),
             (VideoCodec::ProRes4444, _) => options.push((c"profile", c"4444".to_owned())),
+            (VideoCodec::Dnxhr(quality), _) => {
+                let profile = match quality {
+                    DnxhrQuality::Lb => c"dnxhr_lb",
+                    DnxhrQuality::Sq => c"dnxhr_sq",
+                    DnxhrQuality::Hq => c"dnxhr_hq",
+                    DnxhrQuality::Hqx => c"dnxhr_hqx",
+                    DnxhrQuality::Dnx444 => c"dnxhr_444",
+                };
+                options.push((c"profile", profile.to_owned()));
+            }
         }
         if settings.codec.is_prores() {
             // Apple's vendor code, which some players check before trusting the stream.
@@ -226,6 +252,7 @@ fn find_video(codec: VideoCodec) -> *const sys::AVCodec {
         VideoCodec::ProRes422 | VideoCodec::ProRes422Hq | VideoCodec::ProRes4444 => {
             find(Some(c"prores_ks"), sys::AVCodecID::AV_CODEC_ID_PRORES)
         }
+        VideoCodec::Dnxhr(_) => find(None, sys::AVCodecID::AV_CODEC_ID_DNXHD),
     }
 }
 

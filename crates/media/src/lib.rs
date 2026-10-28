@@ -17,7 +17,7 @@ mod still;
 mod test_picture;
 mod writer;
 
-pub use codec::{AudioCodec, RateControl, VideoCodec};
+pub use codec::{AudioCodec, DnxhrQuality, RateControl, VideoCodec};
 pub use error::MediaError;
 pub use frames::{AudioBuffer, DecodedFrame, VideoFrame};
 /// Decodes video on the GPU where the codec and device allow, from the next file opened.

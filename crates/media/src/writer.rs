@@ -287,6 +287,11 @@ mod tests {
                 Some(video(VideoCodec::ProRes422Hq, 128)),
                 Some(audio(AudioCodec::Pcm24)),
             ),
+            (
+                "dnxhr.mov",
+                Some(video(VideoCodec::Dnxhr(crate::DnxhrQuality::Hqx), 256)),
+                Some(audio(AudioCodec::Pcm24)),
+            ),
             ("sound.wav", None, Some(audio(AudioCodec::Pcm16))),
             ("sound.flac", None, Some(audio(AudioCodec::Flac))),
             ("sound.mp3", None, Some(audio(AudioCodec::Mp3))),
