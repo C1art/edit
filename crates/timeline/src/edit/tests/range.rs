@@ -68,3 +68,36 @@ fn ripple_trim_to_playhead_closes_up_to_the_nearest_cut_on_any_track() {
         .unwrap();
     assert_eq!(spans(&timeline, V1), [(0, 200, 0), (200, 500, 250)]);
 }
+
+#[test]
+fn trim_to_playhead_leaves_a_gap_on_each_track_under_it() {
+    let (mut timeline, source) = timeline();
+    timeline
+        .apply(place(source, 0, 0, 600, PlaceMode::Overwrite))
+        .unwrap();
+    timeline
+        .apply(Razor {
+            at: Ticks(200),
+            target: RazorTarget::Tracks(vec![A1]),
+        })
+        .unwrap();
+
+    // Each track trims its own clip: V1 from 0, A1 from its cut at 200.
+    timeline
+        .apply(TrimToPlayhead {
+            at: Ticks(250),
+            edge: Edge::Head,
+        })
+        .unwrap();
+    assert_eq!(spans(&timeline, V1), [(250, 600, 250)]);
+    assert_eq!(spans(&timeline, A1), [(0, 200, 0), (250, 600, 250)]);
+
+    timeline
+        .apply(TrimToPlayhead {
+            at: Ticks(500),
+            edge: Edge::Tail,
+        })
+        .unwrap();
+    assert_eq!(spans(&timeline, V1), [(250, 500, 250)]);
+    assert_eq!(spans(&timeline, A1), [(0, 200, 0), (250, 500, 250)]);
+}

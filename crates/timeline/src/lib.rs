@@ -82,7 +82,7 @@ pub use edit::{
     SetMasterEffects, SetMasterGain, SetMediaLog, SetProxy, SetSegmentSpeed, SetSequenceFormat,
     SetSubmix, SetTimeInterpolation, SetToFrameSize, SetTrackAutomation, SetTrackEffects,
     SetTrackMix, SetTrackOutput, SetTrackSwitch, SetTransition, Slide, Slip, SwitchAngle,
-    SyncMethod, TrackSwitch, Trim, TrimMode, Unlinked, UpdateMarker,
+    SyncMethod, TrackSwitch, Trim, TrimMode, TrimToPlayhead, Unlinked, UpdateMarker,
 };
 pub use edl::to_edl;
 pub use effect::{

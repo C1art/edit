@@ -110,6 +110,45 @@ impl RippleTrimToPlayhead {
     }
 }
 
+/// Trims the head (`Edge::Head`) or tail (`Edge::Tail`) of each clip under `at` on
+/// unlocked tracks to `at`, leaving a gap where the trimmed part was.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TrimToPlayhead {
+    pub at: Ticks,
+    pub edge: Edge,
+}
+
+impl Edit for TrimToPlayhead {
+    fn name(&self) -> &'static str {
+        match self.edge {
+            Edge::Head => "Trim Previous Edit to Playhead",
+            Edge::Tail => "Trim Next Edit to Playhead",
+        }
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let trims: Vec<_> = ops::unlocked_tracks(sequence)
+            .into_iter()
+            .filter_map(|track| {
+                let clip = sequence.track(track)?.clip_at(self.at)?;
+                let trimmed = match self.edge {
+                    Edge::Head => clip.start..self.at,
+                    Edge::Tail => self.at..clip.end(),
+                };
+                (!trimmed.is_empty()).then_some((track, trimmed))
+            })
+            .collect();
+        if trims.is_empty() {
+            return Err(TimelineError::NothingToEdit);
+        }
+        let mut relinks = Relinks::default();
+        for (track, trimmed) in trims {
+            ops::clear(sequence, track, trimmed, &mut relinks)?;
+        }
+        Ok(())
+    }
+}
+
 fn marked(sequence: &Sequence) -> Result<Range<Ticks>, TimelineError> {
     let range = sequence.marks.range(sequence.duration());
     if !sequence.marks.is_set() || range.is_empty() {
