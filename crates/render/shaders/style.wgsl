@@ -258,3 +258,19 @@ fn shadow_alpha(uv: vec2<f32>) -> f32 {
     }
     return sum / f32(SHADOW_TAPS) * shadow.w;
 }
+
+// Unsharp masking against the four neighbors. Sampling at level 0 is allowed off
+// uniform control flow, which the branch needs.
+fn sharpen(rgb: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
+    let amount = placement.amounts.y;
+    if amount <= 0.0 {
+        return rgb;
+    }
+    let texel = 1.0 / vec2<f32>(textureDimensions(source));
+    // Neighbours pass through the input LUT too, so it doesn't read as detail.
+    let around = input_grade(textureSampleLevel(source, source_sampler, uv + vec2<f32>(texel.x, 0.0), 0.0).rgb)
+        + input_grade(textureSampleLevel(source, source_sampler, uv - vec2<f32>(texel.x, 0.0), 0.0).rgb)
+        + input_grade(textureSampleLevel(source, source_sampler, uv + vec2<f32>(0.0, texel.y), 0.0).rgb)
+        + input_grade(textureSampleLevel(source, source_sampler, uv - vec2<f32>(0.0, texel.y), 0.0).rgb);
+    return max(rgb + amount * (rgb - around * 0.25), vec3<f32>(0.0));
+}

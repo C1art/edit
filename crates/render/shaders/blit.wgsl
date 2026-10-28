@@ -102,6 +102,10 @@ struct Placement {
     recolor_change_from: vec4<f32>,
     recolor_change_to: vec4<f32>,
     recolor_change_detail: vec4<f32>,
+    // Ultra Key's pedestal, contrast, choke and soften in source pixels; then its spill
+    // and its output (see key.wgsl).
+    key_matte: vec4<f32>,
+    key_spill: vec4<f32>,
 };
 
 const OUTLINE_VEC4S: u32 = 32u;
@@ -114,8 +118,6 @@ const BLACK_LIFT: f32 = 0.03;
 // Stops a wheel at its rim pushes its range toward the hue, and its level brightens it.
 const WHEEL_STOPS: f32 = 1.0;
 const LEVEL_STOPS: f32 = 1.0;
-// The largest chroma distance between saturated colors is about this.
-const CHROMA_RANGE: f32 = 0.5;
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
@@ -330,39 +332,6 @@ fn to_linear(rgb: vec3<f32>) -> vec3<f32> {
     return pow(max(rgb, vec3<f32>(0.0)), vec3<f32>(GAMMA));
 }
 
-// BT.709 Cb and Cr of gamma-encoded color, so keying matches what the eye separates.
-fn chroma(rgb: vec3<f32>) -> vec2<f32> {
-    let c = to_gamma(rgb);
-    return vec2<f32>(dot(c, vec3<f32>(-0.1146, -0.3854, 0.5)), dot(c, vec3<f32>(0.5, -0.4542, -0.0458)));
-}
-
-fn key_alpha(rgb: vec3<f32>) -> f32 {
-    let key = placement.key;
-    if key.w < 0.0 {
-        return color_key_alpha(rgb);
-    }
-    let distance = length(chroma(rgb) - chroma(key.rgb));
-    let tolerance = key.w * CHROMA_RANGE;
-    let softness = max(placement.amounts.x * CHROMA_RANGE, 0.0001);
-    return smoothstep(tolerance, tolerance + softness, distance) * color_key_alpha(rgb);
-}
-
-// Unsharp masking against the four neighbors. Sampling at level 0 is allowed off
-// uniform control flow, which the branch needs.
-fn sharpen(rgb: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
-    let amount = placement.amounts.y;
-    if amount <= 0.0 {
-        return rgb;
-    }
-    let texel = 1.0 / vec2<f32>(textureDimensions(source));
-    // Neighbours pass through the input LUT too, so it doesn't read as detail.
-    let around = input_grade(textureSampleLevel(source, source_sampler, uv + vec2<f32>(texel.x, 0.0), 0.0).rgb)
-        + input_grade(textureSampleLevel(source, source_sampler, uv - vec2<f32>(texel.x, 0.0), 0.0).rgb)
-        + input_grade(textureSampleLevel(source, source_sampler, uv + vec2<f32>(0.0, texel.y), 0.0).rgb)
-        + input_grade(textureSampleLevel(source, source_sampler, uv - vec2<f32>(0.0, texel.y), 0.0).rgb);
-    return max(rgb + amount * (rgb - around * 0.25), vec3<f32>(0.0));
-}
-
 fn stylize(rgb_in: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
     let amounts = placement.amounts;
     let mapped = mix(placement.tint_black.rgb, placement.tint_white.rgb, dot(rgb_in, LUMA));
@@ -486,8 +455,9 @@ fn source_color(uv: vec2<f32>) -> vec4<f32> {
 
 // How much of the cropped, keyed picture covers `uv`, which casts the shadow.
 fn cast_alpha(uv: vec2<f32>) -> f32 {
-    let color = source_color(warp(uv));
-    return color.a * key_alpha(color.rgb) * f32(in_crop(uv));
+    let source = warp(uv);
+    let color = source_color(source);
+    return color.a * key_shown(key_alpha(color.rgb, source)) * f32(in_crop(uv));
 }
 
 // The layer's graded, keyed and masked color, not yet premultiplied.
@@ -496,11 +466,11 @@ fn layer_color(in: VertexOutput) -> vec4<f32> {
     let uv = warp(pinned);
     let color = source_color(uv);
     let wiped = wipe_cover(in.canvas);
-    let keyed = key_alpha(color.rgb);
-    // Desaturating the key's edge suppresses the screen's color spilling onto it.
-    let unspilled = mix(vec3<f32>(dot(color.rgb, LUMA)), color.rgb, keyed);
-    let sharp = sharpen(unspilled, uv);
+    let matte = key_alpha(color.rgb, uv);
+    let keyed = key_shown(matte);
+    let sharp = sharpen(despill(color.rgb, matte), uv);
     var rgb = restyle(stylize(secondary(creative_grade(correct(change_to_color(mix_channels(leave_color(sharp)))))), pinned), uv);
+    rgb = key_view(rgb, matte);
     rgb = mix(rgb, vec3<f32>(1.0), placement.balance.w);
     let picture = color.a * keyed * f32(in_crop(pinned));
     let shadow = shadow_alpha(pinned);

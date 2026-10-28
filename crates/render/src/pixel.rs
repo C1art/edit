@@ -1,3 +1,5 @@
+use timeline::KeyOutput;
+
 use crate::recolor::Recolor;
 use crate::reshape::Reshape;
 use crate::style::PictureStyle;
@@ -29,6 +31,32 @@ pub struct ChromaKey {
     pub tolerance: f32,
     /// 0 to 1.
     pub softness: f32,
+    /// 0 to 1: the matte's coverage below this becomes fully transparent.
+    pub pedestal: f32,
+    /// 0 to 1: how much steeper the matte's partly transparent edge becomes.
+    pub contrast: f32,
+    /// Source pixels the matte shrinks by.
+    pub choke: f32,
+    /// Source pixels across which the matte's edge is blurred.
+    pub soften: f32,
+    /// 0 to 1: how much of the key's color is taken out of what remains.
+    pub spill: f32,
+    pub output: KeyOutput,
+}
+
+impl ChromaKey {
+    // A negative tolerance turns keying off in the shader.
+    const OFF: Self = Self {
+        color: [0.0; 3],
+        tolerance: -1.0,
+        softness: 0.0,
+        pedestal: 0.0,
+        contrast: 0.0,
+        choke: 0.0,
+        soften: 0.0,
+        spill: 0.0,
+        output: KeyOutput::Composite,
+    };
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -60,13 +88,9 @@ impl PixelEffects {
         recolor: Recolor::NONE,
     };
 
-    /// The shader's view, as five vec4s. A negative tolerance turns keying off.
+    /// The shader's view, as five vec4s.
     pub(crate) fn uniform(&self) -> [f32; 20] {
-        let key = self.key.unwrap_or(ChromaKey {
-            color: [0.0; 3],
-            tolerance: -1.0,
-            softness: 0.0,
-        });
+        let key = self.key.unwrap_or(ChromaKey::OFF);
         let [kr, kg, kb] = key.color;
         let [br, bg, bb] = self.tint_black;
         let [wr, wg, wb] = self.tint_white;
@@ -90,6 +114,22 @@ impl PixelEffects {
             0.0,
             vignette.midpoint,
             vignette.feather,
+            0.0,
+            0.0,
+        ]
+    }
+
+    /// The key's matte cleanup and spill, as two vec4s. The shader numbers outputs in
+    /// declaration order.
+    pub(crate) fn key_uniform(&self) -> [f32; 8] {
+        let key = self.key.unwrap_or(ChromaKey::OFF);
+        [
+            key.pedestal,
+            key.contrast,
+            key.choke,
+            key.soften,
+            key.spill,
+            key.output as u32 as f32,
             0.0,
             0.0,
         ]
