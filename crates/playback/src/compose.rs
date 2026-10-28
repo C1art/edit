@@ -1,13 +1,13 @@
 use render::{ColorAdjust, LayerLook};
 use timeline::{
     track_layers_at, ClipId, ColorCorrection, Look, Param, Reveal, Sequence, SourceId, Ticks,
-    TrackRef,
+    Track, TrackRef,
 };
 
 use crate::clip_decoders::ClipDecoders;
 use crate::pixel_effects::pixel_effects;
 use crate::track_video::TrackVideo;
-use crate::{Layer, PlaybackError};
+use crate::{Layer, LayerPicture, PlaybackError};
 
 /// Gaussian blur's "blurriness" reaches about two standard deviations.
 const BLURRINESS_PER_SIGMA: f32 = 2.0;
@@ -24,13 +24,32 @@ pub(crate) fn layers_at(
     warned: &mut Vec<SourceId>,
     warnings: &mut Vec<PlaybackError>,
 ) -> Vec<Layer> {
-    tracks.resize_with(sequence.video.len(), || {
+    let mut reported = Reported { warned, warnings };
+    video_layers(sequence, &sequence.video, pts, tracks, &mut reported)
+}
+
+/// Media already reported as unreadable, and the reports to send.
+struct Reported<'a> {
+    warned: &'a mut Vec<SourceId>,
+    warnings: &'a mut Vec<PlaybackError>,
+}
+
+/// The layers of `video` tracks, which are the sequence's own or a nest's; nests
+/// recurse with the decoders of the clip they're placed in.
+fn video_layers(
+    sequence: &Sequence,
+    video: &[Track],
+    pts: Ticks,
+    tracks: &mut Vec<TrackDecoders>,
+    reported: &mut Reported<'_>,
+) -> Vec<Layer> {
+    tracks.resize_with(video.len(), || {
         ClipDecoders::new(|| TrackVideo::new(sequence.timebase))
     });
     let size = [sequence.format.width, sequence.format.height];
     let canvas = size.map(|side| side as f32);
     let mut layers = Vec::new();
-    for ((index, track), decoders) in sequence.video.iter().enumerate().zip(tracks) {
+    for ((index, track), decoders) in video.iter().enumerate().zip(tracks) {
         if track.muted {
             continue;
         }
@@ -41,25 +60,35 @@ pub(crate) fn layers_at(
                 continue;
             };
             let decoder = decoders.for_clip(plan.clip.id, &showing);
-            match decoder.frame_at(media, plan.source_time, size) {
-                Ok(Some(frame)) => layers.push(Layer {
+            let picture = match &media.nest {
+                Some(nest) => {
+                    let (time, nested) = (plan.source_time, &mut decoder.nested);
+                    let inner = video_layers(sequence, &nest.video, time, nested, reported);
+                    (!inner.is_empty()).then_some(LayerPicture::Nest(inner))
+                }
+                None => match decoder.frame_at(media, plan.source_time, size) {
+                    Ok(frame) => frame.map(LayerPicture::Frame),
+                    Err(error) => {
+                        decoder.reset();
+                        if !reported.warned.contains(&media.id) {
+                            reported.warned.push(media.id);
+                            reported.warnings.push(PlaybackError::Media(error));
+                        }
+                        None
+                    }
+                },
+            };
+            if let Some(picture) = picture {
+                layers.push(Layer {
                     track: TrackRef::video(index),
-                    frame,
+                    picture,
                     look: layer_look(
                         &plan.clip.look,
                         plan.clip.source_time(pts),
                         plan.reveal,
                         canvas,
                     ),
-                }),
-                Ok(None) => {}
-                Err(error) => {
-                    decoder.reset();
-                    if !warned.contains(&media.id) {
-                        warned.push(media.id);
-                        warnings.push(PlaybackError::Media(error));
-                    }
-                }
+                });
             }
         }
     }

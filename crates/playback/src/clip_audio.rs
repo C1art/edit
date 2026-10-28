@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use timeline::{MediaItem, Speed};
+use timeline::{MediaItem, Sequence, Speed};
 
 use crate::stretch::Wsola;
 use crate::track_audio::TrackAudio;
@@ -10,11 +10,17 @@ const CHANNELS: usize = 2;
 /// Source frames read at once when playing backwards, a second at 48 kHz.
 const BACKWARD_BLOCK: i64 = 48_000;
 
-/// Stereo frames of a file's audio at the output rate.
+/// Stereo frames of a media item's audio at the output rate.
 pub(crate) trait FrameSource {
-    /// Adds `out.len() / 2` frames starting at source frame `first` into `out`.
-    fn read(&mut self, media: &MediaItem, first: i64, out: &mut [f32])
-        -> Result<(), PlaybackError>;
+    /// Adds `out.len() / 2` frames starting at source frame `first` into `out`. A
+    /// nested sequence finds the media its clips use in `pool`.
+    fn read(
+        &mut self,
+        pool: &Sequence,
+        media: &MediaItem,
+        first: i64,
+        out: &mut [f32],
+    ) -> Result<(), PlaybackError>;
     /// Forgets the read position, so the next read seeks.
     fn reset(&mut self);
 }
@@ -22,6 +28,7 @@ pub(crate) trait FrameSource {
 impl FrameSource for TrackAudio {
     fn read(
         &mut self,
+        _: &Sequence,
         media: &MediaItem,
         first: i64,
         out: &mut [f32],
@@ -73,7 +80,7 @@ impl ClipRead {
 /// One clip's audio at its speed and direction. Off normal speed the source is
 /// interpolated, so its pitch follows the speed as on tape, unless the clip maintains
 /// pitch.
-pub(crate) struct ClipAudio<S = TrackAudio> {
+pub(crate) struct ClipAudio<S> {
     source: S,
     /// Source frames from `window_start` on, kept so interpolation reaches across chunks.
     window: Vec<f32>,
@@ -101,6 +108,7 @@ impl<S: FrameSource> ClipAudio<S> {
     /// clip. Frames before the media starts stay silent.
     pub(crate) fn mix_into(
         &mut self,
+        pool: &Sequence,
         media: &MediaItem,
         read: &ClipRead,
         offset: i64,
@@ -114,11 +122,11 @@ impl<S: FrameSource> ClipAudio<S> {
             let first = read.position(offset).0;
             let skip = (-first).clamp(0, frames);
             let out = &mut out[usize::try_from(skip).unwrap_or(0) * CHANNELS..];
-            return self.source.read(media, first + skip, out);
+            return self.source.read(pool, media, first + skip, out);
         }
         if read.maintain_pitch && !read.speed.is_normal() {
             let needed = Wsola::needed(read, offset..offset + frames);
-            self.fill(media, needed, read.reverse)?;
+            self.fill(pool, media, needed, read.reverse)?;
             let (window, start) = (&self.window, self.window_start);
             self.stretch.render(read, offset, out, |frame, channel| {
                 window_sample(window, start, frame, channel)
@@ -130,7 +138,7 @@ impl<S: FrameSource> ClipAudio<S> {
         if high < 0 {
             return Ok(());
         }
-        self.fill(media, (low - 1).max(0)..high + 3, read.reverse)?;
+        self.fill(pool, media, (low - 1).max(0)..high + 3, read.reverse)?;
         for (frame, pair) in (offset..).zip(out.as_chunks_mut::<CHANNELS>().0) {
             let (index, t) = read.position(frame);
             if index < 0 {
@@ -150,6 +158,7 @@ impl<S: FrameSource> ClipAudio<S> {
     /// at `needed` so the requests that follow are already there.
     fn fill(
         &mut self,
+        pool: &Sequence,
         media: &MediaItem,
         needed: Range<i64>,
         backward: bool,
@@ -165,7 +174,7 @@ impl<S: FrameSource> ClipAudio<S> {
                 self.window.clear();
                 self.window.resize(frames * CHANNELS, 0.0);
                 self.window_start = start;
-                self.source.read(media, start, &mut self.window)?;
+                self.source.read(pool, media, start, &mut self.window)?;
             }
             return Ok(());
         }
@@ -178,7 +187,8 @@ impl<S: FrameSource> ClipAudio<S> {
             let old = self.window.len();
             let more = usize::try_from(needed.end - have).unwrap_or(0) * CHANNELS;
             self.window.resize(old + more, 0.0);
-            self.source.read(media, have, &mut self.window[old..])?;
+            self.source
+                .read(pool, media, have, &mut self.window[old..])?;
         }
         let stale = usize::try_from(needed.start - self.window_start).unwrap_or(0) * CHANNELS;
         self.window.drain(..stale.min(self.window.len()));
@@ -210,7 +220,7 @@ fn cubic(a: f32, b: f32, c: f32, d: f32, t: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use timeline::{SourceId, Ticks};
+    use timeline::{SourceId, Ticks, Timebase};
 
     /// Each frame's value is its frame number, and every read's start is recorded.
     #[derive(Default)]
@@ -221,6 +231,7 @@ mod tests {
     impl FrameSource for Ramp {
         fn read(
             &mut self,
+            _: &Sequence,
             _: &MediaItem,
             first: i64,
             out: &mut [f32],
@@ -249,6 +260,10 @@ mod tests {
         }
     }
 
+    fn pool() -> Sequence {
+        Sequence::new(Timebase::HZ_90K, Default::default())
+    }
+
     fn forward(source_in: i64, speed: Speed) -> ClipRead {
         ClipRead {
             source_in,
@@ -270,7 +285,7 @@ mod tests {
         let mut chunks = Vec::new();
         for chunk in 0..3 {
             let mut out = vec![0.0; 4 * CHANNELS];
-            clip.mix_into(&media(), &forward(100, speed), chunk * 4, &mut out)
+            clip.mix_into(&pool(), &media(), &forward(100, speed), chunk * 4, &mut out)
                 .unwrap();
             chunks.extend(left(&out));
         }
@@ -287,7 +302,8 @@ mod tests {
         let mut clip = ClipAudio::new(Ramp::default());
         let mut out = vec![0.0; 6 * CHANNELS];
         let read = forward(0, Speed::new(1, 2).unwrap());
-        clip.mix_into(&media(), &read, -4, &mut out).unwrap();
+        clip.mix_into(&pool(), &media(), &read, -4, &mut out)
+            .unwrap();
         let left = left(&out);
         assert_eq!(left[..5], [0.0; 5]);
         assert!(left[5] > 0.0);
@@ -303,7 +319,8 @@ mod tests {
         let mut heard = Vec::new();
         for chunk in 0..3 {
             let mut out = vec![0.0; 4 * CHANNELS];
-            clip.mix_into(&media(), &read, chunk * 4, &mut out).unwrap();
+            clip.mix_into(&pool(), &media(), &read, chunk * 4, &mut out)
+                .unwrap();
             heard.extend(left(&out));
         }
         let expected: Vec<f32> = (0..12).map(|k| 1_099.0 - k as f32).collect();

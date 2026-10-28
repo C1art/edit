@@ -1,23 +1,36 @@
 use std::sync::Arc;
 
 use media::VideoFrame;
-use render::{LayerImage, LayerLook};
+use render::{LayerImage, LayerLook, Picture};
 use timeline::{Ticks, TrackRef};
 
-/// One source picture placed in the program picture.
+/// One picture placed in the program picture.
 #[derive(Debug, Clone)]
 pub struct Layer {
     pub track: TrackRef,
-    pub frame: Arc<VideoFrame>,
+    pub picture: LayerPicture,
     pub look: LayerLook,
+}
+
+#[derive(Debug, Clone)]
+pub enum LayerPicture {
+    Frame(Arc<VideoFrame>),
+    /// What a nested sequence shows, bottom layer first, composited before the look.
+    Nest(Vec<Layer>),
 }
 
 impl Layer {
     pub fn image(&self) -> LayerImage<'_> {
+        let picture = match &self.picture {
+            LayerPicture::Frame(frame) => Picture::Pixels {
+                width: frame.width,
+                height: frame.height,
+                rgba: &frame.pixels,
+            },
+            LayerPicture::Nest(layers) => Picture::Group(layers.iter().map(Layer::image).collect()),
+        };
         LayerImage {
-            width: self.frame.width,
-            height: self.frame.height,
-            rgba: &self.frame.pixels,
+            picture,
             look: self.look,
         }
     }

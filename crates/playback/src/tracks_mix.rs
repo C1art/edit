@@ -1,0 +1,205 @@
+use audio::SampleRate;
+use timeline::{audio_fade, audio_span, ClipId, Gain, MediaItem, Sequence, SourceId, Ticks};
+use timeline::{Timebase, Track};
+
+use crate::clip_audio::{ClipAudio, ClipRead, FrameSource};
+use crate::clip_decoders::ClipDecoders;
+use crate::mixdown;
+use crate::track_audio::TrackAudio;
+use crate::PlaybackError;
+
+/// Mixes a set of audio tracks, the sequence's own or a nest's, with clip gain, track
+/// volume and balance and a master gain, into interleaved stereo at one output rate.
+pub(crate) struct TracksMix {
+    sample_rate: SampleRate,
+    /// One tick per output frame.
+    rate: Timebase,
+    tracks: Vec<ClipDecoders<ClipAudio<MediaAudio>>>,
+    track_mix: Vec<f32>,
+    clip_mix: Vec<f32>,
+    /// Media already reported as unreadable.
+    warned: Vec<SourceId>,
+}
+
+/// Peak levels after the faders: one per track, then the master.
+pub(crate) type MixLevels = (Vec<[f32; 2]>, [f32; 2]);
+
+impl TracksMix {
+    pub(crate) fn new(sample_rate: SampleRate) -> Self {
+        Self {
+            sample_rate,
+            rate: Timebase::new(1, sample_rate.0).unwrap_or(Timebase::HZ_90K),
+            tracks: Vec::new(),
+            track_mix: Vec::new(),
+            clip_mix: Vec::new(),
+            warned: Vec::new(),
+        }
+    }
+
+    pub(crate) fn rate(&self) -> Timebase {
+        self.rate
+    }
+
+    /// Forgets decode positions, so the next mix seeks.
+    pub(crate) fn reset(&mut self) {
+        self.tracks
+            .iter_mut()
+            .flat_map(ClipDecoders::iter_mut)
+            .for_each(ClipAudio::reset);
+    }
+
+    /// Writes the mix of `tracks` from output frame `start` over `out`. Clips find
+    /// their media in `pool`; media that can't be read is reported once and left silent.
+    pub(crate) fn mix(
+        &mut self,
+        pool: &Sequence,
+        (tracks, master): (&[Track], Gain),
+        start: i64,
+        out: &mut [f32],
+        warnings: &mut Vec<PlaybackError>,
+    ) -> MixLevels {
+        let timebase = pool.timebase;
+        let to_frames = |ticks: Ticks| ticks.rescale(timebase, self.rate).0;
+        let end = start + (out.len() / 2) as i64;
+        let sample_rate = self.sample_rate;
+        self.tracks.resize_with(tracks.len(), || {
+            ClipDecoders::new(|| ClipAudio::new(MediaAudio::new(timebase, sample_rate)))
+        });
+        self.track_mix.resize(out.len(), 0.0);
+        self.clip_mix.resize(out.len(), 0.0);
+        out.fill(0.0);
+        let soloing = tracks.iter().any(|track| track.solo);
+        let mut track_levels = Vec::with_capacity(tracks.len());
+        for (track, decoders) in tracks.iter().zip(&mut self.tracks) {
+            self.track_mix.fill(0.0);
+            if track.muted || (soloing && !track.solo) {
+                track_levels.push([0.0; 2]);
+                continue;
+            }
+            let heard: Vec<(usize, i64, i64)> = (0..track.clips.len())
+                .filter(|&index| !track.clips[index].disabled)
+                .filter_map(|index| {
+                    let (span_start, span_end) = audio_span(track, index);
+                    let (from, to) = (
+                        start.max(to_frames(span_start)),
+                        end.min(to_frames(span_end)),
+                    );
+                    (from < to).then_some((index, from, to))
+                })
+                .collect();
+            let keep: Vec<ClipId> = heard
+                .iter()
+                .map(|&(index, ..)| track.clips[index].id)
+                .collect();
+            for (index, from, to) in heard {
+                let clip = &track.clips[index];
+                let Some(media) = pool.media_item(clip.source) else {
+                    continue;
+                };
+                let offset = usize::try_from(from - start).unwrap_or(0) * 2;
+                let length = usize::try_from(to - from).unwrap_or(0) * 2;
+                let clip_mix = &mut self.clip_mix[..length];
+                clip_mix.fill(0.0);
+                let decoder = decoders.for_clip(clip.id, &keep);
+                let read = ClipRead {
+                    source_in: to_frames(clip.source_in),
+                    length: to_frames(clip.end()) - to_frames(clip.start),
+                    speed: clip.speed,
+                    reverse: clip.reverse,
+                    maintain_pitch: clip.maintain_pitch,
+                };
+                let into_clip = from - to_frames(clip.start);
+                if let Err(error) = decoder.mix_into(pool, media, &read, into_clip, clip_mix) {
+                    if !self.warned.contains(&media.id) {
+                        self.warned.push(media.id);
+                        warnings.push(error);
+                    }
+                }
+                let (pairs, _) = clip_mix.as_chunks_mut::<2>();
+                for (frame, pair) in (from..to).zip(pairs) {
+                    let fade = audio_fade(track, index, Ticks(frame).rescale(self.rate, timebase));
+                    pair.iter_mut().for_each(|sample| *sample *= fade);
+                }
+                let gain = clip.gain.amplitude();
+                mixdown::add_scaled(
+                    clip_mix,
+                    [gain, gain],
+                    &mut self.track_mix[offset..offset + length],
+                );
+            }
+            let volume = track.volume.amplitude();
+            let [left, right] = track.pan.balance();
+            track_levels.push(mixdown::add_scaled(
+                &self.track_mix,
+                [left * volume, right * volume],
+                out,
+            ));
+        }
+        let master = mixdown::scale_in_place(out, master.amplitude());
+        (track_levels, master)
+    }
+}
+
+/// A file's audio, or the mix of a nested sequence's tracks.
+pub(crate) struct MediaAudio {
+    file: TrackAudio,
+    sample_rate: SampleRate,
+    nest: Option<Box<NestAudio>>,
+}
+
+struct NestAudio {
+    mix: TracksMix,
+    out: Vec<f32>,
+    warnings: Vec<PlaybackError>,
+}
+
+impl MediaAudio {
+    fn new(timebase: Timebase, sample_rate: SampleRate) -> Self {
+        Self {
+            file: TrackAudio::new(timebase, sample_rate),
+            sample_rate,
+            nest: None,
+        }
+    }
+}
+
+impl FrameSource for MediaAudio {
+    fn read(
+        &mut self,
+        pool: &Sequence,
+        media: &MediaItem,
+        first: i64,
+        out: &mut [f32],
+    ) -> Result<(), PlaybackError> {
+        let Some(nest) = &media.nest else {
+            return self.file.read(pool, media, first, out);
+        };
+        let sample_rate = self.sample_rate;
+        let nested = self.nest.get_or_insert_with(|| {
+            Box::new(NestAudio {
+                mix: TracksMix::new(sample_rate),
+                out: Vec::new(),
+                warnings: Vec::new(),
+            })
+        });
+        nested.out.resize(out.len(), 0.0);
+        let tracks = (nest.audio.as_slice(), nest.master);
+        let warnings = &mut nested.warnings;
+        nested
+            .mix
+            .mix(pool, tracks, first, &mut nested.out, warnings);
+        mixdown::add_scaled(&nested.out, [1.0, 1.0], out);
+        // The clip reports a nest's first unreadable media, as it would a file's.
+        match nested.warnings.drain(..).next() {
+            Some(error) => Err(error),
+            None => Ok(()),
+        }
+    }
+
+    fn reset(&mut self) {
+        FrameSource::reset(&mut self.file);
+        if let Some(nested) = &mut self.nest {
+            nested.mix.reset();
+        }
+    }
+}

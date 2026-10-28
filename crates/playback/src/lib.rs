@@ -16,9 +16,10 @@ mod sequence_mix;
 mod stretch;
 mod track_audio;
 mod track_video;
+mod tracks_mix;
 mod video_worker;
 
-pub use composed::{ComposedFrame, Layer, Levels};
+pub use composed::{ComposedFrame, Layer, LayerPicture, Levels};
 pub use error::PlaybackError;
 pub use export::{ExportEvent, ExportJob, ExportSettings};
 pub use generated::generated_frame;

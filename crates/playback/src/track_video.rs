@@ -5,6 +5,7 @@ use std::sync::Arc;
 use media::{DecodedFrame, MediaError, MediaReader, Streams, VideoFrame};
 use timeline::{Generator, MediaItem, SourceId, Ticks, Timebase};
 
+use crate::compose::TrackDecoders;
 use crate::generated_frame;
 
 /// Jumps further ahead than this seek instead of decoding through; keyframe intervals
@@ -36,6 +37,8 @@ pub(crate) struct TrackVideo {
     /// The pictures decoded up to `current`, oldest first, kept while requests go
     /// backwards.
     behind: VecDeque<Arc<VideoFrame>>,
+    /// The decoders of a nested sequence's tracks, when the clip followed is one.
+    pub(crate) nested: Vec<TrackDecoders>,
 }
 
 impl TrackVideo {
@@ -47,6 +50,7 @@ impl TrackVideo {
             next: None,
             ended: false,
             behind: VecDeque::new(),
+            nested: Vec::new(),
         }
     }
 

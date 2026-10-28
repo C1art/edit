@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use media::MediaReader;
-use playback::Player;
+use playback::{LayerPicture, Player};
 use timeline::{
     FrameRate, ImportMedia, PlaceClip, PlaceMode, Sequence, Ticks, Timebase, Timeline, VideoFormat,
 };
@@ -89,8 +89,11 @@ fn seeks_show_the_clip_frame_or_black_in_gaps() {
     pump_until(&mut player, |player| {
         shown(player) == Some((Ticks(60 * FRAME), 1))
     });
-    let source_pts = player.current_frame().unwrap().layers[0].frame.pts;
-    assert_eq!(source_pts, Ticks(35 * FRAME));
+    let frame = player.current_frame().unwrap();
+    let LayerPicture::Frame(picture) = &frame.layers[0].picture else {
+        panic!("a file clip shows a decoded frame");
+    };
+    assert_eq!(picture.pts, Ticks(35 * FRAME));
 
     player.step(-25);
     pump_until(&mut player, |player| {
