@@ -66,6 +66,26 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                 editor.redo();
             }
             ui.separator();
+            let selected = !editor.view.selection.is_empty();
+            let cut = Button::new("Cut").shortcut_text(shortcut(ui, shortcuts::CUT));
+            if ui.add_enabled(selected, cut).clicked() {
+                editor.cut();
+            }
+            let copy = Button::new("Copy").shortcut_text(shortcut(ui, shortcuts::COPY));
+            if ui.add_enabled(selected, copy).clicked() {
+                editor.copy();
+            }
+            let can_paste = editor.clipboard.is_some();
+            let paste = Button::new("Paste").shortcut_text(shortcut(ui, shortcuts::PASTE));
+            if ui.add_enabled(can_paste, paste).clicked() {
+                editor.paste(PlaceMode::Overwrite);
+            }
+            let paste_insert =
+                Button::new("Paste Insert").shortcut_text(shortcut(ui, shortcuts::PASTE_INSERT));
+            if ui.add_enabled(can_paste, paste_insert).clicked() {
+                editor.paste(PlaceMode::Insert);
+            }
+            ui.separator();
             ui.menu_button("Preferences", |ui| {
                 let decoding = &mut editor.hardware_decoding;
                 let device = media::hardware_decoder().map_or_else(

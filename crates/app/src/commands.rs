@@ -1,4 +1,7 @@
-use timeline::{AddTrack, Lift, Razor, RazorTarget, RippleDelete, TrackKind};
+use timeline::{
+    AddTrack, Clipboard, Lift, PasteClips, PlaceMode, Razor, RazorTarget, RippleDelete, Timecode,
+    TrackKind,
+};
 
 use crate::editor::Editor;
 
@@ -42,6 +45,51 @@ impl Editor {
         let clips = std::mem::take(&mut self.view.selection);
         if !clips.is_empty() {
             self.apply(RippleDelete { clips });
+        }
+    }
+
+    pub(crate) fn copy(&mut self) {
+        let sequence = self.timeline.sequence();
+        let Some(clipboard) = Clipboard::copy(sequence, &self.view.selection) else {
+            return;
+        };
+        // Paste only arrives as an event while the system clipboard holds text.
+        let timecode = Timecode::new(
+            clipboard.duration(),
+            sequence.timebase,
+            sequence.format.frame_rate,
+        );
+        self.ctx
+            .copy_text(format!("{} clips, {timecode}", clipboard.clip_count()));
+        self.clipboard = Some(clipboard);
+    }
+
+    pub(crate) fn cut(&mut self) {
+        self.copy();
+        self.lift();
+    }
+
+    /// Pastes at the playhead, onto the targeted tracks where they are set, and parks
+    /// the playhead after the pasted clips.
+    pub(crate) fn paste(&mut self, mode: PlaceMode) {
+        let Some(clipboard) = self.clipboard.clone() else {
+            return;
+        };
+        let offset = |kind, target: Option<usize>| match (clipboard.first_track(kind), target) {
+            (Some(first), Some(target)) => target as isize - first as isize,
+            _ => 0,
+        };
+        let at = self.playhead();
+        let end = at + clipboard.duration();
+        let paste = PasteClips {
+            video_offset: offset(TrackKind::Video, self.view.targets.video),
+            audio_offset: offset(TrackKind::Audio, self.view.targets.audio),
+            clipboard,
+            at,
+            mode,
+        };
+        if self.apply(paste) {
+            self.seek_program(end);
         }
     }
 

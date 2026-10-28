@@ -1,4 +1,4 @@
-use egui::{Key, KeyboardShortcut, Modifiers};
+use egui::{Event, Key, KeyboardShortcut, Modifiers};
 use timeline::{PlaceMode, TrackKind};
 
 use crate::editor::Editor;
@@ -14,6 +14,11 @@ pub const OPEN: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key
 pub const SAVE: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::S);
 pub const SAVE_AS: KeyboardShortcut =
     KeyboardShortcut::new(Modifiers::COMMAND.plus(Modifiers::SHIFT), Key::S);
+pub const COPY: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::C);
+pub const CUT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::X);
+pub const PASTE: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::V);
+pub const PASTE_INSERT: KeyboardShortcut =
+    KeyboardShortcut::new(Modifiers::COMMAND.plus(Modifiers::SHIFT), Key::V);
 pub const IMPORT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::I);
 pub const EXPORT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::M);
 pub const UNDO: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::Z);
@@ -35,6 +40,9 @@ enum Action {
     Export,
     Undo,
     Redo,
+    Copy,
+    Cut,
+    Paste(PlaceMode),
     AddEdit,
     Transition(TrackKind),
     RippleDelete,
@@ -75,10 +83,14 @@ pub fn handle(editor: &mut Editor, ctx: &egui::Context) {
 
 fn pressed(ctx: &egui::Context) -> Option<Action> {
     ctx.input_mut(|input| {
+        if let Some(action) = clipboard_action(input) {
+            return Some(action);
+        }
         // Shortcuts with more modifiers go first so a plainer one can't claim their key.
         let chords = [
             (NEW, Action::NewProject),
             (SAVE_AS, Action::SaveAs),
+            (PASTE_INSERT, Action::Paste(PlaceMode::Insert)),
             (REDO, Action::Redo),
             (REDO_ALT, Action::Redo),
             (AUDIO_TRANSITION, Action::Transition(TrackKind::Audio)),
@@ -122,6 +134,19 @@ fn pressed(ctx: &egui::Context) -> Option<Action> {
     })
 }
 
+/// The windowing layer turns clipboard chords into events instead of key presses,
+/// including Shift+Delete on Windows, which is Ripple Delete here.
+fn clipboard_action(input: &egui::InputState) -> Option<Action> {
+    let shift_only = input.modifiers.shift && !input.modifiers.command;
+    input.events.iter().find_map(|event| match event {
+        Event::Copy => Some(Action::Copy),
+        Event::Cut if shift_only => Some(Action::RippleDelete),
+        Event::Cut => Some(Action::Cut),
+        Event::Paste(_) => Some(Action::Paste(PlaceMode::Overwrite)),
+        _ => None,
+    })
+}
+
 fn run(editor: &mut Editor, action: Action) {
     match action {
         Action::NewProject => editor.discard_then(AfterDiscard::NewProject),
@@ -132,6 +157,9 @@ fn run(editor: &mut Editor, action: Action) {
         Action::Export => crate::export::open(editor),
         Action::Undo => editor.undo(),
         Action::Redo => editor.redo(),
+        Action::Copy => editor.copy(),
+        Action::Cut => editor.cut(),
+        Action::Paste(mode) => editor.paste(mode),
         Action::AddEdit => editor.add_edit(),
         Action::Transition(kind) => crate::effects::apply_default_transition(editor, kind),
         Action::RippleDelete => editor.ripple_delete(),

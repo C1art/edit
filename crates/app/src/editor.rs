@@ -5,7 +5,7 @@ use audio::AudioOutput;
 use eframe::egui_wgpu::RenderState;
 use egui::{CentralPanel, Panel, RichText};
 use timeline::{
-    Edit, Sequence, SetProxy, SetSequenceFormat, SourceId, Ticks, Timebase, Timeline,
+    Clipboard, Edit, Sequence, SetProxy, SetSequenceFormat, SourceId, Ticks, Timebase, Timeline,
     TimelineError, VideoFormat,
 };
 
@@ -45,6 +45,7 @@ pub struct Editor {
     side_tab: SideTab,
     /// The gain in dB being typed into the clip gain dialog, while it is showing.
     pub(crate) gain_prompt: Option<f32>,
+    pub(crate) clipboard: Option<Clipboard>,
     pub(crate) path_prompt: Option<PathPrompt>,
     pub(crate) store: Option<ProjectStore>,
     /// Where the project was last saved or opened from.
@@ -110,6 +111,7 @@ impl Editor {
             effects: EffectControls::default(),
             side_tab: SideTab::default(),
             gain_prompt: None,
+            clipboard: None,
             path_prompt: None,
             store,
             project_path: None,
