@@ -132,6 +132,7 @@ fn program(editor: &mut Editor, ui: &mut egui::Ui) {
             let canvas = egui::vec2(format.width as f32, format.height as f32);
             crate::safe_margins::paint(ui, response.rect, canvas);
         }
+        crate::effects::motion_overlay(editor, ui, response.rect);
         crate::effects::mask_overlay(editor, ui, response.rect);
     }
     let Some(program) = &mut editor.program else {

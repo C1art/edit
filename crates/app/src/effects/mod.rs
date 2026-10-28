@@ -5,6 +5,7 @@ mod lane;
 mod look;
 mod mask_overlay;
 mod masks;
+mod motion_overlay;
 mod picture_frame;
 mod remap;
 mod secondary;
@@ -30,6 +31,7 @@ use look::Rows;
 
 pub use color::LutSlot;
 pub use mask_overlay::mask_overlay;
+pub use motion_overlay::motion_overlay;
 pub use transitions::apply_default_transition;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
