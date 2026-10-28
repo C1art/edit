@@ -1,8 +1,9 @@
 use egui::{Button, KeyboardShortcut, Ui};
-use timeline::FrameFit;
+use timeline::{FrameFit, Label, SetClipLabel};
 
 use crate::editor::Editor;
 use crate::shortcuts;
+use crate::timeline_view::label_color;
 
 fn shortcut(ui: &Ui, shortcut: KeyboardShortcut) -> String {
     ui.ctx().format_shortcut(&shortcut)
@@ -74,6 +75,7 @@ pub(crate) fn items(editor: &mut Editor, ui: &mut Ui) {
     if ui.add(gain).clicked() {
         editor.prompt_clip_gain();
     }
+    ui.menu_button("Label", |ui| labels(editor, ui));
     ui.menu_button("Video Options", |ui| {
         if ui.button("Add Frame Hold").clicked() {
             editor.add_frame_hold();
@@ -89,4 +91,33 @@ pub(crate) fn items(editor: &mut Editor, ui: &mut Ui) {
     if ui.button("Nest").clicked() {
         editor.nest_selection();
     }
+}
+
+fn labels(editor: &mut Editor, ui: &mut Ui) {
+    for label in Label::ALL {
+        let clicked = ui
+            .horizontal(|ui| {
+                let size = egui::vec2(12.0, 12.0);
+                let (swatch, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+                ui.painter().rect_filled(swatch, 2.0, label_color(label));
+                ui.button(label.name()).clicked()
+            })
+            .inner;
+        if clicked {
+            set_label(editor, Some(label));
+        }
+    }
+    ui.separator();
+    if ui.button("Track Color").clicked() {
+        set_label(editor, None);
+    }
+}
+
+fn set_label(editor: &mut Editor, label: Option<Label>) {
+    if editor.view.selection.is_empty() {
+        editor.notice("Select clips to label");
+        return;
+    }
+    let clips = editor.view.selection.clone();
+    editor.apply(SetClipLabel { clips, label });
 }

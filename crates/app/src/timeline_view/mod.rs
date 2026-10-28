@@ -21,6 +21,7 @@ use crate::clip_art::ClipArt;
 use gesture::{Gesture, PendingEdit};
 use header::HeaderAction;
 pub use markers::color as marker_color;
+pub use paint::label_color;
 use scale::TimeScale;
 pub use tool::Tool;
 

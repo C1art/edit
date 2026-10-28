@@ -1,5 +1,5 @@
 use egui::{Align2, Color32, FontId, Painter, Rect, Stroke, StrokeKind};
-use timeline::{Clip, ClipId, Gain, Sequence, Ticks, Timecode, Track, TrackKind};
+use timeline::{Clip, ClipId, Gain, Label, Sequence, Ticks, Timecode, Track, TrackKind};
 
 use super::clip_art::{self, ClipArea};
 use super::layout::{clip_rect, Row};
@@ -94,7 +94,7 @@ pub fn clips(
     let Some(track) = sequence.track(row.track) else {
         return;
     };
-    let base = match row.track.kind {
+    let track_color = match row.track.kind {
         TrackKind::Video => VIDEO_CLIP,
         TrackKind::Audio => AUDIO_CLIP,
     };
@@ -110,6 +110,7 @@ pub fn clips(
             continue;
         }
         let selected = selection.contains(&clip.id);
+        let base = clip.label.map_or(track_color, label_color);
         let mut fill = if selected {
             base.lerp_to_gamma(Color32::WHITE, 0.25)
         } else {
@@ -290,4 +291,27 @@ pub fn guide(painter: &Painter, x: f32, top: f32, bottom: f32) {
         [egui::pos2(x, top), egui::pos2(x, bottom)],
         Stroke::new(1.5, Color32::from_rgb(250, 210, 60)),
     );
+}
+
+/// Premiere's label colors, toned down so clip names stay readable on them.
+pub fn label_color(label: Label) -> Color32 {
+    let [r, g, b] = match label {
+        Label::Violet => [169, 144, 221],
+        Label::Iris => [90, 100, 204],
+        Label::Caribbean => [29, 232, 182],
+        Label::Lavender => [227, 132, 227],
+        Label::Cerulean => [26, 153, 227],
+        Label::Forest => [75, 165, 49],
+        Label::Rose => [247, 91, 157],
+        Label::Mango => [246, 154, 49],
+        Label::Purple => [140, 66, 199],
+        Label::Blue => [50, 99, 232],
+        Label::Teal => [41, 167, 167],
+        Label::Magenta => [227, 11, 140],
+        Label::Tan => [205, 173, 122],
+        Label::Green => [45, 158, 68],
+        Label::Brown => [141, 91, 48],
+        Label::Yellow => [227, 211, 57],
+    };
+    Color32::from_rgb(r, g, b).gamma_multiply(0.75)
 }
