@@ -31,6 +31,7 @@ fn sample() -> ProjectFile {
     clip.look.effects.push(VideoEffect::GaussianBlur {
         blurriness: clip.look.opacity.clone(),
     });
+    clip.look.effects.extend(VideoEffect::catalog());
     sequence.video.push(Track {
         clips: vec![clip],
         locked: true,
