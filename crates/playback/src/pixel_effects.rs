@@ -1,5 +1,5 @@
 use render::{
-    ChangeToColor, ChannelMixer, ChromaKey, ColorKey, LeaveColor, Mirror, PixelEffects,
+    ChangeToColor, ChannelMixer, ChromaKey, ColorKey, LeaveColor, LumaKey, Mirror, PixelEffects,
     PlaneTransform, Ramp, Warp,
 };
 use timeline::{
@@ -316,6 +316,38 @@ pub(crate) fn pixel_effects(
                     spill: share(spill),
                     output: *output,
                 });
+            }
+            VideoEffect::LumaKey { threshold, cutoff } => {
+                pixel.adjust.luma_key = Some(LumaKey {
+                    threshold: unit(threshold).clamp(0.0, 1.0),
+                    cutoff: unit(cutoff).clamp(0.0, 1.0),
+                });
+            }
+            VideoEffect::AlphaAdjust {
+                opacity,
+                ignore_alpha,
+                invert_alpha,
+                mask_only,
+            } => {
+                let alpha = &mut pixel.adjust.alpha;
+                alpha.opacity *= unit(opacity).clamp(0.0, 1.0);
+                alpha.ignore |= *ignore_alpha;
+                alpha.invert ^= *invert_alpha;
+                alpha.mask_only |= *mask_only;
+            }
+            VideoEffect::Solarize { threshold } => {
+                pixel.adjust.solarize = Some(unit(threshold).clamp(0.0, 1.0));
+            }
+            VideoEffect::Threshold { level } => {
+                pixel.adjust.threshold = Some((level.value_at(time) / 255.0).clamp(0.0, 1.0));
+            }
+            VideoEffect::Replicate { count } => {
+                pixel.adjust.replicate *= count.value_at(time).round().clamp(1.0, 16.0);
+            }
+            VideoEffect::ColorBalanceRgb { gains } => {
+                for (balance, gain) in pixel.adjust.balance.iter_mut().zip(gains) {
+                    *balance *= unit(gain).max(0.0);
+                }
             }
         }
     }
