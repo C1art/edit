@@ -1,5 +1,7 @@
 use audio::SampleRate;
-use timeline::{audio_fade, audio_span, ClipId, Gain, MediaItem, Sequence, SourceId, Ticks};
+use timeline::{
+    audio_fade, audio_span, clip_level, ClipId, Gain, MediaItem, Sequence, SourceId, Ticks,
+};
 use timeline::{Timebase, Track};
 
 use crate::clip_audio::{ClipAudio, ClipRead, FrameSource};
@@ -117,13 +119,13 @@ impl TracksMix {
                 }
                 let (pairs, _) = clip_mix.as_chunks_mut::<2>();
                 for (frame, pair) in (from..to).zip(pairs) {
-                    let fade = audio_fade(track, index, Ticks(frame).rescale(self.rate, timebase));
-                    pair.iter_mut().for_each(|sample| *sample *= fade);
+                    let position = Ticks(frame).rescale(self.rate, timebase);
+                    let level = audio_fade(track, index, position) * clip_level(clip, position);
+                    pair.iter_mut().for_each(|sample| *sample *= level);
                 }
-                let gain = clip.gain.amplitude();
                 mixdown::add_scaled(
                     clip_mix,
-                    [gain, gain],
+                    [1.0, 1.0],
                     &mut self.track_mix[offset..offset + length],
                 );
             }
