@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use timeline::{FrameRate, Ticks, Timebase};
+use timeline::{FrameRate, PixelAspect, Ticks, Timebase};
 
 use crate::ffi::{
     Decoder, Frame, InputContext, Packet, Received, SampleConverter, Scaler, OUTPUT_CHANNELS,
@@ -27,6 +27,7 @@ pub struct VideoInfo {
     pub width: u32,
     pub height: u32,
     pub frame_rate: Option<FrameRate>,
+    pub pixel_aspect: PixelAspect,
 }
 
 /// Which of a file's streams a reader decodes. Timeline playback opens one reader per
@@ -120,6 +121,10 @@ impl MediaReader {
                     frame_rate: input
                         .frame_rate(video.index)
                         .and_then(|(num, den)| FrameRate::new(num, den)),
+                    pixel_aspect: input
+                        .pixel_aspect(video.index)
+                        .and_then(|(num, den)| PixelAspect::new(num, den))
+                        .unwrap_or_default(),
                 }
             }),
             has_audio: audio.is_some(),

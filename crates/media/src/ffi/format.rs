@@ -78,6 +78,19 @@ impl InputContext {
         Some((u32::try_from(rate.num).ok()?, u32::try_from(rate.den).ok()?))
     }
 
+    /// The width over height of one stored pixel as `(num, den)`, when the file says;
+    /// FFmpeg weighs the container's flag against the codec's.
+    pub(crate) fn pixel_aspect(&self, index: usize) -> Option<(u32, u32)> {
+        let stream = self.stream(index)?;
+        // SAFETY: the context is open and `stream` is one of its streams; a null frame
+        // is allowed and leaves only the stream and its codec parameters to consult.
+        let ratio =
+            unsafe { sys::av_guess_sample_aspect_ratio(self.0.as_ptr(), stream, ptr::null_mut()) };
+        let num = u32::try_from(ratio.num).ok().filter(|&num| num > 0)?;
+        let den = u32::try_from(ratio.den).ok().filter(|&den| den > 0)?;
+        Some((num, den))
+    }
+
     /// The coded picture size declared in the stream header.
     pub(crate) fn frame_size(&self, index: usize) -> Option<(u32, u32)> {
         // SAFETY: `stream` returns valid stream pointers owned by the open context, and
