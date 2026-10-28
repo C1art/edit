@@ -316,4 +316,39 @@ mod tests {
         }
         std::fs::remove_dir_all(&dir).unwrap();
     }
+
+    #[test]
+    #[ignore = "encodes and decodes a real file with FFmpeg"]
+    fn prores_4444_keeps_transparency() {
+        let video = VideoSettings {
+            input_size: (64, 36),
+            width: 64,
+            height: 36,
+            frame_rate: FrameRate::FPS_25,
+            codec: VideoCodec::ProRes4444,
+            rate_control: RateControl::Quality(0),
+            profile: EncodeProfile::Delivery,
+        };
+        let path = std::env::temp_dir().join(format!("media-alpha-{}.mov", std::process::id()));
+        let mut writer = MediaWriter::create(&path, Some(video), None).unwrap();
+        // The left half clear, the right half opaque.
+        let picture: Vec<u8> = (0..64 * 36)
+            .flat_map(|pixel| match pixel % 64 < 32 {
+                true => [0, 0, 0, 0],
+                false => [200, 100, 50, 255],
+            })
+            .collect();
+        for _ in 0..5 {
+            writer.write_video(&picture).unwrap();
+        }
+        writer.finish().unwrap();
+        let mut reader = MediaReader::open(&path, Timebase::HZ_90K).unwrap();
+        let Some(crate::DecodedFrame::Video(frame)) = reader.next_frame().unwrap() else {
+            panic!("no picture");
+        };
+        let alpha = |x: usize| frame.pixels[(18 * 64 + x) * 4 + 3];
+        assert!(alpha(8) < 4, "{}", alpha(8));
+        assert!(alpha(56) > 251, "{}", alpha(56));
+        std::fs::remove_file(&path).unwrap();
+    }
 }

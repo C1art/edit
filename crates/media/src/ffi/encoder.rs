@@ -40,6 +40,7 @@ impl Encoder {
             VideoCodec::ProRes422 | VideoCodec::ProRes422Hq => {
                 sys::AVPixelFormat::AV_PIX_FMT_YUV422P10LE
             }
+            VideoCodec::ProRes4444 => sys::AVPixelFormat::AV_PIX_FMT_YUVA444P10LE,
         };
         raw.colorspace = sys::AVColorSpace::AVCOL_SPC_BT709;
         raw.color_primaries = sys::AVColorPrimaries::AVCOL_PRI_BT709;
@@ -74,11 +75,9 @@ impl Encoder {
             }
             (VideoCodec::ProRes422, _) => options.push((c"profile", c"standard".to_owned())),
             (VideoCodec::ProRes422Hq, _) => options.push((c"profile", c"hq".to_owned())),
+            (VideoCodec::ProRes4444, _) => options.push((c"profile", c"4444".to_owned())),
         }
-        if matches!(
-            settings.codec,
-            VideoCodec::ProRes422 | VideoCodec::ProRes422Hq
-        ) {
+        if settings.codec.is_prores() {
             // Apple's vendor code, which some players check before trusting the stream.
             options.push((c"vendor", c"apl0".to_owned()));
         }
@@ -224,7 +223,7 @@ fn find_video(codec: VideoCodec) -> *const sys::AVCodec {
     match codec {
         VideoCodec::H264 => find(Some(c"libx264"), sys::AVCodecID::AV_CODEC_ID_H264),
         VideoCodec::Hevc => find(Some(c"libx265"), sys::AVCodecID::AV_CODEC_ID_HEVC),
-        VideoCodec::ProRes422 | VideoCodec::ProRes422Hq => {
+        VideoCodec::ProRes422 | VideoCodec::ProRes422Hq | VideoCodec::ProRes4444 => {
             find(Some(c"prores_ks"), sys::AVCodecID::AV_CODEC_ID_PRORES)
         }
     }

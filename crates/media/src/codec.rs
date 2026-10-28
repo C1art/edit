@@ -16,12 +16,24 @@ pub enum VideoCodec {
     /// Apple ProRes 4:2:2 10-bit, which sets its own data rate.
     ProRes422,
     ProRes422Hq,
+    /// Apple ProRes 4:4:4:4 with a 16-bit alpha channel, for graphics laid over
+    /// other footage.
+    ProRes4444,
 }
 
 impl VideoCodec {
     /// Whether [`RateControl`] applies.
     pub fn is_rate_controlled(self) -> bool {
         matches!(self, Self::H264 | Self::Hevc)
+    }
+
+    /// Whether the picture's transparency is kept.
+    pub fn keeps_alpha(self) -> bool {
+        self == Self::ProRes4444
+    }
+
+    pub(crate) fn is_prores(self) -> bool {
+        matches!(self, Self::ProRes422 | Self::ProRes422Hq | Self::ProRes4444)
     }
 }
 
