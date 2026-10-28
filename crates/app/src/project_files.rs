@@ -19,6 +19,7 @@ pub enum PathPurpose {
     SaveProject,
     ImportCaptions,
     ExportCaptions,
+    ExportEdl,
     /// An image of the program at the playhead.
     ExportFrame,
     /// A `.cube` file for one of a clip's LUTs.
@@ -39,6 +40,7 @@ pub enum AfterDiscard {
 }
 
 const SUBRIP: &str = "srt";
+const EDL: &str = "edl";
 
 pub fn is_project(path: &Path) -> bool {
     has_extension(path, project::EXTENSION)
@@ -75,6 +77,11 @@ impl Editor {
                 .project_path
                 .as_ref()
                 .map(|path| path.with_extension(SUBRIP).display().to_string())
+                .unwrap_or_default(),
+            PathPurpose::ExportEdl => self
+                .project_path
+                .as_ref()
+                .map(|path| path.with_extension(EDL).display().to_string())
                 .unwrap_or_default(),
             PathPurpose::ExportFrame => self.default_frame_path().display().to_string(),
             _ => String::new(),
@@ -119,6 +126,27 @@ impl Editor {
         match &mut self.store {
             Some(store) => store.write_captions(path, captions, timebase),
             None => self.notice("Cannot export captions: the project worker is not running"),
+        }
+    }
+
+    /// Writes the targeted video track, V1 when none is, with the first two audio tracks.
+    fn export_edl(&mut self, mut path: PathBuf) {
+        if !has_extension(&path, EDL) {
+            path.as_mut_os_string().push(format!(".{EDL}"));
+        }
+        let title = self
+            .project_path
+            .as_ref()
+            .and_then(|project| project.file_stem())
+            .map_or_else(
+                || "Untitled".to_owned(),
+                |stem| stem.to_string_lossy().into_owned(),
+            );
+        let video_track = self.view.targets.video.unwrap_or(0);
+        let text = timeline::to_edl(self.timeline.sequence(), &title, video_track);
+        match &mut self.store {
+            Some(store) => store.write_edl(path, text),
+            None => self.notice("Cannot export the EDL: the project worker is not running"),
         }
     }
 
@@ -214,6 +242,12 @@ impl Editor {
                 StoreEvent::CaptionsWritten(path, Err(error)) => {
                     self.notice(format!("Cannot export {}: {error}", path.display()));
                 }
+                StoreEvent::EdlWritten(path, Ok(())) => {
+                    self.notice(format!("Exported the EDL to {}", path.display()));
+                }
+                StoreEvent::EdlWritten(path, Err(error)) => {
+                    self.notice(format!("Cannot export {}: {error}", path.display()));
+                }
                 StoreEvent::KeymapRead(_, Ok(text)) => {
                     if let Some(text) = text {
                         self.keymap = crate::keymap::Keymap::from_text(&text);
@@ -289,6 +323,11 @@ pub fn path_dialog(editor: &mut Editor, ctx: &egui::Context) {
             "Write the sequence's captions as SubRip to:",
             "Export",
         ),
+        PathPurpose::ExportEdl => (
+            "Export EDL",
+            "Write the targeted video track and audio tracks A1-A2 as a CMX 3600 EDL to:",
+            "Export",
+        ),
         PathPurpose::ExportFrame => (
             "Export Frame",
             "Save the program's frame at the playhead, at the sequence's size, as .png or .tif:",
@@ -336,6 +375,7 @@ pub fn path_dialog(editor: &mut Editor, ctx: &egui::Context) {
             PathPurpose::SaveProject => editor.save_project_to(path),
             PathPurpose::ImportCaptions => editor.import_captions(path),
             PathPurpose::ExportCaptions => editor.export_captions(path),
+            PathPurpose::ExportEdl => editor.export_edl(path),
             PathPurpose::ExportFrame => editor.export_frame(path),
             PathPurpose::Lut(clip, slot) => crate::effects::set_lut(editor, clip, slot, path),
         }

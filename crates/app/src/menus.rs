@@ -64,6 +64,9 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             if ui.add(frame).clicked() {
                 editor.prompt_path(PathPurpose::ExportFrame);
             }
+            if ui.button("Export EDL…").clicked() {
+                editor.prompt_path(PathPurpose::ExportEdl);
+            }
             ui.separator();
             if ui.button("Quit").clicked() {
                 ui.ctx().send_viewport_cmd(ViewportCommand::Close);
