@@ -9,6 +9,7 @@ mod mixer;
 mod monitor;
 mod monitors;
 mod placing;
+mod proxies;
 mod scopes;
 mod shortcuts;
 mod source;

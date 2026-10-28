@@ -1,10 +1,14 @@
 use egui::{Label, RichText, Sense};
 use timeline::{FrameRate, MediaItem, SourceId, Timebase, Timecode};
 
+use crate::proxies::ProxyMaker;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PoolAction {
     Open(SourceId),
     Remove(SourceId),
+    CreateProxy(SourceId),
+    DetachProxy(SourceId),
 }
 
 /// Lists imported media. Click opens an item in the source monitor; dragging one onto
@@ -14,6 +18,7 @@ pub fn ui(
     media: &[MediaItem],
     timebase: Timebase,
     importing: bool,
+    proxies: Option<&ProxyMaker>,
 ) -> Option<PoolAction> {
     let mut action = None;
     if media.is_empty() && !importing {
@@ -24,7 +29,8 @@ pub fn ui(
         .max_height(ui.available_height() * 0.6)
         .show(ui, |ui| {
             for item in media {
-                let response = item_row(ui, item, timebase);
+                let building = proxies.and_then(|maker| maker.progress(item.id));
+                let response = item_row(ui, item, timebase, building);
                 if response.drag_started() {
                     response.dnd_set_drag_payload(item.id);
                 }
@@ -38,6 +44,22 @@ pub fn ui(
                     if ui.button("Remove from Project").clicked() {
                         action = Some(PoolAction::Remove(item.id));
                     }
+                    if item.video.is_some() {
+                        ui.separator();
+                        let label = if item.proxy.is_some() {
+                            "Recreate Proxy"
+                        } else {
+                            "Create Proxy"
+                        };
+                        let enabled = proxies.is_some() && building.is_none();
+                        if ui.add_enabled(enabled, egui::Button::new(label)).clicked() {
+                            action = Some(PoolAction::CreateProxy(item.id));
+                        }
+                        let detach = egui::Button::new("Detach Proxy");
+                        if ui.add_enabled(item.proxy.is_some(), detach).clicked() {
+                            action = Some(PoolAction::DetachProxy(item.id));
+                        }
+                    }
                 });
             }
         });
@@ -50,7 +72,12 @@ pub fn ui(
     action
 }
 
-fn item_row(ui: &mut egui::Ui, item: &MediaItem, timebase: Timebase) -> egui::Response {
+fn item_row(
+    ui: &mut egui::Ui,
+    item: &MediaItem,
+    timebase: Timebase,
+    building: Option<f32>,
+) -> egui::Response {
     let rate = item
         .video
         .map_or(FrameRate::FPS_25, |video| video.frame_rate);
@@ -66,10 +93,17 @@ fn item_row(ui: &mut egui::Ui, item: &MediaItem, timebase: Timebase) -> egui::Re
     if item.has_audio {
         details.push("audio".to_owned());
     }
+    if item.proxy.is_some() {
+        details.push("proxy".to_owned());
+    }
     let inner = ui.group(|ui| {
         ui.set_width(ui.available_width());
         ui.add(Label::new(RichText::new(&item.name).strong()).truncate());
         ui.add(Label::new(RichText::new(details.join(" · ")).small()).truncate());
+        if let Some(done) = building {
+            let bar = egui::ProgressBar::new(done).text(RichText::new("Creating proxy").small());
+            ui.add(bar.desired_height(14.0));
+        }
     });
     inner
         .response

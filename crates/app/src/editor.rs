@@ -5,8 +5,8 @@ use audio::AudioOutput;
 use eframe::egui_wgpu::RenderState;
 use egui::{CentralPanel, Panel, RichText};
 use timeline::{
-    Edit, Sequence, SetSequenceFormat, SourceId, Ticks, Timebase, Timeline, TimelineError,
-    VideoFormat,
+    Edit, Sequence, SetProxy, SetSequenceFormat, SourceId, Ticks, Timebase, Timeline,
+    TimelineError, VideoFormat,
 };
 
 use crate::effects::{self, EffectControls, SideTab};
@@ -15,6 +15,7 @@ use crate::import::Importer;
 use crate::media_pool::{self, PoolAction};
 use crate::mixer::{self, Mixer};
 use crate::monitors::{self, Focus};
+use crate::proxies::ProxyMaker;
 use crate::source::SourceMonitor;
 use crate::timeline_view::TimelineView;
 use crate::viewer::Viewer;
@@ -27,6 +28,9 @@ pub struct Editor {
     pub(crate) audio: Option<AudioOutput>,
     pub(crate) render_state: Option<RenderState>,
     pub(crate) importer: Option<Importer>,
+    proxies: Option<ProxyMaker>,
+    /// Whether the monitors play proxies where media has them.
+    pub(crate) use_proxies: bool,
     pub(crate) source: Option<SourceMonitor>,
     pub(crate) program: Option<Viewer>,
     /// The timeline revision the program viewer is playing.
@@ -61,6 +65,9 @@ impl Editor {
         let importer = Importer::new(timeline.sequence().timebase)
             .map_err(|error| notices.push(format!("Import disabled: {error}")))
             .ok();
+        let proxies = ProxyMaker::new()
+            .map_err(|error| notices.push(format!("Proxies disabled: {error}")))
+            .ok();
         let program = Viewer::new(
             Arc::new(timeline.sequence().clone()),
             audio.as_ref(),
@@ -74,6 +81,8 @@ impl Editor {
             audio,
             render_state,
             importer,
+            proxies,
+            use_proxies: false,
             source: None,
             program,
             focus: Focus::Program,
@@ -199,6 +208,27 @@ impl Editor {
         }
     }
 
+    fn poll_proxies(&mut self, ctx: &egui::Context) {
+        let Some(maker) = &mut self.proxies else {
+            return;
+        };
+        let finished = maker.poll();
+        if maker.is_busy() {
+            ctx.request_repaint();
+        }
+        for (source, result) in finished {
+            match result {
+                Ok(path) => {
+                    self.apply(SetProxy {
+                        source,
+                        proxy: Some(path),
+                    });
+                }
+                Err(error) => self.notice(format!("Cannot create proxy: {error}")),
+            }
+        }
+    }
+
     fn sync_program(&mut self) {
         let revision = self.timeline.revision();
         if revision == self.shown_revision {
@@ -206,6 +236,11 @@ impl Editor {
         }
         self.shown_revision = revision;
         self.view.prune_selection(self.timeline.sequence());
+        if let Some(source) = &mut self.source {
+            if let Some(item) = self.timeline.sequence().media_item(source.source) {
+                source.refresh(item);
+            }
+        }
         if let Some(program) = &mut self.program {
             program
                 .player
@@ -215,6 +250,13 @@ impl Editor {
 
     fn update_viewers(&mut self, ctx: &egui::Context) {
         let mut notices = Vec::new();
+        let viewers = [
+            self.program.as_mut(),
+            self.source.as_mut().map(|source| &mut source.viewer),
+        ];
+        for viewer in viewers.into_iter().flatten() {
+            viewer.player.set_proxies(self.use_proxies);
+        }
         if let Some(program) = &mut self.program {
             notices.extend(program.update(ctx));
         }
@@ -231,7 +273,8 @@ impl Editor {
         ui.separator();
         let importing = self.importer.as_ref().is_some_and(Importer::is_busy);
         let sequence = self.timeline.sequence();
-        match media_pool::ui(ui, &sequence.media, sequence.timebase, importing) {
+        let proxies = self.proxies.as_ref();
+        match media_pool::ui(ui, &sequence.media, sequence.timebase, importing, proxies) {
             Some(PoolAction::Open(id)) => self.open_source(id),
             Some(PoolAction::Remove(id)) => {
                 if self
@@ -242,6 +285,18 @@ impl Editor {
                     self.source = None;
                 }
                 self.apply(timeline::RemoveMedia { source: id });
+            }
+            Some(PoolAction::CreateProxy(id)) => {
+                let path = sequence.media_item(id).map(|item| item.path.clone());
+                if let (Some(maker), Some(path)) = (&mut self.proxies, path) {
+                    maker.request(id, path);
+                }
+            }
+            Some(PoolAction::DetachProxy(id)) => {
+                self.apply(SetProxy {
+                    source: id,
+                    proxy: None,
+                });
             }
             None => {}
         }
@@ -316,6 +371,7 @@ impl eframe::App for Editor {
             self.import(path);
         }
         self.poll_imports();
+        self.poll_proxies(&ctx);
         if self.importer.as_ref().is_some_and(Importer::is_busy) {
             ctx.request_repaint();
         }

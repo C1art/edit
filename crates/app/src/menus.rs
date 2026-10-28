@@ -94,6 +94,9 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             if ui.button("Add Audio Track").clicked() {
                 editor.add_track(TrackKind::Audio);
             }
+            ui.separator();
+            ui.checkbox(&mut editor.use_proxies, "Use Proxies")
+                .on_hover_text("Play proxies where media has them; export uses the originals");
         });
     });
 }

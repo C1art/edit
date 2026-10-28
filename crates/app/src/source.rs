@@ -33,6 +33,15 @@ impl SourceMonitor {
         })
     }
 
+    /// Picks up changes to the item shown, such as a proxy being attached.
+    pub fn refresh(&mut self, item: &MediaItem) {
+        let player = &mut self.viewer.player;
+        if player.sequence().media.first() != Some(item) {
+            let timebase = player.sequence().timebase;
+            player.set_sequence(Arc::new(source_sequence(item, timebase)));
+        }
+    }
+
     pub fn mark_in(&mut self) {
         let position = self.viewer.player.position();
         self.marks.mark_in = Some(position);
