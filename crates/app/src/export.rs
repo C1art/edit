@@ -1,14 +1,17 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use egui::{Key, ProgressBar};
+use egui::{ComboBox, DragValue, Key, ProgressBar, Slider};
+use media::{AudioCodec, RateControl};
 use playback::{ExportEvent, ExportJob, ExportSettings};
 
 use crate::editor::Editor;
+use crate::export_format::{ExportFormat, Format, PRESETS};
 
-const DEFAULT_CRF: u8 = 18;
-const SAMPLE_RATE: u32 = 48_000;
-const AUDIO_BITS_PER_SECOND: u32 = 192_000;
+/// Frame heights offered besides the sequence's own.
+const HEIGHTS: [u32; 6] = [2160, 1440, 1080, 720, 540, 360];
+const SAMPLE_RATES: [u32; 2] = [44_100, 48_000];
+const AUDIO_KBPS: [u32; 4] = [128, 192, 256, 320];
 
 struct Running {
     job: ExportJob,
@@ -27,7 +30,7 @@ enum Span {
 /// The export dialog: settings while idle, progress while a job runs.
 pub struct ExportDialog {
     path: String,
-    crf: u8,
+    format: ExportFormat,
     span: Span,
     running: Option<Running>,
 }
@@ -49,9 +52,11 @@ pub fn open(editor: &mut Editor) {
         .and_then(|item| item.path.parent())
         .map(PathBuf::from)
         .unwrap_or_default();
+    let format = ExportFormat::default();
+    let file = format!("Sequence.{}", format.format.extension());
     editor.export = Some(ExportDialog {
-        path: folder.join("Sequence.mp4").display().to_string(),
-        crf: DEFAULT_CRF,
+        path: folder.join(file).display().to_string(),
+        format,
         span,
         running: None,
     });
@@ -59,7 +64,9 @@ pub fn open(editor: &mut Editor) {
 
 pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     poll(editor);
-    let marked = editor.timeline.sequence().marks.is_set();
+    let sequence = editor.timeline.sequence();
+    let marked = sequence.marks.is_set();
+    let sequence_size = (sequence.format.width, sequence.format.height);
     let Some(dialog) = &mut editor.export else {
         return;
     };
@@ -90,12 +97,15 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                 ctx.request_repaint();
             }
             None => {
-                ui.label("Output file (.mp4, .mov or .mkv):");
+                let kind = dialog.format.format;
+                settings(ui, &mut dialog.format, sequence_size);
+                if dialog.format.format != kind {
+                    let mut path = PathBuf::from(dialog.path.trim());
+                    path.set_extension(dialog.format.format.extension());
+                    dialog.path = path.display().to_string();
+                }
+                ui.label("Output file:");
                 ui.add(egui::TextEdit::singleline(&mut dialog.path).desired_width(420.0));
-                ui.horizontal(|ui| {
-                    ui.label("Quality (CRF, lower is better):");
-                    ui.add(egui::Slider::new(&mut dialog.crf, 0..=40));
-                });
                 ui.horizontal(|ui| {
                     ui.label("Source range:");
                     ui.radio_value(&mut dialog.span, Span::Sequence, "Entire sequence");
@@ -104,7 +114,7 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                             .on_disabled_hover_text("Mark in or out on the program first");
                     });
                 });
-                ui.label("H.264 and AAC at the sequence's frame size and rate.");
+                ui.label(summary(&dialog.format, sequence_size));
                 ui.horizontal(|ui| {
                     start = ui.button("Export").clicked();
                     close = ui.button("Close").clicked()
@@ -125,13 +135,16 @@ fn start_job(editor: &mut Editor) {
     };
     let path = PathBuf::from(dialog.path.trim().trim_matches('"'));
     let sequence = editor.timeline.sequence();
+    let sequence_size = (sequence.format.width, sequence.format.height);
+    let (width, height) = dialog.format.size(sequence_size);
     let problem = if path.as_os_str().is_empty() {
         Some("Choose an output file first".to_owned())
     } else if sequence.duration() == timeline::Ticks::ZERO {
         Some("The sequence is empty".to_owned())
-    } else if !sequence.format.width.is_multiple_of(2) || !sequence.format.height.is_multiple_of(2)
+    } else if dialog.format.format.video_codec().is_some()
+        && !(width.is_multiple_of(2) && height.is_multiple_of(2))
     {
-        Some("The frame size must be even to export".to_owned())
+        Some(format!("The frame size must be even, not {width}×{height}"))
     } else {
         None
     };
@@ -151,9 +164,8 @@ fn start_job(editor: &mut Editor) {
     }
     let settings = ExportSettings {
         path: path.clone(),
-        crf: dialog.crf,
-        sample_rate: SAMPLE_RATE,
-        audio_bits_per_second: AUDIO_BITS_PER_SECOND,
+        video: dialog.format.video(sequence_size),
+        audio: dialog.format.audio(),
         range,
     };
     match ExportJob::start(
@@ -171,6 +183,162 @@ fn start_job(editor: &mut Editor) {
             });
         }
         Err(error) => editor.notice(format!("Cannot export: {error}")),
+    }
+}
+
+fn settings(ui: &mut egui::Ui, format: &mut ExportFormat, sequence_size: (u32, u32)) {
+    egui::Grid::new("export settings")
+        .num_columns(2)
+        .spacing([12.0, 6.0])
+        .show(ui, |ui| {
+            ui.label("Preset:");
+            let current = format.preset_name();
+            ComboBox::from_id_salt("export preset")
+                .width(260.0)
+                .selected_text(current.unwrap_or("Custom"))
+                .show_ui(ui, |ui| {
+                    for preset in &PRESETS {
+                        if ui
+                            .selectable_label(current == Some(preset.name), preset.name)
+                            .clicked()
+                        {
+                            *format = preset.format;
+                        }
+                    }
+                });
+            ui.end_row();
+            ui.label("Format:");
+            ComboBox::from_id_salt("export format")
+                .width(260.0)
+                .selected_text(format.format.name())
+                .show_ui(ui, |ui| {
+                    for kind in Format::ALL {
+                        ui.selectable_value(&mut format.format, kind, kind.name());
+                    }
+                });
+            ui.end_row();
+            if let Some(codec) = format.format.video_codec() {
+                video_rows(ui, format, sequence_size, codec.is_rate_controlled());
+            }
+            if format.has_audio() {
+                ui.label("Sample rate:");
+                ui.horizontal(|ui| {
+                    for rate in SAMPLE_RATES {
+                        let text = format!("{} kHz", rate as f32 / 1_000.0);
+                        ui.selectable_value(&mut format.sample_rate, rate, text);
+                    }
+                });
+                ui.end_row();
+                if format.format.audio_codec().is_lossy() {
+                    ui.label("Audio bitrate:");
+                    ui.horizontal(|ui| {
+                        for kbps in AUDIO_KBPS {
+                            let text = format!("{kbps} kbps");
+                            ui.selectable_value(&mut format.audio_kbps, kbps, text);
+                        }
+                    });
+                    ui.end_row();
+                }
+            }
+        });
+}
+
+fn video_rows(
+    ui: &mut egui::Ui,
+    format: &mut ExportFormat,
+    sequence_size: (u32, u32),
+    rate_controlled: bool,
+) {
+    ui.label("Frame size:");
+    let size_text = |height: Option<u32>| {
+        let (width, height) = ExportFormat { height, ..*format }.size(sequence_size);
+        if (width, height) == sequence_size {
+            format!("{width}×{height} (sequence)")
+        } else {
+            format!("{width}×{height}")
+        }
+    };
+    ComboBox::from_id_salt("export size")
+        .width(260.0)
+        .selected_text(size_text(format.height))
+        .show_ui(ui, |ui| {
+            ui.selectable_value(&mut format.height, None, size_text(None));
+            for height in HEIGHTS
+                .into_iter()
+                .filter(|&height| height != sequence_size.1)
+            {
+                ui.selectable_value(&mut format.height, Some(height), size_text(Some(height)));
+            }
+        });
+    ui.end_row();
+    if rate_controlled {
+        ui.label("Bitrate:");
+        ui.horizontal(|ui| {
+            let by_quality = matches!(format.rate_control, RateControl::Quality(_));
+            if ui.radio(by_quality, "Quality").clicked() && !by_quality {
+                format.rate_control = RateControl::Quality(18);
+            }
+            if ui.radio(!by_quality, "Target").clicked() && by_quality {
+                format.rate_control = RateControl::Bitrate(16_000_000);
+            }
+            match &mut format.rate_control {
+                RateControl::Quality(crf) => {
+                    ui.add(Slider::new(crf, 0..=40).text("CRF, lower is better"));
+                }
+                RateControl::Bitrate(bits) => {
+                    let mut mbps = *bits as f32 / 1e6;
+                    let drag = DragValue::new(&mut mbps)
+                        .range(1.0..=400.0)
+                        .speed(0.2)
+                        .max_decimals(1)
+                        .suffix(" Mbps");
+                    if ui.add(drag).changed() {
+                        *bits = (mbps * 1e6).round() as u32;
+                    }
+                }
+            }
+        });
+        ui.end_row();
+    }
+    ui.label("Audio:");
+    ui.checkbox(&mut format.with_audio, "Export audio");
+    ui.end_row();
+}
+
+fn summary(format: &ExportFormat, sequence_size: (u32, u32)) -> String {
+    let audio = format.audio().map(|audio| {
+        let codec = audio_codec_name(audio.codec);
+        if audio.codec.is_lossy() {
+            format!("{codec} {} kbps", format.audio_kbps)
+        } else {
+            codec.to_owned()
+        }
+    });
+    match (format.video(sequence_size), audio) {
+        (Some(video), Some(audio)) => format!(
+            "{} at {}×{}, with {audio} sound.",
+            format.format.name(),
+            video.size.0,
+            video.size.1
+        ),
+        (Some(video), None) => format!(
+            "{} at {}×{}, silent.",
+            format.format.name(),
+            video.size.0,
+            video.size.1
+        ),
+        (None, Some(audio)) => format!("Sound only, {audio}."),
+        (None, None) => String::new(),
+    }
+}
+
+fn audio_codec_name(codec: AudioCodec) -> &'static str {
+    match codec {
+        AudioCodec::Aac => "AAC",
+        AudioCodec::Mp3 => "MP3",
+        AudioCodec::Flac => "FLAC",
+        AudioCodec::Pcm16 => "16-bit PCM",
+        AudioCodec::Pcm24 => "24-bit PCM",
     }
 }
 

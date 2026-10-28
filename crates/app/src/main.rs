@@ -4,6 +4,7 @@ mod commands;
 mod editor;
 mod effects;
 mod export;
+mod export_format;
 mod import;
 mod marker_dialog;
 mod media_pool;
