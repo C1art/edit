@@ -146,6 +146,11 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             {
                 placing::edit_from_source(editor, PlaceMode::Overwrite);
             }
+            let subclip =
+                Button::new("Make Subclip").shortcut_text(shortcut(ui, shortcuts::MAKE_SUBCLIP));
+            if ui.add(subclip).clicked() {
+                editor.make_subclip();
+            }
             ui.separator();
             crate::clip_menu::items(editor, ui);
         });

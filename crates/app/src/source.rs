@@ -1,3 +1,4 @@
+use std::ops::Range;
 use std::sync::Arc;
 
 use audio::AudioOutput;
@@ -14,6 +15,8 @@ pub struct SourceMonitor {
     pub source: SourceId,
     pub name: String,
     pub viewer: Viewer,
+    /// Monitor time zero in the media's time: the start of a subclip, else zero.
+    offset: Ticks,
     pub marks: Marks,
 }
 
@@ -30,6 +33,7 @@ impl SourceMonitor {
             source: item.id,
             name: item.name.clone(),
             viewer: Viewer::new(sequence, audio, render_state)?,
+            offset: item.default_range(pool.timebase).start,
             marks: Marks::default(),
         })
     }
@@ -52,10 +56,22 @@ impl SourceMonitor {
             .with_out(transport::out_point(&self.viewer.player));
     }
 
-    /// The marked source range as `(source_in, duration)`, defaulting to the whole item.
+    /// The marked source range as `(source_in, duration)` in the media's time,
+    /// defaulting to the whole item.
     pub fn range(&self) -> (Ticks, Ticks) {
         let marked = self.marks.range(self.viewer.player.duration());
-        (marked.start, marked.end - marked.start)
+        (self.offset + marked.start, marked.end - marked.start)
+    }
+
+    /// Marks the media range `marked` and parks on media time `at`.
+    pub fn show_media(&mut self, marked: Range<Ticks>, at: Ticks) {
+        let end = self.viewer.player.duration();
+        let to_monitor = |time: Ticks| (time - self.offset).clamp(Ticks::ZERO, end);
+        self.marks = Marks {
+            mark_in: Some(to_monitor(marked.start)),
+            mark_out: Some(to_monitor(marked.end)),
+        };
+        self.viewer.player.seek(to_monitor(at));
     }
 }
 
@@ -65,13 +81,14 @@ fn source_sequence(item: &MediaItem, pool: &Sequence) -> Sequence {
     let timebase = pool.timebase;
     let mut sequence = Sequence::new(timebase, item.video.unwrap_or(pool.format));
     sequence.media.clone_from(&pool.media);
+    let range = item.default_range(timebase);
     let track = |id| Track {
         clips: vec![Clip::new(
             ClipId(id),
             item.id,
             Ticks::ZERO,
-            item.default_length(timebase),
-            Ticks::ZERO,
+            range.end - range.start,
+            range.start,
         )],
         ..Track::default()
     };

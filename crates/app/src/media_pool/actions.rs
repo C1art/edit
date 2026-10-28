@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use timeline::{
-    AddBin, CreateMulticam, Edit, MoveToBin, RelinkMedia, RemoveBin, RemoveMedia, RenameBin,
-    RenameMedia, SetProxy, SourceId, Ticks, TimelineError,
+    AddBin, CreateMulticam, Edit, MakeSubclip, MoveToBin, RelinkMedia, RemoveBin, RemoveMedia,
+    RenameBin, RenameMedia, SetProxy, SourceId, Ticks, TimelineError,
 };
 
 use super::{PoolAction, PoolEntry};
@@ -123,6 +123,25 @@ impl Editor {
                     "Created {}; place it in a sequence and turn on Multi-Camera in the program monitor's View menu",
                     item.name
                 ));
+            }
+        }
+    }
+
+    /// Adds the source monitor's marked range to the project as a subclip.
+    pub(crate) fn make_subclip(&mut self) {
+        let Some(source) = &self.source else {
+            self.notice("Open a clip in the source monitor and mark the part to keep first");
+            return;
+        };
+        let (start, duration) = source.range();
+        let edit = MakeSubclip {
+            source: source.source,
+            range: start..start + duration,
+            name: format!("{}.Subclip", source.name),
+        };
+        if self.apply_to_pool(edit) {
+            if let Some(item) = self.timeline.project().media.last() {
+                self.pool.selected = vec![item.id];
             }
         }
     }

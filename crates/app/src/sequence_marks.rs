@@ -117,11 +117,7 @@ impl Editor {
             .as_mut()
             .filter(|source| source.source == clip.source)
         {
-            source.marks = Marks {
-                mark_in: Some(clip.source_in),
-                mark_out: Some(clip.source_out()),
-            };
-            source.viewer.player.seek(clip.source_time(at));
+            source.show_media(clip.source_in..clip.source_out(), clip.source_time(at));
         }
     }
 }

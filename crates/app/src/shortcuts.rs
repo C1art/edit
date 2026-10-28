@@ -41,6 +41,7 @@ pub const ADD_EDIT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND,
 pub const TRANSITION: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::D);
 pub const AUDIO_TRANSITION: KeyboardShortcut =
     KeyboardShortcut::new(Modifiers::COMMAND.plus(Modifiers::SHIFT), Key::D);
+pub const MAKE_SUBCLIP: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::U);
 pub const MULTICAM_VIEW: KeyboardShortcut = KeyboardShortcut::new(Modifiers::SHIFT, Key::Num0);
 /// Switch to cameras one to nine in the multi-camera view.
 const ANGLE_KEYS: [Key; crate::multicam::KEYED_ANGLES] = [
@@ -101,6 +102,7 @@ enum Action {
     PasteAttributes,
     NewTitle,
     ToggleMulticamView,
+    MakeSubclip,
 }
 
 /// Editor-wide keys. Skipped while a text field has focus so typing isn't hijacked.
@@ -165,6 +167,7 @@ fn pressed(ctx: &egui::Context) -> Option<Action> {
             (TRANSITION, Action::Transition(TrackKind::Video)),
             (CLEAR_IN_OUT, Action::ClearInOut),
             (MULTICAM_VIEW, Action::ToggleMulticamView),
+            (MAKE_SUBCLIP, Action::MakeSubclip),
             (GO_TO_IN, Action::GoToMark(Edge::Head)),
             (GO_TO_OUT, Action::GoToMark(Edge::Tail)),
             (
@@ -277,6 +280,7 @@ fn run(editor: &mut Editor, action: Action) {
         Action::CancelDrag => editor.view.cancel_drag(),
         Action::ClipGain => editor.prompt_clip_gain(),
         Action::ToggleMulticamView => editor.toggle_multicam_view(),
+        Action::MakeSubclip => editor.make_subclip(),
     }
 }
 

@@ -1,4 +1,4 @@
-use timeline::{AddGenerated, AddTrack, Generator, PlaceClip, PlaceMode, Ticks, TrackKind};
+use timeline::{AddGenerated, AddTrack, Generator, PlaceClip, PlaceMode, TrackKind};
 
 use crate::editor::Editor;
 use crate::timeline_view::MediaDrop;
@@ -40,7 +40,7 @@ pub fn drop_media(editor: &mut Editor, drop: MediaDrop) {
     let Some(item) = sequence.media_item(drop.source) else {
         return;
     };
-    let duration = item.default_length(sequence.timebase);
+    let range = item.default_range(sequence.timebase);
     let first = |count: usize| (count > 0).then_some(0);
     let (video_track, audio_track) = match drop.track.kind {
         TrackKind::Video => (Some(drop.track.index), first(sequence.audio.len())),
@@ -49,8 +49,8 @@ pub fn drop_media(editor: &mut Editor, drop: MediaDrop) {
     editor.match_format(drop.source);
     editor.apply(PlaceClip {
         source: drop.source,
-        source_in: Ticks::ZERO,
-        duration,
+        source_in: range.start,
+        duration: range.end - range.start,
         at: drop.at,
         video_track,
         audio_track,
@@ -80,7 +80,9 @@ pub fn new_generated(editor: &mut Editor, generator: Generator) {
     let Some(item) = sequence.media.last() else {
         return;
     };
-    let (source, duration) = (item.id, item.default_length(sequence.timebase));
+    let source = item.id;
+    let range = item.default_range(sequence.timebase);
+    let duration = range.end - range.start;
     let at = editor.playhead();
     let first = editor.view.targets.video.unwrap_or(0);
     let free = sequence
@@ -108,7 +110,7 @@ pub fn new_generated(editor: &mut Editor, generator: Generator) {
     };
     let placed = editor.apply(PlaceClip {
         source,
-        source_in: Ticks::ZERO,
+        source_in: range.start,
         duration,
         at,
         video_track: Some(track),

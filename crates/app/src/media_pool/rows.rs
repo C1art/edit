@@ -58,12 +58,16 @@ pub(super) fn item_row(
     let rate = item
         .video
         .map_or(FrameRate::FPS_25, |video| video.frame_rate);
+    let range = item.default_range(timebase);
     let mut details = vec![match &item.generator {
         Some(generator) => generator.kind_name().to_owned(),
-        None => Timecode::new(item.duration, timebase, rate).to_string(),
+        None => Timecode::new(range.end - range.start, timebase, rate).to_string(),
     }];
     if item.nest.is_some() {
         details.insert(0, "Sequence".to_owned());
+    }
+    if item.subclip.is_some() {
+        details.insert(0, "Subclip".to_owned());
     }
     if let Some(video) = item.video {
         details.push(format!(

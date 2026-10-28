@@ -72,6 +72,7 @@ fn source(editor: &mut Editor, ui: &mut egui::Ui) {
     let marks = source.marks;
     transport::ui(ui, &mut source.viewer.player, Some(marks));
     let mut place = None;
+    let mut subclip = false;
     ui.horizontal(|ui| {
         if ui.button("Mark In").on_hover_text("I").clicked() {
             source.mark_in();
@@ -93,12 +94,20 @@ fn source(editor: &mut Editor, ui: &mut egui::Ui) {
         if ui.button("Overwrite").on_hover_text(".").clicked() {
             place = Some(PlaceMode::Overwrite);
         }
+        ui.separator();
+        subclip = ui
+            .button("Subclip")
+            .on_hover_text("Make a subclip of the marked part (Ctrl+U)")
+            .clicked();
     });
     if pressed_inside(ui) {
         editor.focus = Focus::Source;
     }
     if let Some(mode) = place {
         placing::edit_from_source(editor, mode);
+    }
+    if subclip {
+        editor.make_subclip();
     }
 }
 
