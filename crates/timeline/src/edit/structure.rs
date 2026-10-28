@@ -162,6 +162,7 @@ impl Edit for ImportMedia {
             log: Default::default(),
             offline: false,
             still: self.still,
+            channel_map: None,
         });
         Ok(())
     }

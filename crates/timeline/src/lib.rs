@@ -75,13 +75,13 @@ pub use edit::{
     RazorTarget, RelinkMedia, RemoveAttributes, RemoveBin, RemoveMarker, RemoveMedia,
     RemoveSpeedKeyframe, RemoveSubmix, RemoveTimeRemap, RemoveTrack, RenameBin, RenameMedia,
     RenameTrack, RenderAndReplace, ReplaceClip, RestoreUnrendered, RippleDelete,
-    RippleTrimToPlayhead, Roll, SetCaptions, SetClipAudioEffects, SetClipGain, SetClipLabel,
-    SetClipLook, SetClipPan, SetClipSpeed, SetClipVolume, SetClipsEnabled, SetClipsSound,
-    SetGenerator, SetGrouped, SetLinked, SetLinkedSelection, SetMarks, SetMasterEffects,
-    SetMasterGain, SetMediaLog, SetProxy, SetSegmentSpeed, SetSequenceFormat, SetSubmix,
-    SetTimeInterpolation, SetToFrameSize, SetTrackAutomation, SetTrackEffects, SetTrackMix,
-    SetTrackOutput, SetTrackSwitch, SetTransition, Slide, Slip, SwitchAngle, SyncMethod,
-    TrackSwitch, Trim, TrimMode, Unlinked, UpdateMarker,
+    RippleTrimToPlayhead, Roll, SetCaptions, SetChannelMap, SetClipAudioEffects, SetClipGain,
+    SetClipLabel, SetClipLook, SetClipPan, SetClipSpeed, SetClipVolume, SetClipsEnabled,
+    SetClipsSound, SetGenerator, SetGrouped, SetLinked, SetLinkedSelection, SetMarks,
+    SetMasterEffects, SetMasterGain, SetMediaLog, SetProxy, SetSegmentSpeed, SetSequenceFormat,
+    SetSubmix, SetTimeInterpolation, SetToFrameSize, SetTrackAutomation, SetTrackEffects,
+    SetTrackMix, SetTrackOutput, SetTrackSwitch, SetTransition, Slide, Slip, SwitchAngle,
+    SyncMethod, TrackSwitch, Trim, TrimMode, Unlinked, UpdateMarker,
 };
 pub use edl::to_edl;
 pub use effect::{
@@ -107,7 +107,7 @@ pub use mask_path::{
     toggle_path_animation, PathVertex, VertexAt,
 };
 pub use mask_track::{MaskTracking, PictureUnits};
-pub use media::{MediaItem, MediaLog, SourceId};
+pub use media::{ChannelMap, MediaItem, MediaLog, SourceId};
 pub use mix::{balance, Gain, Pan};
 pub use model::{
     Clip, ClipId, IdGenerator, LinkId, Sequence, Track, TrackKind, TrackRef, VideoFormat,

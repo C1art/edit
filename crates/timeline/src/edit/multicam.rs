@@ -87,6 +87,7 @@ impl Edit for CreateMulticam {
             log: Default::default(),
             offline: false,
             still: false,
+            channel_map: None,
         });
         sequence.fit_nest(id);
         Ok(())

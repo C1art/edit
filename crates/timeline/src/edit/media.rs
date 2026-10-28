@@ -1,7 +1,9 @@
 use std::ops::Range;
 use std::path::Path;
 
-use crate::{Edit, ImportMedia, MediaItem, MediaLog, Sequence, SourceId, Ticks, TimelineError};
+use crate::{
+    ChannelMap, Edit, ImportMedia, MediaItem, MediaLog, Sequence, SourceId, Ticks, TimelineError,
+};
 
 fn media_item(sequence: &mut Sequence, source: SourceId) -> Result<&mut MediaItem, TimelineError> {
     sequence
@@ -29,6 +31,29 @@ impl Edit for RenameMedia {
             return Err(TimelineError::NothingToEdit);
         }
         name.clone_into(&mut item.name);
+        Ok(())
+    }
+}
+
+/// Plays the file's channels `map` names on each side, or all of them mixed to stereo
+/// again for `None`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetChannelMap {
+    pub source: SourceId,
+    pub map: Option<ChannelMap>,
+}
+
+impl Edit for SetChannelMap {
+    fn name(&self) -> &'static str {
+        "Modify Audio Channels"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let item = media_item(sequence, self.source)?;
+        if !item.has_audio || !item.is_file() || item.channel_map == self.map {
+            return Err(TimelineError::NothingToEdit);
+        }
+        item.channel_map = self.map;
         Ok(())
     }
 }

@@ -359,6 +359,7 @@ impl Edit for ImportXmeml {
                         log: Default::default(),
                         offline: false,
                         still: false,
+                        channel_map: None,
                     });
                     id
                 }
@@ -436,6 +437,7 @@ impl Edit for ImportXmeml {
             log: Default::default(),
             offline: false,
             still: false,
+            channel_map: None,
         });
         sequence.fit_nest(id);
         Ok(())

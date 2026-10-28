@@ -38,6 +38,7 @@ impl Edit for AddGenerated {
             log: Default::default(),
             offline: false,
             still: false,
+            channel_map: None,
         });
         Ok(())
     }

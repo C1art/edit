@@ -57,6 +57,17 @@ pub struct MediaItem {
     /// A single picture, held for however long its clips run.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub still: bool,
+    /// The file's channels played on each side instead of all of them mixed to stereo.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel_map: Option<ChannelMap>,
+}
+
+/// Which of a file's audio channels, counting from zero, play on the left and the right;
+/// the same channel on both plays it as mono.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ChannelMap {
+    pub left: u16,
+    pub right: u16,
 }
 
 /// What the editor has written down about a media item, as Premiere's Metadata panel
