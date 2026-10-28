@@ -3,9 +3,9 @@ use std::sync::Arc;
 use audio::AudioOutput;
 use eframe::egui_wgpu::RenderState;
 use playback::PlaybackError;
-use timeline::{Clip, ClipId, MediaItem, Sequence, SourceId, Ticks, Track};
+use timeline::{Clip, ClipId, Marks, MediaItem, Sequence, SourceId, Ticks, Track};
 
-use crate::transport::Marks;
+use crate::transport;
 use crate::viewer::Viewer;
 
 /// The source monitor: plays one media item so a range of it can be marked and edited
@@ -43,31 +43,19 @@ impl SourceMonitor {
     }
 
     pub fn mark_in(&mut self) {
-        let position = self.viewer.player.position();
-        self.marks.mark_in = Some(position);
-        if self.marks.mark_out.is_some_and(|out| out <= position) {
-            self.marks.mark_out = None;
-        }
+        self.marks = self.marks.with_in(self.viewer.player.position());
     }
 
     pub fn mark_out(&mut self) {
-        let player = &self.viewer.player;
-        // The out mark includes the frame on screen, as in other editors.
-        let rate = player.frame_rate();
-        let timebase = player.sequence().timebase;
-        let frame = rate.frame_at(player.position(), timebase);
-        let out = rate.frame_start(frame + 1, timebase).min(player.duration());
-        self.marks.mark_out = Some(out);
-        if self.marks.mark_in.is_some_and(|mark_in| mark_in >= out) {
-            self.marks.mark_in = None;
-        }
+        self.marks = self
+            .marks
+            .with_out(transport::out_point(&self.viewer.player));
     }
 
     /// The marked source range as `(source_in, duration)`, defaulting to the whole item.
     pub fn range(&self) -> (Ticks, Ticks) {
-        let mark_in = self.marks.mark_in.unwrap_or(Ticks::ZERO);
-        let mark_out = self.marks.mark_out.unwrap_or(self.viewer.player.duration());
-        (mark_in, mark_out - mark_in)
+        let marked = self.marks.range(self.viewer.player.duration());
+        (marked.start, marked.end - marked.start)
     }
 }
 

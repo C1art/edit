@@ -6,6 +6,7 @@ use super::scale::TimeScale;
 /// How close to a marker, in points, a click must land to pick it.
 const HIT_POINTS: f32 = 6.0;
 const HALF_WIDTH: f32 = 5.0;
+const IN_OUT: Color32 = Color32::from_rgb(170, 170, 190);
 
 pub fn color(color: MarkerColor) -> Color32 {
     match color {
@@ -17,6 +18,37 @@ pub fn color(color: MarkerColor) -> Color32 {
         MarkerColor::White => Color32::from_rgb(235, 235, 235),
         MarkerColor::Blue => Color32::from_rgb(80, 130, 240),
         MarkerColor::Cyan => Color32::from_rgb(70, 210, 220),
+    }
+}
+
+/// Shades the range between the in and out marks across the ruler and the tracks, with
+/// brackets at the marks on the ruler.
+pub fn paint_in_out(
+    painter: &Painter,
+    ruler: Rect,
+    bottom: f32,
+    scale: &TimeScale,
+    sequence: &Sequence,
+) {
+    let marks = sequence.marks;
+    if !marks.is_set() {
+        return;
+    }
+    let range = marks.range(sequence.duration().max(marks.mark_in.unwrap_or_default()));
+    let (left, right) = (scale.x(range.start), scale.x(range.end));
+    let shade = Rect::from_x_y_ranges(left..=right, ruler.top()..=bottom);
+    painter.rect_filled(shade, 0.0, Color32::from_white_alpha(14));
+    let band = Rect::from_x_y_ranges(left..=right, ruler.top()..=ruler.top() + 4.0);
+    painter.rect_filled(band, 0.0, IN_OUT);
+    let stroke = Stroke::new(1.5, IN_OUT);
+    let (top, foot) = (ruler.top(), ruler.bottom());
+    if marks.mark_in.is_some() {
+        painter.line_segment([pos2(left, top), pos2(left, foot)], stroke);
+        painter.line_segment([pos2(left, foot), pos2(left + 4.0, foot)], stroke);
+    }
+    if marks.mark_out.is_some() {
+        painter.line_segment([pos2(right, top), pos2(right, foot)], stroke);
+        painter.line_segment([pos2(right, foot), pos2(right - 4.0, foot)], stroke);
     }
 }
 

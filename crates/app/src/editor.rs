@@ -169,8 +169,9 @@ impl Editor {
         }
     }
 
-    /// Applies an edit that changes only levels, handing it to the program player without
-    /// the seek a structural edit needs, so playback carries on uninterrupted.
+    /// Applies an edit that changes only levels, or nothing that plays at all, handing it
+    /// to the program player without the seek a structural edit needs, so playback
+    /// carries on uninterrupted.
     pub(crate) fn apply_levels(&mut self, edit: impl Edit) {
         if !self.apply(edit) {
             return;

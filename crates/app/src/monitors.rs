@@ -83,7 +83,7 @@ fn source(editor: &mut Editor, ui: &mut egui::Ui) {
             .on_hover_text("Clear in and out")
             .clicked()
         {
-            source.marks = transport::Marks::default();
+            source.marks = timeline::Marks::default();
         }
         ui.separator();
         if ui.button("Insert").on_hover_text(",").clicked() {
@@ -109,7 +109,30 @@ fn program(editor: &mut Editor, ui: &mut egui::Ui) {
     };
     let response = program.picture(ui, picture_size(ui));
     outline(ui, &response, focused);
-    transport::ui(ui, &mut program.player, None);
+    let marks = editor.timeline.sequence().marks;
+    transport::ui(ui, &mut program.player, Some(marks));
+    ui.horizontal(|ui| {
+        if ui.button("Mark In").on_hover_text("I").clicked() {
+            editor.mark_sequence_in();
+        }
+        if ui.button("Mark Out").on_hover_text("O").clicked() {
+            editor.mark_sequence_out();
+        }
+        if ui
+            .button("Clear")
+            .on_hover_text("Clear in and out (Ctrl+Shift+X)")
+            .clicked()
+        {
+            editor.clear_sequence_marks();
+        }
+        ui.separator();
+        if ui.button("Lift").on_hover_text(";").clicked() {
+            editor.lift_marked();
+        }
+        if ui.button("Extract").on_hover_text("'").clicked() {
+            editor.extract_marked();
+        }
+    });
     if pressed_inside(ui) {
         editor.focus = Focus::Program;
     }

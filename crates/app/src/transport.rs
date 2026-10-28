@@ -1,16 +1,9 @@
 use egui::{Button, Color32, Key, Modifiers, Rect, Sense, Stroke};
 use playback::Player;
-use timeline::{Ticks, Timecode};
+use timeline::{Marks, Ticks, Timecode};
 
 /// Height of the scrub bar under each monitor.
 const SCRUB_HEIGHT: f32 = 18.0;
-
-/// In and out marks drawn on the scrub bar.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct Marks {
-    pub mark_in: Option<Ticks>,
-    pub mark_out: Option<Ticks>,
-}
 
 /// A scrub bar with the playhead and marked range, then buttons and timecode.
 pub fn ui(ui: &mut egui::Ui, player: &mut Player, marks: Option<Marks>) {
@@ -59,6 +52,15 @@ pub fn ui(ui: &mut egui::Ui, player: &mut Player, marks: Option<Marks>) {
     });
 }
 
+/// Where an out mark set now falls: after the frame on screen, which it includes, as in
+/// other editors.
+pub fn out_point(player: &Player) -> Ticks {
+    let rate = player.frame_rate();
+    let timebase = player.sequence().timebase;
+    let frame = rate.frame_at(player.position(), timebase);
+    rate.frame_start(frame + 1, timebase).min(player.duration())
+}
+
 fn scrub_bar(ui: &mut egui::Ui, player: &mut Player, marks: Marks) {
     let size = egui::vec2(ui.available_width(), SCRUB_HEIGHT);
     let (rect, response) = ui.allocate_exact_size(size, Sense::click_and_drag());
@@ -71,10 +73,9 @@ fn scrub_bar(ui: &mut egui::Ui, player: &mut Player, marks: Marks) {
     }
     let to_x =
         |time: Ticks| rect.left() + rect.width() * (time.0 as f64 / duration.0 as f64) as f32;
-    let mark_in = marks.mark_in.unwrap_or(Ticks::ZERO);
-    let mark_out = marks.mark_out.unwrap_or(duration);
-    if marks.mark_in.is_some() || marks.mark_out.is_some() {
-        let range = Rect::from_x_y_ranges(to_x(mark_in)..=to_x(mark_out), rect.y_range());
+    if marks.is_set() {
+        let marked = marks.range(duration);
+        let range = Rect::from_x_y_ranges(to_x(marked.start)..=to_x(marked.end), rect.y_range());
         painter.rect_filled(range, 0.0, visuals.selection.bg_fill.gamma_multiply(0.6));
     }
     let playhead = to_x(player.position());

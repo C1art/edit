@@ -240,6 +240,13 @@ impl TimelineView {
             paint::guide(&painter, scale.x(at), tracks.top(), tracks.bottom());
         }
         paint::ruler(&ui.painter_at(ruler), ruler, &scale, sequence);
+        markers::paint_in_out(
+            &ui.painter_at(ruler.union(tracks)),
+            ruler,
+            tracks.bottom(),
+            &scale,
+            sequence,
+        );
         markers::paint(&ui.painter_at(ruler), ruler, &scale, sequence);
         paint::playhead(
             &ui.painter_at(ruler.union(tracks)),

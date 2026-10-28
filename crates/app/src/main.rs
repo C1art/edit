@@ -17,6 +17,7 @@ mod project_files;
 mod project_store;
 mod proxies;
 mod scopes;
+mod sequence_marks;
 mod shortcuts;
 mod source;
 mod speed_dialog;

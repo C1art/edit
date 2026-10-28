@@ -1,5 +1,5 @@
 use egui::{Event, Key, KeyboardShortcut, Modifiers};
-use timeline::{Generator, PlaceMode, Title, TrackKind};
+use timeline::{Generator, Marks, PlaceMode, Title, TrackKind};
 
 use crate::editor::Editor;
 use crate::monitors::Focus;
@@ -38,6 +38,8 @@ pub const ADD_EDIT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND,
 pub const TRANSITION: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::D);
 pub const AUDIO_TRANSITION: KeyboardShortcut =
     KeyboardShortcut::new(Modifiers::COMMAND.plus(Modifiers::SHIFT), Key::D);
+pub const CLEAR_IN_OUT: KeyboardShortcut =
+    KeyboardShortcut::new(Modifiers::COMMAND.plus(Modifiers::SHIFT), Key::X);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Action {
@@ -61,6 +63,9 @@ enum Action {
     Lift,
     MarkIn,
     MarkOut,
+    ClearInOut,
+    LiftMarked,
+    ExtractMarked,
     Place(PlaceMode),
     Tool(Tool),
     ToggleSnapping,
@@ -122,6 +127,7 @@ fn pressed(ctx: &egui::Context) -> Option<Action> {
             (TOGGLE_ENABLED, Action::ToggleEnabled),
             (NEW_TITLE, Action::NewTitle),
             (TRANSITION, Action::Transition(TrackKind::Video)),
+            (CLEAR_IN_OUT, Action::ClearInOut),
             (
                 KeyboardShortcut::new(Modifiers::SHIFT, Key::Delete),
                 Action::RippleDelete,
@@ -139,6 +145,8 @@ fn pressed(ctx: &egui::Context) -> Option<Action> {
             (Key::Backspace, Action::Lift),
             (Key::I, Action::MarkIn),
             (Key::O, Action::MarkOut),
+            (Key::Semicolon, Action::LiftMarked),
+            (Key::Quote, Action::ExtractMarked),
             (Key::Comma, Action::Place(PlaceMode::Insert)),
             (Key::Period, Action::Place(PlaceMode::Overwrite)),
             (Key::S, Action::ToggleSnapping),
@@ -157,12 +165,15 @@ fn pressed(ctx: &egui::Context) -> Option<Action> {
 }
 
 /// The windowing layer turns clipboard chords into events instead of key presses,
-/// including Shift+Delete on Windows, which is Ripple Delete here.
+/// including Shift+Delete on Windows, which is Ripple Delete here, and Ctrl+Shift+X,
+/// which clears in and out.
 fn clipboard_action(input: &egui::InputState) -> Option<Action> {
     let shift_only = input.modifiers.shift && !input.modifiers.command;
+    let command_shift = input.modifiers.shift && input.modifiers.command;
     input.events.iter().find_map(|event| match event {
         Event::Copy => Some(Action::Copy),
         Event::Cut if shift_only => Some(Action::RippleDelete),
+        Event::Cut if command_shift => Some(Action::ClearInOut),
         Event::Cut => Some(Action::Cut),
         Event::Paste(_) => Some(Action::Paste(PlaceMode::Overwrite)),
         _ => None,
@@ -198,15 +209,9 @@ fn run(editor: &mut Editor, action: Action) {
         Action::Transition(kind) => crate::effects::apply_default_transition(editor, kind),
         Action::RippleDelete => editor.ripple_delete(),
         Action::Lift => editor.lift(),
-        Action::MarkIn | Action::MarkOut => {
-            if let Some(source) = &mut editor.source {
-                if action == Action::MarkIn {
-                    source.mark_in();
-                } else {
-                    source.mark_out();
-                }
-            }
-        }
+        Action::MarkIn | Action::MarkOut | Action::ClearInOut => mark(editor, action),
+        Action::LiftMarked => editor.lift_marked(),
+        Action::ExtractMarked => editor.extract_marked(),
         Action::Place(mode) => placing::edit_from_source(editor, mode),
         Action::Tool(tool) => editor.view.tool = tool,
         Action::ToggleSnapping => editor.view.snapping = !editor.view.snapping,
@@ -215,5 +220,22 @@ fn run(editor: &mut Editor, action: Action) {
         Action::ZoomToFit => editor.view.zoom_to_fit(editor.timeline.sequence()),
         Action::CancelDrag => editor.view.cancel_drag(),
         Action::ClipGain => editor.prompt_clip_gain(),
+    }
+}
+
+/// Marks the focused monitor: the source, or the sequence the program shows.
+fn mark(editor: &mut Editor, action: Action) {
+    match (editor.focus, &mut editor.source) {
+        (Focus::Source, Some(source)) => match action {
+            Action::MarkIn => source.mark_in(),
+            Action::MarkOut => source.mark_out(),
+            _ => source.marks = Marks::default(),
+        },
+        (Focus::Source, None) => {}
+        (Focus::Program, _) => match action {
+            Action::MarkIn => editor.mark_sequence_in(),
+            Action::MarkOut => editor.mark_sequence_out(),
+            _ => editor.clear_sequence_marks(),
+        },
     }
 }

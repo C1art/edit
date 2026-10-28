@@ -17,10 +17,18 @@ struct Running {
     frames_total: i64,
 }
 
+/// What part of the sequence to export.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Span {
+    Sequence,
+    InToOut,
+}
+
 /// The export dialog: settings while idle, progress while a job runs.
 pub struct ExportDialog {
     path: String,
     crf: u8,
+    span: Span,
     running: Option<Running>,
 }
 
@@ -29,9 +37,13 @@ pub fn open(editor: &mut Editor) {
     if editor.export.is_some() {
         return;
     }
-    let folder = editor
-        .timeline
-        .sequence()
+    let sequence = editor.timeline.sequence();
+    let span = if sequence.marks.is_set() {
+        Span::InToOut
+    } else {
+        Span::Sequence
+    };
+    let folder = sequence
         .media
         .first()
         .and_then(|item| item.path.parent())
@@ -40,12 +52,14 @@ pub fn open(editor: &mut Editor) {
     editor.export = Some(ExportDialog {
         path: folder.join("Sequence.mp4").display().to_string(),
         crf: DEFAULT_CRF,
+        span,
         running: None,
     });
 }
 
 pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     poll(editor);
+    let marked = editor.timeline.sequence().marks.is_set();
     let Some(dialog) = &mut editor.export else {
         return;
     };
@@ -81,6 +95,14 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                 ui.horizontal(|ui| {
                     ui.label("Quality (CRF, lower is better):");
                     ui.add(egui::Slider::new(&mut dialog.crf, 0..=40));
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Source range:");
+                    ui.radio_value(&mut dialog.span, Span::Sequence, "Entire sequence");
+                    ui.add_enabled_ui(marked, |ui| {
+                        ui.radio_value(&mut dialog.span, Span::InToOut, "Sequence in/out")
+                            .on_disabled_hover_text("Mark in or out on the program first");
+                    });
                 });
                 ui.label("H.264 and AAC at the sequence's frame size and rate.");
                 ui.horizontal(|ui| {
@@ -121,11 +143,18 @@ fn start_job(editor: &mut Editor) {
         editor.notice("Cannot export: there is no GPU renderer");
         return;
     };
+    let range = (dialog.span == Span::InToOut && sequence.marks.is_set())
+        .then(|| sequence.marks.range(sequence.duration()));
+    if range.as_ref().is_some_and(|range| range.is_empty()) {
+        editor.notice("Cannot export: the in mark is past the end of the sequence");
+        return;
+    }
     let settings = ExportSettings {
         path: path.clone(),
         crf: dialog.crf,
         sample_rate: SAMPLE_RATE,
         audio_bits_per_second: AUDIO_BITS_PER_SECOND,
+        range,
     };
     match ExportJob::start(
         Arc::new(sequence.clone()),

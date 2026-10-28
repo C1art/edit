@@ -188,6 +188,30 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                 editor.ripple_delete();
             }
             ui.separator();
+            if ui.add(Button::new("Mark In").shortcut_text("I")).clicked() {
+                editor.mark_sequence_in();
+            }
+            if ui.add(Button::new("Mark Out").shortcut_text("O")).clicked() {
+                editor.mark_sequence_out();
+            }
+            let clear = Button::new("Clear In and Out")
+                .shortcut_text(shortcut(ui, shortcuts::CLEAR_IN_OUT));
+            if ui.add(clear).clicked() {
+                editor.clear_sequence_marks();
+            }
+            if ui
+                .add(Button::new("Lift In to Out").shortcut_text(";"))
+                .clicked()
+            {
+                editor.lift_marked();
+            }
+            if ui
+                .add(Button::new("Extract In to Out").shortcut_text("'"))
+                .clicked()
+            {
+                editor.extract_marked();
+            }
+            ui.separator();
             if ui.button("Add Video Track").clicked() {
                 editor.add_track(TrackKind::Video);
             }
