@@ -85,6 +85,13 @@ pub(crate) fn pixel_effects(
                 let waves = seconds * f64::from(speed.value_at(time));
                 pixel.style.wave_phase = waves.rem_euclid(1.0) as f32;
             }
+            VideoEffect::WarpStabilizer(stabilizer) => {
+                if let Some(correction) = stabilizer.correction_at(time) {
+                    let [x, y] = correction.shift;
+                    pixel.style.stabilize =
+                        [x, y, correction.angle, correction.scale].map(|value| value as f32);
+                }
+            }
             VideoEffect::HorizontalFlip => pixel.flip[0] = !pixel.flip[0],
             VideoEffect::VerticalFlip => pixel.flip[1] = !pixel.flip[1],
             VideoEffect::BlackAndWhite => {
