@@ -3,6 +3,7 @@ use std::path::Path;
 use std::ptr::{self, NonNull};
 
 use ffmpeg_sys_next as sys;
+use timeline::{Chapter, Timebase};
 
 use super::error::check;
 use super::{Encoder, Packet};
@@ -64,6 +65,61 @@ impl OutputContext {
             stream.time_base = encoder.raw().time_base;
             usize::try_from(stream.index).map_err(|_| MediaError::OutOfMemory)
         }
+    }
+
+    /// Adds chapters for players to skip between, before the header is written.
+    pub(crate) fn set_chapters(
+        &mut self,
+        chapters: &[Chapter],
+        timebase: Timebase,
+    ) -> Result<(), MediaError> {
+        if chapters.is_empty() {
+            return Ok(());
+        }
+        let too_many = || MediaError::InvalidSettings("too many chapters");
+        let time_base = sys::AVRational {
+            num: i32::try_from(timebase.num()).map_err(|_| too_many())?,
+            den: i32::try_from(timebase.den()).map_err(|_| too_many())?,
+        };
+        let titles = chapters
+            .iter()
+            .map(|chapter| CString::new(chapter.title.replace('\0', "")))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| too_many())?;
+        let context = self.0.as_ptr();
+        // SAFETY: the context is valid, its header is not written and it has no chapters
+        // yet. The array and each chapter come from FFmpeg's allocator and are handed to
+        // the context as soon as they exist, so avformat_free_context frees them however
+        // far this gets; `nb_chapters` only counts chapters already in the array.
+        unsafe {
+            debug_assert!((*context).chapters.is_null());
+            let array = sys::av_calloc(chapters.len(), size_of::<*mut sys::AVChapter>())
+                .cast::<*mut sys::AVChapter>();
+            if array.is_null() {
+                return Err(MediaError::OutOfMemory);
+            }
+            (*context).chapters = array;
+            for (index, (chapter, title)) in chapters.iter().zip(&titles).enumerate() {
+                let raw = sys::av_mallocz(size_of::<sys::AVChapter>()).cast::<sys::AVChapter>();
+                if raw.is_null() {
+                    return Err(MediaError::OutOfMemory);
+                }
+                *array.add(index) = raw;
+                (*context).nb_chapters += 1;
+                let raw = &mut *raw;
+                raw.id = i64::try_from(index).map_err(|_| too_many())?;
+                raw.time_base = time_base;
+                raw.start = chapter.range.start.0;
+                raw.end = chapter.range.end.0;
+                check(sys::av_dict_set(
+                    &mut raw.metadata,
+                    c"title".as_ptr(),
+                    title.as_ptr(),
+                    0,
+                ))?;
+            }
+        }
+        Ok(())
     }
 
     pub(crate) fn write_header(&mut self) -> Result<(), MediaError> {

@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use timeline::FrameRate;
+use timeline::{Chapter, FrameRate, Timebase};
 
 use crate::ffi::{Encoder, Frame, OutputContext, Packet, Received, RgbaToYuv};
 use crate::{AudioCodec, MediaError, RateControl, VideoCodec};
@@ -71,6 +71,17 @@ impl MediaWriter {
         video: Option<VideoSettings>,
         audio: Option<AudioSettings>,
     ) -> Result<Self, MediaError> {
+        Self::with_chapters(path, video, audio, &[], Timebase::HZ_90K)
+    }
+
+    /// As [`MediaWriter::create`], marking `chapters` timed in `timebase` in the file.
+    pub fn with_chapters(
+        path: &Path,
+        video: Option<VideoSettings>,
+        audio: Option<AudioSettings>,
+        chapters: &[Chapter],
+        timebase: Timebase,
+    ) -> Result<Self, MediaError> {
         if video.is_none() && audio.is_none() {
             return Err(MediaError::InvalidSettings("nothing to export"));
         }
@@ -114,6 +125,7 @@ impl MediaWriter {
                 })
             })
             .transpose()?;
+        output.set_chapters(chapters, timebase)?;
         output.write_header()?;
         Ok(Self {
             output,
