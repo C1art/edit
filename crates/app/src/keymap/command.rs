@@ -1,6 +1,3 @@
-use crate::timeline_view::{Direction, Tool};
-use crate::transport::TransportKey;
-
 /// Everything a key can be bound to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Command {
@@ -92,6 +89,9 @@ pub enum Command {
     RazorTool,
     SlipTool,
     SlideTool,
+    TypeTool,
+    RectangleTool,
+    EllipseTool,
     PlayStop,
     ShuttleLeft,
     ShuttleStop,
@@ -128,7 +128,7 @@ const WORKSPACE_WORDS: [(&str, &str); WORKSPACE_SLOTS as usize] = [
 ];
 
 impl Command {
-    pub const ALL: [Self; 113] = [
+    pub const ALL: [Self; 116] = [
         Self::NewProject,
         Self::OpenProject,
         Self::Save,
@@ -217,6 +217,9 @@ impl Command {
         Self::RazorTool,
         Self::SlipTool,
         Self::SlideTool,
+        Self::TypeTool,
+        Self::RectangleTool,
+        Self::EllipseTool,
         Self::PlayStop,
         Self::ShuttleLeft,
         Self::ShuttleStop,
@@ -353,6 +356,9 @@ impl Command {
             Self::RazorTool => ("razor_tool", "Razor Tool"),
             Self::SlipTool => ("slip_tool", "Slip Tool"),
             Self::SlideTool => ("slide_tool", "Slide Tool"),
+            Self::TypeTool => ("type_tool", "Type Tool"),
+            Self::RectangleTool => ("rectangle_tool", "Rectangle Tool"),
+            Self::EllipseTool => ("ellipse_tool", "Ellipse Tool"),
             Self::PlayStop => ("play_stop", "Play/Stop"),
             Self::ShuttleLeft => ("shuttle_left", "Shuttle Left"),
             Self::ShuttleStop => ("shuttle_stop", "Shuttle Stop"),
@@ -439,48 +445,14 @@ impl Command {
             | RateStretchTool
             | RazorTool
             | SlipTool
-            | SlideTool => "Tools",
+            | SlideTool
+            | TypeTool
+            | RectangleTool
+            | EllipseTool => "Tools",
             PlayStop | ShuttleLeft | ShuttleStop | ShuttleRight | StepBack | StepForward
             | StepBackFive | StepForwardFive | GoToStart | GoToEnd | PreviousEdit | NextEdit
             | PlayInToOut | PlayAround | ToggleLoop => "Playback",
             Workspace(_) | ResetWorkspace => "Window",
         }
-    }
-
-    pub fn tool(self) -> Option<Tool> {
-        Some(match self {
-            Self::SelectionTool => Tool::Selection,
-            Self::TrackSelectForwardTool => Tool::TrackSelect(Direction::Forward),
-            Self::TrackSelectBackwardTool => Tool::TrackSelect(Direction::Backward),
-            Self::RippleTool => Tool::Ripple,
-            Self::RollTool => Tool::Roll,
-            Self::RateStretchTool => Tool::RateStretch,
-            Self::RazorTool => Tool::Razor,
-            Self::SlipTool => Tool::Slip,
-            Self::SlideTool => Tool::Slide,
-            _ => return None,
-        })
-    }
-
-    /// What the command asks of the focused monitor, for playback commands.
-    pub fn transport(self) -> Option<TransportKey> {
-        Some(match self {
-            Self::PlayStop => TransportKey::Toggle,
-            Self::ShuttleLeft => TransportKey::Reverse,
-            Self::ShuttleStop => TransportKey::Pause,
-            Self::ShuttleRight => TransportKey::Forward,
-            Self::StepBack => TransportKey::Step(-1),
-            Self::StepForward => TransportKey::Step(1),
-            Self::StepBackFive => TransportKey::Step(-5),
-            Self::StepForwardFive => TransportKey::Step(5),
-            Self::GoToStart => TransportKey::Start,
-            Self::GoToEnd => TransportKey::End,
-            Self::PreviousEdit => TransportKey::PreviousEdit,
-            Self::NextEdit => TransportKey::NextEdit,
-            Self::PlayInToOut => TransportKey::PlayInToOut,
-            Self::PlayAround => TransportKey::PlayAround,
-            Self::ToggleLoop => TransportKey::ToggleLoop,
-            _ => return None,
-        })
     }
 }

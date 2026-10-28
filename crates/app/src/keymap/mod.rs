@@ -1,3 +1,4 @@
+mod actions;
 mod command;
 mod defaults;
 mod window;

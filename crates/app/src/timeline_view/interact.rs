@@ -31,7 +31,7 @@ impl TimelineView {
             (modifiers.shift, modifiers.command, modifiers.alt)
         });
 
-        if response.double_clicked() && self.tool == Tool::Selection {
+        if response.double_clicked() && self.tool.on_timeline() == Tool::Selection {
             if let Some(pos) = response.interact_pointer_pos() {
                 if let Hit::Body { clip, .. } = layout::hit(sequence, &rows, &scale, pos) {
                     let marker = sequence
@@ -65,7 +65,7 @@ impl TimelineView {
         if response.clicked() {
             if let Some(pos) = response.interact_pointer_pos() {
                 let hit = layout::hit(sequence, &rows, &scale, pos);
-                if self.tool == Tool::Razor {
+                if self.tool.on_timeline() == Tool::Razor {
                     if let Hit::Body { clip, .. } | Hit::Edge { clip, .. } = hit {
                         let razor = Razor {
                             at: frame_time(pos.x),
@@ -75,13 +75,13 @@ impl TimelineView {
                             output.errors.push(error.to_string());
                         }
                     }
-                } else if let Tool::TrackSelect(direction) = self.tool {
+                } else if let Tool::TrackSelect(direction) = self.tool.on_timeline() {
                     let only = shift.then(|| hit_track(hit)).flatten();
                     self.selection =
                         track_select::pick(sequence, frame_time(pos.x), direction, only);
                 } else if let Some((owner, grabbed, _)) = self
                     .band_hit(sequence, &rows, &scale, hit, pos)
-                    .filter(|_| command && self.tool == Tool::Selection)
+                    .filter(|_| command && self.tool.on_timeline() == Tool::Selection)
                 {
                     toggle_volume_key(timeline, owner, grabbed, output);
                 } else {
@@ -115,7 +115,7 @@ impl TimelineView {
                     &unlinked
                 }
             };
-            if let Tool::TrackSelect(direction) = self.tool {
+            if let Tool::TrackSelect(direction) = self.tool.on_timeline() {
                 let only = shift.then(|| hit_track(hit)).flatten();
                 self.selection =
                     track_select::pick(sequence, frame_time(origin.x), direction, only);
@@ -128,7 +128,7 @@ impl TimelineView {
             }
             let band = self
                 .band_hit(sequence, &rows, &scale, hit, origin)
-                .filter(|_| self.tool == Tool::Selection);
+                .filter(|_| self.tool.on_timeline() == Tool::Selection);
             let gesture = match band {
                 Some((owner, grabbed, band)) => Some(Gesture::Volume {
                     owner,
@@ -285,7 +285,7 @@ impl TimelineView {
             }
             selection.clone()
         };
-        match (self.tool, hit) {
+        match (self.tool.on_timeline(), hit) {
             (Tool::TrackSelect(_), hit) => {
                 let (first, _) = self.selection.first().and_then(|&id| sequence.clip(id))?;
                 let from = hit_track(hit).unwrap_or(first);
@@ -297,7 +297,7 @@ impl TimelineView {
             (Tool::Razor, _) | (_, Hit::Empty { .. }) => None,
             (Tool::Selection | Tool::Ripple, Hit::Edge { clip, edge, .. }) => {
                 self.selection = sequence.with_links(&[clip]);
-                let mode = if self.tool == Tool::Ripple {
+                let mode = if self.tool.on_timeline() == Tool::Ripple {
                     timeline::TrimMode::Ripple
                 } else {
                     timeline::TrimMode::Normal

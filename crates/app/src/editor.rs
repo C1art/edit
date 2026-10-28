@@ -113,6 +113,7 @@ pub struct Editor {
     pub(crate) preset_dialog: Option<crate::effect_presets::PresetDialog>,
     pub(crate) workspaces: crate::workspaces::Workspaces,
     pub(crate) naming_workspace: Option<crate::workspaces::NamingWorkspace>,
+    pub(crate) typing: Option<crate::graphics_tools::Typing>,
 }
 
 impl Editor {
@@ -231,6 +232,7 @@ impl Editor {
             presets: Vec::new(),
             workspaces: crate::workspaces::Workspaces::default(),
             naming_workspace: None,
+            typing: None,
             preset_dialog: None,
         };
         for path in initial {

@@ -1,3 +1,5 @@
+use timeline::ShapeKind;
+
 /// Which way along the timeline a track select tool picks clips.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direction {
@@ -16,10 +18,14 @@ pub enum Tool {
     Razor,
     Slip,
     Slide,
+    /// Click the program picture to type a title there.
+    Type,
+    /// Drag on the program picture to draw a shape.
+    Shape(ShapeKind),
 }
 
 impl Tool {
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 12] = [
         Self::Selection,
         Self::TrackSelect(Direction::Forward),
         Self::TrackSelect(Direction::Backward),
@@ -29,6 +35,9 @@ impl Tool {
         Self::Razor,
         Self::Slip,
         Self::Slide,
+        Self::Type,
+        Self::Shape(ShapeKind::Rectangle),
+        Self::Shape(ShapeKind::Ellipse),
     ];
 
     pub fn label(self) -> &'static str {
@@ -42,6 +51,8 @@ impl Tool {
             Self::Razor => "Razor",
             Self::Slip => "Slip",
             Self::Slide => "Slide",
+            Self::Type => "Type",
+            Self::Shape(kind) => kind.name(),
         }
     }
 
@@ -60,6 +71,21 @@ impl Tool {
             Self::Razor => "Click a clip to cut it (C)",
             Self::Slip => "Drag a clip to change its source range (Y)",
             Self::Slide => "Drag a clip between its neighbours (U)",
+            Self::Type => "Click the program picture to type a title there (T)",
+            Self::Shape(ShapeKind::Rectangle) => {
+                "Drag on the program picture to draw a rectangle; Shift for a square"
+            }
+            Self::Shape(ShapeKind::Ellipse) => {
+                "Drag on the program picture to draw an ellipse; Shift for a circle"
+            }
+        }
+    }
+
+    /// What the tool does on the timeline, where the graphics tools select.
+    pub fn on_timeline(self) -> Self {
+        match self {
+            Self::Type | Self::Shape(_) => Self::Selection,
+            tool => tool,
         }
     }
 }

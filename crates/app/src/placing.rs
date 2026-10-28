@@ -1,5 +1,6 @@
 use timeline::{
-    edit_points, AddGenerated, AddTrack, FourPoint, Generator, PlaceClip, PlaceMode, TrackKind,
+    edit_points, AddGenerated, AddTrack, ClipId, FourPoint, Generator, PlaceClip, PlaceMode,
+    TrackKind,
 };
 
 use crate::editor::Editor;
@@ -89,7 +90,9 @@ pub fn drop_media(editor: &mut Editor, drop: MediaDrop) {
 /// Adds a title or color matte to the pool and lays it at the playhead on the first
 /// free video track from the targeted one up, adding a track when all are busy, then
 /// selects it for editing.
-pub fn new_generated(editor: &mut Editor, generator: Generator) {
+/// Adds `generator` to the project and places it at the playhead on the first free
+/// video track, returning the placed clip.
+pub fn new_generated(editor: &mut Editor, generator: Generator) -> Option<ClipId> {
     let sequence = editor.timeline.sequence();
     let count = sequence
         .media
@@ -102,12 +105,10 @@ pub fn new_generated(editor: &mut Editor, generator: Generator) {
         .count();
     let name = format!("{} {:02}", generator.kind_name(), count + 1);
     if !editor.apply(AddGenerated { name, generator }) {
-        return;
+        return None;
     }
     let sequence = editor.timeline.sequence();
-    let Some(item) = sequence.media.last() else {
-        return;
-    };
+    let item = sequence.media.last()?;
     let source = item.id;
     let range = item.default_range(sequence.timebase);
     let duration = range.end - range.start;
@@ -150,8 +151,9 @@ pub fn new_generated(editor: &mut Editor, generator: Generator) {
     let clip = sequence
         .video
         .get(track)
-        .and_then(|track| track.clip_at(at));
-    if let (true, Some(clip)) = (placed, clip) {
-        editor.view.selection = vec![clip.id];
-    }
+        .and_then(|track| track.clip_at(at))
+        .filter(|_| placed)?
+        .id;
+    editor.view.selection = vec![clip];
+    Some(clip)
 }
