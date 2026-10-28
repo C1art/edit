@@ -161,15 +161,19 @@ pub enum TimeInterpolation {
     FrameSampling,
     /// Cross-fades from the earlier frame to the later one.
     FrameBlending,
+    /// Moves the content of both frames along its motion to where it would be between
+    /// them, then cross-fades.
+    OpticalFlow,
 }
 
 impl TimeInterpolation {
-    pub const ALL: [Self; 2] = [Self::FrameSampling, Self::FrameBlending];
+    pub const ALL: [Self; 3] = [Self::FrameSampling, Self::FrameBlending, Self::OpticalFlow];
 
     pub fn name(self) -> &'static str {
         match self {
             Self::FrameSampling => "Frame Sampling",
             Self::FrameBlending => "Frame Blending",
+            Self::OpticalFlow => "Optical Flow",
         }
     }
 
