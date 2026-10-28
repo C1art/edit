@@ -12,6 +12,7 @@ mod edit;
 mod edl;
 mod effect;
 mod error;
+mod file_url;
 mod generator;
 mod group;
 mod history;
@@ -49,6 +50,7 @@ mod validate;
 mod wipe;
 mod xmeml;
 mod xmeml_import;
+mod xmeml_markers;
 mod xml;
 
 pub use audio_effect::AudioEffect;

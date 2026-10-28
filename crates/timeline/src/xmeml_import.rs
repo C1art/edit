@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use crate::file_url::path_from_url;
+use crate::xmeml_markers::XmlMarker;
 use crate::xml::{self, Element};
 use crate::{
     Alignment, Clip, ClipId, Edit, FrameRate, Gain, LinkId, MediaItem, Nest, Sequence, SourceId,
@@ -18,6 +20,7 @@ pub struct ImportXmeml {
     video: Vec<Vec<XmlClip>>,
     audio: Vec<Vec<XmlClip>>,
     links: usize,
+    markers: Vec<XmlMarker>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,6 +47,7 @@ struct XmlClip {
     gain: Gain,
     transition_in: Option<(TransitionKind, i64, Alignment)>,
     transition_out: Option<(TransitionKind, i64)>,
+    markers: Vec<XmlMarker>,
 }
 
 /// One child of a `<track>` in document order, with times as written, -1 for unknown.
@@ -102,6 +106,7 @@ pub fn read_xmeml(text: &str) -> Result<ImportXmeml, TimelineError> {
         video,
         audio,
         links: reader.link_keys.len(),
+        markers: XmlMarker::all(sequence),
     })
 }
 
@@ -177,6 +182,7 @@ impl Reader {
             gain: level(element),
             transition_in: None,
             transition_out: None,
+            markers: XmlMarker::all(element),
         };
         let out = element.number_at(&["out"]).unwrap_or(-1);
         Ok(Some(Item::Clip { clip, out }))
@@ -382,15 +388,27 @@ impl Edit for ImportXmeml {
                                     ..transition((kind, frames))
                                 });
                         clip.transition_out = xml.transition_out.map(transition);
+                        clip.markers = xml
+                            .markers
+                            .iter()
+                            .map(|marker| marker.marker(&mut sequence.ids, xml.rate, timebase))
+                            .collect();
                         track.clips.push(clip);
                     }
                     track
                 })
                 .collect()
         };
+        let (video, audio) = (tracks(&self.video), tracks(&self.audio));
+        let markers = self
+            .markers
+            .iter()
+            .map(|marker| marker.marker(&mut sequence.ids, self.rate, timebase))
+            .collect();
         let nest = Nest {
-            video: tracks(&self.video),
-            audio: tracks(&self.audio),
+            video,
+            audio,
+            markers,
             ..Nest::default()
         };
         let id = SourceId(sequence.ids.next());
@@ -447,40 +465,6 @@ fn level(clip: &Element) -> Gain {
         .map_or(Gain::UNITY, |amplitude| {
             Gain::from_db(20.0 * amplitude.max(1e-6).log10())
         })
-}
-
-/// A `file://` URL as a path, with a drive letter for Windows paths.
-fn path_from_url(url: &str) -> PathBuf {
-    let rest = url
-        .strip_prefix("file://localhost")
-        .or_else(|| url.strip_prefix("file://"))
-        .unwrap_or(url);
-    let bytes = rest.as_bytes();
-    let mut decoded = Vec::with_capacity(bytes.len());
-    let mut index = 0;
-    while index < bytes.len() {
-        let hex = bytes
-            .get(index + 1..index + 3)
-            .and_then(|hex| std::str::from_utf8(hex).ok())
-            .and_then(|hex| u8::from_str_radix(hex, 16).ok());
-        match (bytes[index], hex) {
-            (b'%', Some(byte)) => {
-                decoded.push(byte);
-                index += 3;
-            }
-            (byte, _) => {
-                decoded.push(byte);
-                index += 1;
-            }
-        }
-    }
-    let text = String::from_utf8_lossy(&decoded).into_owned();
-    let drive = text
-        .as_bytes()
-        .get(1..3)
-        .is_some_and(|bytes| bytes[1] == b':')
-        && text.starts_with('/');
-    PathBuf::from(if drive { text[1..].to_owned() } else { text })
 }
 
 #[cfg(test)]

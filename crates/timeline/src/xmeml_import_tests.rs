@@ -1,11 +1,21 @@
 use super::*;
-use crate::{ImportMedia, PlaceClip, PlaceMode, Timebase, Timeline};
+use crate::{ImportMedia, Marker, MarkerId, PlaceClip, PlaceMode, Timebase, Timeline};
 
 fn spans(track: &Track) -> Vec<(i64, i64, i64)> {
     track
         .clips
         .iter()
         .map(|clip| (clip.start.0, clip.end().0, clip.source_in.0))
+        .collect()
+}
+
+fn times(markers: &[Marker]) -> Vec<(i64, i64, &str, &str)> {
+    markers
+        .iter()
+        .map(|marker| {
+            let (name, comment) = (marker.name.as_str(), marker.comment.as_str());
+            (marker.at.0, marker.duration.0, name, comment)
+        })
         .collect()
 }
 
@@ -42,6 +52,17 @@ fn an_exported_sequence_reads_back_as_a_nest_of_the_same_cut() {
     let dissolve = Transition::new(TransitionKind::DipToBlack, Ticks(10));
     sequence.video[0].clips[1].transition_in = Some(dissolve);
     sequence.audio[0].clips[0].gain = Gain::from_db(-6.0);
+    let marker = |at, duration, name: &str| Marker {
+        id: MarkerId(900),
+        at: Ticks(at),
+        duration: Ticks(duration),
+        name: name.into(),
+        comment: "a < b".into(),
+        color: Default::default(),
+        kind: Default::default(),
+    };
+    sequence.markers = vec![marker(20, 0, "Point"), marker(60, 15, "Span")];
+    sequence.video[0].clips[1].markers = vec![marker(210, 0, "Take")];
     let mut timeline = Timeline::new(sequence.clone());
 
     let import = read_xmeml(&crate::to_xmeml(&sequence, "Cut")).unwrap();
@@ -55,16 +76,18 @@ fn an_exported_sequence_reads_back_as_a_nest_of_the_same_cut() {
     assert_eq!(spans(&nest.audio[0]), spans(&sequence.audio[0]));
     assert_eq!(nest.video[0].clips[1].transition_in, Some(dissolve));
     assert_eq!(nest.audio[0].clips[0].gain, Gain::from_db(-6.0));
+    assert_eq!(
+        times(&nest.markers),
+        [(20, 0, "Point", "a < b"), (60, 15, "Span", "a < b")]
+    );
+    assert_eq!(
+        times(&nest.video[0].clips[1].markers),
+        [(210, 0, "Take", "a < b")]
+    );
     let links: Vec<_> = [&nest.video[0], &nest.audio[0]]
         .iter()
         .map(|track| track.clips.iter().map(|clip| clip.link).collect::<Vec<_>>())
         .collect();
     assert_eq!(links[0], links[1]);
     assert_ne!(links[0][0], links[0][1]);
-}
-
-#[test]
-fn a_windows_file_url_becomes_a_drive_path() {
-    let path = path_from_url("file://localhost/C%3A/Media/Day%201/take%232.mov");
-    assert_eq!(path, PathBuf::from("C:/Media/Day 1/take#2.mov"));
 }

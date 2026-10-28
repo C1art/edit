@@ -1,14 +1,16 @@
 //! Final Cut Pro 7 XML (xmeml), the timeline interchange Premiere, Resolve and Final Cut
-//! read: every track's clips with their files, links, speed, level and transitions.
+//! read: every track's clips with their files, links, speed, level, transitions and
+//! markers.
 //! Generated media and nested sequences have no file to point at, so they are left out.
 
 use std::collections::HashMap;
 use std::fmt::{Display, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
+use crate::file_url::path_url;
 use crate::{
-    cut_window, Alignment, Clip, ClipId, FrameRate, MediaItem, Sequence, Ticks, Track, TrackKind,
-    Transition,
+    cut_window, Alignment, Clip, ClipId, FrameRate, Marker, MediaItem, Sequence, Ticks, Track,
+    TrackKind, Transition,
 };
 
 /// `sequence` as an xmeml document, named `title`.
@@ -80,6 +82,7 @@ impl Writer<'_> {
         self.leaf("name", escape(title));
         self.leaf("duration", self.frames(sequence.duration()));
         self.rate();
+        self.markers(&sequence.markers);
         self.open("media");
         self.open("video");
         self.open("format");
@@ -198,6 +201,7 @@ impl Writer<'_> {
         let length = self.frames(clip.end()) - self.frames(clip.start);
         self.leaf("out", source_in + length);
         self.file(item);
+        self.markers(&clip.markers);
         if kind == TrackKind::Audio {
             self.open("sourcetrack");
             self.leaf("mediatype", "audio");
@@ -238,6 +242,23 @@ impl Writer<'_> {
             }
         }
         self.close("clipitem");
+    }
+
+    /// Markers at their frames; a clip's count from the start of its file.
+    fn markers(&mut self, markers: &[Marker]) {
+        for marker in markers {
+            self.open("marker");
+            self.leaf("comment", escape(&marker.comment));
+            self.leaf("name", escape(&marker.name));
+            self.leaf("in", self.frames(marker.at));
+            let out = if marker.duration > Ticks::ZERO {
+                self.frames(marker.end())
+            } else {
+                -1
+            };
+            self.leaf("out", out);
+            self.close("marker");
+        }
     }
 
     fn link(&mut self, id: ClipId) {
@@ -357,26 +378,6 @@ fn escape(text: &str) -> String {
         .replace('"', "&quot;")
 }
 
-/// A `file://localhost` URL, the drive of a Windows path becoming its first segment.
-fn path_url(path: &Path) -> String {
-    let text = path.to_string_lossy().replace('\\', "/");
-    let mut url = String::from("file://localhost");
-    if !text.starts_with('/') {
-        url.push('/');
-    }
-    for byte in text.bytes() {
-        match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' | b'/' => {
-                url.push(char::from(byte));
-            }
-            _ => {
-                let _ = write!(url, "%{byte:02X}");
-            }
-        }
-    }
-    url
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -433,13 +434,5 @@ mod tests {
             assert!(xml.contains(&part), "missing {part} in {xml}");
         }
         assert_eq!(xml.matches("<file id=\"file-1\">").count(), 1);
-    }
-
-    #[test]
-    fn a_windows_path_becomes_an_escaped_file_url() {
-        assert_eq!(
-            path_url(Path::new(r"C:\Media\Day 1\take#2.mov")),
-            "file://localhost/C%3A/Media/Day%201/take%232.mov"
-        );
     }
 }
