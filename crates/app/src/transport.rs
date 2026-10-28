@@ -95,7 +95,10 @@ fn scrub_bar(ui: &mut egui::Ui, player: &mut Player, marks: Marks) {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransportKey {
     Toggle,
-    Play,
+    /// Plays forwards, faster on each press.
+    Forward,
+    /// Plays backwards, faster on each press.
+    Reverse,
     Pause,
     Step(i64),
     Start,
@@ -110,7 +113,8 @@ pub fn pressed_key(ctx: &egui::Context) -> Option<TransportKey> {
         [
             (Modifiers::NONE, Key::Space, TransportKey::Toggle),
             (Modifiers::NONE, Key::K, TransportKey::Pause),
-            (Modifiers::NONE, Key::L, TransportKey::Play),
+            (Modifiers::NONE, Key::J, TransportKey::Reverse),
+            (Modifiers::NONE, Key::L, TransportKey::Forward),
             (Modifiers::SHIFT, Key::ArrowLeft, TransportKey::Step(-5)),
             (Modifiers::SHIFT, Key::ArrowRight, TransportKey::Step(5)),
             (Modifiers::NONE, Key::ArrowLeft, TransportKey::Step(-1)),
@@ -128,7 +132,8 @@ pub fn pressed_key(ctx: &egui::Context) -> Option<TransportKey> {
 pub fn handle_key(player: &mut Player, key: TransportKey) {
     match key {
         TransportKey::Toggle => player.toggle(),
-        TransportKey::Play => player.play(),
+        TransportKey::Forward => player.shuttle(faster(player.rate(), 1)),
+        TransportKey::Reverse => player.shuttle(faster(player.rate(), -1)),
         TransportKey::Pause => player.pause(),
         TransportKey::Step(frames) => player.step(frames),
         TransportKey::Start => player.seek(Ticks::ZERO),
@@ -146,5 +151,16 @@ pub fn handle_key(player: &mut Player, key: TransportKey) {
                 player.seek(target);
             }
         }
+    }
+}
+
+/// The shuttle rate after pressing towards `direction` (1 or -1): normal speed from a
+/// stop or the other way, then doubling up to the fastest.
+fn faster(rate: i32, direction: i32) -> i32 {
+    const FASTEST: i32 = 8;
+    if rate.signum() == direction {
+        (rate * 2).clamp(-FASTEST, FASTEST)
+    } else {
+        direction
     }
 }
