@@ -4,6 +4,7 @@ use std::sync::Arc;
 use egui::{ComboBox, DragValue, Key, ProgressBar, Slider};
 use media::{AudioCodec, RateControl};
 use playback::{ExportEvent, ExportJob, ExportSettings};
+use timeline::Sequence;
 
 use crate::editor::Editor;
 use crate::export_format::{ExportFormat, Format, PRESETS};
@@ -71,6 +72,7 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
         return;
     };
     let mut start = false;
+    let mut queue = false;
     let mut close = false;
     egui::Window::new("Export Media")
         .collapsible(false)
@@ -117,6 +119,10 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                 ui.label(summary(&dialog.format, sequence_size));
                 ui.horizontal(|ui| {
                     start = ui.button("Export").clicked();
+                    queue = ui
+                        .button("Queue")
+                        .on_hover_text("Add to the export queue and keep editing")
+                        .clicked();
                     close = ui.button("Close").clicked()
                         || ui.input(|input| input.key_pressed(Key::Escape));
                 });
@@ -126,17 +132,21 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
         editor.export = None;
     } else if start {
         start_job(editor);
+    } else if queue {
+        queue_job(editor);
     }
 }
 
-fn start_job(editor: &mut Editor) {
-    let Some(dialog) = &mut editor.export else {
-        return;
-    };
+/// The sequence and settings the dialog would export, after telling the user what's
+/// wrong if it can't.
+fn prepare(editor: &mut Editor) -> Option<(Arc<Sequence>, ExportSettings)> {
+    let dialog = editor.export.as_ref()?;
     let path = PathBuf::from(dialog.path.trim().trim_matches('"'));
     let sequence = editor.timeline.sequence();
     let sequence_size = (sequence.format.width, sequence.format.height);
     let (width, height) = dialog.format.size(sequence_size);
+    let range = (dialog.span == Span::InToOut && sequence.marks.is_set())
+        .then(|| sequence.marks.range(sequence.duration()));
     let problem = if path.as_os_str().is_empty() {
         Some("Choose an output file first".to_owned())
     } else if sequence.duration() == timeline::Ticks::ZERO {
@@ -145,45 +155,68 @@ fn start_job(editor: &mut Editor) {
         && !(width.is_multiple_of(2) && height.is_multiple_of(2))
     {
         Some(format!("The frame size must be even, not {width}×{height}"))
+    } else if range.as_ref().is_some_and(|range| range.is_empty()) {
+        Some("The in mark is past the end of the sequence".to_owned())
     } else {
         None
     };
     if let Some(problem) = problem {
         editor.notice(format!("Cannot export: {problem}"));
-        return;
-    }
-    let Some(render_state) = &editor.render_state else {
-        editor.notice("Cannot export: there is no GPU renderer");
-        return;
-    };
-    let range = (dialog.span == Span::InToOut && sequence.marks.is_set())
-        .then(|| sequence.marks.range(sequence.duration()));
-    if range.as_ref().is_some_and(|range| range.is_empty()) {
-        editor.notice("Cannot export: the in mark is past the end of the sequence");
-        return;
+        return None;
     }
     let settings = ExportSettings {
-        path: path.clone(),
+        path,
         video: dialog.format.video(sequence_size),
         audio: dialog.format.audio(),
         range,
     };
-    match ExportJob::start(
-        Arc::new(sequence.clone()),
+    Some((Arc::new(sequence.clone()), settings))
+}
+
+fn start_job(editor: &mut Editor) {
+    let Some((sequence, settings)) = prepare(editor) else {
+        return;
+    };
+    let Some(render_state) = &editor.render_state else {
+        editor.notice("Cannot export: there is no GPU renderer");
+        return;
+    };
+    let path = settings.path.clone();
+    let started = ExportJob::start(
+        sequence,
         render_state.device.clone(),
         render_state.queue.clone(),
         settings,
-    ) {
+    );
+    match started {
         Ok(job) => {
-            dialog.running = Some(Running {
-                job,
-                path,
-                frames_done: 0,
-                frames_total: 0,
-            });
+            if let Some(dialog) = &mut editor.export {
+                dialog.running = Some(Running {
+                    job,
+                    path,
+                    frames_done: 0,
+                    frames_total: 0,
+                });
+            }
         }
         Err(error) => editor.notice(format!("Cannot export: {error}")),
     }
+}
+
+/// Hands the export to the queue and closes the dialog, so another can be set up.
+fn queue_job(editor: &mut Editor) {
+    let Some((sequence, settings)) = prepare(editor) else {
+        return;
+    };
+    let summary = editor.export.as_ref().map_or_else(String::new, |dialog| {
+        summary(
+            &dialog.format,
+            (sequence.format.width, sequence.format.height),
+        )
+    });
+    editor.export_queue.add(sequence, settings, summary);
+    editor.export_queue.open = true;
+    editor.export = None;
 }
 
 fn settings(ui: &mut egui::Ui, format: &mut ExportFormat, sequence_size: (u32, u32)) {

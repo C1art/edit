@@ -10,6 +10,7 @@ mod effects;
 mod export;
 mod export_format;
 mod export_frame;
+mod export_queue;
 mod gain_dialog;
 mod history_panel;
 mod import;

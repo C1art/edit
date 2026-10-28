@@ -88,6 +88,7 @@ pub struct Editor {
     pub(crate) window_title: String,
     pub(crate) ctx: egui::Context,
     pub(crate) export: Option<ExportDialog>,
+    pub(crate) export_queue: crate::export_queue::ExportQueue,
     /// The sequences left to reach the open nest, outermost first.
     pub(crate) nest_trail: Vec<Level>,
     pub(crate) notices: Vec<String>,
@@ -178,6 +179,7 @@ impl Editor {
             window_title: String::new(),
             ctx: creation_context.egui_ctx.clone(),
             export: None,
+            export_queue: Default::default(),
             nest_trail: Vec::new(),
             notices,
         };
@@ -357,6 +359,7 @@ impl eframe::App for Editor {
         self.poll_scene_edits(&ctx);
         self.poll_motion_analysis(&ctx);
         self.poll_export_frame(&ctx);
+        self.poll_export_queue(&ctx);
         if self.importer.as_ref().is_some_and(Importer::is_busy) {
             ctx.request_repaint();
         }
@@ -389,5 +392,6 @@ impl eframe::App for Editor {
         crate::loudness_window::window(self, &ctx);
         crate::speed_dialog::dialog(self, &ctx);
         crate::export::dialog(self, &ctx);
+        crate::export_queue::window(self, &ctx);
     }
 }
