@@ -71,6 +71,7 @@ pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorr
             });
         });
     }
+    super::secondary::controls(ui, rows, &mut color.secondary);
 }
 
 fn lut_row(
@@ -104,7 +105,7 @@ fn lut_row(
 
 /// A disc of hues with a puck at the wheel's push toward blue (right) and red (up), as
 /// on a vectorscope. Dragging moves the puck; double-clicking centres it.
-fn wheel_pad(ui: &mut egui::Ui, rows: &mut Rows, wheel: &mut ColorWheel) {
+pub(super) fn wheel_pad(ui: &mut egui::Ui, rows: &mut Rows, wheel: &mut ColorWheel) {
     let time = rows.time();
     let (rect, mut response) =
         ui.allocate_exact_size(Vec2::splat(WHEEL_SIZE), Sense::click_and_drag());

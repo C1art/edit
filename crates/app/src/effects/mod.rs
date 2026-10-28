@@ -5,6 +5,7 @@ mod look;
 mod mask_overlay;
 mod masks;
 mod remap;
+mod secondary;
 mod sound;
 mod transitions;
 
