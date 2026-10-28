@@ -136,9 +136,13 @@ impl Worker {
             profile: EncodeProfile::Delivery,
         });
         let audio = self.settings.audio;
-        let mut writer = MediaWriter::create(&self.settings.path, video, audio)?;
-
         let frames = frame_span(&sequence, self.settings.range.clone());
+        let exported =
+            rate.frame_start(frames.start, timebase)..rate.frame_start(frames.end, timebase);
+        let chapters = timeline::chapters(&sequence.markers, exported);
+        let path = &self.settings.path;
+        let mut writer = MediaWriter::with_chapters(path, video, audio, &chapters, timebase)?;
+
         let frames_total = frames.end - frames.start;
         // A silent export never mixes, so its rate doesn't matter.
         let sample_rate = audio.map_or(48_000, |audio| audio.sample_rate);
