@@ -34,6 +34,7 @@ mod srt;
 mod stabilize;
 mod time;
 mod timecode;
+mod track;
 mod transition;
 mod validate;
 
@@ -57,8 +58,9 @@ pub use edit::{
     RippleTrimToPlayhead, Roll, SetCaptions, SetClipAudioEffects, SetClipGain, SetClipLabel,
     SetClipLook, SetClipSpeed, SetClipVolume, SetClipsEnabled, SetClipsSound, SetGenerator,
     SetLinked, SetMarks, SetMasterGain, SetProxy, SetSegmentSpeed, SetSequenceFormat,
-    SetTimeInterpolation, SetToFrameSize, SetTrackAutomation, SetTrackMix, SetTrackSwitch,
-    SetTransition, Slide, Slip, SwitchAngle, TrackSwitch, Trim, TrimMode, UpdateMarker,
+    SetTimeInterpolation, SetToFrameSize, SetTrackAutomation, SetTrackEffects, SetTrackMix,
+    SetTrackSwitch, SetTransition, Slide, Slip, SwitchAngle, TrackSwitch, Trim, TrimMode,
+    UpdateMarker,
 };
 pub use effect::{
     ColorMatch, EffectCategory, MatteChannel, RampShape, Rgb, TimecodeSource, VideoEffect,

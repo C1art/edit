@@ -20,6 +20,8 @@ pub(crate) struct TracksMix {
     /// One tick per output frame.
     rate: Timebase,
     tracks: Vec<ClipDecoders<Voice>>,
+    /// Each track's inserts, in step with `tracks`.
+    inserts: Vec<EffectChain>,
     track_mix: Vec<f32>,
     clip_mix: Vec<f32>,
     /// Media already reported as unreadable.
@@ -48,6 +50,7 @@ impl TracksMix {
             sample_rate,
             rate: Timebase::new(1, sample_rate.0).unwrap_or(Timebase::HZ_90K),
             tracks: Vec::new(),
+            inserts: Vec::new(),
             track_mix: Vec::new(),
             clip_mix: Vec::new(),
             warned: Vec::new(),
@@ -64,6 +67,7 @@ impl TracksMix {
             .iter_mut()
             .flat_map(ClipDecoders::iter_mut)
             .for_each(Voice::reset);
+        self.inserts.iter_mut().for_each(EffectChain::reset);
     }
 
     /// Writes the mix of `tracks` from output frame `start` over `out`. Clips find
@@ -86,12 +90,15 @@ impl TracksMix {
                 effects: EffectChain::new(sample_rate),
             })
         });
+        self.inserts
+            .resize_with(tracks.len(), || EffectChain::new(sample_rate));
         self.track_mix.resize(out.len(), 0.0);
         self.clip_mix.resize(out.len(), 0.0);
         out.fill(0.0);
         let soloing = tracks.iter().any(|track| track.solo);
         let mut track_levels = Vec::with_capacity(tracks.len());
-        for (track, decoders) in tracks.iter().zip(&mut self.tracks) {
+        let chains = self.tracks.iter_mut().zip(&mut self.inserts);
+        for (track, (decoders, inserts)) in tracks.iter().zip(chains) {
             self.track_mix.fill(0.0);
             if track.muted || (soloing && !track.solo) {
                 track_levels.push([0.0; 2]);
@@ -143,7 +150,7 @@ impl TracksMix {
                     let at = clip.source_time(Ticks(from).rescale(self.rate, timebase));
                     voice
                         .effects
-                        .process(clip.id, &clip.audio_effects, at, clip_mix);
+                        .process(Some(clip.id), &clip.audio_effects, at, clip_mix);
                 }
                 let (pairs, _) = clip_mix.as_chunks_mut::<2>();
                 for (frame, pair) in (from..to).zip(pairs) {
@@ -156,6 +163,10 @@ impl TracksMix {
                     [1.0, 1.0],
                     &mut self.track_mix[offset..offset + length],
                 );
+            }
+            if !track.effects.is_empty() {
+                let at = Ticks(start).rescale(self.rate, timebase);
+                inserts.process(None, &track.effects, at, &mut self.track_mix);
             }
             if track.automation.is_animated() || track.automation.value() != 0.0 {
                 let (pairs, _) = self.track_mix.as_chunks_mut::<2>();

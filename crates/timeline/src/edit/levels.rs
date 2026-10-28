@@ -216,3 +216,30 @@ impl Edit for SetMasterGain {
         Ok(())
     }
 }
+
+/// Replaces an audio track's inserts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetTrackEffects {
+    pub track: TrackRef,
+    pub effects: Vec<AudioEffect>,
+}
+
+impl Edit for SetTrackEffects {
+    fn name(&self) -> &'static str {
+        "Track Effects"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        if self.track.kind != TrackKind::Audio {
+            return Err(TimelineError::NothingToEdit);
+        }
+        let track = sequence
+            .track_mut(self.track)
+            .ok_or(TimelineError::TrackNotFound(self.track))?;
+        if track.effects == self.effects {
+            return Err(TimelineError::NothingToEdit);
+        }
+        track.effects.clone_from(&self.effects);
+        Ok(())
+    }
+}

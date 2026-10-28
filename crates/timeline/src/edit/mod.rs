@@ -40,7 +40,7 @@ pub use interpret::InterpretFootage;
 pub use label::SetClipLabel;
 pub use levels::{
     AutoDuck, NormalizeClipGains, SetClipAudioEffects, SetClipGain, SetClipVolume, SetMasterGain,
-    SetTrackAutomation, SetTrackMix,
+    SetTrackAutomation, SetTrackEffects, SetTrackMix,
 };
 pub use link::SetLinked;
 pub use look::{SetClipLook, SetTransition};

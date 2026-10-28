@@ -40,6 +40,7 @@ enum Unit {
 /// The running state of one clip's audio effects, carried from block to block.
 pub(crate) struct EffectChain {
     rate: SampleRate,
+    /// The clip the effects belong to; none for a track's inserts.
     owner: Option<ClipId>,
     kinds: Vec<Discriminant<AudioEffect>>,
     units: Vec<Unit>,
@@ -76,16 +77,16 @@ impl EffectChain {
         }
     }
 
-    /// Runs `clip`'s `effects`, set as they are at source time `time`, over interleaved
-    /// stereo `samples`.
+    /// Runs `owner`'s `effects`, set as they are at `time` (source time for a clip,
+    /// sequence time for a track), over interleaved stereo `samples`.
     pub(crate) fn process(
         &mut self,
-        clip: ClipId,
+        owner: Option<ClipId>,
         effects: &[AudioEffect],
         time: Ticks,
         samples: &mut [f32],
     ) {
-        self.follow(clip, effects);
+        self.follow(owner, effects);
         let rate = self.rate;
         for (effect, unit) in effects.iter().zip(&mut self.units) {
             match (effect, unit) {
@@ -318,16 +319,16 @@ impl EffectChain {
 
     /// Rebuilds the units when the chain changes hands or effects are added, removed or
     /// reordered; settings alone change without losing the sound in flight.
-    fn follow(&mut self, clip: ClipId, effects: &[AudioEffect]) {
+    fn follow(&mut self, owner: Option<ClipId>, effects: &[AudioEffect]) {
         let same_kinds = self
             .kinds
             .iter()
             .copied()
             .eq(effects.iter().map(discriminant));
-        if self.owner == Some(clip) && same_kinds {
+        if self.owner == owner && same_kinds {
             return;
         }
-        self.owner = Some(clip);
+        self.owner = owner;
         self.kinds = effects.iter().map(discriminant).collect();
         self.units = effects.iter().map(|effect| self.unit(effect)).collect();
     }
