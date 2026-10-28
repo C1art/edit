@@ -1,9 +1,11 @@
-use super::{ColorMatch, EffectCategory, MatteChannel, RampShape, Rgb, VideoEffect};
+use super::{
+    ColorMatch, EffectCategory, MatteChannel, RampShape, Rgb, TimecodeSource, VideoEffect,
+};
 use crate::{Param, Stabilizer};
 
 impl VideoEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 28] {
+    pub fn catalog() -> [Self; 31] {
         [
             Self::GaussianBlur {
                 blurriness: Param::from_value(10.0),
@@ -115,6 +117,21 @@ impl VideoEffect {
                 corners: [[0.0, 0.0], [100.0, 0.0], [0.0, 100.0], [100.0, 100.0]]
                     .map(|corner| corner.map(Param::from_value)),
             },
+            Self::PosterizeTime {
+                frame_rate: Param::from_value(12.0),
+            },
+            Self::StrobeLight {
+                color: Rgb::WHITE,
+                blend: Param::from_value(50.0),
+                duration: Param::from_value(0.1),
+                period: Param::from_value(1.0),
+            },
+            Self::Timecode {
+                position: [Param::from_value(50.0), Param::from_value(90.0)],
+                size: Param::from_value(6.0),
+                opacity: Param::from_value(60.0),
+                source: TimecodeSource::Media,
+            },
         ]
     }
 
@@ -143,7 +160,10 @@ impl VideoEffect {
             | Self::Posterize { .. }
             | Self::Noise { .. }
             | Self::FindEdges { .. }
-            | Self::Mosaic { .. } => EffectCategory::Stylize,
+            | Self::Mosaic { .. }
+            | Self::StrobeLight { .. } => EffectCategory::Stylize,
+            Self::PosterizeTime { .. } => EffectCategory::Time,
+            Self::Timecode { .. } => EffectCategory::Video,
             Self::HorizontalFlip | Self::VerticalFlip => EffectCategory::Transform,
         }
     }
@@ -178,6 +198,9 @@ impl VideoEffect {
             Self::GradientRamp { .. } => "Gradient Ramp",
             Self::Mirror { .. } => "Mirror",
             Self::CornerPin { .. } => "Corner Pin",
+            Self::PosterizeTime { .. } => "Posterize Time",
+            Self::StrobeLight { .. } => "Strobe Light",
+            Self::Timecode { .. } => "Timecode",
         }
     }
 }

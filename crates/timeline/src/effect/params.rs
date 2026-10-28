@@ -7,6 +7,7 @@ impl VideoEffect {
             Self::GaussianBlur { blurriness } => vec![blurriness],
             Self::GammaCorrection { gamma: one }
             | Self::Posterize { levels: one }
+            | Self::PosterizeTime { frame_rate: one }
             | Self::Noise { amount: one }
             | Self::FindEdges { blend: one, .. }
             | Self::LensDistortion { curvature: one } => vec![one],
@@ -83,6 +84,18 @@ impl VideoEffect {
                 direction,
                 speed,
             } => vec![height, width, direction, speed],
+            Self::StrobeLight {
+                blend,
+                duration,
+                period,
+                ..
+            } => vec![blend, duration, period],
+            Self::Timecode {
+                position: [x, y],
+                size,
+                opacity,
+                ..
+            } => vec![x, y, size, opacity],
         }
     }
 
@@ -91,6 +104,7 @@ impl VideoEffect {
             Self::GaussianBlur { blurriness } => vec![blurriness],
             Self::GammaCorrection { gamma: one }
             | Self::Posterize { levels: one }
+            | Self::PosterizeTime { frame_rate: one }
             | Self::Noise { amount: one }
             | Self::FindEdges { blend: one, .. }
             | Self::LensDistortion { curvature: one } => vec![one],
@@ -167,6 +181,18 @@ impl VideoEffect {
                 direction,
                 speed,
             } => vec![height, width, direction, speed],
+            Self::StrobeLight {
+                blend,
+                duration,
+                period,
+                ..
+            } => vec![blend, duration, period],
+            Self::Timecode {
+                position: [x, y],
+                size,
+                opacity,
+                ..
+            } => vec![x, y, size, opacity],
         }
     }
 }

@@ -13,6 +13,10 @@ const SHADOW_OPACITY: f32 = 0.7;
 /// each way.
 const BOLD_GROWTH: f32 = 1.0 / 40.0;
 /// Premiere's red, so a missing file can't pass for a dark shot.
+/// The width of a monospace character in the built-in face, in sizes, with room to
+/// spare so the line never wraps.
+const TIMECODE_ADVANCE: f32 = 0.7;
+/// Premiere's red, so a missing file can't pass for a dark shot.
 const OFFLINE_RED: Rgb = Rgb::new(200, 30, 30);
 
 /// The caption last drawn, and what it was drawn from, since one shows for many frames.
@@ -77,6 +81,32 @@ pub(crate) fn offline_frame(width: u32, height: u32) -> Arc<VideoFrame> {
         *cache = Some(Arc::clone(&frame));
         frame
     })
+}
+
+/// `text` in white monospace `size` pixels tall on a black box of `opacity`, as the
+/// Timecode effect draws it.
+pub(crate) fn timecode_box(text: &str, size: u32, opacity: f32) -> VideoFrame {
+    let characters = text.chars().count() as f32;
+    let width = (size as f32 * (TIMECODE_ADVANCE * characters + 1.0)).ceil() as u32;
+    let height = (size as f32 * 1.5).ceil() as u32;
+    let title = Title {
+        text: text.to_owned(),
+        size,
+        color: Rgb::WHITE,
+        align: TextAlign::Center,
+        font: TitleFont::Mono,
+        shadow: false,
+        ..Title::default()
+    };
+    let mut canvas = Canvas::new(width, height);
+    canvas.pixels.fill([0.0, 0.0, 0.0, opacity]);
+    draw_title(&mut canvas, &title, Anchor::Center);
+    VideoFrame {
+        pts: Ticks::ZERO,
+        width,
+        height,
+        pixels: canvas.into_pixels(),
+    }
 }
 
 /// `text` drawn in `style` near the bottom of a `width` by `height` canvas.

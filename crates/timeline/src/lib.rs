@@ -57,7 +57,9 @@ pub use edit::{
     SetTrackSwitch, SetTransition, Slide, Slip, SwitchAngle, TrackSwitch, Trim, TrimMode,
     UpdateMarker,
 };
-pub use effect::{ColorMatch, EffectCategory, MatteChannel, RampShape, Rgb, VideoEffect};
+pub use effect::{
+    ColorMatch, EffectCategory, MatteChannel, RampShape, Rgb, TimecodeSource, VideoEffect,
+};
 pub use error::TimelineError;
 pub use generator::{Generator, TextAlign, TextStroke, Title, TitleFont, GENERATED_SECONDS};
 pub use history::{preview, Edit, EditCommand, Timeline};

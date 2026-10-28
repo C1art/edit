@@ -1,4 +1,6 @@
-use timeline::{ColorMatch, EffectCategory, MatteChannel, RampShape, Rgb, VideoEffect};
+use timeline::{
+    ColorMatch, EffectCategory, MatteChannel, RampShape, Rgb, TimecodeSource, VideoEffect,
+};
 
 use super::look::Rows;
 
@@ -118,6 +120,39 @@ impl Rows {
                 self.param(ui, "Wave Width", width, 1.0..=2_000.0, " px");
                 self.param(ui, "Direction", direction, -360.0..=360.0, "°");
                 self.param(ui, "Wave Speed", speed, -10.0..=10.0, "/s");
+            }
+            VideoEffect::PosterizeTime { frame_rate } => {
+                self.param(ui, "Frame Rate", frame_rate, 1.0..=60.0, " fps");
+            }
+            VideoEffect::StrobeLight {
+                color,
+                blend,
+                duration,
+                period,
+            } => {
+                self.color(ui, "Strobe Color", color);
+                self.param(ui, "Amount", blend, 0.0..=100.0, "%");
+                self.param(ui, "Strobe Duration", duration, 0.0..=10.0, " s");
+                self.param(ui, "Strobe Period", period, 0.01..=10.0, " s");
+            }
+            VideoEffect::Timecode {
+                position: [x, y],
+                size,
+                opacity,
+                source,
+            } => {
+                self.param(ui, "Position X", x, 0.0..=100.0, "%");
+                self.param(ui, "Position Y", y, 0.0..=100.0, "%");
+                self.param(ui, "Size", size, 1.0..=50.0, "%");
+                self.param(ui, "Opacity", opacity, 0.0..=100.0, "%");
+                self.options(
+                    ui,
+                    "Timecode Source",
+                    "timecode_source",
+                    source,
+                    TimecodeSource::ALL,
+                    TimecodeSource::name,
+                );
             }
             VideoEffect::Sharpen { amount } => {
                 self.param(ui, "Amount", amount, 0.0..=500.0, "");

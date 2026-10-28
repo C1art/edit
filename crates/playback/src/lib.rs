@@ -22,6 +22,7 @@ mod sequence_mix;
 mod shuttle;
 mod still;
 mod stretch;
+mod time_effects;
 mod track_audio;
 mod track_video;
 mod tracks_mix;

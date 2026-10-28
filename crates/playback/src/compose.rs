@@ -14,6 +14,7 @@ use crate::clip_decoders::ClipDecoders;
 use crate::generated::caption_frame;
 use crate::grades::grade_for;
 use crate::pixel_effects::pixel_effects;
+use crate::time_effects::{posterized, with_timecode};
 use crate::track_video::TrackVideo;
 use crate::{Layer, LayerPicture, PlaybackError, Resolution};
 
@@ -151,7 +152,9 @@ fn clip_picture(
         }
         None => {
             let size = [sequence.format.width, sequence.format.height];
-            let (time, resolution) = (plan.source_time, decoding.resolution);
+            let effects = &plan.clip.look.effects;
+            let time = posterized(effects, plan.source_time, sequence.timebase);
+            let resolution = decoding.resolution;
             let frame = match plan.clip.interpolation {
                 TimeInterpolation::FrameSampling => decoder.frame_at(media, time, size, resolution),
                 TimeInterpolation::FrameBlending => {
@@ -159,7 +162,9 @@ fn clip_picture(
                 }
             };
             match frame {
-                Ok(frame) => frame.map(LayerPicture::Frame),
+                Ok(frame) => frame
+                    .map(|frame| with_timecode(frame, sequence, plan.clip, media, time))
+                    .map(LayerPicture::Frame),
                 Err(error) => {
                     decoder.reset();
                     if !decoding.warned.contains(&media.id) {

@@ -182,6 +182,51 @@ pub enum VideoEffect {
     CornerPin {
         corners: [[Param; 2]; 4],
     },
+    /// Holds each picture for a while, as footage shot at `frame_rate`.
+    PosterizeTime {
+        frame_rate: Param,
+    },
+    /// Flashes a color over the picture at regular intervals of the media's time.
+    StrobeLight {
+        color: Rgb,
+        /// Percent of the color over the picture while it flashes.
+        blend: Param,
+        /// Seconds each flash lasts.
+        duration: Param,
+        /// Seconds from the start of one flash to the next.
+        period: Param,
+    },
+    /// Burns the time into the picture, white on a box.
+    Timecode {
+        /// The box's center, in percent of the picture's width and height.
+        position: [Param; 2],
+        /// Text height in percent of the picture's height.
+        size: Param,
+        /// Percent opacity of the box behind the text.
+        opacity: Param,
+        source: TimecodeSource,
+    },
+}
+
+/// Which time the Timecode effect shows.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum TimecodeSource {
+    /// The time in the media file, at its own frame rate.
+    #[default]
+    Media,
+    /// The time since the clip's first frame, at the sequence's frame rate.
+    Clip,
+}
+
+impl TimecodeSource {
+    pub const ALL: [Self; 2] = [Self::Media, Self::Clip];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Media => "Media",
+            Self::Clip => "Clip",
+        }
+    }
 }
 
 /// How Leave Color tells colors apart.
@@ -235,11 +280,13 @@ pub enum EffectCategory {
     Keying,
     Perspective,
     Stylize,
+    Time,
     Transform,
+    Video,
 }
 
 impl EffectCategory {
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 11] = [
         Self::BlurAndSharpen,
         Self::ColorCorrection,
         Self::Distort,
@@ -248,7 +295,9 @@ impl EffectCategory {
         Self::Keying,
         Self::Perspective,
         Self::Stylize,
+        Self::Time,
         Self::Transform,
+        Self::Video,
     ];
 
     pub fn name(self) -> &'static str {
@@ -261,7 +310,9 @@ impl EffectCategory {
             Self::Keying => "Keying",
             Self::Perspective => "Perspective",
             Self::Stylize => "Stylize",
+            Self::Time => "Time",
             Self::Transform => "Transform",
+            Self::Video => "Video",
         }
     }
 }

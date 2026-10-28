@@ -145,6 +145,28 @@ pub(crate) fn pixel_effects(
                 pixel.reshape.corner_pin =
                     Some(corners.each_ref().map(|corner| corner.each_ref().map(unit)));
             }
+            VideoEffect::StrobeLight {
+                color,
+                blend,
+                duration,
+                period,
+            } => {
+                let seconds = time.0 as f64 * f64::from(timebase.num()) / f64::from(timebase.den());
+                let period = f64::from(period.value_at(time)).max(0.01);
+                let flashing = seconds.rem_euclid(period) < f64::from(duration.value_at(time));
+                if flashing {
+                    // A ramp of one color is a flat fill over the picture.
+                    pixel.recolor.ramp = Some(Ramp {
+                        start: [0.0, 0.0],
+                        end: [0.0, 1.0],
+                        start_color: encoded(*color),
+                        end_color: encoded(*color),
+                        radial: false,
+                        blend: 1.0 - unit(blend).clamp(0.0, 1.0),
+                    });
+                }
+            }
+            VideoEffect::PosterizeTime { .. } | VideoEffect::Timecode { .. } => {}
             VideoEffect::HorizontalFlip => pixel.flip[0] = !pixel.flip[0],
             VideoEffect::VerticalFlip => pixel.flip[1] = !pixel.flip[1],
             VideoEffect::BlackAndWhite => {
