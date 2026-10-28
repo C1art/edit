@@ -10,6 +10,7 @@ use timeline::{
 };
 
 use crate::autosave::Autosave;
+use crate::captions::CaptionPanel;
 use crate::clip_art::{ClipArt, ThumbnailWorker, WaveformWorker};
 use crate::effects::{self, EffectControls, SideTab};
 use crate::export::ExportDialog;
@@ -18,7 +19,7 @@ use crate::media_pool;
 use crate::mixer::{self, Mixer};
 use crate::monitors::{self, Focus};
 use crate::nesting::Level;
-use crate::project_files::{is_project, AfterDiscard, PathPrompt};
+use crate::project_files::{is_project, is_subrip, AfterDiscard, PathPrompt};
 use crate::project_store::ProjectStore;
 use crate::proxies::ProxyMaker;
 use crate::source::SourceMonitor;
@@ -46,6 +47,7 @@ pub struct Editor {
     pub(crate) view: TimelineView,
     pub(crate) mixer: Mixer,
     pub(crate) effects: EffectControls,
+    pub(crate) captions: CaptionPanel,
     side_tab: SideTab,
     /// The gain in dB being typed into the clip gain dialog, while it is showing.
     pub(crate) gain_prompt: Option<f32>,
@@ -128,6 +130,7 @@ impl Editor {
             view: TimelineView::default(),
             mixer: Mixer::default(),
             effects: EffectControls::default(),
+            captions: CaptionPanel::default(),
             side_tab: SideTab::default(),
             gain_prompt: None,
             speed_prompt: None,
@@ -188,6 +191,8 @@ impl Editor {
     pub(crate) fn open_path(&mut self, path: PathBuf) {
         if is_project(&path) {
             self.discard_then(AfterDiscard::Open(path));
+        } else if is_subrip(&path) {
+            self.import_captions(path);
         } else {
             self.import(path, None);
         }
@@ -332,6 +337,7 @@ impl Editor {
                 (SideTab::EffectControls, "Effect Controls"),
                 (SideTab::AudioMixer, "Audio Mixer"),
                 (SideTab::Scopes, "Scopes"),
+                (SideTab::Captions, "Captions"),
             ];
             for (tab, name) in tabs {
                 ui.selectable_value(&mut self.side_tab, tab, RichText::new(name).heading());
@@ -346,6 +352,7 @@ impl Editor {
             SideTab::EffectControls => effects::ui(self, ui),
             SideTab::AudioMixer => mixer::ui(self, ui),
             SideTab::Scopes => crate::scopes::ui(self, ui),
+            SideTab::Captions => crate::captions::ui(self, ui),
         }
     }
 

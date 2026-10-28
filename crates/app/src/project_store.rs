@@ -3,7 +3,7 @@ use std::thread;
 
 use crossbeam::channel::{self, Receiver, Sender};
 use project::ProjectFile;
-use timeline::Sequence;
+use timeline::{captions_from_cues, parse_srt, to_srt, Caption, Sequence, Timebase};
 
 enum Request {
     Save {
@@ -16,6 +16,12 @@ enum Request {
         path: PathBuf,
         sequence: Box<Sequence>,
     },
+    ReadCaptions(PathBuf, Timebase),
+    WriteCaptions {
+        path: PathBuf,
+        captions: Vec<Caption>,
+        timebase: Timebase,
+    },
 }
 
 pub enum StoreEvent {
@@ -23,6 +29,8 @@ pub enum StoreEvent {
     Saved(PathBuf, u64, Result<(), String>),
     Opened(PathBuf, Result<Box<Sequence>, String>),
     Autosaved(PathBuf, Result<(), String>),
+    CaptionsRead(PathBuf, Result<Vec<Caption>, String>),
+    CaptionsWritten(PathBuf, Result<(), String>),
 }
 
 /// Reads and writes project files on a worker thread so the UI never touches the disk.
@@ -80,6 +88,25 @@ impl ProjectStore {
         }
     }
 
+    /// Reads a SubRip file as captions in `timebase`.
+    pub fn read_captions(&mut self, path: PathBuf, timebase: Timebase) {
+        self.send(Request::ReadCaptions(path, timebase));
+    }
+
+    pub fn write_captions(&mut self, path: PathBuf, captions: Vec<Caption>, timebase: Timebase) {
+        self.send(Request::WriteCaptions {
+            path,
+            captions,
+            timebase,
+        });
+    }
+
+    fn send(&mut self, request: Request) {
+        if self.requests.send(request).is_ok() {
+            self.pending += 1;
+        }
+    }
+
     pub fn is_busy(&self) -> bool {
         self.pending > 0
     }
@@ -120,6 +147,22 @@ fn handle(request: Request) -> StoreEvent {
                         .map_err(|error| error.to_string())
                 });
             StoreEvent::Autosaved(path, result)
+        }
+        Request::ReadCaptions(path, timebase) => {
+            let result = std::fs::read_to_string(&path)
+                .map_err(|error| error.to_string())
+                .and_then(|text| parse_srt(&text, timebase).map_err(|error| error.to_string()))
+                .map(captions_from_cues);
+            StoreEvent::CaptionsRead(path, result)
+        }
+        Request::WriteCaptions {
+            path,
+            captions,
+            timebase,
+        } => {
+            let result = std::fs::write(&path, to_srt(&captions, timebase))
+                .map_err(|error| error.to_string());
+            StoreEvent::CaptionsWritten(path, result)
         }
     }
 }

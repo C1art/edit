@@ -198,6 +198,17 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                 editor.ripple_delete();
             }
             ui.separator();
+            if ui.button("Import Captions…").clicked() {
+                editor.prompt_path(PathPurpose::ImportCaptions);
+            }
+            let has_captions = !editor.timeline.sequence().captions.items.is_empty();
+            if ui
+                .add_enabled(has_captions, Button::new("Export Captions…"))
+                .clicked()
+            {
+                editor.prompt_path(PathPurpose::ExportCaptions);
+            }
+            ui.separator();
             if ui.add(Button::new("Mark In").shortcut_text("I")).clicked() {
                 editor.mark_sequence_in();
             }

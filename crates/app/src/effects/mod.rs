@@ -24,6 +24,7 @@ pub enum SideTab {
     EffectControls,
     AudioMixer,
     Scopes,
+    Captions,
 }
 
 /// The look, volume or audio effect being dragged, or the title being typed, shown live

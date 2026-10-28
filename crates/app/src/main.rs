@@ -1,4 +1,5 @@
 mod autosave;
+mod captions;
 mod clip_art;
 mod commands;
 mod editor;

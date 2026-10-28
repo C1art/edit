@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use egui::{Key, ViewportCommand};
-use timeline::{Sequence, SourceId, Timebase, Timeline, VideoFormat};
+use timeline::{Captions, Sequence, SetCaptions, SourceId, Timebase, Timeline, VideoFormat};
 
 use crate::editor::Editor;
 use crate::project_store::StoreEvent;
@@ -15,6 +15,8 @@ pub enum PathPurpose {
     Replace(SourceId),
     OpenProject,
     SaveProject,
+    ImportCaptions,
+    ExportCaptions,
 }
 
 pub struct PathPrompt {
@@ -30,9 +32,19 @@ pub enum AfterDiscard {
     Quit,
 }
 
+const SUBRIP: &str = "srt";
+
 pub fn is_project(path: &Path) -> bool {
+    has_extension(path, project::EXTENSION)
+}
+
+pub fn is_subrip(path: &Path) -> bool {
+    has_extension(path, SUBRIP)
+}
+
+fn has_extension(path: &Path, wanted: &str) -> bool {
     path.extension()
-        .is_some_and(|extension| extension.eq_ignore_ascii_case(project::EXTENSION))
+        .is_some_and(|extension| extension.eq_ignore_ascii_case(wanted))
 }
 
 impl Editor {
@@ -52,6 +64,11 @@ impl Editor {
                 .project()
                 .media_item(id)
                 .map(|item| item.path.display().to_string())
+                .unwrap_or_default(),
+            PathPurpose::ExportCaptions => self
+                .project_path
+                .as_ref()
+                .map(|path| path.with_extension(SUBRIP).display().to_string())
                 .unwrap_or_default(),
             _ => String::new(),
         };
@@ -75,6 +92,26 @@ impl Editor {
         match &mut self.store {
             Some(store) => store.save(path, sequence, revision),
             None => self.notice("Cannot save: the project worker is not running"),
+        }
+    }
+
+    pub(crate) fn import_captions(&mut self, path: PathBuf) {
+        let timebase = self.timeline.sequence().timebase;
+        match &mut self.store {
+            Some(store) => store.read_captions(path, timebase),
+            None => self.notice("Cannot import captions: the project worker is not running"),
+        }
+    }
+
+    fn export_captions(&mut self, mut path: PathBuf) {
+        if !is_subrip(&path) {
+            path.as_mut_os_string().push(format!(".{SUBRIP}"));
+        }
+        let sequence = self.timeline.sequence();
+        let (captions, timebase) = (sequence.captions.items.clone(), sequence.timebase);
+        match &mut self.store {
+            Some(store) => store.write_captions(path, captions, timebase),
+            None => self.notice("Cannot export captions: the project worker is not running"),
         }
     }
 
@@ -151,6 +188,23 @@ impl Editor {
                 StoreEvent::Opened(path, Err(error)) => {
                     self.notice(format!("Cannot open {}: {error}", path.display()));
                 }
+                StoreEvent::CaptionsRead(path, Ok(items)) if items.is_empty() => {
+                    self.notice(format!("No captions found in {}", path.display()));
+                }
+                StoreEvent::CaptionsRead(_, Ok(items)) => {
+                    let captions = Captions {
+                        items,
+                        ..self.timeline.sequence().captions.clone()
+                    };
+                    self.apply(SetCaptions { captions });
+                }
+                StoreEvent::CaptionsRead(path, Err(error)) => {
+                    self.notice(format!("Cannot import {}: {error}", path.display()));
+                }
+                StoreEvent::CaptionsWritten(_, Ok(())) => {}
+                StoreEvent::CaptionsWritten(path, Err(error)) => {
+                    self.notice(format!("Cannot export {}: {error}", path.display()));
+                }
                 StoreEvent::Autosaved(_, Ok(())) => {}
                 StoreEvent::Autosaved(path, Err(error)) => {
                     self.notice(format!("Cannot autosave to {}: {error}", path.display()));
@@ -198,6 +252,16 @@ pub fn path_dialog(editor: &mut Editor, ctx: &egui::Context) {
         ),
         PathPurpose::OpenProject => ("Open Project", "Path to a project file:", "Open"),
         PathPurpose::SaveProject => ("Save Project As", "Save the project to:", "Save"),
+        PathPurpose::ImportCaptions => (
+            "Import Captions",
+            "Path to a SubRip (.srt) file; its captions replace the sequence's:",
+            "Import",
+        ),
+        PathPurpose::ExportCaptions => (
+            "Export Captions",
+            "Write the sequence's captions as SubRip to:",
+            "Export",
+        ),
     };
     let mut submitted = None;
     let mut cancelled = false;
@@ -228,6 +292,8 @@ pub fn path_dialog(editor: &mut Editor, ctx: &egui::Context) {
             PathPurpose::Replace(id) => editor.import(path, Some(id)),
             PathPurpose::OpenProject => editor.discard_then(AfterDiscard::Open(path)),
             PathPurpose::SaveProject => editor.save_project_to(path),
+            PathPurpose::ImportCaptions => editor.import_captions(path),
+            PathPurpose::ExportCaptions => editor.export_captions(path),
         }
     } else if cancelled {
         editor.path_prompt = None;
