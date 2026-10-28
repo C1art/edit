@@ -12,7 +12,10 @@ fn generated_media_places_a_still_length_of_picture_and_edits_undo() {
         })
         .unwrap();
     let item = timeline.sequence().media[1].clone();
-    assert_eq!(item.default_length(Timebase::HZ_90K), Ticks(450_000));
+    assert_eq!(
+        item.default_range(Timebase::HZ_90K),
+        Ticks::ZERO..Ticks(450_000)
+    );
     timeline
         .apply(place(item.id, 0, 0, 450_000, PlaceMode::Overwrite))
         .unwrap();

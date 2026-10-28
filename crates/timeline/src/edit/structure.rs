@@ -120,6 +120,7 @@ impl Edit for ImportMedia {
             bin: None,
             generator: None,
             nest: None,
+            subclip: None,
         });
         Ok(())
     }

@@ -1,6 +1,7 @@
+use std::ops::Range;
 use std::path::Path;
 
-use crate::{Edit, ImportMedia, MediaItem, Sequence, SourceId, TimelineError};
+use crate::{Edit, ImportMedia, MediaItem, Sequence, SourceId, Ticks, TimelineError};
 
 fn media_item(sequence: &mut Sequence, source: SourceId) -> Result<&mut MediaItem, TimelineError> {
     sequence
@@ -65,4 +66,42 @@ impl Edit for RelinkMedia {
 
 fn is_file_name(name: &str, path: &Path) -> bool {
     path.file_name().is_some_and(|file| *file == *name)
+}
+
+/// Adds an item to the pool standing for part of a file, in the same bin as the item
+/// it was marked in, which may itself be a subclip.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MakeSubclip {
+    pub source: SourceId,
+    /// In the file's time.
+    pub range: Range<Ticks>,
+    pub name: String,
+}
+
+impl Edit for MakeSubclip {
+    fn name(&self) -> &'static str {
+        "Make Subclip"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let item = sequence
+            .media_item(self.source)
+            .ok_or(TimelineError::MediaNotFound(self.source))?
+            .clone();
+        if !item.is_file() {
+            return Err(TimelineError::NothingToEdit);
+        }
+        let range = self.range.start.max(Ticks::ZERO)..self.range.end.min(item.duration);
+        if range.is_empty() {
+            return Err(TimelineError::NonPositiveDuration);
+        }
+        let subclip = MediaItem {
+            id: SourceId(sequence.ids.next()),
+            name: self.name.clone(),
+            subclip: Some(range),
+            ..item
+        };
+        sequence.media.push(subclip);
+        Ok(())
+    }
 }

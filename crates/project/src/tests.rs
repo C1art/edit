@@ -21,6 +21,7 @@ fn sample() -> ProjectFile {
         bin: None,
         generator: None,
         nest: None,
+        subclip: None,
     });
     sequence.media.push(MediaItem {
         id: SourceId(2),
@@ -41,6 +42,7 @@ fn sample() -> ProjectFile {
             background: Some(Rgb::BLACK),
         })),
         nest: None,
+        subclip: None,
     });
     sequence.bins = vec![
         Bin {
@@ -76,6 +78,7 @@ fn sample() -> ProjectFile {
         bin: None,
         generator: None,
         nest: Some(nest),
+        subclip: None,
     });
     let mut clip = Clip::new(ClipId(7), SourceId(1), Ticks(0), Ticks(90_000), Ticks(3));
     clip.gain = Gain(-600);

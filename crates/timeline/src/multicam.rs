@@ -86,6 +86,7 @@ impl Sequence {
                 ..Nest::default()
             }),
             bin: None,
+            subclip: None,
         });
         let mut whole = Clip::new(
             ClipId(view.ids.next()),

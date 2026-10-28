@@ -88,6 +88,7 @@ impl Edit for NestClips {
             bin: None,
             generator: None,
             nest: Some(nest),
+            subclip: None,
         });
         let link = (video.is_some() && audio.is_some()).then(|| LinkId(sequence.ids.next()));
         let placements = [video.map(TrackRef::video), audio.map(TrackRef::audio)];
@@ -130,6 +131,7 @@ impl Edit for AddNest {
             bin: None,
             generator: None,
             nest: Some(Nest::with_default_tracks()),
+            subclip: None,
         });
         sequence.fit_nest(id);
         Ok(())

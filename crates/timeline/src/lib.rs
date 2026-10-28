@@ -43,7 +43,7 @@ pub use curves::{Curve, CurvePoint, Curves, CURVE_RANGE};
 pub use edit::{
     clamp_delta, AddBin, AddFrameHold, AddGenerated, AddMarker, AddNest, AddSpeedKeyframe,
     AddTrack, Attribute, Clipboard, CloseGap, CreateMulticam, Edge, ExtractMarked, FlattenMulticam,
-    FrameFit, ImportMedia, InNest, Lift, LiftMarked, MoveClips, MoveToBin, NestClips,
+    FrameFit, ImportMedia, InNest, Lift, LiftMarked, MakeSubclip, MoveClips, MoveToBin, NestClips,
     NormalizeClipGains, PasteAttributes, PasteClips, PlaceClip, PlaceMode, RateStretch, Razor,
     RazorTarget, RelinkMedia, RemoveAttributes, RemoveBin, RemoveMarker, RemoveMedia,
     RemoveSpeedKeyframe, RemoveTimeRemap, RemoveTrack, RenameBin, RenameMedia, RippleDelete,

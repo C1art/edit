@@ -43,3 +43,25 @@ fn relinking_follows_the_new_file_unless_renamed_and_needs_room_for_the_clips() 
     let item = &timeline.sequence().media[0];
     assert_eq!((item.name.as_str(), item.duration), ("c.wav", Ticks(900)));
 }
+
+#[test]
+fn a_subclip_places_its_part_of_the_file_and_cannot_reach_past_it() {
+    let (mut timeline, source) = timeline();
+    let subclip = |start, end| MakeSubclip {
+        source,
+        range: Ticks(start)..Ticks(end),
+        name: "take 2".into(),
+    };
+    // The file is 1000 ticks long.
+    timeline.apply(subclip(200, 5_000)).unwrap();
+    let item = timeline.sequence().media.last().unwrap();
+    assert_eq!(item.name, "take 2");
+    assert_eq!(
+        item.default_range(Timebase::HZ_90K),
+        Ticks(200)..Ticks(1000)
+    );
+    assert_eq!(
+        timeline.apply(subclip(1000, 1010)),
+        Err(TimelineError::NonPositiveDuration)
+    );
+}

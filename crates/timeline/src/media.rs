@@ -1,3 +1,4 @@
+use std::ops::Range;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -32,15 +33,19 @@ pub struct MediaItem {
     /// The bin the item sits in, or none at the top of the project.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bin: Option<BinId>,
+    /// The part of the file a subclip stands for; clips of it start inside this range.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subclip: Option<Range<Ticks>>,
 }
 
 impl MediaItem {
-    /// How much an edit places when no range is marked: all of a file, or a still's
-    /// usual length of generated media.
-    pub fn default_length(&self, timebase: Timebase) -> Ticks {
-        match self.generator {
-            Some(_) => placed_length(timebase).min(self.duration),
-            None => self.duration,
+    /// What an edit places when no range is marked: all of a file or subclip, or a
+    /// still's usual length of generated media.
+    pub fn default_range(&self, timebase: Timebase) -> Range<Ticks> {
+        match (&self.generator, &self.subclip) {
+            (Some(_), _) => Ticks::ZERO..placed_length(timebase).min(self.duration),
+            (None, Some(range)) => range.clone(),
+            (None, None) => Ticks::ZERO..self.duration,
         }
     }
 

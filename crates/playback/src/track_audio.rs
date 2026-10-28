@@ -140,6 +140,7 @@ mod tests {
             bin: None,
             generator: None,
             nest: None,
+            subclip: None,
         }
     }
 

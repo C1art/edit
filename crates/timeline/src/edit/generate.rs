@@ -30,6 +30,7 @@ impl Edit for AddGenerated {
             bin: None,
             generator: Some(self.generator.clone()),
             nest: None,
+            subclip: None,
         });
         Ok(())
     }

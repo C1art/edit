@@ -80,6 +80,7 @@ impl Edit for CreateMulticam {
             generator: None,
             nest: Some(nest),
             bin,
+            subclip: None,
         });
         sequence.fit_nest(id);
         Ok(())
