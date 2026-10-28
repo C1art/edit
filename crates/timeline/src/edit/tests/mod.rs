@@ -513,6 +513,7 @@ mod nest;
 mod paste;
 mod range;
 mod remap;
+mod replace;
 mod speed;
 mod submix;
 mod track;
