@@ -36,6 +36,7 @@ impl Edit for AddGenerated {
             interpreted_aspect: None,
             alpha: Default::default(),
             log: Default::default(),
+            offline: false,
         });
         Ok(())
     }

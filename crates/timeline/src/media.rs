@@ -51,6 +51,9 @@ pub struct MediaItem {
     pub alpha: AlphaInterpretation,
     #[serde(default, skip_serializing_if = "MediaLog::is_empty")]
     pub log: MediaLog,
+    /// Set by Make Offline: the file is left alone but no longer read, until relinked.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub offline: bool,
 }
 
 /// What the editor has written down about a media item, as Premiere's Metadata panel

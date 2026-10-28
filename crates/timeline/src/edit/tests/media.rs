@@ -77,3 +77,20 @@ fn a_duplicate_follows_its_original_under_a_new_id_and_undoes() {
     timeline.undo();
     assert_eq!(timeline.sequence().media.len(), 1);
 }
+
+#[test]
+fn media_made_offline_comes_back_by_relinking_even_to_the_same_file() {
+    let (mut timeline, source) = timeline();
+    let offline = || MakeOffline {
+        sources: vec![source],
+    };
+    timeline.apply(offline()).unwrap();
+    assert!(timeline.sequence().media[0].offline);
+    assert_eq!(timeline.apply(offline()), Err(TimelineError::NothingToEdit));
+    timeline.apply(relink(source, "a.mp4", 1000)).unwrap();
+    assert!(!timeline.sequence().media[0].offline);
+    assert_eq!(
+        timeline.apply(relink(source, "a.mp4", 1000)),
+        Err(TimelineError::NothingToEdit)
+    );
+}

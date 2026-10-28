@@ -36,6 +36,7 @@ fn sample() -> ProjectFile {
             log_note: String::new(),
             good: true,
         },
+        offline: false,
     });
     sequence.media.push(MediaItem {
         id: SourceId(2),
@@ -77,6 +78,7 @@ fn sample() -> ProjectFile {
         interpreted_aspect: None,
         alpha: Default::default(),
         log: Default::default(),
+        offline: false,
     });
     sequence.bins = vec![
         Bin {
@@ -117,6 +119,7 @@ fn sample() -> ProjectFile {
         interpreted_aspect: None,
         alpha: Default::default(),
         log: Default::default(),
+        offline: false,
     });
     let mut clip = Clip::new(ClipId(7), SourceId(1), Ticks(0), Ticks(90_000), Ticks(3));
     clip.gain = Gain(-600);

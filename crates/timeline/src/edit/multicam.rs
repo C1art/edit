@@ -85,6 +85,7 @@ impl Edit for CreateMulticam {
             interpreted_aspect: None,
             alpha: Default::default(),
             log: Default::default(),
+            offline: false,
         });
         sequence.fit_nest(id);
         Ok(())

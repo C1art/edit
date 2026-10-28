@@ -70,7 +70,7 @@ impl Edit for RelinkMedia {
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
         let item = media_item(sequence, self.source)?;
-        if !item.is_file() || item.path == self.media.path {
+        if !item.is_file() || (item.path == self.media.path && !item.offline) {
             return Err(TimelineError::NothingToEdit);
         }
         // A name the user chose survives; one that only echoed the old file follows the new.
@@ -82,7 +82,38 @@ impl Edit for RelinkMedia {
         item.video = self.media.video;
         item.has_audio = self.media.has_audio;
         item.proxy = None;
+        item.offline = false;
         Ok(())
+    }
+}
+
+/// Stops the project reading the files behind media items, as Premiere's Make Offline
+/// does before the files are moved or replaced; clips keep their places and show as
+/// offline until the items are relinked.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MakeOffline {
+    pub sources: Vec<SourceId>,
+}
+
+impl Edit for MakeOffline {
+    fn name(&self) -> &'static str {
+        "Make Offline"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let mut changed = false;
+        for &source in &self.sources {
+            let item = media_item(sequence, source)?;
+            if item.is_file() && !item.offline {
+                item.offline = true;
+                changed = true;
+            }
+        }
+        if changed {
+            Ok(())
+        } else {
+            Err(TimelineError::NothingToEdit)
+        }
     }
 }
 

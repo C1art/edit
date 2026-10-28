@@ -93,6 +93,7 @@ impl Edit for NestClips {
             interpreted_aspect: None,
             alpha: Default::default(),
             log: Default::default(),
+            offline: false,
         });
         let link = (video.is_some() && audio.is_some()).then(|| LinkId(sequence.ids.next()));
         let placements = [video.map(TrackRef::video), audio.map(TrackRef::audio)];
@@ -140,6 +141,7 @@ impl Edit for AddNest {
             interpreted_aspect: None,
             alpha: Default::default(),
             log: Default::default(),
+            offline: false,
         });
         sequence.fit_nest(id);
         Ok(())
