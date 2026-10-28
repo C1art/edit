@@ -92,6 +92,34 @@ impl Edit for SetClipVolume {
     }
 }
 
+/// Gives audio clips volume keyframes that lower them under other sound.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AutoDuck {
+    pub volumes: Vec<(ClipId, Param)>,
+}
+
+impl Edit for AutoDuck {
+    fn name(&self) -> &'static str {
+        "Auto Duck"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        if self.volumes.is_empty() {
+            return Err(TimelineError::NothingToEdit);
+        }
+        for (id, volume) in &self.volumes {
+            if sequence
+                .clip(*id)
+                .is_some_and(|(track, _)| track.kind != TrackKind::Audio)
+            {
+                return Err(TimelineError::NothingToEdit);
+            }
+            ops::clip_mut(sequence, *id)?.volume = volume.clone();
+        }
+        Ok(())
+    }
+}
+
 /// Replaces an audio clip's effects and their settings.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SetClipAudioEffects {

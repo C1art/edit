@@ -5,6 +5,7 @@ mod blend;
 mod caption;
 mod color;
 mod curves;
+mod ducking;
 mod edit;
 mod effect;
 mod error;
@@ -40,9 +41,10 @@ pub use blend::BlendMode;
 pub use caption::{captions_from_cues, Caption, CaptionStyle, Captions};
 pub use color::{ColorCorrection, ColorWheel};
 pub use curves::{Curve, CurvePoint, Curves, CURVE_RANGE};
+pub use ducking::{active_spans, ducked_volume};
 pub use edit::{
     clamp_delta, AddBin, AddEdits, AddFrameHold, AddGenerated, AddMarker, AddNest,
-    AddSpeedKeyframe, AddTrack, Attribute, Clipboard, CloseGap, CreateMulticam, Edge,
+    AddSpeedKeyframe, AddTrack, Attribute, AutoDuck, Clipboard, CloseGap, CreateMulticam, Edge,
     ExtractMarked, FlattenMulticam, FrameFit, ImportMedia, InNest, Lift, LiftMarked, MakeSubclip,
     MoveClips, MoveToBin, NestClips, NormalizeClipGains, PasteAttributes, PasteClips, PlaceClip,
     PlaceMode, RateStretch, Razor, RazorTarget, RelinkMedia, RemoveAttributes, RemoveBin,

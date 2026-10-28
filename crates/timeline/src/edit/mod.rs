@@ -36,7 +36,7 @@ pub use generate::{AddGenerated, SetGenerator};
 pub use hold::AddFrameHold;
 pub use label::SetClipLabel;
 pub use levels::{
-    NormalizeClipGains, SetClipAudioEffects, SetClipGain, SetClipVolume, SetMasterGain,
+    AutoDuck, NormalizeClipGains, SetClipAudioEffects, SetClipGain, SetClipVolume, SetMasterGain,
     SetTrackAutomation, SetTrackMix,
 };
 pub use link::SetLinked;
