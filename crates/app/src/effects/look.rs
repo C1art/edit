@@ -1,7 +1,7 @@
 use std::ops::RangeInclusive;
 
 use egui::{DragValue, RichText};
-use timeline::{Interpolation, Look, Param, Rgb, Ticks, VideoEffect};
+use timeline::{BlendMode, Interpolation, Look, Param, Rgb, Ticks, VideoEffect};
 
 use super::LutSlot;
 use crate::mixer::{response_state, Change};
@@ -39,6 +39,23 @@ pub(super) fn controls(ui: &mut egui::Ui, look: &mut Look, time: Ticks) -> Outpu
         .default_open(true)
         .show(ui, |ui| {
             rows.param(ui, "Opacity", &mut look.opacity, 0.0..=100.0, "%");
+            ui.horizontal(|ui| {
+                ui.label("Blend Mode");
+                egui::ComboBox::from_id_salt("blend_mode")
+                    .selected_text(look.blend.name())
+                    .height(f32::INFINITY)
+                    .show_ui(ui, |ui| {
+                        for mode in BlendMode::ALL {
+                            if mode.starts_group() {
+                                ui.separator();
+                            }
+                            let choice = ui.selectable_value(&mut look.blend, mode, mode.name());
+                            if choice.clicked() {
+                                rows.commit();
+                            }
+                        }
+                    });
+            });
             super::masks::controls(ui, &mut rows, &mut look.masks);
         });
     egui::CollapsingHeader::new("Crop").show(ui, |ui| {
