@@ -50,3 +50,32 @@ fn nesting_moves_clips_into_a_sequence_that_edits_and_undoes_in_place() {
     assert_eq!(spans(&timeline, V1), [(0, 300, 0)]);
     assert_eq!(spans(&timeline, V2), [(400, 500, 0)]);
 }
+
+#[test]
+fn a_duplicated_sequence_gives_its_clips_and_links_new_ids() {
+    let (mut timeline, source) = timeline();
+    timeline
+        .apply(place(source, 0, 0, 300, PlaceMode::Overwrite))
+        .unwrap();
+    let clips = vec![clip_on(&timeline, V1, 0), clip_on(&timeline, A1, 0)];
+    let name = "Nest".into();
+    timeline.apply(NestClips { clips, name }).unwrap();
+    let nest = timeline.sequence().media[1].id;
+    timeline.apply(DuplicateMedia { source: nest }).unwrap();
+
+    let contents = |index: usize| {
+        let item = &timeline.project().media[index];
+        let nest = item.nest.as_ref().unwrap();
+        let clips: Vec<_> = nest.tracks().flat_map(|(_, track)| &track.clips).collect();
+        clips
+            .iter()
+            .map(|clip| (clip.id, clip.link))
+            .collect::<Vec<_>>()
+    };
+    let (original, copy) = (contents(1), contents(2));
+    assert_eq!(copy.len(), 2);
+    assert!(copy.iter().all(|(id, link)| original
+        .iter()
+        .all(|(other, other_link)| id != other && link != other_link)));
+    assert!(copy[0].1.is_some() && copy[0].1 == copy[1].1);
+}

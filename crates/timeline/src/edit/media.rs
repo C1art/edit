@@ -1,8 +1,11 @@
+use std::collections::HashMap;
 use std::ops::Range;
 use std::path::Path;
 
+use crate::model::IdGenerator;
 use crate::{
-    ChannelMap, Edit, ImportMedia, MediaItem, MediaLog, Sequence, SourceId, Ticks, TimelineError,
+    ChannelMap, ClipId, Edit, GroupId, ImportMedia, LinkId, MediaItem, MediaLog, Nest, Sequence,
+    SourceId, Ticks, TimelineError,
 };
 
 fn media_item(sequence: &mut Sequence, source: SourceId) -> Result<&mut MediaItem, TimelineError> {
@@ -206,7 +209,27 @@ impl Edit for DuplicateMedia {
         let mut copy = sequence.media[index].clone();
         copy.id = SourceId(sequence.ids.next());
         copy.name.push_str(" Copy");
+        if let Some(nest) = &mut copy.nest {
+            renumber(nest, &mut sequence.ids);
+        }
         sequence.media.insert(index + 1, copy);
         Ok(())
+    }
+}
+
+/// Gives a copied sequence's clips, links and groups ids of their own, so nothing kept per
+/// clip, such as a selection or a cached preview, mistakes the copy for its original.
+fn renumber(nest: &mut Nest, ids: &mut IdGenerator) {
+    let mut links: HashMap<LinkId, LinkId> = HashMap::new();
+    let mut groups: HashMap<GroupId, GroupId> = HashMap::new();
+    let tracks = nest.video.iter_mut().chain(&mut nest.audio);
+    for clip in tracks.flat_map(|track| &mut track.clips) {
+        clip.id = ClipId(ids.next());
+        if let Some(link) = &mut clip.link {
+            *link = *links.entry(*link).or_insert_with(|| LinkId(ids.next()));
+        }
+        if let Some(group) = &mut clip.group {
+            *group = *groups.entry(*group).or_insert_with(|| GroupId(ids.next()));
+        }
     }
 }
