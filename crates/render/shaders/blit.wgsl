@@ -5,7 +5,7 @@
 struct Placement {
     // The uncropped picture's center, then the vector along its width (all NDC).
     center_axis_x: vec4<f32>,
-    // The vector down its height, then opacity.
+    // The vector down its height, opacity, then 1 when the source is premultiplied.
     axis_y_opacity: vec4<f32>,
     // Fractions removed from the left, top, right and bottom.
     crop: vec4<f32>,
@@ -138,7 +138,10 @@ fn stylize(rgb_in: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let color = textureSample(source, source_sampler, in.uv);
+    var color = textureSample(source, source_sampler, in.uv);
+    if placement.axis_y_opacity.w > 0.5 {
+        color = vec4<f32>(color.rgb / max(color.a, 1e-6), color.a);
+    }
     let mask = placement.mask;
     let shown = all(in.canvas >= mask.xy) && all(in.canvas <= vec2<f32>(1.0) - mask.zw);
     let keyed = key_alpha(color.rgb);

@@ -146,7 +146,13 @@ impl Waveform {
             pass.set_bind_group(0, binding, &[]);
             pass.dispatch_workgroups(width.div_ceil(WORKGROUP), height.div_ceil(WORKGROUP), 1);
         }
-        crate::blit::draw(encoder, &self.view, &self.draw, &[&self.draw_binding]);
+        crate::blit::draw(
+            encoder,
+            &self.view,
+            &self.draw,
+            &[&self.draw_binding],
+            wgpu::Color::BLACK,
+        );
     }
 }
 

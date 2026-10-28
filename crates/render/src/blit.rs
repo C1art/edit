@@ -154,6 +154,7 @@ pub(crate) fn draw(
     target: &wgpu::TextureView,
     pipeline: &wgpu::RenderPipeline,
     bindings: &[&wgpu::BindGroup],
+    clear: wgpu::Color,
 ) {
     let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: Some("blit_pass"),
@@ -162,7 +163,7 @@ pub(crate) fn draw(
             depth_slice: None,
             resolve_target: None,
             ops: wgpu::Operations {
-                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                load: wgpu::LoadOp::Clear(clear),
                 store: wgpu::StoreOp::Store,
             },
         })],

@@ -16,17 +16,47 @@ pub enum Presented {
     NewTarget,
 }
 
-/// A source picture to composite: tightly packed RGBA8 in the source transfer function.
-#[derive(Debug, Clone, Copy)]
+/// A picture to composite and how to draw it.
+#[derive(Debug, Clone)]
 pub struct LayerImage<'a> {
-    pub width: u32,
-    pub height: u32,
-    pub rgba: &'a [u8],
+    pub picture: Picture<'a>,
     pub look: LayerLook,
 }
 
-/// Upload texture and placement for one layer, reused while the layer's size holds.
+#[derive(Debug, Clone)]
+pub enum Picture<'a> {
+    /// Tightly packed RGBA8 in the source transfer function.
+    Pixels {
+        width: u32,
+        height: u32,
+        rgba: &'a [u8],
+    },
+    /// Layers composited bottom first onto a transparent canvas of their own, so the
+    /// look applies to them as one picture, as to a nested sequence.
+    Group(Vec<LayerImage<'a>>),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SlotKind {
+    /// Uploaded source pixels.
+    Picture,
+    /// A canvas-sized working texture that a group is drawn into.
+    Group,
+}
+
+/// GPU work that must run before the layers that use it are drawn.
+enum Step {
+    Blur(usize),
+    /// Draws the slots in `members` into the group slot `index`.
+    Group {
+        index: usize,
+        members: Vec<usize>,
+    },
+}
+
+/// Texture and placement for one layer, reused while the layer's size and kind hold.
 struct Slot {
+    kind: SlotKind,
     width: u32,
     height: u32,
     texture: wgpu::Texture,
@@ -135,17 +165,7 @@ impl Compositor {
         layers: &[LayerImage<'_>],
     ) -> Result<Presented, RenderError> {
         self.check_size(canvas.0, canvas.1)?;
-        for layer in layers {
-            self.check_size(layer.width, layer.height)?;
-            let expected = layer.width as usize * layer.height as usize * 4;
-            if layer.rgba.len() != expected {
-                return Err(RenderError::FrameSize {
-                    width: layer.width,
-                    height: layer.height,
-                    bytes: layer.rgba.len(),
-                });
-            }
-        }
+        self.check_layers(layers)?;
 
         let presented = match &self.targets {
             Some(targets) if (targets.width, targets.height) == canvas => Presented::SameTarget,
@@ -154,9 +174,8 @@ impl Compositor {
                 Presented::NewTarget
             }
         };
-        for (index, layer) in layers.iter().enumerate() {
-            self.upload(index, layer, canvas);
-        }
+        let mut steps = Vec::new();
+        let top = self.prepare(layers, canvas, &mut 0, &mut steps);
         let Some(targets) = &self.targets else {
             unreachable!("targets were created above");
         };
@@ -169,30 +188,108 @@ impl Compositor {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("compositor"),
             });
-        let slots = &self.slots[..layers.len()];
-        for slot in slots.iter().filter(|slot| slot.blurred) {
-            if let Some(blur) = &slot.blur {
-                blur.draw(&mut encoder, &self.blit);
+        for step in &steps {
+            match step {
+                Step::Blur(index) => {
+                    if let Some(blur) = &self.slots[*index].blur {
+                        blur.draw(&mut encoder, &self.blit);
+                    }
+                }
+                Step::Group { index, members } => blit::draw(
+                    &mut encoder,
+                    &self.slots[*index].view,
+                    &self.blit.to_working,
+                    &self.placed(members),
+                    wgpu::Color::TRANSPARENT,
+                ),
             }
         }
-        let layer_bindings: Vec<&wgpu::BindGroup> = slots.iter().map(Slot::placed).collect();
         blit::draw(
             &mut encoder,
             &targets.working,
             &self.blit.to_working,
-            &layer_bindings,
+            &self.placed(&top),
+            wgpu::Color::BLACK,
         );
         blit::draw(
             &mut encoder,
             &targets.output,
             &self.blit.to_display,
             &[&targets.working_binding],
+            wgpu::Color::BLACK,
         );
         if let Some(waveform) = &self.waveform {
             waveform.record(&mut encoder);
         }
         self.queue.submit([encoder.finish()]);
         Ok(presented)
+    }
+
+    fn placed(&self, slots: &[usize]) -> Vec<&wgpu::BindGroup> {
+        slots
+            .iter()
+            .map(|&index| self.slots[index].placed())
+            .collect()
+    }
+
+    fn check_layers(&self, layers: &[LayerImage<'_>]) -> Result<(), RenderError> {
+        for layer in layers {
+            match &layer.picture {
+                Picture::Pixels {
+                    width,
+                    height,
+                    rgba,
+                } => {
+                    self.check_size(*width, *height)?;
+                    if rgba.len() != *width as usize * *height as usize * 4 {
+                        return Err(RenderError::FrameSize {
+                            width: *width,
+                            height: *height,
+                            bytes: rgba.len(),
+                        });
+                    }
+                }
+                Picture::Group(members) => self.check_layers(members)?,
+            }
+        }
+        Ok(())
+    }
+
+    /// Uploads and places `layers` in the slots from `next` on, adding the work they
+    /// need before drawing to `steps`. Returns their slots, bottom first.
+    fn prepare(
+        &mut self,
+        layers: &[LayerImage<'_>],
+        canvas: (u32, u32),
+        next: &mut usize,
+        steps: &mut Vec<Step>,
+    ) -> Vec<usize> {
+        let mut placed = Vec::with_capacity(layers.len());
+        for layer in layers {
+            let index = match &layer.picture {
+                Picture::Pixels {
+                    width,
+                    height,
+                    rgba,
+                } => {
+                    let index = self.claim(next, (*width, *height), SlotKind::Picture);
+                    self.upload(index, rgba);
+                    index
+                }
+                Picture::Group(members) => {
+                    let members = self.prepare(members, canvas, next, steps);
+                    let index = self.claim(next, canvas, SlotKind::Group);
+                    steps.push(Step::Group { index, members });
+                    index
+                }
+            };
+            self.place(index, &layer.look, canvas);
+            if self.slots[index].blurred {
+                steps.push(Step::Blur(index));
+            }
+            placed.push(index);
+        }
+        placed
     }
 
     fn check_size(&self, width: u32, height: u32) -> Result<(), RenderError> {
@@ -203,22 +300,48 @@ impl Compositor {
         Ok(())
     }
 
-    fn upload(&mut self, index: usize, layer: &LayerImage<'_>, canvas: (u32, u32)) {
+    /// The next slot, recreated unless it already has this size and kind.
+    fn claim(&mut self, next: &mut usize, size: (u32, u32), kind: SlotKind) -> usize {
+        let index = *next;
+        *next += 1;
         let fits = self
             .slots
             .get(index)
-            .is_some_and(|slot| (slot.width, slot.height) == (layer.width, layer.height));
+            .is_some_and(|slot| slot.kind == kind && (slot.width, slot.height) == size);
         if !fits {
-            let slot = self.create_slot(layer.width, layer.height);
+            let slot = self.create_slot(size, kind);
             match self.slots.get_mut(index) {
                 Some(existing) => *existing = slot,
                 None => self.slots.push(slot),
             }
         }
-        let size = (layer.width, layer.height);
-        // The blur radius is in canvas pixels, but the blur runs on the layer itself.
-        let sigma = layer.look.blur / (fit_scale(size, canvas) * layer.look.scale.max(0.01));
+        index
+    }
+
+    fn upload(&self, index: usize, rgba: &[u8]) {
+        let slot = &self.slots[index];
+        self.queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &slot.texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            rgba,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(slot.width * 4),
+                rows_per_image: Some(slot.height),
+            },
+            extent(slot.width, slot.height),
+        );
+    }
+
+    fn place(&mut self, index: usize, look: &LayerLook, canvas: (u32, u32)) {
         let slot = &mut self.slots[index];
+        let size = (slot.width, slot.height);
+        // The blur radius is in canvas pixels, but the blur runs on the layer itself.
+        let sigma = look.blur / (fit_scale(size, canvas) * look.scale.max(0.01));
         slot.blurred = sigma >= 0.5;
         if slot.blurred && slot.blur.is_none() {
             let blur =
@@ -228,35 +351,29 @@ impl Compositor {
         if let Some(blur) = slot.blur.as_ref().filter(|_| slot.blurred) {
             blur.write(&self.queue, size, sigma);
         }
-        self.queue.write_texture(
-            wgpu::TexelCopyTextureInfo {
-                texture: &slot.texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            layer.rgba,
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(layer.width * 4),
-                rows_per_image: Some(layer.height),
-            },
-            extent(layer.width, layer.height),
-        );
-        let placement = Placement::new(size, canvas, &layer.look);
+        let placement = Placement {
+            // Compositing leaves a group's colors multiplied by its coverage.
+            premultiplied: slot.kind == SlotKind::Group,
+            ..Placement::new(size, canvas, look)
+        };
         Blit::write_placement(&self.queue, &slot.placement, placement);
     }
 
-    fn create_slot(&self, width: u32, height: u32) -> Slot {
+    fn create_slot(&self, (width, height): (u32, u32), kind: SlotKind) -> Slot {
+        let (format, written) = match kind {
+            SlotKind::Picture => (SOURCE_FORMAT, wgpu::TextureUsages::COPY_DST),
+            SlotKind::Group => (WORKING_FORMAT, wgpu::TextureUsages::RENDER_ATTACHMENT),
+        };
         let texture = self.texture(
             "layer",
             (width, height),
-            SOURCE_FORMAT,
-            wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
+            format,
+            written | wgpu::TextureUsages::TEXTURE_BINDING,
         );
         let placement = Blit::placement_buffer(&self.device);
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         Slot {
+            kind,
             width,
             height,
             binding: self.blit.bind(&self.device, &view, &placement),

@@ -8,7 +8,7 @@ mod readback;
 mod waveform;
 
 pub use blit::DISPLAY_FORMAT;
-pub use compositor::{Compositor, LayerImage, Presented};
+pub use compositor::{Compositor, LayerImage, Picture, Presented};
 pub use error::RenderError;
 pub use pixel::{ChromaKey, PixelEffects, Vignette};
 pub use placement::{ColorAdjust, LayerLook};

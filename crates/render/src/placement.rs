@@ -83,6 +83,8 @@ pub(crate) struct Placement {
     pub(crate) mask: [f32; 4],
     pub(crate) wash: f32,
     pub(crate) effects: PixelEffects,
+    /// Whether the picture's colors are already multiplied by its alpha.
+    pub(crate) premultiplied: bool,
 }
 
 impl Placement {
@@ -96,6 +98,7 @@ impl Placement {
         mask: [0.0; 4],
         wash: 0.0,
         effects: PixelEffects::NONE,
+        premultiplied: false,
     };
 
     /// Fits the layer to the canvas keeping its aspect ratio, then applies the look.
@@ -118,6 +121,7 @@ impl Placement {
             mask: look.mask.map(|side| side.clamp(0.0, 1.0)),
             wash: look.wash.clamp(0.0, 1.0),
             effects: look.effects,
+            premultiplied: false,
         }
     }
 
@@ -126,7 +130,8 @@ impl Placement {
         let [xx, xy] = self.axis_x;
         let [yx, yy] = self.axis_y;
         let color = &self.color;
-        [cx, cy, xx, xy, yx, yy, self.opacity, 0.0]
+        let premultiplied = if self.premultiplied { 1.0 } else { 0.0 };
+        [cx, cy, xx, xy, yx, yy, self.opacity, premultiplied]
             .into_iter()
             .chain(self.crop)
             .chain([
