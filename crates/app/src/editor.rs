@@ -109,6 +109,7 @@ pub struct Editor {
     pub(crate) export_queue: crate::export_queue::ExportQueue,
     /// The sequences left to reach the open nest, outermost first.
     pub(crate) nest_trail: Vec<Level>,
+    pub(crate) sequence_tabs: Vec<crate::sequence_tabs::SequenceTab>,
     pub(crate) notices: Vec<String>,
     pub(crate) keymap: crate::keymap::Keymap,
     pub(crate) keymap_window: Option<crate::keymap::KeymapWindow>,
@@ -232,6 +233,7 @@ impl Editor {
             export: None,
             export_queue: Default::default(),
             nest_trail: Vec::new(),
+            sequence_tabs: Vec::new(),
             notices,
             keymap: Default::default(),
             keymap_window: None,
@@ -374,6 +376,7 @@ impl Editor {
         }
         self.shown_revision = revision;
         self.prune_nest_trail();
+        self.prune_sequence_tabs();
         self.view.prune_selection(self.timeline.sequence());
         if let Some(source) = &mut self.source {
             let pool = self.timeline.project();

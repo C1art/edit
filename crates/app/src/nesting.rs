@@ -80,8 +80,17 @@ impl Editor {
             nest: self.timeline.open_nest(),
             playhead: self.playhead(),
         };
+        self.tab_shown_sequence();
+        if let Some(tab) = self
+            .sequence_tabs
+            .iter_mut()
+            .find(|tab| tab.nest == level.nest)
+        {
+            tab.playhead = level.playhead;
+        }
         if self.show_nest(Some(nest)) {
             self.nest_trail.push(level);
+            self.tab_shown_sequence();
             self.seek_program(playhead);
         }
     }
@@ -97,7 +106,7 @@ impl Editor {
         }
     }
 
-    fn show_nest(&mut self, nest: Option<SourceId>) -> bool {
+    pub(crate) fn show_nest(&mut self, nest: Option<SourceId>) -> bool {
         // Opening a nest changes what is shown, not the project.
         let clean = !self.is_dirty();
         if !self.timeline.set_open_nest(nest) {

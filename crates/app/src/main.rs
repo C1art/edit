@@ -56,6 +56,7 @@ mod scene_edits;
 mod scopes;
 mod sequence_marks;
 mod sequence_settings;
+mod sequence_tabs;
 mod shortcuts;
 mod source;
 mod speed_dialog;

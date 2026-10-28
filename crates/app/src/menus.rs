@@ -352,6 +352,7 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
 }
 
 pub fn timeline_toolbar(editor: &mut Editor, ui: &mut egui::Ui) {
+    crate::sequence_tabs::tabs(editor, ui);
     crate::nesting::breadcrumbs(editor, ui);
     ui.horizontal_wrapped(|ui| {
         for tool in Tool::ALL {
