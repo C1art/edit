@@ -193,6 +193,10 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             }
         });
         ui.menu_button("Sequence", |ui| {
+            if ui.button("Sequence Settings…").clicked() {
+                editor.open_sequence_settings();
+            }
+            ui.separator();
             let add_edit =
                 Button::new("Add Edit").shortcut_text(editor.keymap.label(Command::AddEdit));
             if ui.add(add_edit).clicked() {

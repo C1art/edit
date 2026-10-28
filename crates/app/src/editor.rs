@@ -71,6 +71,7 @@ pub struct Editor {
     pub(crate) gain_dialog: Option<crate::gain_dialog::GainDialog>,
     pub(crate) duck_dialog: Option<crate::duck_dialog::DuckDialog>,
     pub(crate) interpret_dialog: Option<crate::interpret_dialog::InterpretDialog>,
+    pub(crate) sequence_settings: Option<crate::sequence_settings::SequenceSettings>,
     /// An edit from the source waiting on how to fit its clip to the sequence marks.
     pub(crate) fit_clip: Option<timeline::PlaceMode>,
     pub(crate) attributes_dialog: Option<crate::attributes_dialog::AttributesDialog>,
@@ -185,6 +186,7 @@ impl Editor {
             gain_dialog: None,
             duck_dialog: None,
             interpret_dialog: None,
+            sequence_settings: None,
             fit_clip: None,
             attributes_dialog: None,
             loudness: None,
@@ -425,6 +427,7 @@ impl eframe::App for Editor {
         crate::gain_dialog::dialog(self, &ctx);
         crate::duck_dialog::dialog(self, &ctx);
         crate::interpret_dialog::dialog(self, &ctx);
+        crate::sequence_settings::dialog(self, &ctx);
         crate::fit_clip::dialog(self, &ctx);
         crate::attributes_dialog::dialog(self, &ctx);
         crate::loudness_window::window(self, &ctx);

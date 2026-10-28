@@ -87,7 +87,7 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     }
 }
 
-fn rate_picker(ui: &mut egui::Ui, rate: &mut FrameRate) {
+pub(crate) fn rate_picker(ui: &mut egui::Ui, rate: &mut FrameRate) {
     let shown = COMMON_RATES
         .iter()
         .find(|&&(_, num, den)| FrameRate::new(num, den) == Some(*rate))

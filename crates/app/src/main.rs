@@ -43,6 +43,7 @@ mod safe_margins;
 mod scene_edits;
 mod scopes;
 mod sequence_marks;
+mod sequence_settings;
 mod shortcuts;
 mod source;
 mod speed_dialog;
