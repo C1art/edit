@@ -164,7 +164,11 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         Command::ResetWorkspace => editor.reset_workspace(),
         Command::RenderInToOut => editor.render_in_to_out(),
         Command::DeleteRenderFiles => editor.delete_render_files(),
-        Command::MarkIn | Command::MarkOut | Command::ClearInOut => mark(editor, command),
+        Command::MarkIn
+        | Command::MarkOut
+        | Command::ClearInOut
+        | Command::ClearIn
+        | Command::ClearOut => mark(editor, command),
         Command::MarkClip => editor.mark_clip(),
         Command::MarkSelection => editor.mark_selection(),
         Command::GoToIn => editor.go_to_mark(Edge::Head),
@@ -188,12 +192,16 @@ fn mark(editor: &mut Editor, command: Command) {
         (Focus::Source, Some(source)) => match command {
             Command::MarkIn => source.mark_in(),
             Command::MarkOut => source.mark_out(),
+            Command::ClearIn => source.marks.mark_in = None,
+            Command::ClearOut => source.marks.mark_out = None,
             _ => source.marks = Marks::default(),
         },
         (Focus::Source, None) => {}
         (Focus::Program, _) => match command {
             Command::MarkIn => editor.mark_sequence_in(),
             Command::MarkOut => editor.mark_sequence_out(),
+            Command::ClearIn => editor.clear_sequence_in(),
+            Command::ClearOut => editor.clear_sequence_out(),
             _ => editor.clear_sequence_marks(),
         },
     }

@@ -87,6 +87,8 @@ impl Command {
             Self::MarkIn => vec![plain(Key::I)],
             Self::MarkOut => vec![plain(Key::O)],
             Self::ClearInOut => vec![ctrl_shift(Key::X)],
+            Self::ClearIn => vec![ctrl_shift(Key::I)],
+            Self::ClearOut => vec![ctrl_shift(Key::O)],
             Self::MarkClip => vec![plain(Key::X)],
             Self::MarkSelection => vec![plain(Key::Slash)],
             Self::GoToIn => vec![shift(Key::I)],

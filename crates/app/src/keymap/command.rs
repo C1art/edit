@@ -75,6 +75,8 @@ pub enum Command {
     MarkIn,
     MarkOut,
     ClearInOut,
+    ClearIn,
+    ClearOut,
     MarkClip,
     MarkSelection,
     GoToIn,
@@ -131,7 +133,7 @@ const WORKSPACE_WORDS: [(&str, &str); WORKSPACE_SLOTS as usize] = [
 ];
 
 impl Command {
-    pub const ALL: [Self; 119] = [
+    pub const ALL: [Self; 121] = [
         Self::NewProject,
         Self::OpenProject,
         Self::Save,
@@ -206,6 +208,8 @@ impl Command {
         Self::MarkIn,
         Self::MarkOut,
         Self::ClearInOut,
+        Self::ClearIn,
+        Self::ClearOut,
         Self::MarkClip,
         Self::MarkSelection,
         Self::GoToIn,
@@ -344,6 +348,8 @@ impl Command {
             Self::MarkIn => ("mark_in", "Mark In"),
             Self::MarkOut => ("mark_out", "Mark Out"),
             Self::ClearInOut => ("clear_in_out", "Clear In and Out"),
+            Self::ClearIn => ("clear_in", "Clear In"),
+            Self::ClearOut => ("clear_out", "Clear Out"),
             Self::MarkClip => ("mark_clip", "Mark Clip"),
             Self::MarkSelection => ("mark_selection", "Mark Selection"),
             Self::GoToIn => ("go_to_in", "Go to In"),
@@ -447,8 +453,8 @@ impl Command {
             | ComparisonView
             | RenderInToOut
             | DeleteRenderFiles => "Sequence",
-            MarkIn | MarkOut | ClearInOut | MarkClip | MarkSelection | GoToIn | GoToOut
-            | AddMarker | NextMarker | PreviousMarker | ClearMarker => "Markers",
+            MarkIn | MarkOut | ClearInOut | ClearIn | ClearOut | MarkClip | MarkSelection
+            | GoToIn | GoToOut | AddMarker | NextMarker | PreviousMarker | ClearMarker => "Markers",
             SelectionTool
             | TrackSelectForwardTool
             | TrackSelectBackwardTool

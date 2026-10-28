@@ -74,9 +74,31 @@ impl Editor {
     }
 
     pub(crate) fn clear_sequence_marks(&mut self) {
-        self.apply_levels(SetMarks {
-            marks: Marks::default(),
+        self.clear_sequence_mark(Marks::default());
+    }
+
+    pub(crate) fn clear_sequence_in(&mut self) {
+        let marks = self.timeline.sequence().marks;
+        self.clear_sequence_mark(Marks {
+            mark_in: None,
+            ..marks
         });
+    }
+
+    pub(crate) fn clear_sequence_out(&mut self) {
+        let marks = self.timeline.sequence().marks;
+        self.clear_sequence_mark(Marks {
+            mark_out: None,
+            ..marks
+        });
+    }
+
+    /// Sets what is left of the marks after clearing one or both, unless that changes
+    /// nothing, which would only add an empty step to the history.
+    fn clear_sequence_mark(&mut self, marks: Marks) {
+        if marks != self.timeline.sequence().marks {
+            self.apply_levels(SetMarks { marks });
+        }
     }
 
     pub(crate) fn lift_marked(&mut self) {
