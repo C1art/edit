@@ -2,7 +2,8 @@ use std::mem::{discriminant, Discriminant};
 
 use audio::{
     Biquad, Coefficients, Compressor, CompressorSettings, DeEsser, DeHum, DeNoise, Delay, Gate,
-    Limiter, ModulatedDelay, PitchShifter, Reverb, SampleRate, Sweep,
+    GraphicEqualizer, Limiter, ModulatedDelay, MultibandCompressor, MultibandSettings,
+    PitchShifter, Reverb, SampleRate, Sweep,
 };
 use timeline::{AudioEffect, ClipId, Ticks};
 
@@ -22,6 +23,8 @@ const BUTTERWORTH_Q: f32 = std::f32::consts::FRAC_1_SQRT_2;
 
 enum Unit {
     Equalizer([Biquad; 3]),
+    Graphic(Box<GraphicEqualizer>),
+    Multiband(Box<MultibandCompressor>),
     Filter(Biquad),
     Compressor(Compressor),
     Delay(Box<Delay>),
@@ -61,6 +64,8 @@ impl EffectChain {
         for unit in &mut self.units {
             match unit {
                 Unit::Equalizer(bands) => bands.iter_mut().for_each(Biquad::reset),
+                Unit::Graphic(equalizer) => equalizer.reset(),
+                Unit::Multiband(compressor) => compressor.reset(),
                 Unit::Filter(filter) => filter.reset(),
                 Unit::Compressor(compressor) => compressor.reset(),
                 Unit::Delay(delay) => delay.reset(),
@@ -152,6 +157,47 @@ impl EffectChain {
                         mix.value_at(time) / 100.0,
                         samples,
                     ),
+                (AudioEffect::ChannelVolume { left, right }, Unit::Stateless) => {
+                    let sides = [left, right].map(|side| db_to_amplitude(side.value_at(time)));
+                    for frame in samples.as_chunks_mut::<2>().0 {
+                        frame[0] *= sides[0];
+                        frame[1] *= sides[1];
+                    }
+                }
+                (AudioEffect::GraphicEqualizer { bands }, Unit::Graphic(equalizer)) => {
+                    let gains = bands.each_ref().map(|band| band.value_at(time));
+                    equalizer.process(gains, rate, samples);
+                }
+                (
+                    AudioEffect::MultibandCompressor {
+                        low_crossover,
+                        high_crossover,
+                        low_threshold,
+                        mid_threshold,
+                        high_threshold,
+                        ratio,
+                        attack,
+                        release,
+                        makeup,
+                    },
+                    Unit::Multiband(compressor),
+                ) => {
+                    let band = |threshold: &timeline::Param| CompressorSettings {
+                        threshold_db: threshold.value_at(time),
+                        ratio: ratio.value_at(time),
+                        attack_ms: attack.value_at(time),
+                        release_ms: release.value_at(time),
+                        makeup_db: makeup.value_at(time),
+                    };
+                    let settings = MultibandSettings {
+                        crossovers_hz: [
+                            low_crossover.value_at(time),
+                            high_crossover.value_at(time),
+                        ],
+                        bands: [low_threshold, mid_threshold, high_threshold].map(band),
+                    };
+                    compressor.process(&settings, rate, samples);
+                }
                 (AudioEffect::FillLeftWithRight, Unit::Stateless) => {
                     for frame in samples.as_chunks_mut::<2>().0 {
                         frame[0] = frame[1];
@@ -336,6 +382,8 @@ impl EffectChain {
     fn unit(&self, effect: &AudioEffect) -> Unit {
         match effect {
             AudioEffect::Equalizer { .. } => Unit::Equalizer(Default::default()),
+            AudioEffect::GraphicEqualizer { .. } => Unit::Graphic(Box::default()),
+            AudioEffect::MultibandCompressor { .. } => Unit::Multiband(Box::default()),
             AudioEffect::HighPass { .. }
             | AudioEffect::LowPass { .. }
             | AudioEffect::Notch { .. }
@@ -355,6 +403,7 @@ impl EffectChain {
             AudioEffect::DeHum { .. } => Unit::DeHum(Box::default()),
             AudioEffect::Amplify { .. }
             | AudioEffect::Balance { .. }
+            | AudioEffect::ChannelVolume { .. }
             | AudioEffect::FillLeftWithRight
             | AudioEffect::FillRightWithLeft
             | AudioEffect::SwapChannels
