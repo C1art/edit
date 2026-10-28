@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 
 use timeline::{
-    AudioEffect, Bin, BinId, Caption, Clip, ClipId, CurvePoint, Gain, Generator, Interpolation,
-    Keyframe, Marks, Mask, MaskShape, MediaItem, MediaLog, Nest, Pan, Param, Rgb, Scroll, SourceId,
-    TextAlign, TextStroke, Ticks, Timebase, Title, TitleFont, TitleMotion, Track, Transition,
-    TransitionKind, VideoEffect, VideoFormat,
+    AlphaInterpretation, AudioEffect, Bin, BinId, Caption, Clip, ClipId, CurvePoint, Gain,
+    Generator, Interpolation, Keyframe, Marks, Mask, MaskShape, MediaItem, MediaLog, Nest, Pan,
+    Param, PixelAspect, Rgb, Scroll, SourceId, TextAlign, TextStroke, Ticks, Timebase, Title,
+    TitleFont, TitleMotion, Track, Transition, TransitionKind, VideoEffect, VideoFormat,
 };
 
 use super::*;
@@ -16,7 +16,10 @@ fn sample() -> ProjectFile {
         name: "Interview \"A\" — café\n".to_owned(),
         path: PathBuf::from(r"C:\Footage\interview 😀.mp4"),
         duration: Ticks(900_000),
-        video: Some(VideoFormat::default()),
+        video: Some(VideoFormat {
+            pixel_aspect: PixelAspect::new(10, 11).unwrap_or_default(),
+            ..VideoFormat::default()
+        }),
         has_audio: true,
         proxy: Some(PathBuf::from(r"C:\Footage\Proxies\interview_Proxy.mp4")),
         bin: None,
@@ -24,6 +27,8 @@ fn sample() -> ProjectFile {
         nest: None,
         subclip: None,
         interpreted_rate: None,
+        interpreted_aspect: PixelAspect::new(40, 33),
+        alpha: AlphaInterpretation::Invert,
         log: MediaLog {
             description: "Wide, \"take 3\"".to_owned(),
             scene: "12A".to_owned(),
@@ -69,6 +74,8 @@ fn sample() -> ProjectFile {
         nest: None,
         subclip: None,
         interpreted_rate: None,
+        interpreted_aspect: None,
+        alpha: Default::default(),
         log: Default::default(),
     });
     sequence.bins = vec![
@@ -107,6 +114,8 @@ fn sample() -> ProjectFile {
         nest: Some(nest),
         subclip: None,
         interpreted_rate: None,
+        interpreted_aspect: None,
+        alpha: Default::default(),
         log: Default::default(),
     });
     let mut clip = Clip::new(ClipId(7), SourceId(1), Ticks(0), Ticks(90_000), Ticks(3));
