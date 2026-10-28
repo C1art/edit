@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use render::{ColorAdjust, Grade, LayerLook, LayerMask, MAX_MASKS};
+use render::{ColorAdjust, Grade, LayerLook, LayerMask, SecondaryAdjust, MAX_MASKS};
 use timeline::{
-    track_layers_at, BlendMode, ClipId, ColorCorrection, Generator, Look, Mask, MatteChannel,
-    MediaItem, Param, PlannedLayer, Reveal, Sequence, SourceId, Ticks, Track, TrackRef,
-    VideoEffect,
+    track_layers_at, BlendMode, ClipId, ColorCorrection, Generator, HslSecondary, Look, Mask,
+    MatteChannel, MediaItem, Param, PlannedLayer, Reveal, Sequence, SourceId, Ticks, Track,
+    TrackRef, VideoEffect,
 };
 
 use crate::clip_decoders::ClipDecoders;
@@ -307,7 +307,30 @@ fn color_adjust(color: &ColorCorrection, time: Ticks) -> ColorAdjust {
         saturation: unit(&color.saturation),
         vibrance: unit(&color.vibrance),
         look_intensity: unit(&color.look_intensity),
+        secondary: secondary_adjust(&color.secondary, time),
     }
+}
+
+fn secondary_adjust(secondary: &HslSecondary, time: Ticks) -> Option<SecondaryAdjust> {
+    if !secondary.enabled {
+        return None;
+    }
+    let unit = |param: &Param| param.value_at(time) / 100.0;
+    let turns = |param: &Param| param.value_at(time) / 360.0;
+    Some(SecondaryAdjust {
+        hue: turns(&secondary.hue),
+        hue_width: turns(&secondary.hue_width),
+        saturation_range: secondary.saturation_range.each_ref().map(unit),
+        lightness_range: secondary.lightness_range.each_ref().map(unit),
+        softness: unit(&secondary.softness),
+        inverted: secondary.inverted,
+        show_mask: secondary.show_mask,
+        temperature: unit(&secondary.temperature),
+        tint: unit(&secondary.tint),
+        contrast: unit(&secondary.contrast),
+        saturation: unit(&secondary.saturation),
+        wheel: secondary.wheel.params().map(unit),
+    })
 }
 
 /// The first [`MAX_MASKS`] masks; the effect controls offer no more.
