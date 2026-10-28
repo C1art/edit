@@ -1,6 +1,7 @@
 use egui::{Button, Ui};
 use timeline::{
-    ClipId, FrameFit, Label, SetClipLabel, SetTimeInterpolation, TimeInterpolation, TrackKind,
+    ClipId, Edit, FrameFit, IntoSync, Label, SetClipLabel, SetTimeInterpolation, SyncMethod,
+    TimeInterpolation, TrackKind,
 };
 
 use crate::editor::Editor;
@@ -44,6 +45,15 @@ pub(crate) fn context(editor: &mut Editor, ui: &mut Ui) {
         .clicked()
     {
         editor.ripple_delete();
+    }
+    if let Some(clip) = editor.out_of_sync_selection() {
+        ui.separator();
+        for method in [SyncMethod::Move, SyncMethod::Slip] {
+            let edit = IntoSync { clip, method };
+            if ui.button(edit.name()).clicked() {
+                editor.apply(edit);
+            }
+        }
     }
     ui.separator();
     items(editor, ui);

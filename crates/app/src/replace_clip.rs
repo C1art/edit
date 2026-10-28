@@ -1,8 +1,19 @@
-use timeline::ReplaceClip;
+use timeline::{ClipId, ReplaceClip};
 
 use crate::editor::Editor;
 
 impl Editor {
+    /// The first selected clip that has slipped out of sync with its link.
+    pub(crate) fn out_of_sync_selection(&self) -> Option<ClipId> {
+        let sequence = self.timeline.sequence();
+        self.view
+            .selection
+            .iter()
+            .filter_map(|&id| sequence.clip(id))
+            .find(|(_, clip)| sequence.sync_offset(clip).is_some())
+            .map(|(_, clip)| clip.id)
+    }
+
     /// Puts the Source Monitor's media under the first selected clip, as Premiere's
     /// Replace With Clip. It reads from the source in point, or the source playhead;
     /// with `match_frame`, the source playhead's frame lands under the sequence playhead.
