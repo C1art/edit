@@ -1,6 +1,7 @@
 mod color;
 mod curves;
 mod generated;
+mod key_selection;
 mod lane;
 mod look;
 mod mask_overlay;
@@ -27,10 +28,12 @@ use crate::editor::Editor;
 use crate::mixer::Change;
 use crate::project_files::PathPurpose;
 use color::ToneState;
+use key_selection::KeySelection;
 use lane::Lane;
 use look::Rows;
 
 pub use color::LutSlot;
+pub(crate) use key_selection::KeyAction;
 pub use mask_overlay::mask_overlay;
 pub use motion_overlay::motion_overlay;
 pub(crate) use sound::track_effect_controls;
@@ -58,6 +61,7 @@ pub struct EffectControls {
     drawing: Option<(SourceId, Generator)>,
     /// The clip, segment and speed in percent of a time remapping drag.
     remapping: Option<(ClipId, usize, f64)>,
+    keys: KeySelection,
 }
 
 pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
@@ -101,6 +105,7 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
         }
         transitions::controls(editor, ui, track, &clip);
     });
+    editor.effects.keys.end_frame(ui, clip.id);
 }
 
 fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
@@ -119,7 +124,8 @@ fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
         .as_mut()
         .and_then(|generator| generated::controls(ui, generator));
     let video_tracks = editor.timeline.sequence().video.len();
-    let mut rows = Rows::new(time, lane(editor, ui, clip));
+    let keys = std::mem::take(&mut editor.effects.keys);
+    let mut rows = Rows::new(time, lane(editor, ui, clip), keys);
     rows.analyzing = editor.motion_analysis_progress(clip.id);
     rows.tracking = editor.mask_tracking(clip.id);
     rows.tone = match (editor.analyzing_tone(clip.id), &editor.comparison) {
@@ -127,7 +133,8 @@ fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
         (false, Some(_)) => ToneState::ReadyToMatch,
         (false, None) => ToneState::Ready,
     };
-    let output = look::controls(ui, &mut look, rows, video_tracks);
+    let mut output = look::controls(ui, &mut look, rows, video_tracks);
+    editor.effects.keys = std::mem::take(&mut output.keys);
     if output.change.is_some() {
         stabilizer::retune(&mut look, editor.timeline.sequence().timebase);
     }
@@ -208,8 +215,10 @@ fn volume_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
         Some((id, volume, pan)) if *id == clip.id => (volume.clone(), pan.clone()),
         _ => (clip.volume.clone(), clip.pan.clone()),
     };
-    let rows = Rows::new(time, lane(editor, ui, clip));
-    let output = sound::volume_controls(ui, &mut volume, &mut pan, rows);
+    let keys = std::mem::take(&mut editor.effects.keys);
+    let rows = Rows::new(time, lane(editor, ui, clip), keys);
+    let mut output = sound::volume_controls(ui, &mut volume, &mut pan, rows);
+    editor.effects.keys = std::mem::take(&mut output.keys);
     seek_to_key(editor, clip, output.seek);
     let Some(change) = output.change else {
         return;
@@ -244,8 +253,10 @@ fn audio_effect_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
         Some((id, effects)) if *id == clip.id => effects.clone(),
         _ => clip.audio_effects.clone(),
     };
-    let rows = Rows::new(time, lane(editor, ui, clip));
-    let output = sound::effect_controls(ui, &mut effects, rows);
+    let keys = std::mem::take(&mut editor.effects.keys);
+    let rows = Rows::new(time, lane(editor, ui, clip), keys);
+    let mut output = sound::effect_controls(ui, &mut effects, rows);
+    editor.effects.keys = std::mem::take(&mut output.keys);
     seek_to_key(editor, clip, output.seek);
     let edit = SetClipAudioEffects {
         clip: clip.id,

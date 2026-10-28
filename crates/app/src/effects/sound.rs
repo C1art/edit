@@ -117,7 +117,7 @@ pub(crate) fn track_effect_controls(
     effects: &mut Vec<AudioEffect>,
     time: Ticks,
 ) -> (Option<Change>, Option<Ticks>) {
-    let output = effect_controls(ui, effects, Rows::new(time, None));
+    let output = effect_controls(ui, effects, Rows::new(time, None, Default::default()));
     (output.change, output.seek)
 }
 

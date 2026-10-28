@@ -1,4 +1,4 @@
-use egui::{Color32, Rect, Sense, Stroke};
+use egui::{Color32, Id, Rect, Sense, Stroke};
 use timeline::{Clip, FrameRate, Interpolation, Param, Sequence, Ticks, Timebase};
 
 use super::look::{paint_key, Output, ANIMATED};
@@ -12,6 +12,7 @@ const MIN_WIDTH: f32 = 60.0;
 const HEIGHT: f32 = 18.0;
 /// How near the pointer must be to grab a keyframe, or to snap one to the playhead.
 const REACH: f32 = 6.0;
+const SELECTED: Color32 = Color32::from_rgb(250, 190, 60);
 
 /// The clip's length drawn beside each parameter, as in a grading panel's timeline:
 /// the playhead and the keyframes, which drag to retime and right-click to change.
@@ -42,6 +43,7 @@ impl Lane {
     pub(super) fn show(
         &self,
         ui: &mut egui::Ui,
+        id: Id,
         param: &mut Param,
         time: Ticks,
         output: &mut Output,
@@ -56,9 +58,21 @@ impl Lane {
         let dragging = response.id;
         let menu = response.id.with("menu");
         let pointer = response.interact_pointer_pos();
+        let keys = &mut output.keys;
+        if keys.act(id, param, time) {
+            output.change = Some(Change::Commit);
+        }
+        let keys = &mut output.keys;
+        if response.is_pointer_button_down_on() || response.clicked() {
+            keys.press();
+        }
+        let adding = ui.input(|input| input.modifiers.command || input.modifiers.shift);
         if response.drag_started() {
             let origin = ui.input(|input| input.pointer.press_origin());
             let grabbed = origin.and_then(|origin| self.near_key(rect, param, origin.x));
+            if let Some(key) = grabbed.filter(|&key| !keys.is_selected(id, key)) {
+                keys.pick(id, key, adding);
+            }
             ui.data_mut(|data| data.insert_temp(dragging, grabbed));
         }
         let grabbed: Option<Ticks> = ui.data(|data| data.get_temp(dragging)).flatten();
@@ -69,7 +83,10 @@ impl Lane {
             } else {
                 self.source_at(rect, pointer.x)
             };
-            if param.move_key(from, to) {
+            // The parameter's other selected keyframes go along.
+            let moving = output.keys.selected_in(id);
+            if param.shift_keys(&moving, to - from) {
+                output.keys.shift(id, to - from);
                 ui.data_mut(|data| data.insert_temp(dragging, Some(to)));
                 output.change = output.change.max(Some(Change::Live));
             }
@@ -83,10 +100,13 @@ impl Lane {
             ui.data_mut(|data| data.remove::<Option<Ticks>>(dragging));
         }
         if let (true, Some(pointer)) = (response.clicked(), pointer) {
-            output.seek = Some(
-                self.near_key(rect, param, pointer.x)
-                    .unwrap_or_else(|| self.source_at(rect, pointer.x)),
-            );
+            let key = self.near_key(rect, param, pointer.x);
+            match key {
+                Some(key) => output.keys.pick(id, key, adding),
+                None if !adding => output.keys.clear(),
+                None => {}
+            }
+            output.seek = Some(key.unwrap_or_else(|| self.source_at(rect, pointer.x)));
         }
         if let (true, Some(pointer)) = (response.secondary_clicked(), pointer) {
             let key = self.near_key(rect, param, pointer.x);
@@ -111,10 +131,19 @@ impl Lane {
                 }
             });
         }
-        self.paint(ui, rect, param, time);
+        self.paint(ui, rect, param, time, |key| {
+            output.keys.is_selected(id, key)
+        });
     }
 
-    fn paint(&self, ui: &egui::Ui, rect: Rect, param: &Param, time: Ticks) {
+    fn paint(
+        &self,
+        ui: &egui::Ui,
+        rect: Rect,
+        param: &Param,
+        time: Ticks,
+        selected: impl Fn(Ticks) -> bool,
+    ) {
         let painter = ui.painter_at(rect.expand2(egui::vec2(REACH, 0.0)));
         let visuals = ui.visuals();
         painter.rect_filled(rect, 2.0, visuals.extreme_bg_color);
@@ -135,7 +164,9 @@ impl Lane {
             if !(rect.left() - REACH..=rect.right() + REACH).contains(&x) {
                 continue;
             }
-            let fill = if key.time == time {
+            let fill = if selected(key.time) {
+                SELECTED
+            } else if key.time == time {
                 Color32::WHITE
             } else {
                 ANIMATED

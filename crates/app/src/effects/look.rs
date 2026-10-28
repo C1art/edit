@@ -6,6 +6,7 @@ use timeline::{BlendMode, Interpolation, Look, Param, Ticks};
 use media::TrackDirection;
 
 use super::color::ToneState;
+use super::key_selection::KeySelection;
 use super::lane::Lane;
 use super::LutSlot;
 use crate::color_match::ToneGoal;
@@ -27,6 +28,7 @@ pub(super) struct Output {
     pub(super) stop_tracking: bool,
     /// What to set the Basic Correction for from the picture.
     pub(super) analyze_tone: Option<ToneGoal>,
+    pub(super) keys: KeySelection,
 }
 
 /// Edits `look` in `rows`, of a clip among `video_tracks` video tracks.
@@ -132,7 +134,7 @@ pub(super) struct Rows {
 }
 
 impl Rows {
-    pub(super) fn new(time: Ticks, lane: Option<Lane>) -> Self {
+    pub(super) fn new(time: Ticks, lane: Option<Lane>, keys: KeySelection) -> Self {
         Self {
             time,
             lane,
@@ -147,6 +149,7 @@ impl Rows {
                 track_mask: None,
                 stop_tracking: false,
                 analyze_tone: None,
+                keys,
             },
         }
     }
@@ -210,7 +213,7 @@ impl Rows {
                 self.key_buttons(ui, param);
             }
             if let Some(lane) = &self.lane {
-                lane.show(ui, param, time, &mut self.output);
+                lane.show(ui, graph, param, time, &mut self.output);
             }
         });
         if let Some(lane) = self.lane.as_ref().filter(|_| open && param.is_animated()) {
