@@ -139,6 +139,29 @@ impl VideoEffect {
         }
     }
 
+    pub fn params_mut(&mut self) -> Vec<&mut Param> {
+        match self {
+            Self::GaussianBlur { blurriness } => vec![blurriness],
+            Self::HorizontalFlip
+            | Self::VerticalFlip
+            | Self::BlackAndWhite
+            | Self::TrackMatteKey { .. } => Vec::new(),
+            Self::Tint { amount, .. } | Self::Invert { amount } | Self::Sharpen { amount } => {
+                vec![amount]
+            }
+            Self::Vignette {
+                amount,
+                midpoint,
+                feather,
+            } => vec![amount, midpoint, feather],
+            Self::UltraKey {
+                tolerance,
+                softness,
+                ..
+            } => vec![tolerance, softness],
+        }
+    }
+
     pub fn params(&self) -> Vec<&Param> {
         match self {
             Self::GaussianBlur { blurriness } => vec![blurriness],

@@ -37,6 +37,30 @@ pub enum AudioEffect {
 }
 
 impl AudioEffect {
+    pub fn params_mut(&mut self) -> Vec<&mut Param> {
+        match self {
+            Self::Equalizer {
+                low,
+                mid,
+                mid_frequency,
+                high,
+            } => vec![low, mid, mid_frequency, high],
+            Self::HighPass { frequency } | Self::LowPass { frequency } => vec![frequency],
+            Self::Compressor {
+                threshold,
+                ratio,
+                attack,
+                release,
+                makeup,
+            } => vec![threshold, ratio, attack, release, makeup],
+            Self::Delay {
+                time,
+                feedback,
+                mix,
+            } => vec![time, feedback, mix],
+        }
+    }
+
     /// Each effect with its default settings, in the order the effects menu lists them.
     pub fn catalog() -> [Self; 5] {
         [

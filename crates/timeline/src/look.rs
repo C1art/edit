@@ -13,6 +13,24 @@ pub struct Motion {
     pub rotation: Param,
 }
 
+impl Motion {
+    pub fn params_mut(&mut self) -> impl Iterator<Item = &mut Param> {
+        let [x, y] = &mut self.position;
+        [x, y, &mut self.scale, &mut self.rotation].into_iter()
+    }
+}
+
+impl Crop {
+    pub fn params_mut(&mut self) -> [&mut Param; 4] {
+        [
+            &mut self.left,
+            &mut self.top,
+            &mut self.right,
+            &mut self.bottom,
+        ]
+    }
+}
+
 impl Default for Motion {
     fn default() -> Self {
         Self {

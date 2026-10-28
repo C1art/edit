@@ -455,6 +455,7 @@ fn proxy_replaces_only_the_decoded_path_and_undoes() {
     assert_eq!(timeline.sequence().media[0].proxy, None);
 }
 
+mod attributes;
 mod bin;
 mod caption;
 mod enable;

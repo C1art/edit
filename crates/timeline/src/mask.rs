@@ -63,6 +63,15 @@ impl Mask {
         }
     }
 
+    pub fn params_mut(&mut self) -> impl Iterator<Item = &mut Param> {
+        self.center.iter_mut().chain(&mut self.size).chain([
+            &mut self.rotation,
+            &mut self.feather,
+            &mut self.expansion,
+            &mut self.opacity,
+        ])
+    }
+
     pub fn params(&self) -> impl Iterator<Item = &Param> {
         self.center.iter().chain(&self.size).chain([
             &self.rotation,

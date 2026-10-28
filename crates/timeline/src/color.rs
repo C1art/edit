@@ -80,6 +80,29 @@ impl Default for ColorCorrection {
 }
 
 impl ColorCorrection {
+    pub fn params_mut(&mut self) -> impl Iterator<Item = &mut Param> {
+        let wheels = [
+            &mut self.shadow_wheel,
+            &mut self.midtone_wheel,
+            &mut self.highlight_wheel,
+        ];
+        [
+            &mut self.temperature,
+            &mut self.tint,
+            &mut self.exposure,
+            &mut self.contrast,
+            &mut self.highlights,
+            &mut self.shadows,
+            &mut self.whites,
+            &mut self.blacks,
+            &mut self.saturation,
+            &mut self.vibrance,
+            &mut self.look_intensity,
+        ]
+        .into_iter()
+        .chain(wheels.into_iter().flat_map(ColorWheel::params_mut))
+    }
+
     pub fn params(&self) -> impl Iterator<Item = &Param> {
         let wheels = [
             &self.shadow_wheel,
@@ -107,5 +130,9 @@ impl ColorCorrection {
 impl ColorWheel {
     pub fn params(&self) -> [&Param; 3] {
         [&self.blue, &self.red, &self.level]
+    }
+
+    pub fn params_mut(&mut self) -> [&mut Param; 3] {
+        [&mut self.blue, &mut self.red, &mut self.level]
     }
 }

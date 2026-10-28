@@ -31,6 +31,15 @@ impl Clipboard {
         self.clips.len()
     }
 
+    /// The earliest clip of `kind` on the lowest-numbered track it was copied from.
+    pub fn first_clip(&self, kind: TrackKind) -> Option<&Clip> {
+        self.clips
+            .iter()
+            .filter(|(track, _)| track.kind == kind)
+            .min_by_key(|(track, clip)| (track.index, clip.start))
+            .map(|(_, clip)| clip)
+    }
+
     /// The lowest-numbered track of `kind` the clips were copied from.
     pub fn first_track(&self, kind: TrackKind) -> Option<usize> {
         self.clips
