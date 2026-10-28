@@ -67,7 +67,10 @@ impl Editor {
     /// Probes `path` to add to the pool, or to replace the file of `replacing`.
     pub(crate) fn import(&mut self, path: PathBuf, replacing: Option<SourceId>) {
         match &mut self.importer {
-            Some(importer) => importer.request(path, replacing),
+            Some(importer) => {
+                let rate = self.timeline.sequence().format.frame_rate;
+                importer.request(path, replacing, rate);
+            }
             None => self.notice(format!("Cannot import {}", path.display())),
         }
     }

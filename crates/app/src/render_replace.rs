@@ -8,7 +8,8 @@ use egui::{ProgressBar, RichText};
 use media::{AudioCodec, AudioSettings, MediaError, RateControl, VideoCodec};
 use playback::{ExportEvent, ExportJob, ExportSettings, VideoExport};
 use timeline::{
-    ClipId, ImportMedia, RenderAndReplace, RestoreUnrendered, SourceId, Ticks, Timebase, TrackKind,
+    ClipId, FrameRate, ImportMedia, RenderAndReplace, RestoreUnrendered, SourceId, Ticks, Timebase,
+    TrackKind,
 };
 
 use crate::editor::Editor;
@@ -201,8 +202,9 @@ impl Editor {
                         } => (*frames_done, *frames_total) = (done, total),
                         ExportEvent::Warning(warning) => self.notice(format!("Render: {warning}")),
                         ExportEvent::Finished => {
-                            let timebase = self.timeline.sequence().timebase;
-                            running.stage = Stage::Probing(probe(path.clone(), timebase));
+                            let sequence = self.timeline.sequence();
+                            let (timebase, rate) = (sequence.timebase, sequence.format.frame_rate);
+                            running.stage = Stage::Probing(probe(path.clone(), timebase, rate));
                             break;
                         }
                         ExportEvent::Cancelled => return Ok(None),
@@ -316,12 +318,16 @@ fn free_path(folder: &Path, name: &str) -> std::io::Result<PathBuf> {
 
 /// The file at `path` read as an import would; the receiver disconnects without an
 /// answer if the thread can't start.
-fn probe(path: PathBuf, timebase: Timebase) -> Receiver<Result<ImportMedia, MediaError>> {
+fn probe(
+    path: PathBuf,
+    timebase: Timebase,
+    rate: FrameRate,
+) -> Receiver<Result<ImportMedia, MediaError>> {
     let (sender, receiver) = channel::bounded(1);
     let _ = thread::Builder::new()
         .name("render-replace-probe".to_owned())
         .spawn(move || {
-            let _ = sender.send(crate::import::probe(&path, timebase));
+            let _ = sender.send(crate::import::probe(&path, timebase, rate));
         });
     receiver
 }

@@ -448,7 +448,7 @@ impl eframe::App for Editor {
 
         self.lay_out_panels(ui);
 
-        crate::project_files::path_dialog(self, &ctx);
+        crate::path_dialog::path_dialog(self, &ctx);
         crate::project_files::discard_dialog(self, &ctx);
         crate::marker_dialog::dialog(self, &ctx);
         crate::gain_dialog::dialog(self, &ctx);

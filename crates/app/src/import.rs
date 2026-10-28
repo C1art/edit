@@ -14,22 +14,26 @@ pub struct Probed {
     pub result: Result<ImportMedia, (PathBuf, MediaError)>,
 }
 
+/// A file to probe, the item it replaces, and the rate an image sequence plays at.
+type Request = (PathBuf, Option<SourceId>, FrameRate);
+
 /// Probes files on a worker thread so the UI never touches the disk.
 pub struct Importer {
-    requests: Sender<(PathBuf, Option<SourceId>)>,
+    requests: Sender<Request>,
     results: Receiver<Probed>,
     pending: usize,
 }
 
 impl Importer {
     pub fn new(timebase: Timebase) -> std::io::Result<Self> {
-        let (request_tx, request_rx) = channel::unbounded::<(PathBuf, Option<SourceId>)>();
+        let (request_tx, request_rx) = channel::unbounded::<Request>();
         let (result_tx, result_rx) = channel::unbounded();
         thread::Builder::new()
             .name("import".to_owned())
             .spawn(move || {
-                for (path, replacing) in request_rx {
-                    let result = probe(&path, timebase).map_err(|error| (path, error));
+                for (path, replacing, sequence_rate) in request_rx {
+                    let result =
+                        probe(&path, timebase, sequence_rate).map_err(|error| (path, error));
                     if result_tx.send(Probed { replacing, result }).is_err() {
                         break;
                     }
@@ -42,8 +46,13 @@ impl Importer {
         })
     }
 
-    pub fn request(&mut self, path: PathBuf, replacing: Option<SourceId>) {
-        if self.requests.send((path, replacing)).is_ok() {
+    pub fn request(
+        &mut self,
+        path: PathBuf,
+        replacing: Option<SourceId>,
+        sequence_rate: FrameRate,
+    ) {
+        if self.requests.send((path, replacing, sequence_rate)).is_ok() {
             self.pending += 1;
         }
     }
@@ -59,10 +68,20 @@ impl Importer {
     }
 }
 
-pub(crate) fn probe(path: &std::path::Path, timebase: Timebase) -> Result<ImportMedia, MediaError> {
+/// Reads the file as an import would; an image sequence plays at `sequence_rate`, as
+/// pictures declare none of their own.
+pub(crate) fn probe(
+    path: &std::path::Path,
+    timebase: Timebase,
+    sequence_rate: FrameRate,
+) -> Result<ImportMedia, MediaError> {
     let reader = MediaReader::open(path, timebase)?;
     let info = reader.info();
-    let name = path.file_name().map_or_else(
+    let first_frame = info
+        .sequence
+        .then(|| media::source_files(path).into_iter().next());
+    let named = first_frame.flatten().unwrap_or_else(|| path.to_owned());
+    let name = named.file_name().map_or_else(
         || path.display().to_string(),
         |name| name.to_string_lossy().into_owned(),
     );
@@ -82,5 +101,6 @@ pub(crate) fn probe(path: &std::path::Path, timebase: Timebase) -> Result<Import
         }),
         has_audio: info.has_audio,
         still: info.still,
+        interpreted_rate: info.sequence.then_some(sequence_rate),
     })
 }

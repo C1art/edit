@@ -185,7 +185,7 @@ fn collect(
             return Err("cancelled".to_owned());
         }
         if copy.from != copy.to {
-            if let Err(error) = std::fs::copy(&copy.from, &copy.to) {
+            if let Err(error) = copy_source(&copy.from, &copy.to) {
                 failed.push(format!("{} ({error})", copy.from.display()));
             }
         }
@@ -195,4 +195,16 @@ fn collect(
         .save(project)
         .map_err(|error| error.to_string())?;
     Ok((project.to_path_buf(), failed))
+}
+
+/// Copies a file, or each frame of an image sequence to the pattern it is copied to.
+fn copy_source(from: &Path, to: &Path) -> std::io::Result<()> {
+    let Some(frames) = media::sequence_frames(from) else {
+        return std::fs::copy(from, to).map(drop);
+    };
+    frames.into_iter().try_for_each(|(number, frame)| {
+        let target = media::sequence_frame(to, number)
+            .ok_or_else(|| std::io::Error::other("the copy is not named as a sequence"))?;
+        std::fs::copy(frame, target).map(drop)
+    })
 }

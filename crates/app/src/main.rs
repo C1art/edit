@@ -42,6 +42,7 @@ mod multicam_sync;
 mod nesting;
 mod offline;
 mod panels;
+mod path_dialog;
 mod placing;
 mod program_zoom;
 mod project_files;

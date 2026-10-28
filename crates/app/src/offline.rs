@@ -50,7 +50,7 @@ impl OfflineMedia {
                         Request::Check(files) => Reply::Missing(
                             files
                                 .into_iter()
-                                .filter(|(_, path)| !path.try_exists().unwrap_or(false))
+                                .filter(|(_, path)| !media::source_exists(path))
                                 .map(|(id, _)| id)
                                 .collect(),
                         ),
@@ -162,7 +162,7 @@ fn find(folder: &Path, wanted: Vec<(SourceId, PathBuf)>) -> Vec<(SourceId, PathB
         .into_iter()
         .filter_map(|(id, old)| {
             let candidate = folder.join(old.file_name()?);
-            (candidate != old && candidate.is_file()).then_some((id, candidate))
+            (candidate != old && media::source_exists(&candidate)).then_some((id, candidate))
         })
         .collect()
 }
