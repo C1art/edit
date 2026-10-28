@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::ops::Range;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -51,6 +52,17 @@ pub struct Player {
     proxies: bool,
     resolution: Resolution,
     shuttle: Option<Shuttle>,
+    /// While set, playing wraps from this range's end back to its start.
+    looping: Option<Range<Ticks>>,
+    stop: Option<Stop>,
+}
+
+/// Where playback started by [`Player::play_range`] ends.
+#[derive(Debug, Clone, Copy)]
+struct Stop {
+    at: Ticks,
+    /// Where the playhead goes back to once stopped, as Play Around leaves it.
+    back_to: Option<Ticks>,
 }
 
 impl Player {
@@ -110,6 +122,8 @@ impl Player {
             proxies: false,
             resolution: Resolution::Full,
             shuttle: None,
+            looping: None,
+            stop: None,
         };
         player.seek(Ticks::ZERO);
         Ok(player)
@@ -249,6 +263,9 @@ impl Player {
         let frames = &self.frames;
         let changed = self.picker.advance(position, || frames.try_recv().ok());
         self.advance_shuttle();
+        if self.playing {
+            self.keep_in_range(position);
+        }
         if self.playing && self.reached_end(position) {
             self.pause();
         }
@@ -267,7 +284,13 @@ impl Player {
             }
             lost
         });
-        if self.reached_end(self.position()) {
+        if let Some(range) = self
+            .looping
+            .clone()
+            .filter(|range| !range.contains(&self.position()))
+        {
+            self.go_to(range.start);
+        } else if self.reached_end(self.position()) {
             self.seek(Ticks::ZERO);
         } else if reclaimed {
             // Another player used the device meanwhile, so this one's queued audio is gone.
@@ -284,6 +307,7 @@ impl Player {
 
     pub fn pause(&mut self) {
         self.shuttle = None;
+        self.stop = None;
         if !self.playing {
             return;
         }
@@ -304,7 +328,45 @@ impl Player {
 
     pub fn seek(&mut self, position: Ticks) {
         self.shuttle = None;
+        self.stop = None;
         self.go_to(position);
+    }
+
+    /// Plays `range` once, then stops, going back to `back_to` when given.
+    pub fn play_range(&mut self, range: Range<Ticks>, back_to: Option<Ticks>) {
+        if range.is_empty() {
+            return;
+        }
+        self.pause();
+        self.seek(range.start);
+        self.play();
+        self.stop = Some(Stop {
+            at: range.end,
+            back_to,
+        });
+    }
+
+    pub fn is_looping(&self) -> bool {
+        self.looping.is_some()
+    }
+
+    /// Loops `range` while playing, or plays on through when `None`.
+    pub fn set_looping(&mut self, range: Option<Range<Ticks>>) {
+        self.looping = range.filter(|range| !range.is_empty());
+    }
+
+    fn keep_in_range(&mut self, position: Ticks) {
+        if let Some(stop) = self.stop.filter(|stop| position >= stop.at) {
+            self.pause();
+            // The clock runs past the end by up to a frame; rest on the range's last one.
+            let (rate, timebase) = (self.frame_rate(), self.sequence.timebase);
+            let last = rate.frame_start(rate.frame_at(stop.at - Ticks(1), timebase), timebase);
+            self.seek(stop.back_to.unwrap_or(last));
+        } else if let Some(range) = self.looping.clone() {
+            if position >= range.end {
+                self.go_to(range.start);
+            }
+        }
     }
 
     fn advance_shuttle(&mut self) {
