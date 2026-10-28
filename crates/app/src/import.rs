@@ -3,30 +3,34 @@ use std::thread;
 
 use crossbeam::channel::{self, Receiver, Sender};
 use media::{MediaError, MediaReader};
-use timeline::{FrameRate, ImportMedia, Timebase, VideoFormat};
+use timeline::{FrameRate, ImportMedia, SourceId, Timebase, VideoFormat};
 
 /// Rate assumed for video whose container declares none.
 const FALLBACK_RATE: FrameRate = FrameRate::FPS_25;
 
-pub type ImportResult = Result<ImportMedia, (PathBuf, MediaError)>;
+/// A probed file, and the media item it is to replace rather than join the pool.
+pub struct Probed {
+    pub replacing: Option<SourceId>,
+    pub result: Result<ImportMedia, (PathBuf, MediaError)>,
+}
 
 /// Probes files on a worker thread so the UI never touches the disk.
 pub struct Importer {
-    requests: Sender<PathBuf>,
-    results: Receiver<ImportResult>,
+    requests: Sender<(PathBuf, Option<SourceId>)>,
+    results: Receiver<Probed>,
     pending: usize,
 }
 
 impl Importer {
     pub fn new(timebase: Timebase) -> std::io::Result<Self> {
-        let (request_tx, request_rx) = channel::unbounded::<PathBuf>();
+        let (request_tx, request_rx) = channel::unbounded::<(PathBuf, Option<SourceId>)>();
         let (result_tx, result_rx) = channel::unbounded();
         thread::Builder::new()
             .name("import".to_owned())
             .spawn(move || {
-                for path in request_rx {
+                for (path, replacing) in request_rx {
                     let result = probe(&path, timebase).map_err(|error| (path, error));
-                    if result_tx.send(result).is_err() {
+                    if result_tx.send(Probed { replacing, result }).is_err() {
                         break;
                     }
                 }
@@ -38,8 +42,8 @@ impl Importer {
         })
     }
 
-    pub fn request(&mut self, path: PathBuf) {
-        if self.requests.send(path).is_ok() {
+    pub fn request(&mut self, path: PathBuf, replacing: Option<SourceId>) {
+        if self.requests.send((path, replacing)).is_ok() {
             self.pending += 1;
         }
     }
@@ -48,7 +52,7 @@ impl Importer {
         self.pending > 0
     }
 
-    pub fn poll(&mut self) -> Vec<ImportResult> {
+    pub fn poll(&mut self) -> Vec<Probed> {
         let results: Vec<_> = self.results.try_iter().collect();
         self.pending = self.pending.saturating_sub(results.len());
         results

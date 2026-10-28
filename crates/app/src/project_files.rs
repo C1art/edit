@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use egui::{Key, ViewportCommand};
-use timeline::{Sequence, Timebase, Timeline, VideoFormat};
+use timeline::{Sequence, SourceId, Timebase, Timeline, VideoFormat};
 
 use crate::editor::Editor;
 use crate::project_store::StoreEvent;
@@ -11,6 +11,8 @@ use crate::project_store::StoreEvent;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PathPurpose {
     Import,
+    /// A file to take the place of a media item's.
+    Replace(SourceId),
     OpenProject,
     SaveProject,
 }
@@ -44,6 +46,12 @@ impl Editor {
                 .project_path
                 .as_ref()
                 .map(|path| path.display().to_string())
+                .unwrap_or_default(),
+            PathPurpose::Replace(id) => self
+                .timeline
+                .project()
+                .media_item(id)
+                .map(|item| item.path.display().to_string())
                 .unwrap_or_default(),
             _ => String::new(),
         };
@@ -183,6 +191,11 @@ pub fn path_dialog(editor: &mut Editor, ctx: &egui::Context) {
             "Path to a video or audio file (or drop files on the window):",
             "Import",
         ),
+        PathPurpose::Replace(_) => (
+            "Replace Footage",
+            "Path to the file to use instead (clips keep their source times):",
+            "Replace",
+        ),
         PathPurpose::OpenProject => ("Open Project", "Path to a project file:", "Open"),
         PathPurpose::SaveProject => ("Save Project As", "Save the project to:", "Save"),
     };
@@ -211,7 +224,8 @@ pub fn path_dialog(editor: &mut Editor, ctx: &egui::Context) {
     if let Some(path) = submitted.filter(|path| !path.as_os_str().is_empty()) {
         editor.path_prompt = None;
         match purpose {
-            PathPurpose::Import => editor.import(path),
+            PathPurpose::Import => editor.import(path, None),
+            PathPurpose::Replace(id) => editor.import(path, Some(id)),
             PathPurpose::OpenProject => editor.discard_then(AfterDiscard::Open(path)),
             PathPurpose::SaveProject => editor.save_project_to(path),
         }

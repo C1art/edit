@@ -14,7 +14,7 @@ use crate::clip_art::{ClipArt, ThumbnailWorker, WaveformWorker};
 use crate::effects::{self, EffectControls, SideTab};
 use crate::export::ExportDialog;
 use crate::import::Importer;
-use crate::media_pool::{self, PoolAction};
+use crate::media_pool;
 use crate::mixer::{self, Mixer};
 use crate::monitors::{self, Focus};
 use crate::nesting::Level;
@@ -33,7 +33,7 @@ pub struct Editor {
     pub(crate) audio: Option<AudioOutput>,
     pub(crate) render_state: Option<RenderState>,
     pub(crate) importer: Option<Importer>,
-    proxies: Option<ProxyMaker>,
+    pub(crate) proxies: Option<ProxyMaker>,
     pub(crate) clip_art: ClipArt,
     /// Whether the monitors play proxies where media has them.
     pub(crate) use_proxies: bool,
@@ -188,14 +188,7 @@ impl Editor {
         if is_project(&path) {
             self.discard_then(AfterDiscard::Open(path));
         } else {
-            self.import(path);
-        }
-    }
-
-    pub(crate) fn import(&mut self, path: PathBuf) {
-        match &mut self.importer {
-            Some(importer) => importer.request(path),
-            None => self.notice(format!("Cannot import {}", path.display())),
+            self.import(path, None);
         }
     }
 
@@ -245,27 +238,6 @@ impl Editor {
         };
         if format != sequence.format {
             self.apply(SetSequenceFormat { format });
-        }
-    }
-
-    fn poll_imports(&mut self) {
-        let Some(importer) = &mut self.importer else {
-            return;
-        };
-        for result in importer.poll() {
-            match result {
-                Ok(import) => {
-                    if self.apply(import) {
-                        if let Some(id) = self.timeline.sequence().media.last().map(|item| item.id)
-                        {
-                            self.open_source(id);
-                        }
-                    }
-                }
-                Err((path, error)) => {
-                    self.notice(format!("Cannot import {}: {error}", path.display()));
-                }
-            }
         }
     }
 
@@ -337,35 +309,10 @@ impl Editor {
         let importing = self.importer.as_ref().is_some_and(Importer::is_busy);
         let sequence = self.timeline.sequence();
         let proxies = self.proxies.as_ref();
-        match media_pool::ui(ui, &sequence.media, sequence.timebase, importing, proxies) {
-            Some(PoolAction::Open(id)) => self.open_source(id),
-            Some(PoolAction::OpenNest(id)) => self.enter_nest(id, Ticks::ZERO),
-            Some(PoolAction::Remove(id)) => {
-                if self
-                    .source
-                    .as_ref()
-                    .is_some_and(|source| source.source == id)
-                {
-                    self.source = None;
-                }
-                let remove = timeline::RemoveMedia { source: id };
-                if let Err(error) = self.timeline.apply_to_project(remove) {
-                    self.notice(format!("Cannot remove: {error}"));
-                }
-            }
-            Some(PoolAction::CreateProxy(id)) => {
-                let path = sequence.media_item(id).map(|item| item.path.clone());
-                if let (Some(maker), Some(path)) = (&mut self.proxies, path) {
-                    maker.request(id, path);
-                }
-            }
-            Some(PoolAction::DetachProxy(id)) => {
-                self.apply(SetProxy {
-                    source: id,
-                    proxy: None,
-                });
-            }
-            None => {}
+        if let Some(action) =
+            media_pool::ui(ui, &sequence.media, sequence.timebase, importing, proxies)
+        {
+            self.pool_action(action);
         }
         if !self.notices.is_empty() {
             ui.separator();
