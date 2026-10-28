@@ -1,4 +1,5 @@
-// Mirror and Corner Pin: warps of the whole picture, measured in fractions of it.
+// Mirror, and the warps that move the picture's plane: Corner Pin, Transform and
+// Basic 3D, measured in fractions of the picture.
 
 // Reflects the side of the mirror's line that its normal points to from the other.
 fn mirrored(uv: vec2<f32>) -> vec2<f32> {
@@ -17,7 +18,7 @@ fn mirrored(uv: vec2<f32>) -> vec2<f32> {
     return (p - 2.0 * beyond * normal) / aspect + mirror.xy;
 }
 
-// Where the point at `uv` of the pinned picture lies in the picture before pinning;
+// Where the point at `uv` of the warped picture lies in the picture before warping;
 // outside it where the plane would face away.
 fn unpinned(uv: vec2<f32>) -> vec2<f32> {
     let rows = placement.reshape_unpin;

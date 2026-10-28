@@ -53,6 +53,18 @@ pub struct PictureStyle {
     /// shift right and down and a turn clockwise in radians, then a scale, in shares of
     /// the picture's longer side about its center.
     pub stabilize: [f32; 4],
+    /// Fractions of the picture's width and height.
+    pub sphere_center: [f32; 2],
+    /// Pixels of the fitted picture; at 0 the picture stays flat.
+    pub sphere_radius: f32,
+    /// Radians clockwise from up that the light comes from.
+    pub emboss_direction: f32,
+    /// Pixels of the fitted picture.
+    pub emboss_relief: f32,
+    /// 1 is Premiere's 100%.
+    pub emboss_contrast: f32,
+    /// 0 to 1: how much the relief replaces the picture.
+    pub emboss_mix: f32,
 }
 
 impl PictureStyle {
@@ -82,15 +94,22 @@ impl PictureStyle {
         shadow_opacity: 0.0,
         shadow_color: [0.0; 3],
         stabilize: [0.0, 0.0, 0.0, 1.0],
+        sphere_center: [0.5; 2],
+        sphere_radius: 0.0,
+        emboss_direction: 0.0,
+        emboss_relief: 0.0,
+        emboss_contrast: 1.0,
+        emboss_mix: 0.0,
     };
 
-    /// The shader's view, as nine vec4s.
-    pub(crate) fn uniform(&self) -> [f32; 36] {
+    /// The shader's view, as eleven vec4s.
+    pub(crate) fn uniform(&self) -> [f32; 44] {
         let inverted = if self.edges_inverted { 1.0 } else { 0.0 };
         let [mosaic_x, mosaic_y] = self.mosaic;
         let [offset_x, offset_y] = self.offset;
         let [shadow_x, shadow_y] = self.shadow_offset;
         let [red, green, blue] = self.shadow_color;
+        let sphere = if self.sphere_radius > 0.0 { 1.0 } else { 0.0 };
         [
             self.brightness,
             self.contrast,
@@ -128,6 +147,14 @@ impl PictureStyle {
             self.stabilize[1],
             self.stabilize[2],
             self.stabilize[3],
+            self.sphere_center[0],
+            self.sphere_center[1],
+            self.sphere_radius.max(0.0),
+            sphere,
+            self.emboss_direction,
+            self.emboss_relief.max(0.0),
+            self.emboss_contrast.max(0.0),
+            self.emboss_mix.clamp(0.0, 1.0),
         ]
     }
 }

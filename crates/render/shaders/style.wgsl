@@ -33,6 +33,17 @@ fn warp(uv_in: vec2<f32>) -> vec2<f32> {
     let aspect = picture / max(picture.x, picture.y);
     let half_diagonal = length(aspect * 0.5);
     var p = (wave(mirrored(uv_in)) - vec2<f32>(0.5)) * aspect;
+    // The picture as seen on a ball: points at the rim show as they are, nearer the
+    // middle they read from nearer it still, as an arc's length to its height.
+    let sphere = placement.style_sphere;
+    let sphere_center = (sphere.xy - vec2<f32>(0.5)) * aspect;
+    let sphere_radius = sphere.z / max(picture.x, picture.y);
+    let from_center = p - sphere_center;
+    let reach = length(from_center);
+    if sphere.w > 0.5 && reach < sphere_radius && reach > 0.0 {
+        let read = sphere_radius * asin(reach / sphere_radius) * 2.0 / 3.14159265;
+        p = sphere_center + from_center * read / reach;
+    }
     // Scaling with the squared radius, normalized so the corners stay put: a bulge
     // reads nearer the center there, magnifying it.
     let lens = placement.style_warp.w * 0.5;
@@ -98,6 +109,11 @@ fn picture_at(uv: vec2<f32>) -> vec4<f32> {
     return color * f32(inside);
 }
 
+fn encoded_luma(uv: vec2<f32>) -> f32 {
+    let encoded = to_gamma(max(input_grade(picture_at(uv).rgb), vec3<f32>(0.0)));
+    return dot(encoded, vec3<f32>(0.2126, 0.7152, 0.0722));
+}
+
 fn grain_hash(p: vec2<f32>) -> f32 {
     var q = fract(p * vec2<f32>(0.1031, 0.1030));
     q += dot(q, q.yx + 33.33);
@@ -109,8 +125,9 @@ fn grain_hash(p: vec2<f32>) -> f32 {
 fn restyle(rgb_in: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
     let tone = placement.style_tone;
     let grain = placement.style_grain;
+    let emboss = placement.style_emboss;
     let untouched = all(tone == vec4<f32>(0.0, 0.0, 1.0, 0.0)) && grain.x <= 0.0
-        && grain.z <= 0.0;
+        && grain.z <= 0.0 && emboss.w <= 0.0;
     if untouched {
         return rgb_in;
     }
@@ -126,6 +143,13 @@ fn restyle(rgb_in: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
             edges = vec3<f32>(1.0) - edges;
         }
         encoded = mix(encoded, edges, grain.z);
+    }
+    if emboss.w > 0.0 {
+        // Lit from the light's side: a rise facing it is bright, one facing away dark.
+        let toward = vec2<f32>(sin(emboss.x), -cos(emboss.x)) * emboss.y / picture_size();
+        let rise = encoded_luma(uv - toward) - encoded_luma(uv + toward);
+        let relief = clamp(0.5 + rise * emboss.z * 2.0, 0.0, 1.0);
+        encoded = mix(encoded, vec3<f32>(relief), emboss.w);
     }
     // Lowering contrast flattens toward grey; raising it steepens up to fourfold.
     let slope = select(1.0 + tone.y, 1.0 + 3.0 * tone.y, tone.y > 0.0);

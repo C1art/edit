@@ -69,8 +69,12 @@ struct Placement {
     style_shadow_color: vec4<f32>,
     // Warp Stabilizer's shift, turn and scale of the source (see style.wgsl).
     style_stabilize: vec4<f32>,
-    // Mirror's center, angle and 1 when on; Corner Pin's map back to the picture, its
-    // first row ending in 1 when on, and the pinned picture's bounds (see reshape.wgsl).
+    // Spherize's center as fractions of the picture, its radius in pixels, then 1 when on.
+    style_sphere: vec4<f32>,
+    // Emboss's light direction in radians, relief in pixels, contrast and share.
+    style_emboss: vec4<f32>,
+    // Mirror's center, angle and 1 when on; the warps' map back to the picture, its
+    // first row ending in 1 when on, and the warped picture's bounds (see reshape.wgsl).
     reshape_mirror: vec4<f32>,
     reshape_unpin: array<vec4<f32>, 3>,
     reshape_bounds: vec4<f32>,

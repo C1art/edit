@@ -14,6 +14,7 @@ mod reshape;
 mod scope;
 mod secondary;
 mod style;
+mod warp;
 mod wipe;
 
 pub use blit::DISPLAY_FORMAT;
@@ -29,6 +30,7 @@ pub use reshape::{Mirror, Reshape};
 pub use scope::Scope;
 pub use secondary::SecondaryAdjust;
 pub use style::PictureStyle;
+pub use warp::{PlaneTransform, Warp, MAX_WARPS};
 pub use wipe::LayerWipe;
 
 /// Compositing happens in linear light at half-float precision.

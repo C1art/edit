@@ -168,6 +168,16 @@ impl Placement {
         }
     }
 
+    /// Width over height of the picture; 0 before it has a size.
+    fn aspect(&self) -> f32 {
+        let [width, height] = self.fitted;
+        if height > 0.0 {
+            width / height
+        } else {
+            0.0
+        }
+    }
+
     pub(crate) fn to_bytes(self) -> Vec<u8> {
         let [cx, cy] = self.center;
         let [xx, xy] = self.axis_x;
@@ -203,7 +213,7 @@ impl Placement {
             .chain(SecondaryAdjust::uniform(color.secondary.as_ref()))
             .chain(mask::uniform(&self.opacity_masks, self.fitted))
             .chain(self.effects.style.uniform())
-            .chain(self.effects.reshape.uniform())
+            .chain(self.effects.reshape.uniform(self.aspect()))
             .chain(self.effects.recolor.uniform())
             .flat_map(f32::to_le_bytes)
             .collect()
@@ -251,11 +261,11 @@ mod tests {
         let bytes = Placement::new((1920, 1080), (1920, 1080), &look).to_bytes();
         // Twenty vec4s, three of them added by the wipes, lead the shader's struct. The
         // masks follow: the header, three vec4s each, then their outlines at two points
-        // a vec4; then the picture style's nine, the reshape's five and the recolor's six.
+        // a vec4; then the picture style's eleven, the reshape's five and the recolor's six.
         let outlines = MAX_MASKS * MAX_OUTLINE_POINTS / 2;
         assert_eq!(
             bytes.len(),
-            (23 + 1 + 3 * MAX_MASKS + outlines + 9 + 5 + 6) * 16
+            (23 + 1 + 3 * MAX_MASKS + outlines + 11 + 5 + 6) * 16
         );
         assert!(bytes.len() as u64 <= crate::blit::UNIFORM_BYTES);
     }

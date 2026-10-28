@@ -1,7 +1,7 @@
 mod common;
 
 use common::{compositor, layer, solid, SIZE};
-use render::{LayerImage, Mirror, PixelEffects, Reshape};
+use render::{LayerImage, Mirror, PixelEffects, Reshape, Warp};
 use timeline::BlendMode;
 
 // Helpers outside `#[test]` fns are not covered by `allow-unwrap-in-tests`.
@@ -26,14 +26,14 @@ fn rgb(pixels: &[u8], x: u32, y: u32) -> [u8; 3] {
 #[ignore = "needs a GPU"]
 fn corner_pin_squeezes_the_picture_into_its_corners() {
     let white = solid([255, 255, 255]);
-    let corner_pin = Some([[0.0, 0.0], [0.5, 0.0], [0.0, 0.5], [0.5, 0.5]]);
-    let pixels = reshaped(
-        layer(&white, BlendMode::Normal),
-        Reshape {
-            corner_pin,
-            ..Reshape::NONE
-        },
-    );
+    let mut reshape = Reshape::NONE;
+    reshape.push(Warp::CornerPin([
+        [0.0, 0.0],
+        [0.5, 0.0],
+        [0.0, 0.5],
+        [0.5, 0.5],
+    ]));
+    let pixels = reshaped(layer(&white, BlendMode::Normal), reshape);
     assert_eq!(rgb(&pixels, 1, 1), [255, 255, 255]);
     assert_eq!(rgb(&pixels, 2, 0), [0, 0, 0]);
     assert_eq!(rgb(&pixels, 3, 3), [0, 0, 0]);

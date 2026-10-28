@@ -1,10 +1,11 @@
+use crate::warp::{Warp, MAX_WARPS};
+
 /// Warps that move a layer's whole picture, applied after its other effects.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Reshape {
     pub mirror: Option<Mirror>,
-    /// Where the picture's corners go, as fractions of its width and height: upper
-    /// left, upper right, lower left, lower right.
-    pub corner_pin: Option<[[f32; 2]; 4]>,
+    /// Maps of the picture's plane, in the order they apply.
+    pub warps: [Option<Warp>; MAX_WARPS],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -21,21 +22,47 @@ const DEGENERATE: f64 = 1e-9;
 impl Reshape {
     pub const NONE: Self = Self {
         mirror: None,
-        corner_pin: None,
+        warps: [None; MAX_WARPS],
     };
 
+    /// Adds `warp` after the others; past the most a layer holds, it is left out.
+    pub fn push(&mut self, warp: Warp) {
+        if let Some(free) = self.warps.iter_mut().find(|slot| slot.is_none()) {
+            *free = Some(warp);
+        }
+    }
+
+    /// Where the warps together take the picture's corners, on a picture `aspect`
+    /// times as wide as it is high; none when nothing warps it, and corners all at the
+    /// middle when it can't be seen.
+    fn corners(&self, aspect: f64) -> Option<[[f32; 2]; 4]> {
+        let mut warps = self.warps.iter().flatten().peekable();
+        warps.peek()?;
+        let square = [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]];
+        let moved = warps.try_fold(square, |corners: [[f64; 2]; 4], warp| {
+            let [a, b, c, d] = corners.map(|corner| warp.map(corner, aspect));
+            Some([a?, b?, c?, d?])
+        });
+        let hidden = [[0.5, 0.5]; 4];
+        Some(moved.map_or(hidden, |corners| {
+            corners.map(|corner| corner.map(|v| v as f32))
+        }))
+    }
+
     /// The shader's view, as five vec4s: the mirror's center, angle and 1 when on; the
-    /// rows of the map from the pinned picture back to the source, the first ending in
-    /// 1 when on; then the pinned picture's bounds.
-    pub(crate) fn uniform(&self) -> [f32; 20] {
+    /// rows of the map from the warped picture back to the source, the first ending in
+    /// 1 when on; then the warped picture's bounds. A picture warped out of sight maps
+    /// nowhere.
+    pub(crate) fn uniform(&self, aspect: f32) -> [f32; 20] {
         let mirror = self.mirror.map_or([0.0; 4], |mirror| {
             [mirror.center[0], mirror.center[1], mirror.angle, 1.0]
         });
-        let pin = self
-            .corner_pin
-            .and_then(|corners| Some((unpin(corners)?, bounds(corners))));
-        let ([first, second, third], bounds) = pin.unwrap_or(([[0.0; 3]; 3], [0.0; 4]));
-        let on = if pin.is_some() { 1.0 } else { 0.0 };
+        let aspect = if aspect > 0.0 { f64::from(aspect) } else { 1.0 };
+        let corners = self.corners(aspect);
+        let rows = corners.map(|corners| unpin(corners).unwrap_or([[0.0; 3]; 3]));
+        let [first, second, third] = rows.unwrap_or([[0.0; 3]; 3]);
+        let bounds = corners.map_or([0.0; 4], bounds);
+        let on = if corners.is_some() { 1.0 } else { 0.0 };
         [
             mirror[0], mirror[1], mirror[2], mirror[3], first[0], first[1], first[2], on,
             second[0], second[1], second[2], 0.0, third[0], third[1], third[2], 0.0, bounds[0],
@@ -70,7 +97,7 @@ fn unpin(corners: [[f32; 2]; 4]) -> Option<[[f32; 3]; 3]> {
 /// The map taking the unit square's corners to `corners`, after Heckbert's
 /// "Fundamentals of Texture Mapping": x = (au + bv + c) / (gu + hv + 1), and y likewise
 /// with d, e and f.
-fn square_to_quad(corners: [[f64; 2]; 4]) -> Option<[f64; 8]> {
+pub(crate) fn square_to_quad(corners: [[f64; 2]; 4]) -> Option<[f64; 8]> {
     // Around the square: (0,0), (1,0), (1,1), (0,1).
     let [[x0, y0], [x1, y1], [x3, y3], [x2, y2]] = corners;
     let (dx1, dx2, dx3) = (x1 - x2, x3 - x2, x0 - x1 + x2 - x3);
