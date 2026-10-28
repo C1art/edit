@@ -21,6 +21,10 @@ impl Keyframe {
             interpolation: Interpolation::Linear,
         }
     }
+
+    pub fn value(&self) -> f32 {
+        self.hundredths as f32 / 100.0
+    }
 }
 
 /// How the value moves through a keyframe. Easing slows the change arriving at the

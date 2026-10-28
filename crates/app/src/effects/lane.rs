@@ -4,8 +4,10 @@ use timeline::{Clip, FrameRate, Interpolation, Param, Sequence, Ticks, Timebase}
 use super::look::{paint_key, Output, ANIMATED};
 use crate::mixer::Change;
 
+mod graph;
+
 /// Room left of the lanes for a parameter's name, value and keyframe buttons.
-const CONTROLS_WIDTH: f32 = 270.0;
+const CONTROLS_WIDTH: f32 = 290.0;
 const MIN_WIDTH: f32 = 60.0;
 const HEIGHT: f32 = 18.0;
 /// How near the pointer must be to grab a keyframe, or to snap one to the playhead.

@@ -152,8 +152,21 @@ impl Rows {
         suffix: &str,
     ) {
         let time = self.time;
+        let graph = ui.make_persistent_id(("value graph", label));
+        let mut open = ui.data(|data| data.get_temp(graph)).unwrap_or(false);
         ui.horizontal(|ui| {
             let animated = param.is_animated();
+            let twirl = icon_button(
+                ui,
+                Icon::Twirl(open),
+                false,
+                self.lane.is_some() && animated,
+            )
+            .on_hover_text("Show the value graph");
+            if twirl.clicked() {
+                open = !open;
+                ui.data_mut(|data| data.insert_temp(graph, open));
+            }
             let stopwatch =
                 icon_button(ui, Icon::Stopwatch, animated, true).on_hover_text("Toggle animation");
             if stopwatch.clicked() {
@@ -167,7 +180,7 @@ impl Rows {
             let response = ui.add(
                 DragValue::new(&mut value)
                     .speed(drag_speed(&range))
-                    .range(range)
+                    .range(range.clone())
                     .max_decimals(2)
                     .suffix(suffix),
             );
@@ -182,6 +195,9 @@ impl Rows {
                 lane.show(ui, param, time, &mut self.output);
             }
         });
+        if let Some(lane) = self.lane.as_ref().filter(|_| open && param.is_animated()) {
+            lane.show_graph(ui, param, &range, time, &mut self.output);
+        }
     }
 
     /// Steps between keyframes and adds or removes the one at the playhead.
@@ -231,6 +247,8 @@ fn drag_speed(range: &RangeInclusive<f32>) -> f32 {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Icon {
+    /// Points down when what it discloses is open.
+    Twirl(bool),
     Stopwatch,
     Previous,
     Key(Interpolation),
@@ -269,6 +287,14 @@ pub(super) fn icon_button(
     let at = |points: &[(f32, f32)]| points.iter().map(|&(x, y)| c + egui::vec2(x, y)).collect();
     let painter = ui.painter();
     match icon {
+        Icon::Twirl(open) => {
+            let points: &[(f32, f32)] = if open {
+                &[(-4.0, -2.0), (4.0, -2.0), (0.0, 3.0)]
+            } else {
+                &[(-2.0, -4.0), (-2.0, 4.0), (3.0, 0.0)]
+            };
+            painter.add(egui::Shape::convex_polygon(at(points), color, stroke));
+        }
         Icon::Stopwatch => {
             painter.circle(c + egui::vec2(0.0, 1.0), 5.0, fill, stroke);
             painter.line_segment(
