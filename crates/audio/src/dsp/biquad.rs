@@ -114,7 +114,7 @@ impl Coefficients {
         1.0 / ((a + 1.0 / a) * (1.0 / SHELF_SLOPE - 1.0) + 2.0).sqrt()
     }
 
-    fn normalised(b: [f64; 3], a: [f64; 3]) -> Self {
+    pub(super) fn normalised(b: [f64; 3], a: [f64; 3]) -> Self {
         let a0 = a[0];
         Self {
             b: b.map(|b| (b / a0) as f32),
