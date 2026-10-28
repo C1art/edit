@@ -1,16 +1,21 @@
 use egui::DragValue;
 use timeline::{
-    nearest_transition_edge, Clip, Edge, Sequence, SetTransition, TrackKind, TrackRef, Transition,
-    TransitionKind,
+    nearest_transition_edge, Alignment, Clip, Edge, Sequence, SetTransition, TrackKind, TrackRef,
+    Transition, TransitionKind,
 };
 
 use crate::editor::Editor;
 
 pub(super) fn controls(editor: &mut Editor, ui: &mut egui::Ui, track: TrackRef, clip: &Clip) {
     let sequence = editor.timeline.sequence();
-    let followed = sequence
-        .track(track)
-        .is_some_and(|track| track.clips.iter().any(|next| next.start == clip.end()));
+    let neighbours = sequence.track(track).map(|track| {
+        let at = |time| track.clips.iter().any(|other| other.end() == time);
+        (
+            at(clip.start),
+            track.clips.iter().any(|next| next.start == clip.end()),
+        )
+    });
+    let (at_cut, followed) = neighbours.unwrap_or_default();
     let mut edits = Vec::new();
     egui::CollapsingHeader::new("Transitions")
         .default_open(true)
@@ -23,7 +28,9 @@ pub(super) fn controls(editor: &mut Editor, ui: &mut egui::Ui, track: TrackRef, 
                     ui.weak("Out: set on the next clip's In");
                     continue;
                 }
-                if let Some(transition) = transition_row(ui, sequence, track.kind, label, current) {
+                let at_cut = edge == Edge::Head && at_cut;
+                let row = transition_row(ui, sequence, track.kind, label, current, at_cut);
+                if let Some(transition) = row {
                     edits.push(SetTransition {
                         clip: clip.id,
                         edge,
@@ -44,6 +51,7 @@ fn transition_row(
     track: TrackKind,
     label: &str,
     current: Option<Transition>,
+    at_cut: bool,
 ) -> Option<Option<Transition>> {
     let (rate, timebase) = (sequence.format.frame_rate, sequence.timebase);
     let (kinds, name): (&[TransitionKind], fn(TransitionKind) -> &'static str) = match track {
@@ -76,6 +84,19 @@ fn transition_row(
             if response.changed() {
                 transition.duration = rate.frame_start(frames, timebase);
             }
+            if at_cut {
+                egui::ComboBox::from_id_salt((label, "alignment"))
+                    .selected_text(transition.alignment.name())
+                    .show_ui(ui, |ui| {
+                        for alignment in Alignment::ALL {
+                            ui.selectable_value(
+                                &mut transition.alignment,
+                                alignment,
+                                alignment.name(),
+                            );
+                        }
+                    });
+            }
         }
     });
     (chosen != current).then_some(chosen)
@@ -86,10 +107,10 @@ fn transition_row(
 pub fn default_transition(sequence: &Sequence) -> Transition {
     let rate = sequence.format.frame_rate;
     let frames = i64::from(rate.num().div_ceil(rate.den()));
-    Transition {
-        kind: TransitionKind::CrossDissolve,
-        duration: rate.frame_start(frames, sequence.timebase),
-    }
+    Transition::new(
+        TransitionKind::CrossDissolve,
+        rate.frame_start(frames, sequence.timebase),
+    )
 }
 
 /// Applies the default transition at the cut or clip end nearest the playhead on the

@@ -1,5 +1,7 @@
 use egui::{Align2, Color32, FontId, Painter, Rect, Stroke, StrokeKind};
-use timeline::{Clip, ClipId, Gain, Label, Sequence, Ticks, Timecode, Track, TrackKind};
+use timeline::{
+    cut_window, Clip, ClipId, Gain, Label, Sequence, Ticks, Timecode, Track, TrackKind,
+};
 
 use super::clip_art::{self, ClipArea};
 use super::layout::{clip_rect, Row};
@@ -329,17 +331,18 @@ fn speed_marks(painter: &Painter, rect: Rect, scale: &TimeScale, clip: &Clip) {
 
 /// Shades where a clip's transitions play: across a shared cut or inside the clip.
 fn transition_marks(painter: &Painter, row: &Row, scale: &TimeScale, track: &Track, clip: &Clip) {
-    let follows = |start: Ticks| track.clips.iter().any(|other| other.end() == start);
+    let previous = track.clips.iter().find(|other| other.end() == clip.start);
     let mut spans = Vec::new();
     if let Some(transition) = clip.transition_in {
-        let span = if follows(clip.start) {
-            let half = Ticks(transition.duration.0 / 2);
-            (clip.start - half, clip.start - half + transition.duration)
-        } else {
-            (
+        let span = match previous {
+            Some(previous) => {
+                let (before, after) = cut_window(previous, clip, transition);
+                (clip.start - before, clip.start + after)
+            }
+            None => (
                 clip.start,
                 clip.start + transition.duration.min(clip.duration),
-            )
+            ),
         };
         spans.push((span, transition.kind));
     }
