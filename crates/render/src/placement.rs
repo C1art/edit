@@ -1,3 +1,4 @@
+use crate::mask::{self, LayerMask, MAX_MASKS};
 use crate::pixel::PixelEffects;
 
 /// How a layer is drawn: everything except the picture itself.
@@ -12,6 +13,8 @@ pub struct LayerLook {
     /// Fractions of the picture removed from the left, top, right and bottom.
     pub crop: [f32; 4],
     pub opacity: f32,
+    /// What of the picture the opacity applies to; none keeps all of it.
+    pub opacity_masks: [Option<LayerMask>; MAX_MASKS],
     /// Gaussian blur standard deviation in canvas pixels.
     pub blur: f32,
     pub color: ColorAdjust,
@@ -77,6 +80,7 @@ impl LayerLook {
         rotation_degrees: 0.0,
         crop: [0.0; 4],
         opacity: 1.0,
+        opacity_masks: [None; MAX_MASKS],
         blur: 0.0,
         color: ColorAdjust::IDENTITY,
         mask: [0.0; 4],
@@ -95,6 +99,9 @@ pub(crate) struct Placement {
     pub(crate) axis_y: [f32; 2],
     pub(crate) crop: [f32; 4],
     pub(crate) opacity: f32,
+    pub(crate) opacity_masks: [Option<LayerMask>; MAX_MASKS],
+    /// The picture fitted to the canvas, in canvas pixels, which masks are measured in.
+    pub(crate) fitted: [f32; 2],
     pub(crate) color: ColorAdjust,
     pub(crate) mask: [f32; 4],
     pub(crate) wash: f32,
@@ -112,6 +119,8 @@ impl Placement {
         axis_y: [0.0, -2.0],
         crop: [0.0; 4],
         opacity: 1.0,
+        opacity_masks: [None; MAX_MASKS],
+        fitted: [0.0; 2],
         color: ColorAdjust::IDENTITY,
         mask: [0.0; 4],
         wash: 0.0,
@@ -123,8 +132,8 @@ impl Placement {
     /// Fits the layer to the canvas keeping its aspect ratio, then applies the look.
     pub(crate) fn new(layer: (u32, u32), canvas: (u32, u32), look: &LayerLook) -> Self {
         let (cw, ch) = (canvas.0 as f32, canvas.1 as f32);
-        let scale = fit_scale(layer, canvas) * look.scale;
-        let (width, height) = (layer.0 as f32 * scale, layer.1 as f32 * scale);
+        let fitted = [layer.0, layer.1].map(|side| side as f32 * fit_scale(layer, canvas));
+        let [width, height] = fitted.map(|side| side * look.scale);
         let (sin, cos) = look.rotation_degrees.to_radians().sin_cos();
         // Rotating in pixel space, where +y is down, turns positive angles clockwise.
         let rotate = |x: f32, y: f32| [x * cos - y * sin, x * sin + y * cos];
@@ -136,6 +145,8 @@ impl Placement {
             axis_y: to_ndc(rotate(0.0, height * flip_y)),
             crop: look.crop.map(|side| side.clamp(0.0, 1.0)),
             opacity: look.opacity.clamp(0.0, 1.0),
+            opacity_masks: look.opacity_masks,
+            fitted,
             color: look.color,
             mask: look.mask.map(|side| side.clamp(0.0, 1.0)),
             wash: look.wash.clamp(0.0, 1.0),
@@ -171,6 +182,7 @@ impl Placement {
                     .flat_map(|[blue, red, level]| [blue, red, level, 0.0]),
             )
             .chain(self.grade)
+            .chain(mask::uniform(&self.opacity_masks, self.fitted))
             .flat_map(f32::to_le_bytes)
             .collect()
     }
@@ -195,6 +207,28 @@ mod tests {
         let placement = Placement::new((960, 1080), (1920, 1080), &LayerLook::IDENTITY);
         assert_eq!(placement.axis_x, [1.0, 0.0]);
         assert_eq!(placement.axis_y, [0.0, -2.0]);
+    }
+
+    #[test]
+    fn placement_with_every_mask_fits_its_uniform() {
+        let mask = LayerMask {
+            shape: timeline::MaskShape::Rectangle,
+            center: [0.5; 2],
+            size: [0.5; 2],
+            rotation_degrees: 0.0,
+            feather: 10.0,
+            expansion: 0.0,
+            opacity: 1.0,
+            inverted: true,
+        };
+        let look = LayerLook {
+            opacity_masks: [Some(mask); MAX_MASKS],
+            ..LayerLook::IDENTITY
+        };
+        let bytes = Placement::new((1920, 1080), (1920, 1080), &look).to_bytes();
+        // The shader's struct ends with the masks: the header, then twelve vec4s.
+        assert_eq!(bytes.len(), (16 + 1 + 3 * MAX_MASKS) * 16);
+        assert!(bytes.len() as u64 <= crate::blit::UNIFORM_BYTES);
     }
 
     #[test]

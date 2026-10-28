@@ -32,6 +32,12 @@ struct Placement {
     // Input and look LUT sizes (0 when absent), the look's intensity, then 1 when
     // curves apply.
     grade: vec4<f32>,
+    // The picture fitted to the canvas in canvas pixels, then the number of masks.
+    mask_space: vec4<f32>,
+    // Three for each mask: center and size as fractions of the picture; rotation in
+    // radians, feather and expansion in pixels, opacity; then 1 for a rectangle and 1
+    // when inverted.
+    masks: array<vec4<f32>, 12>,
 };
 
 const MID_GREY: f32 = 0.18;
@@ -233,6 +239,57 @@ fn stylize(rgb_in: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
     return rgb;
 }
 
+// Signed distance outside an ellipse, close enough near its outline for a feather.
+fn ellipse_distance(p: vec2<f32>, radii: vec2<f32>) -> f32 {
+    let scaled = length(p / radii);
+    let gradient = length(p / (radii * radii));
+    if gradient < 1e-6 {
+        return -min(radii.x, radii.y);
+    }
+    return scaled * (scaled - 1.0) / gradient;
+}
+
+fn box_distance(p: vec2<f32>, half_size: vec2<f32>) -> f32 {
+    let q = abs(p) - half_size;
+    return length(max(q, vec2<f32>(0.0))) + min(max(q.x, q.y), 0.0);
+}
+
+// How much of the picture at `uv` the masks keep. Masks add: each covers what the
+// others leave by its own opacity.
+fn mask_coverage(uv: vec2<f32>) -> f32 {
+    let count = u32(placement.mask_space.z);
+    if count == 0u {
+        return 1.0;
+    }
+    let picture = placement.mask_space.xy;
+    var uncovered = 1.0;
+    for (var i = 0u; i < count; i++) {
+        let shape = placement.masks[i * 3u];
+        let edge = placement.masks[i * 3u + 1u];
+        let kind = placement.masks[i * 3u + 2u];
+        let offset = (uv - shape.xy) * picture;
+        // Turning back by the mask's clockwise rotation, with +y down.
+        let sin_cos = vec2<f32>(sin(edge.x), cos(edge.x));
+        let p = vec2<f32>(
+            sin_cos.y * offset.x + sin_cos.x * offset.y,
+            -sin_cos.x * offset.x + sin_cos.y * offset.y,
+        );
+        let half_size = max(shape.zw * picture * 0.5, vec2<f32>(1e-3));
+        var distance = ellipse_distance(p, half_size);
+        if kind.x > 0.5 {
+            distance = box_distance(p, half_size);
+        }
+        // A pixel's softness at least, so a hard edge doesn't alias.
+        let feather = max(edge.y, 1.0);
+        var inside = 1.0 - smoothstep(-0.5 * feather, 0.5 * feather, distance - edge.z);
+        if kind.y > 0.5 {
+            inside = 1.0 - inside;
+        }
+        uncovered *= 1.0 - inside * edge.w;
+    }
+    return 1.0 - uncovered;
+}
+
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var color = textureSample(source, source_sampler, in.uv);
@@ -248,5 +305,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let sharp = sharpen(unspilled, in.uv);
     var rgb = stylize(creative_grade(correct(sharp)), in.uv);
     rgb = mix(rgb, vec3<f32>(1.0), placement.balance.w);
-    return vec4<f32>(rgb, color.a * keyed * placement.axis_y_opacity.z * f32(shown));
+    let opacity = placement.axis_y_opacity.z * mask_coverage(in.uv);
+    return vec4<f32>(rgb, color.a * keyed * opacity * f32(shown));
 }
