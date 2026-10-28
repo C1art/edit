@@ -13,6 +13,7 @@ mod reader;
 mod region_track;
 mod scenes;
 mod seek_trim;
+mod sequence;
 mod still;
 #[cfg(test)]
 mod test_picture;
@@ -39,5 +40,8 @@ pub use proxy::{create_proxy, proxy_size};
 pub use reader::{MediaReader, SourceInfo, Streams, VideoInfo};
 pub use region_track::{track_region, RegionTrack, TrackDirection, TrackedFrame};
 pub use scenes::detect_scenes;
+pub use sequence::{
+    sequence_frame, sequence_frames, sequence_pattern, source_exists, source_files,
+};
 pub use still::{write_still, StillFormat};
 pub use writer::{AudioSettings, EncodeProfile, MediaWriter, VideoSettings};

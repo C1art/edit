@@ -6,6 +6,7 @@ use crate::ffi::{
     Decoder, Frame, InputContext, Packet, Received, SampleConverter, Scaler, OUTPUT_CHANNELS,
 };
 use crate::seek_trim::SeekTrim;
+use crate::sequence::open_input;
 use crate::{AudioBuffer, DecodedFrame, MediaError, StreamKind, VideoFrame};
 
 /// FFmpeg's `AV_TIME_BASE`, used for container-level start time, duration and seeking.
@@ -22,6 +23,8 @@ pub struct SourceInfo {
     pub has_audio: bool,
     /// A single picture rather than moving video.
     pub still: bool,
+    /// Numbered pictures read as one video.
+    pub sequence: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -100,7 +103,7 @@ impl MediaReader {
         timebase: Timebase,
         streams: Streams,
     ) -> Result<Self, MediaError> {
-        let input = InputContext::open(path)?;
+        let (input, sequence) = open_input(path)?;
         let video = match streams {
             Streams::Audio => None,
             _ => StreamDecoder::<Scaler>::open(&input, StreamKind::Video)?,
@@ -130,7 +133,8 @@ impl MediaReader {
                 }
             }),
             has_audio: audio.is_some(),
-            still: input.is_image(),
+            still: input.is_image() && !sequence,
+            sequence,
         };
         Ok(Self {
             start: input.start_time().map_or(Ticks::ZERO, to_ticks),

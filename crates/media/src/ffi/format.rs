@@ -17,16 +17,38 @@ unsafe impl Send for InputContext {}
 
 impl InputContext {
     pub(crate) fn open(path: &Path) -> Result<Self, MediaError> {
+        Self::open_with(path, ptr::null(), Options::default())
+    }
+
+    /// Opens the numbered pictures an FFmpeg pattern such as `shot_%04d.png` names,
+    /// from the frame numbered `start`.
+    pub(crate) fn open_sequence(pattern: &Path, start: u64) -> Result<Self, MediaError> {
+        // SAFETY: the name is a NUL-terminated static string; FFmpeg returns a static
+        // demuxer or null.
+        let demuxer = unsafe { sys::av_find_input_format(c"image2".as_ptr()) };
+        let start =
+            i64::try_from(start).map_err(|_| MediaError::UnsupportedPath(pattern.to_owned()))?;
+        let mut options = Options::default();
+        options.set_number(c"start_number", start)?;
+        Self::open_with(pattern, demuxer, options)
+    }
+
+    fn open_with(
+        path: &Path,
+        demuxer: *const sys::AVInputFormat,
+        mut options: Options,
+    ) -> Result<Self, MediaError> {
         let unsupported = || MediaError::UnsupportedPath(path.to_owned());
         let c_path =
             CString::new(path.to_str().ok_or_else(unsupported)?).map_err(|_| unsupported())?;
 
         let mut raw = ptr::null_mut();
-        // SAFETY: `raw` starts null so FFmpeg allocates the context, and `c_path` is a
-        // NUL-terminated string that outlives the call. On failure FFmpeg frees the
-        // context and leaves `raw` null.
+        // SAFETY: `raw` starts null so FFmpeg allocates the context, `c_path` is a
+        // NUL-terminated string that outlives the call, `demuxer` is null or static and
+        // `options` owns a valid (possibly null) dictionary FFmpeg may replace. On failure
+        // FFmpeg frees the context and leaves `raw` null.
         check(unsafe {
-            sys::avformat_open_input(&mut raw, c_path.as_ptr(), ptr::null(), ptr::null_mut())
+            sys::avformat_open_input(&mut raw, c_path.as_ptr(), demuxer, &mut options.0)
         })?;
         let input = Self(NonNull::new(raw).ok_or_else(unsupported)?);
 
@@ -229,5 +251,29 @@ fn stream_kind(media_type: sys::AVMediaType) -> StreamKind {
         sys::AVMediaType::AVMEDIA_TYPE_AUDIO => StreamKind::Audio,
         sys::AVMediaType::AVMEDIA_TYPE_SUBTITLE => StreamKind::Subtitle,
         _ => StreamKind::Other,
+    }
+}
+
+/// Demuxer options, freed with whatever FFmpeg leaves unused in them.
+struct Options(*mut sys::AVDictionary);
+
+impl Default for Options {
+    fn default() -> Self {
+        Self(ptr::null_mut())
+    }
+}
+
+impl Options {
+    fn set_number(&mut self, key: &CStr, value: i64) -> Result<(), MediaError> {
+        // SAFETY: the dictionary is null or owned by `self`, and FFmpeg copies the
+        // NUL-terminated key.
+        check(unsafe { sys::av_dict_set_int(&mut self.0, key.as_ptr(), value, 0) }).map(drop)
+    }
+}
+
+impl Drop for Options {
+    fn drop(&mut self) {
+        // SAFETY: the dictionary is null or owned by `self`, and is freed exactly once here.
+        unsafe { sys::av_dict_free(&mut self.0) };
     }
 }

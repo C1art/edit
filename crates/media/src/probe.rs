@@ -2,7 +2,7 @@ use std::path::Path;
 
 use timeline::{Ticks, Timebase};
 
-use crate::ffi::InputContext;
+use crate::sequence::open_input;
 use crate::MediaError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,7 +41,7 @@ pub struct MediaInfo {
 
 /// Opens the file and reads its stream headers. Blocks on file I/O, so call it from a worker.
 pub fn probe(path: &Path) -> Result<MediaInfo, MediaError> {
-    let input = InputContext::open(path)?;
+    let (input, _) = open_input(path)?;
     Ok(MediaInfo {
         streams: input.streams(),
         container: input.container(),
