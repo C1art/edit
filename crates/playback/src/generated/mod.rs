@@ -1,13 +1,17 @@
 mod coverage;
+mod scroll;
 mod shape;
 
 use std::cell::RefCell;
 use std::sync::Arc;
 
 use media::VideoFrame;
-use timeline::{CaptionStyle, Generator, Rgb, Shape, TextAlign, Ticks, Title, TitleFont};
+use timeline::{
+    CaptionStyle, Generator, Rgb, Shape, TextAlign, Ticks, Title, TitleFont, TitleMotion,
+};
 
 use coverage::Coverage;
+pub(crate) use scroll::scrolled;
 use shape::shape_coverage;
 
 const SHADOW_OPACITY: f32 = 0.7;
@@ -36,19 +40,23 @@ enum Anchor {
     Bottom,
 }
 
-/// The picture `generator` draws on a `width` by `height` canvas, with straight alpha.
+/// The picture `generator` draws on a `width` by `height` canvas, with straight alpha;
+/// for a rolling or crawling title, the whole strip that travels across it.
 pub fn generated_frame(generator: &Generator, width: u32, height: u32) -> Arc<VideoFrame> {
     let mut canvas = Canvas::new(width, height);
     match generator {
         Generator::ColorMatte { color } => canvas.fill(*color),
+        Generator::Title(title) if title.motion != TitleMotion::Still => {
+            canvas = scroll::title_strip(title, width, height);
+        }
         Generator::Title(title) => draw_title(&mut canvas, title, Anchor::Center),
         Generator::AdjustmentLayer => {}
         Generator::Shape(shape) => draw_shape(&mut canvas, shape),
     }
     Arc::new(VideoFrame {
         pts: Ticks::ZERO,
-        width,
-        height,
+        width: canvas.width,
+        height: canvas.height,
         pixels: canvas.into_pixels(),
     })
 }

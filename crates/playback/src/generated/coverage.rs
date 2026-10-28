@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::sync::Arc;
 
-use egui::epaint::text::{FontDefinitions, Fonts, LayoutJob, TextFormat, TextOptions};
+use egui::epaint::text::{FontDefinitions, Fonts, Galley, LayoutJob, TextFormat, TextOptions};
 use egui::epaint::{Color32, FontColorTransferFunction, FontFamily, FontId};
 use egui::{Align, Rect};
 use timeline::{TextAlign, Title, TitleFont};
@@ -23,6 +23,37 @@ thread_local! {
     static FONTS: RefCell<Option<Fonts>> = const { RefCell::new(None) };
 }
 
+/// `title` laid out to wrap within title safe of a canvas `width` wide, or on one line
+/// for a crawl, with the fonts made or refreshed first.
+fn title_galley(title: &Title, width: u32, fonts: &mut Option<Fonts>) -> Galley {
+    let fonts = match fonts {
+        Some(fonts) if fonts.font_atlas_fill_ratio() < ATLAS_REFILL => fonts,
+        _ => fonts.insert(new_fonts()),
+    };
+    let size = title.size as f32;
+    let family = match title.font {
+        TitleFont::Sans => FontFamily::Proportional,
+        TitleFont::Mono => FontFamily::Monospace,
+    };
+    let font = FontId::new(size, family);
+    let row_height = fonts.with_pixels_per_point(1.0).row_height(&font);
+    let mut format = TextFormat::simple(font, Color32::WHITE);
+    format.extra_letter_spacing = size * title.tracking as f32 / 1000.0;
+    format.line_height = Some((row_height + title.leading as f32).max(1.0));
+    let mut job = LayoutJob::single_section(title.text.clone(), format);
+    job.wrap.max_width = if title.motion.is_crawl() {
+        f32::INFINITY
+    } else {
+        width as f32 * TITLE_SAFE
+    };
+    job.halign = match title.align {
+        TextAlign::Left => Align::LEFT,
+        TextAlign::Center => Align::Center,
+        TextAlign::Right => Align::RIGHT,
+    };
+    fonts.layout_uncached(1.0, Arc::new(job))
+}
+
 /// How much of each canvas pixel a shape covers, from 0 to 1.
 pub(super) struct Coverage {
     width: usize,
@@ -36,33 +67,21 @@ pub(super) struct Coverage {
 }
 
 impl Coverage {
+    /// The width and height `title` lays out to, wrapped as on a canvas `width` wide.
+    pub(super) fn title_extent(title: &Title, width: u32) -> Option<egui::Vec2> {
+        if title.text.trim().is_empty() || title.size == 0 {
+            return None;
+        }
+        FONTS.with_borrow_mut(|fonts| Some(title_galley(title, width, fonts).rect.size()))
+    }
+
     pub(super) fn of_title(title: &Title, width: u32, height: u32, anchor: Anchor) -> Option<Self> {
         if title.text.trim().is_empty() || title.size == 0 {
             return None;
         }
-        let size = title.size as f32;
-        let family = match title.font {
-            TitleFont::Sans => FontFamily::Proportional,
-            TitleFont::Mono => FontFamily::Monospace,
-        };
-        let font = FontId::new(size, family);
         FONTS.with_borrow_mut(|fonts| {
-            let fonts = match fonts {
-                Some(fonts) if fonts.font_atlas_fill_ratio() < ATLAS_REFILL => fonts,
-                _ => fonts.insert(new_fonts()),
-            };
-            let row_height = fonts.with_pixels_per_point(1.0).row_height(&font);
-            let mut format = TextFormat::simple(font, Color32::WHITE);
-            format.extra_letter_spacing = size * title.tracking as f32 / 1000.0;
-            format.line_height = Some((row_height + title.leading as f32).max(1.0));
-            let mut job = LayoutJob::single_section(title.text.clone(), format);
-            job.wrap.max_width = width as f32 * TITLE_SAFE;
-            job.halign = match title.align {
-                TextAlign::Left => Align::LEFT,
-                TextAlign::Center => Align::Center,
-                TextAlign::Right => Align::RIGHT,
-            };
-            let galley = fonts.layout_uncached(1.0, Arc::new(job));
+            let galley = title_galley(title, width, fonts);
+            let fonts = fonts.as_mut()?;
             let mut coverage = Self::empty(width as usize, height as usize);
             // The galley's rows sit around x = 0 as aligned; center the whole block.
             let rect = galley.rect;

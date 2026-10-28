@@ -11,7 +11,7 @@ use timeline::{
 };
 
 use crate::clip_decoders::ClipDecoders;
-use crate::generated::caption_frame;
+use crate::generated::{caption_frame, scrolled};
 use crate::grades::grade_for;
 use crate::pixel_effects::{linear, pixel_effects};
 use crate::time_effects::{posterized, with_timecode};
@@ -163,6 +163,7 @@ fn clip_picture(
             };
             match frame {
                 Ok(frame) => frame
+                    .map(|frame| scrolled(frame, sequence, plan.clip, media, time))
                     .map(|frame| with_timecode(frame, sequence, plan.clip, media, time))
                     .map(LayerPicture::Frame),
                 Err(error) => {
