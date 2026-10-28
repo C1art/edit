@@ -85,6 +85,24 @@ pub(super) fn controls(ui: &mut egui::Ui, look: &mut Look, time: Ticks) -> Outpu
                 }
             });
         });
+    egui::CollapsingHeader::new("Color").show(ui, |ui| {
+        let color = &mut look.color;
+        ui.label(RichText::new("White Balance").weak());
+        rows.param(
+            ui,
+            "Temperature",
+            &mut color.temperature,
+            -100.0..=100.0,
+            "",
+        );
+        rows.param(ui, "Tint", &mut color.tint, -100.0..=100.0, "");
+        ui.label(RichText::new("Tone").weak());
+        rows.param(ui, "Exposure", &mut color.exposure, -5.0..=5.0, "");
+        rows.param(ui, "Contrast", &mut color.contrast, -100.0..=100.0, "");
+        rows.param(ui, "Highlights", &mut color.highlights, -100.0..=100.0, "");
+        rows.param(ui, "Shadows", &mut color.shadows, -100.0..=100.0, "");
+        rows.param(ui, "Saturation", &mut color.saturation, 0.0..=200.0, "%");
+    });
     ui.add_space(4.0);
     if ui.button("Reset Effects").clicked() && *look != Look::default() {
         *look = Look::default();
@@ -128,8 +146,8 @@ impl Rows {
             let mut value = param.value_at(time);
             let response = ui.add(
                 DragValue::new(&mut value)
+                    .speed(drag_speed(&range))
                     .range(range)
-                    .speed(0.5)
                     .max_decimals(2)
                     .suffix(suffix),
             );
@@ -161,6 +179,11 @@ impl Rows {
             }
         });
     }
+}
+
+/// Units per dragged pixel: about a pixel each for wide ranges, finer for narrow ones.
+fn drag_speed(range: &RangeInclusive<f32>) -> f32 {
+    ((range.end() - range.start()) / 400.0).clamp(0.01, 1.0)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
