@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use media::VideoFrame;
 use timeline::{
-    Clip, FrameRate, MediaItem, Sequence, Ticks, Timebase, Timecode, TimecodeSource, VideoEffect,
+    Clip, ClipNameSource, FrameRate, MediaItem, Sequence, Ticks, Timebase, Timecode,
+    TimecodeSource, VideoEffect,
 };
 
 use crate::generated::timecode_box;
@@ -22,54 +23,76 @@ pub(crate) fn posterized(effects: &[VideoEffect], time: Ticks, timebase: Timebas
     Ticks(time.0.div_euclid(step) * step)
 }
 
-/// `frame` with the time burnt in by the clip's last Timecode effect, if it has one.
-pub(crate) fn with_timecode(
+/// `frame` with the text of the clip's Timecode and Clip Name effects burnt in, in
+/// list order.
+pub(crate) fn with_burn_ins(
     frame: Arc<VideoFrame>,
     sequence: &Sequence,
     clip: &Clip,
     media: &MediaItem,
     time: Ticks,
 ) -> Arc<VideoFrame> {
-    let Some((position, size, opacity, source)) =
-        clip.look
-            .effects
-            .iter()
-            .rev()
-            .find_map(|effect| match effect {
-                VideoEffect::Timecode {
-                    position,
-                    size,
-                    opacity,
-                    source,
-                } => Some((position, size, opacity, *source)),
-                _ => None,
-            })
-    else {
+    let burn_ins: Vec<_> = clip
+        .look
+        .effects
+        .iter()
+        .filter_map(|effect| match effect {
+            VideoEffect::Timecode {
+                position,
+                size,
+                opacity,
+                source,
+            } => {
+                let text = match source {
+                    TimecodeSource::Media => {
+                        let rate = media
+                            .video
+                            .map_or(sequence.format.frame_rate, |video| video.frame_rate);
+                        timecode_text(time, sequence.timebase, rate)
+                    }
+                    TimecodeSource::Clip => timecode_text(
+                        time - clip.source_in,
+                        sequence.timebase,
+                        sequence.format.frame_rate,
+                    ),
+                };
+                Some((text, position, size, opacity))
+            }
+            VideoEffect::ClipName {
+                position,
+                size,
+                opacity,
+                source,
+            } => {
+                let text = match source {
+                    ClipNameSource::ProjectItem => media.name.clone(),
+                    ClipNameSource::File => media
+                        .path
+                        .file_name()
+                        .map(|name| name.to_string_lossy().into_owned())
+                        .unwrap_or_default(),
+                };
+                Some((text, position, size, opacity))
+            }
+            _ => None,
+        })
+        .collect();
+    if burn_ins.is_empty() {
         return frame;
-    };
-    let timebase = sequence.timebase;
-    let text = match source {
-        TimecodeSource::Media => {
-            let rate = media
-                .video
-                .map_or(sequence.format.frame_rate, |video| video.frame_rate);
-            timecode_text(time, timebase, rate)
-        }
-        TimecodeSource::Clip => {
-            timecode_text(time - clip.source_in, timebase, sequence.format.frame_rate)
-        }
-    };
-    let percent = |param: &timeline::Param| param.value_at(time) / 100.0;
-    let height = (percent(size) * frame.height as f32).round().max(4.0) as u32;
-    let label = timecode_box(&text, height, percent(opacity).clamp(0.0, 1.0));
-    let center = [
-        percent(&position[0]) * frame.width as f32,
-        percent(&position[1]) * frame.height as f32,
-    ];
-    let left = (center[0] - label.width as f32 / 2.0).round() as i64;
-    let top = (center[1] - label.height as f32 / 2.0).round() as i64;
+    }
     let mut stamped = (*frame).clone();
-    blend_over(&mut stamped, &label, left, top);
+    for (text, position, size, opacity) in burn_ins {
+        let percent = |param: &timeline::Param| param.value_at(time) / 100.0;
+        let height = (percent(size) * frame.height as f32).round().max(4.0) as u32;
+        let label = timecode_box(&text, height, percent(opacity).clamp(0.0, 1.0));
+        let center = [
+            percent(&position[0]) * frame.width as f32,
+            percent(&position[1]) * frame.height as f32,
+        ];
+        let left = (center[0] - label.width as f32 / 2.0).round() as i64;
+        let top = (center[1] - label.height as f32 / 2.0).round() as i64;
+        blend_over(&mut stamped, &label, left, top);
+    }
     Arc::new(stamped)
 }
 

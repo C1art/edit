@@ -11,7 +11,7 @@ use crate::generated::{caption_frame, scrolled};
 use crate::grades::grade_for;
 use crate::layer_look::{interpreted, layer_look};
 use crate::morph_cut::morphed;
-use crate::time_effects::{posterized, with_timecode};
+use crate::time_effects::{posterized, with_burn_ins};
 use crate::track_video::TrackVideo;
 use crate::{Layer, LayerPicture, PlaybackError, Resolution};
 
@@ -181,7 +181,7 @@ fn clip_picture(
             match frame {
                 Ok(frame) => frame
                     .map(|frame| scrolled(frame, sequence, plan.clip, media, time))
-                    .map(|frame| with_timecode(frame, sequence, plan.clip, media, time))
+                    .map(|frame| with_burn_ins(frame, sequence, plan.clip, media, time))
                     .map(LayerPicture::Frame),
                 Err(error) => {
                     decoder.reset();
