@@ -67,6 +67,21 @@ struct Placement {
     style_shadow_color: vec4<f32>,
     // Warp Stabilizer's shift, turn and scale of the source (see style.wgsl).
     style_stabilize: vec4<f32>,
+    // Mirror's center, angle and 1 when on; Corner Pin's map back to the picture, its
+    // first row ending in 1 when on, and the pinned picture's bounds (see reshape.wgsl).
+    reshape_mirror: vec4<f32>,
+    reshape_unpin: array<vec4<f32>, 3>,
+    reshape_bounds: vec4<f32>,
+    // Color Key's encoded color and tolerance, then Leave Color's; Leave Color's amount,
+    // softness and 1 when matching hue, then Color Key's softness (see recolor.wgsl).
+    recolor_key: vec4<f32>,
+    recolor_leave: vec4<f32>,
+    recolor_amounts: vec4<f32>,
+    // Gradient Ramp's start and end points, each end's encoded color, then 1 when
+    // radial and how much of the ramp covers the picture.
+    recolor_ramp_points: vec4<f32>,
+    recolor_ramp_start: vec4<f32>,
+    recolor_ramp_end: vec4<f32>,
 };
 
 const OUTLINE_VEC4S: u32 = 32u;
@@ -113,11 +128,13 @@ fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
         shadow.w > 0.0,
     );
     let margin = vec2<f32>(reach) / picture_size();
-    let uv = mix(
-        placement.crop.xy - margin,
-        vec2<f32>(1.0) - placement.crop.zw + margin,
-        corners[index],
-    );
+    var low = placement.crop.xy - margin;
+    var high = vec2<f32>(1.0) - placement.crop.zw + margin;
+    if placement.reshape_unpin[0].w > 0.5 {
+        low = min(low, placement.reshape_bounds.xy - margin);
+        high = max(high, placement.reshape_bounds.zw + margin);
+    }
+    let uv = mix(low, high, corners[index]);
     let center = placement.center_axis_x.xy;
     let axis_x = placement.center_axis_x.zw;
     let axis_y = placement.axis_y_opacity.xy;
@@ -302,12 +319,12 @@ fn chroma(rgb: vec3<f32>) -> vec2<f32> {
 fn key_alpha(rgb: vec3<f32>) -> f32 {
     let key = placement.key;
     if key.w < 0.0 {
-        return 1.0;
+        return color_key_alpha(rgb);
     }
     let distance = length(chroma(rgb) - chroma(key.rgb));
     let tolerance = key.w * CHROMA_RANGE;
     let softness = max(placement.amounts.x * CHROMA_RANGE, 0.0001);
-    return smoothstep(tolerance, tolerance + softness, distance);
+    return smoothstep(tolerance, tolerance + softness, distance) * color_key_alpha(rgb);
 }
 
 // Unsharp masking against the four neighbors. Sampling at level 0 is allowed off
@@ -444,7 +461,7 @@ fn source_color(uv: vec2<f32>) -> vec4<f32> {
     if placement.axis_y_opacity.w > 0.5 {
         color = vec4<f32>(color.rgb / max(color.a, 1e-6), color.a);
     }
-    return vec4<f32>(input_grade(color.rgb), color.a);
+    return ramped(vec4<f32>(input_grade(color.rgb), color.a), uv);
 }
 
 // How much of the cropped, keyed picture covers `uv`, which casts the shadow.
@@ -455,7 +472,8 @@ fn cast_alpha(uv: vec2<f32>) -> f32 {
 
 // The layer's graded, keyed and masked color, not yet premultiplied.
 fn layer_color(in: VertexOutput) -> vec4<f32> {
-    let uv = warp(in.uv);
+    let pinned = unpinned(in.uv);
+    let uv = warp(pinned);
     let color = source_color(uv);
     let mask = placement.mask;
     let shown = all(in.canvas >= mask.xy) && all(in.canvas <= vec2<f32>(1.0) - mask.zw);
@@ -463,10 +481,10 @@ fn layer_color(in: VertexOutput) -> vec4<f32> {
     // Desaturating the key's edge suppresses the screen's color spilling onto it.
     let unspilled = mix(vec3<f32>(dot(color.rgb, LUMA)), color.rgb, keyed);
     let sharp = sharpen(unspilled, uv);
-    var rgb = restyle(stylize(secondary(creative_grade(correct(sharp))), in.uv), uv);
+    var rgb = restyle(stylize(secondary(creative_grade(correct(leave_color(sharp)))), pinned), uv);
     rgb = mix(rgb, vec3<f32>(1.0), placement.balance.w);
-    let picture = color.a * keyed * f32(in_crop(in.uv));
-    let shadow = shadow_alpha(in.uv);
+    let picture = color.a * keyed * f32(in_crop(pinned));
+    let shadow = shadow_alpha(pinned);
     let covered = picture + shadow * (1.0 - picture);
     rgb = mix(placement.style_shadow_color.rgb, rgb, picture / max(covered, 1e-6));
     let opacity = placement.axis_y_opacity.z * mask_coverage(in.uv);

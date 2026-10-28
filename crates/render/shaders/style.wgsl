@@ -32,7 +32,7 @@ fn warp(uv_in: vec2<f32>) -> vec2<f32> {
     let picture = picture_size();
     let aspect = picture / max(picture.x, picture.y);
     let half_diagonal = length(aspect * 0.5);
-    var p = (wave(uv_in) - vec2<f32>(0.5)) * aspect;
+    var p = (wave(mirrored(uv_in)) - vec2<f32>(0.5)) * aspect;
     // Scaling with the squared radius, normalized so the corners stay put: a bulge
     // reads nearer the center there, magnifying it.
     let lens = placement.style_warp.w * 0.5;

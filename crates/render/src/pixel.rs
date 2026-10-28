@@ -1,3 +1,5 @@
+use crate::recolor::Recolor;
+use crate::reshape::Reshape;
 use crate::style::PictureStyle;
 
 /// Per-pixel effects on a layer, all off by default. Colors are linear RGB.
@@ -16,6 +18,8 @@ pub struct PixelEffects {
     pub invert: f32,
     pub vignette: Vignette,
     pub style: PictureStyle,
+    pub reshape: Reshape,
+    pub recolor: Recolor,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -52,6 +56,8 @@ impl PixelEffects {
             feather: 0.5,
         },
         style: PictureStyle::NONE,
+        reshape: Reshape::NONE,
+        recolor: Recolor::NONE,
     };
 
     /// The shader's view, as five vec4s. A negative tolerance turns keying off.
