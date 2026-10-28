@@ -62,7 +62,7 @@ pub use bin::{Bin, BinId};
 pub use blend::BlendMode;
 pub use caption::{captions_from_cues, Caption, CaptionStyle, Captions};
 pub use collect::{collect_files, Collect, FileCopy};
-pub use color::{ColorCorrection, ColorWheel};
+pub use color::{ColorCorrection, ColorVignette, ColorWheel};
 pub use curves::{Curve, CurvePoint, Curves, CURVE_RANGE};
 pub use ducking::{active_spans, ducked_volume};
 pub use edit::{

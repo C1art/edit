@@ -41,8 +41,43 @@ pub struct ColorCorrection {
     pub look: Option<PathBuf>,
     /// Percent of the look applied.
     pub look_intensity: Param,
+    /// Percent: lifts the blacks and dulls the whites as faded print stock does.
+    pub faded_film: Param,
+    /// Percent of the Sharpen effect's default.
+    pub sharpen: Param,
+    /// Pushes toward blue and red, -100 to 100, of the shadows and of the highlights.
+    pub shadow_tint: [Param; 2],
+    pub highlight_tint: [Param; 2],
+    /// -100 to 100: above 0 the highlight tint reaches into darker tones.
+    pub tint_balance: Param,
+    pub vignette: ColorVignette,
     pub curves: Curves,
     pub secondary: HslSecondary,
+}
+
+/// Lumetri's vignette, which darkens or lightens the picture's edges.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ColorVignette {
+    /// -5 (black edges) to 5 (white edges).
+    pub amount: Param,
+    /// Percent of the way to the corners that the falloff starts.
+    pub midpoint: Param,
+    /// -100 (rectangular) to 100 (circular).
+    pub roundness: Param,
+    /// Percent.
+    pub feather: Param,
+}
+
+impl Default for ColorVignette {
+    fn default() -> Self {
+        Self {
+            amount: Param::default(),
+            midpoint: Param::from_value(50.0),
+            roundness: Param::default(),
+            feather: Param::from_value(50.0),
+        }
+    }
 }
 
 /// A shift of one tonal range toward a hue, with a brightness offset.
@@ -76,6 +111,12 @@ impl Default for ColorCorrection {
             input_lut: None,
             look: None,
             look_intensity: Param::new(10_000),
+            faded_film: Param::default(),
+            sharpen: Param::default(),
+            shadow_tint: Default::default(),
+            highlight_tint: Default::default(),
+            tint_balance: Param::default(),
+            vignette: ColorVignette::default(),
             curves: Curves::default(),
             secondary: HslSecondary::default(),
         }
@@ -101,8 +142,14 @@ impl ColorCorrection {
             &mut self.saturation,
             &mut self.vibrance,
             &mut self.look_intensity,
+            &mut self.faded_film,
+            &mut self.sharpen,
+            &mut self.tint_balance,
         ]
         .into_iter()
+        .chain(&mut self.shadow_tint)
+        .chain(&mut self.highlight_tint)
+        .chain(self.vignette.params_mut())
         .chain(wheels.into_iter().flat_map(ColorWheel::params_mut))
         .chain(self.secondary.params_mut())
     }
@@ -125,10 +172,31 @@ impl ColorCorrection {
             &self.saturation,
             &self.vibrance,
             &self.look_intensity,
+            &self.faded_film,
+            &self.sharpen,
+            &self.tint_balance,
         ]
         .into_iter()
+        .chain(&self.shadow_tint)
+        .chain(&self.highlight_tint)
+        .chain(self.vignette.params())
         .chain(wheels.into_iter().flat_map(ColorWheel::params))
         .chain(self.secondary.params())
+    }
+}
+
+impl ColorVignette {
+    pub fn params(&self) -> [&Param; 4] {
+        [&self.amount, &self.midpoint, &self.roundness, &self.feather]
+    }
+
+    pub fn params_mut(&mut self) -> [&mut Param; 4] {
+        [
+            &mut self.amount,
+            &mut self.midpoint,
+            &mut self.roundness,
+            &mut self.feather,
+        ]
     }
 }
 
