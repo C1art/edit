@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use audio::{Resampler, SampleRate};
 use media::{DecodedFrame, MediaReader, Streams};
-use timeline::{MediaItem, SourceId, Ticks, Timebase};
+use timeline::{ChannelMap, MediaItem, SourceId, Ticks, Timebase};
 
 use crate::PlaybackError;
 
@@ -12,7 +12,7 @@ const CHANNELS: usize = 2;
 
 enum Source {
     None,
-    Open(SourceId, PathBuf, Box<MediaReader>),
+    Open(SourceId, PathBuf, Option<ChannelMap>, Box<MediaReader>),
     Failed(SourceId, PathBuf),
 }
 
@@ -59,23 +59,28 @@ impl TrackAudio {
             return Ok(());
         }
         let same_media = match &self.source {
-            Source::Open(id, path, _) | Source::Failed(id, path) => {
-                *id == media.id && *path == media.path
+            Source::Open(id, path, map, _) => {
+                *id == media.id && *path == media.path && *map == media.channel_map
             }
+            Source::Failed(id, path) => *id == media.id && *path == media.path,
             Source::None => false,
         };
         if !same_media {
             self.reset();
             self.source =
                 match MediaReader::open_streams(&media.path, self.timebase, Streams::Audio) {
-                    Ok(reader) => Source::Open(media.id, media.path.clone(), Box::new(reader)),
+                    Ok(mut reader) => {
+                        reader.set_channel_map(media.channel_map);
+                        let path = media.path.clone();
+                        Source::Open(media.id, path, media.channel_map, Box::new(reader))
+                    }
                     Err(error) => {
                         self.source = Source::Failed(media.id, media.path.clone());
                         return Err(error.into());
                     }
                 };
         }
-        let Source::Open(_, _, reader) = &mut self.source else {
+        let Source::Open(_, _, _, reader) = &mut self.source else {
             return Ok(());
         };
         if first != self.next_frame {
@@ -150,6 +155,7 @@ mod tests {
             log: Default::default(),
             offline: false,
             still: false,
+            channel_map: None,
         }
     }
 
