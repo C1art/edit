@@ -80,6 +80,34 @@ pub enum AudioEffect {
         damping: Param,
         mix: Param,
     },
+    /// Turns down what lies above `frequency` hertz, by up to `reduction` decibels, while
+    /// it is louder than `threshold` decibels: the hiss of s and sh sounds.
+    DeEsser {
+        threshold: Param,
+        reduction: Param,
+        frequency: Param,
+    },
+    /// Thickens the sound with copies whose delay of up to `depth` milliseconds sweeps
+    /// `rate` times a second, mixed in at `mix` percent.
+    Chorus {
+        rate: Param,
+        depth: Param,
+        mix: Param,
+    },
+    /// A short sweeping delay fed back on itself by `feedback` percent, for a jet-like
+    /// whoosh; `rate` in hertz, `depth` in milliseconds and `mix` in percent.
+    Flanger {
+        rate: Param,
+        depth: Param,
+        feedback: Param,
+        mix: Param,
+    },
+    /// Raises the pitch by `semitones`, lowering it when negative, without changing
+    /// timing, mixed in at `mix` percent.
+    PitchShifter {
+        semitones: Param,
+        mix: Param,
+    },
     /// Plays the right side on both.
     FillLeftWithRight,
     /// Plays the left side on both.
@@ -114,6 +142,19 @@ impl AudioEffect {
                 release,
             } => vec![threshold, attack, release],
             Self::Reverb { size, damping, mix } => vec![size, damping, mix],
+            Self::DeEsser {
+                threshold,
+                reduction,
+                frequency,
+            } => vec![threshold, reduction, frequency],
+            Self::Chorus { rate, depth, mix } => vec![rate, depth, mix],
+            Self::Flanger {
+                rate,
+                depth,
+                feedback,
+                mix,
+            } => vec![rate, depth, feedback, mix],
+            Self::PitchShifter { semitones, mix } => vec![semitones, mix],
             Self::FillLeftWithRight
             | Self::FillRightWithLeft
             | Self::SwapChannels
@@ -135,7 +176,7 @@ impl AudioEffect {
     }
 
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 17] {
+    pub fn catalog() -> [Self; 21] {
         [
             Self::Amplify {
                 gain: Param::default(),
@@ -192,6 +233,26 @@ impl AudioEffect {
                 damping: Param::from_value(50.0),
                 mix: Param::from_value(25.0),
             },
+            Self::DeEsser {
+                threshold: Param::from_value(-30.0),
+                reduction: Param::from_value(12.0),
+                frequency: Param::from_value(5_000.0),
+            },
+            Self::Chorus {
+                rate: Param::from_value(1.0),
+                depth: Param::from_value(5.0),
+                mix: Param::from_value(50.0),
+            },
+            Self::Flanger {
+                rate: Param::from_value(0.3),
+                depth: Param::from_value(3.0),
+                feedback: Param::from_value(50.0),
+                mix: Param::from_value(50.0),
+            },
+            Self::PitchShifter {
+                semitones: Param::default(),
+                mix: Param::from_value(100.0),
+            },
             Self::FillLeftWithRight,
             Self::FillRightWithLeft,
             Self::SwapChannels,
@@ -218,6 +279,10 @@ impl AudioEffect {
             Self::LowPass { .. } => "Lowpass",
             Self::Compressor { .. } => "Dynamics Compressor",
             Self::Delay { .. } => "Delay",
+            Self::DeEsser { .. } => "DeEsser",
+            Self::Chorus { .. } => "Chorus",
+            Self::Flanger { .. } => "Flanger",
+            Self::PitchShifter { .. } => "Pitch Shifter",
         }
     }
 }
