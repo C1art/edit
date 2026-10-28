@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{Rgb, Ticks, Timebase};
+use crate::{Rgb, Ticks, Timebase, TitleMotion};
 
 /// Generated pictures have no length of their own; they hold for as long as they're
 /// trimmed to, up to this many seconds.
@@ -57,6 +57,8 @@ pub struct Title {
     /// An outline around the letters, outside them.
     #[serde(default)]
     pub stroke: Option<TextStroke>,
+    #[serde(default)]
+    pub motion: TitleMotion,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -90,6 +92,7 @@ impl Default for Title {
             tracking: 0,
             leading: 0,
             stroke: None,
+            motion: TitleMotion::Still,
         }
     }
 }
