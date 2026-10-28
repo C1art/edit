@@ -5,7 +5,7 @@ use crate::{Param, Stabilizer};
 
 impl VideoEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 31] {
+    pub fn catalog() -> [Self; 35] {
         [
             Self::GaussianBlur {
                 blurriness: Param::from_value(10.0),
@@ -132,6 +132,30 @@ impl VideoEffect {
                 opacity: Param::from_value(60.0),
                 source: TimecodeSource::Media,
             },
+            Self::Transform {
+                anchor: [Param::from_value(50.0), Param::from_value(50.0)],
+                position: [Param::from_value(50.0), Param::from_value(50.0)],
+                scale: [Param::from_value(100.0), Param::from_value(100.0)],
+                skew: Param::default(),
+                skew_axis: Param::default(),
+                rotation: Param::default(),
+                opacity: Param::from_value(100.0),
+            },
+            Self::Basic3D {
+                swivel: Param::default(),
+                tilt: Param::default(),
+                distance: Param::default(),
+            },
+            Self::Spherize {
+                radius: Param::from_value(200.0),
+                center: [Param::from_value(50.0), Param::from_value(50.0)],
+            },
+            Self::Emboss {
+                direction: Param::from_value(45.0),
+                relief: Param::from_value(2.0),
+                contrast: Param::from_value(100.0),
+                blend: Param::default(),
+            },
         ]
     }
 
@@ -147,10 +171,12 @@ impl VideoEffect {
             | Self::WaveWarp { .. }
             | Self::WarpStabilizer(_)
             | Self::Mirror { .. }
-            | Self::CornerPin { .. } => EffectCategory::Distort,
+            | Self::CornerPin { .. }
+            | Self::Transform { .. }
+            | Self::Spherize { .. } => EffectCategory::Distort,
             Self::LeaveColor { .. } => EffectCategory::ColorCorrection,
             Self::GradientRamp { .. } => EffectCategory::Generate,
-            Self::DropShadow { .. } => EffectCategory::Perspective,
+            Self::DropShadow { .. } | Self::Basic3D { .. } => EffectCategory::Perspective,
             Self::BlackAndWhite | Self::GammaCorrection { .. } => EffectCategory::ImageControl,
             Self::UltraKey { .. } | Self::TrackMatteKey { .. } | Self::ColorKey { .. } => {
                 EffectCategory::Keying
@@ -161,7 +187,8 @@ impl VideoEffect {
             | Self::Noise { .. }
             | Self::FindEdges { .. }
             | Self::Mosaic { .. }
-            | Self::StrobeLight { .. } => EffectCategory::Stylize,
+            | Self::StrobeLight { .. }
+            | Self::Emboss { .. } => EffectCategory::Stylize,
             Self::PosterizeTime { .. } => EffectCategory::Time,
             Self::Timecode { .. } => EffectCategory::Video,
             Self::HorizontalFlip | Self::VerticalFlip => EffectCategory::Transform,
@@ -201,6 +228,10 @@ impl VideoEffect {
             Self::PosterizeTime { .. } => "Posterize Time",
             Self::StrobeLight { .. } => "Strobe Light",
             Self::Timecode { .. } => "Timecode",
+            Self::Transform { .. } => "Transform",
+            Self::Basic3D { .. } => "Basic 3D",
+            Self::Spherize { .. } => "Spherize",
+            Self::Emboss { .. } => "Emboss",
         }
     }
 }

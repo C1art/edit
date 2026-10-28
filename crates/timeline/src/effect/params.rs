@@ -96,6 +96,32 @@ impl VideoEffect {
                 opacity,
                 ..
             } => vec![x, y, size, opacity],
+            Self::Transform {
+                anchor: [anchor_x, anchor_y],
+                position: [x, y],
+                scale: [width, height],
+                skew,
+                skew_axis,
+                rotation,
+                opacity,
+            } => vec![
+                anchor_x, anchor_y, x, y, width, height, skew, skew_axis, rotation, opacity,
+            ],
+            Self::Basic3D {
+                swivel,
+                tilt,
+                distance,
+            } => vec![swivel, tilt, distance],
+            Self::Spherize {
+                radius,
+                center: [x, y],
+            } => vec![radius, x, y],
+            Self::Emboss {
+                direction,
+                relief,
+                contrast,
+                blend,
+            } => vec![direction, relief, contrast, blend],
         }
     }
 
@@ -193,6 +219,32 @@ impl VideoEffect {
                 opacity,
                 ..
             } => vec![x, y, size, opacity],
+            Self::Transform {
+                anchor: [anchor_x, anchor_y],
+                position: [x, y],
+                scale: [width, height],
+                skew,
+                skew_axis,
+                rotation,
+                opacity,
+            } => vec![
+                anchor_x, anchor_y, x, y, width, height, skew, skew_axis, rotation, opacity,
+            ],
+            Self::Basic3D {
+                swivel,
+                tilt,
+                distance,
+            } => vec![swivel, tilt, distance],
+            Self::Spherize {
+                radius,
+                center: [x, y],
+            } => vec![radius, x, y],
+            Self::Emboss {
+                direction,
+                relief,
+                contrast,
+                blend,
+            } => vec![direction, relief, contrast, blend],
         }
     }
 }

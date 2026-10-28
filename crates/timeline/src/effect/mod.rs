@@ -206,6 +206,52 @@ pub enum VideoEffect {
         opacity: Param,
         source: TimecodeSource,
     },
+    /// Moves, scales, skews and turns the picture about its anchor point, as Motion
+    /// does but in its place among the effects.
+    Transform {
+        /// The point of the picture that turns and scales in place, in percent of its
+        /// width and height.
+        anchor: [Param; 2],
+        /// Where the anchor point goes, in percent of the picture's width and height.
+        position: [Param; 2],
+        /// Percent of the width, then of the height.
+        scale: [Param; 2],
+        /// Degrees the picture slants by along the skew axis.
+        skew: Param,
+        /// Degrees clockwise from vertical.
+        skew_axis: Param,
+        /// Degrees clockwise.
+        rotation: Param,
+        /// Percent.
+        opacity: Param,
+    },
+    /// Turns the picture in depth about its middle, as a card seen in perspective.
+    Basic3D {
+        /// Degrees about the vertical axis, the right side coming nearer.
+        swivel: Param,
+        /// Degrees about the horizontal axis, the bottom coming nearer.
+        tilt: Param,
+        /// How far the picture moves away, in percent of its height.
+        distance: Param,
+    },
+    /// Bulges the picture inside a circle as if it were wrapped around a ball.
+    Spherize {
+        /// Pixels of the clip's picture.
+        radius: Param,
+        /// Percent of the picture's width and height.
+        center: [Param; 2],
+    },
+    /// Shows the picture's edges in grey relief, lit from one side.
+    Emboss {
+        /// Degrees clockwise from up that the light comes from.
+        direction: Param,
+        /// Pixels of the clip's picture the relief stands out by.
+        relief: Param,
+        /// Percent.
+        contrast: Param,
+        /// Percent of the original showing through.
+        blend: Param,
+    },
 }
 
 /// Which time the Timecode effect shows.
