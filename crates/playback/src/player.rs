@@ -10,7 +10,9 @@ use crate::clock::PlaybackClock;
 use crate::command::{Command, Event};
 use crate::frame_picker::{FramePicker, TaggedFrame};
 use crate::shuttle::Shuttle;
-use crate::{audio_worker, video_worker, ComposedFrame, Levels, PlaybackError, Resolution};
+use crate::{
+    audio_worker, video_worker, ComposedFrame, Levels, PlaybackError, Preview, Resolution,
+};
 
 /// Composed frames buffered ahead of the clock, enough to absorb a slow decode.
 const FRAME_QUEUE: usize = 8;
@@ -141,6 +143,14 @@ impl Player {
             let _ = self.video_commands.send(Command::Resolution(resolution));
             self.seek(self.position());
         }
+    }
+
+    /// Plays these rendered files in place of the pictures they cover, from the next
+    /// frame composed.
+    pub fn set_previews(&mut self, previews: Vec<Preview>) {
+        let _ = self
+            .video_commands
+            .send(Command::Previews(Arc::new(previews)));
     }
 
     /// Plays `sequence` without seeking, for edits that change only levels, so faders

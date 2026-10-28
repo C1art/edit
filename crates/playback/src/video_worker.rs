@@ -7,7 +7,8 @@ use timeline::{Sequence, SourceId, Ticks};
 
 use crate::command::{coalesce, Coalesced, Command, Event};
 use crate::frame_picker::TaggedFrame;
-use crate::{compose, ComposedFrame, Resolution};
+use crate::previews::PreviewPictures;
+use crate::{compose, ComposedFrame, Layer, Resolution};
 
 /// How long the worker waits for room in the frame queue before checking commands again.
 const BACKOFF: Duration = Duration::from_millis(4);
@@ -38,6 +39,7 @@ pub(crate) fn spawn(
             composed: false,
             warned: Vec::new(),
             resolution: Resolution::Full,
+            previews: None,
         }
         .run();
     })
@@ -57,6 +59,8 @@ struct VideoWorker {
     /// Media already reported as unreadable.
     warned: Vec<SourceId>,
     resolution: Resolution,
+    /// Rendered previews, played in place of what they cover.
+    previews: Option<PreviewPictures>,
 }
 
 impl VideoWorker {
@@ -96,6 +100,7 @@ impl VideoWorker {
                 sequence,
                 seek,
                 resolution,
+                previews,
             }) = coalesce(command, &self.channels.commands)
             else {
                 return;
@@ -105,6 +110,9 @@ impl VideoWorker {
             }
             if let Some(sequence) = sequence {
                 self.sequence = sequence;
+            }
+            if let Some(previews) = previews {
+                self.previews = PreviewPictures::new(&previews, &self.sequence);
             }
             if let Some((position, generation)) = seek {
                 self.seek(position, generation);
@@ -159,7 +167,11 @@ impl VideoWorker {
     /// Queues the frame at `pts`, or an empty one for `None`.
     fn compose(&mut self, sequence: &Sequence, pts: Option<Ticks>) {
         let mut warnings = Vec::new();
-        let layers = pts.map_or_else(Vec::new, |pts| {
+        let previewed = pts.and_then(|pts| self.previewed(pts));
+        let layers = previewed.unwrap_or_else(|| {
+            let Some(pts) = pts else {
+                return Vec::new();
+            };
             compose::layers_at(
                 sequence,
                 pts,
@@ -177,5 +189,19 @@ impl VideoWorker {
             layers,
         });
         self.composed = true;
+    }
+
+    /// The preview's picture where one covers `pts`. A preview that can't be read is
+    /// dropped, and the sequence composed from then on.
+    fn previewed(&mut self, pts: Ticks) -> Option<Vec<Layer>> {
+        let previews = self
+            .previews
+            .as_mut()
+            .filter(|previews| previews.covers(pts))?;
+        let layers = previews.layers_at(pts, self.resolution);
+        if layers.is_none() {
+            self.previews = None;
+        }
+        layers
     }
 }

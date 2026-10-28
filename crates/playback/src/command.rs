@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use timeline::{Sequence, Ticks};
 
+use crate::previews::PreviewList;
 use crate::{Levels, PlaybackError, Resolution};
 
 #[derive(Debug, Clone)]
@@ -15,6 +16,8 @@ pub(crate) enum Command {
     },
     /// Only the video worker acts on it; the player follows it with a seek.
     Resolution(Resolution),
+    /// Only the video worker acts on it.
+    Previews(PreviewList),
     Shutdown,
 }
 
@@ -36,6 +39,7 @@ pub(crate) struct Coalesced {
     pub(crate) sequence: Option<Arc<Sequence>>,
     pub(crate) seek: Option<(Ticks, u64)>,
     pub(crate) resolution: Option<Resolution>,
+    pub(crate) previews: Option<PreviewList>,
 }
 
 /// Drains queued commands, keeping the latest sequence and the latest seek, so a burst
@@ -47,6 +51,7 @@ pub(crate) fn coalesce(
     let mut sequence = None;
     let mut seek = None;
     let mut resolution = None;
+    let mut previews = None;
     let mut next = Some(first);
     while let Some(command) = next {
         match command {
@@ -56,6 +61,7 @@ pub(crate) fn coalesce(
                 generation,
             } => seek = Some((position, generation)),
             Command::Resolution(new) => resolution = Some(new),
+            Command::Previews(new) => previews = Some(new),
             Command::Shutdown => return None,
         }
         next = match commands.try_recv() {
@@ -68,5 +74,6 @@ pub(crate) fn coalesce(
         sequence,
         seek,
         resolution,
+        previews,
     })
 }
