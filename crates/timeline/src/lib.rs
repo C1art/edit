@@ -8,6 +8,7 @@ mod color;
 mod curves;
 mod ducking;
 mod edit;
+mod edl;
 mod effect;
 mod error;
 mod generator;
@@ -65,6 +66,7 @@ pub use edit::{
     SetTrackAutomation, SetTrackEffects, SetTrackMix, SetTrackOutput, SetTrackSwitch,
     SetTransition, Slide, Slip, SwitchAngle, TrackSwitch, Trim, TrimMode, UpdateMarker,
 };
+pub use edl::to_edl;
 pub use effect::{
     ColorMatch, EffectCategory, MatteChannel, RampShape, Rgb, TimecodeSource, VideoEffect,
 };
