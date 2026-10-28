@@ -51,6 +51,19 @@ pub(crate) fn context(editor: &mut Editor, ui: &mut Ui) {
 
 /// The Clip menu's commands on the selection.
 pub(crate) fn items(editor: &mut Editor, ui: &mut Ui) {
+    ui.menu_button("Replace With Clip", |ui| {
+        let has_source = editor.source.is_some();
+        if ui
+            .add_enabled(has_source, Button::new("From Source Monitor"))
+            .clicked()
+        {
+            editor.replace_with_source(false);
+        }
+        let matched = Button::new("From Source Monitor, Match Frame");
+        if ui.add_enabled(has_source, matched).clicked() {
+            editor.replace_with_source(true);
+        }
+    });
     let speed =
         Button::new("Speed/Duration…").shortcut_text(editor.keymap.label(Command::SpeedDuration));
     if ui.add(speed).clicked() {

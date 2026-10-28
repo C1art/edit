@@ -39,6 +39,7 @@ mod project_files;
 mod project_store;
 mod proxies;
 mod render_previews;
+mod replace_clip;
 mod safe_margins;
 mod scene_edits;
 mod scopes;
