@@ -10,6 +10,7 @@ use crate::clip_decoders::ClipDecoders;
 use crate::generated::{caption_frame, scrolled};
 use crate::grades::grade_for;
 use crate::layer_look::{interpreted, layer_look};
+use crate::morph_cut::morphed;
 use crate::time_effects::{posterized, with_timecode};
 use crate::track_video::TrackVideo;
 use crate::{Layer, LayerPicture, PlaybackError, Resolution};
@@ -76,7 +77,11 @@ fn video_layers(
         }
         let planned = track_layers_at(sequence, track, pts);
         let showing: Vec<ClipId> = planned.iter().map(|layer| layer.clip.id).collect();
+        // The picture just drawn for this track, and where its layers start, which a
+        // morph cut replaces with its blend of that picture and the next.
+        let mut previous: Option<(usize, LayerPicture)> = None;
         for plan in planned.into_iter().filter(|plan| !plan.clip.disabled) {
+            let outgoing = previous.take();
             let Some(media) = sequence.media_item(plan.clip.source) else {
                 continue;
             };
@@ -107,8 +112,22 @@ fn video_layers(
             else {
                 continue;
             };
+            let morph = plan
+                .morph
+                .zip(outgoing)
+                .and_then(|(fraction, (start, from))| {
+                    Some((start, morphed(&from, &picture, fraction)?))
+                });
+            let (picture, reveal) = match morph {
+                Some((start, morph)) => {
+                    layers.truncate(start);
+                    (morph, Reveal::FULL)
+                }
+                None => (picture, plan.reveal),
+            };
+            let start = layers.len();
             // A split picture is drawn once for each piece, every piece in its place.
-            for piece in plan.reveal.pieces() {
+            for piece in reveal.pieces() {
                 let layer = Layer {
                     track: TrackRef::video(index),
                     picture: picture.clone(),
@@ -120,6 +139,7 @@ fn video_layers(
                     None => layer,
                 });
             }
+            previous = Some((start, picture));
         }
     }
     layers

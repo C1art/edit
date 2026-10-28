@@ -17,6 +17,7 @@ mod grades;
 mod layer_look;
 mod loudness;
 mod mixdown;
+mod morph_cut;
 mod optical_flow;
 mod pixel_effects;
 mod player;

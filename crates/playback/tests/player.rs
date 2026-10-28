@@ -8,14 +8,21 @@ use std::time::{Duration, Instant};
 use media::MediaReader;
 use playback::{LayerPicture, Player};
 use timeline::{
-    FrameRate, ImportMedia, PlaceClip, PlaceMode, Sequence, Ticks, Timebase, Timeline, VideoFormat,
+    Edge, FrameRate, ImportMedia, PlaceClip, PlaceMode, Sequence, SetTransition, Ticks, Timebase,
+    Timeline, Transition, TransitionKind, VideoFormat,
 };
 
 const TB: Timebase = Timebase::HZ_90K;
 const FRAME: i64 = 90_000 / 25;
 
-/// The fixture placed twice back to back, the second time from its one-second mark.
+/// The fixture placed twice with a gap between, the second time from its one-second mark.
 fn sequence() -> Arc<Sequence> {
+    let timeline = timeline_of(&[(0, 0), (50 * FRAME, 25 * FRAME)]);
+    Arc::new(timeline.sequence().clone())
+}
+
+/// The fixture placed for a second at each `(at, source_in)`.
+fn timeline_of(placements: &[(i64, i64)]) -> Timeline {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures/testsrc_2s_25fps_44k.mp4");
     let info = MediaReader::open(&path, TB).unwrap().info().clone();
@@ -38,7 +45,7 @@ fn sequence() -> Arc<Sequence> {
         })
         .unwrap();
     let source = timeline.sequence().media[0].id;
-    for (at, source_in) in [(0, 0), (50 * FRAME, 25 * FRAME)] {
+    for &(at, source_in) in placements {
         timeline
             .apply(PlaceClip {
                 source,
@@ -52,7 +59,7 @@ fn sequence() -> Arc<Sequence> {
             })
             .unwrap();
     }
-    Arc::new(timeline.sequence().clone())
+    timeline
 }
 
 fn pump_until(player: &mut Player, mut done: impl FnMut(&Player) -> bool) {
@@ -103,4 +110,29 @@ fn seeks_show_the_clip_frame_or_black_in_gaps() {
     pump_until(&mut player, |player| {
         shown(player) == Some((Ticks(35 * FRAME), 0))
     });
+}
+
+#[test]
+#[ignore = "decodes a real file with FFmpeg"]
+fn a_morph_cut_shows_one_picture_blended_from_both_sides() {
+    // A jump cut: the second clip goes back a fifth of a second.
+    let mut timeline = timeline_of(&[(0, 0), (25 * FRAME, 20 * FRAME)]);
+    let incoming = timeline.sequence().video[0].clips[1].id;
+    timeline
+        .apply(SetTransition {
+            clip: incoming,
+            edge: Edge::Head,
+            transition: Some(Transition::new(TransitionKind::MorphCut, Ticks(10 * FRAME))),
+        })
+        .unwrap();
+    let mut player = Player::new(Arc::new(timeline.sequence().clone()), None).unwrap();
+    player.seek(Ticks(25 * FRAME));
+    pump_until(&mut player, |player| {
+        player
+            .current_frame()
+            .is_some_and(|frame| frame.pts == Ticks(25 * FRAME))
+    });
+    let frame = player.current_frame().unwrap();
+    assert_eq!(frame.layers.len(), 1);
+    assert!(matches!(frame.layers[0].picture, LayerPicture::Frame(_)));
 }

@@ -1,0 +1,24 @@
+use std::sync::Arc;
+
+use crate::optical_flow::{interpolate, Flow};
+use crate::LayerPicture;
+
+/// What a morph cut shows `fraction` of the way from `outgoing` to `incoming`: each
+/// picture warped along the motion between them and the two mixed. `None` unless both
+/// are decoded pictures of one size, when the cut dissolves instead.
+pub(crate) fn morphed(
+    outgoing: &LayerPicture,
+    incoming: &LayerPicture,
+    fraction: f32,
+) -> Option<LayerPicture> {
+    let (LayerPicture::Frame(from), LayerPicture::Frame(to)) = (outgoing, incoming) else {
+        return None;
+    };
+    if (from.width, from.height) != (to.width, to.height) || from.pixels.len() != to.pixels.len() {
+        return None;
+    }
+    let flow = Flow::between(from, to);
+    Some(LayerPicture::Frame(Arc::new(interpolate(
+        from, to, &flow, fraction,
+    ))))
+}
