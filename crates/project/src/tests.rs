@@ -2,9 +2,9 @@ use std::path::PathBuf;
 
 use timeline::{
     AudioEffect, Bin, BinId, Caption, Clip, ClipId, CurvePoint, Gain, Generator, Interpolation,
-    Keyframe, Marks, Mask, MaskShape, MediaItem, Nest, Pan, Param, Rgb, SourceId, TextAlign,
-    TextStroke, Ticks, Timebase, Title, TitleFont, Track, Transition, TransitionKind, VideoEffect,
-    VideoFormat,
+    Keyframe, Marks, Mask, MaskShape, MediaItem, Nest, Pan, Param, Rgb, Scroll, SourceId,
+    TextAlign, TextStroke, Ticks, Timebase, Title, TitleFont, TitleMotion, Track, Transition,
+    TransitionKind, VideoEffect, VideoFormat,
 };
 
 use super::*;
@@ -49,6 +49,14 @@ fn sample() -> ProjectFile {
             stroke: Some(TextStroke {
                 color: Rgb::new(20, 30, 40),
                 width: 6,
+            }),
+            motion: TitleMotion::CrawlRight(Scroll {
+                start_off_screen: false,
+                end_off_screen: true,
+                preroll: 12,
+                ease_in: 5,
+                ease_out: 7,
+                postroll: 3,
             }),
         })),
         nest: None,
