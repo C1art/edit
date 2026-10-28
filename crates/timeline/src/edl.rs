@@ -4,8 +4,7 @@
 
 use std::fmt::Write;
 
-use crate::plan::cut_window;
-use crate::{Clip, FrameRate, Sequence, Ticks, Timecode, Track, TransitionKind};
+use crate::{cut_window, Clip, FrameRate, Sequence, Ticks, Timecode, Track, TransitionKind};
 
 const BLACK: &str = "BL";
 /// Media is named in comments rather than reels, which files don't have.
@@ -378,10 +377,7 @@ mod tests {
     #[test]
     fn a_dissolve_holds_the_outgoing_clip_then_dissolves_across_the_cut() {
         let mut incoming = clip(2, 50, 50, 200);
-        incoming.transition_in = Some(Transition {
-            kind: TransitionKind::CrossDissolve,
-            duration: Ticks(10),
-        });
+        incoming.transition_in = Some(Transition::new(TransitionKind::CrossDissolve, Ticks(10)));
         let edl = to_edl(
             &sequence(vec![clip(1, 0, 50, 0), incoming], Vec::new()),
             "Dissolve",

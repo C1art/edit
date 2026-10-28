@@ -39,10 +39,7 @@ fn an_exported_sequence_reads_back_as_a_nest_of_the_same_cut() {
         timeline.apply(place).unwrap();
     }
     let mut sequence = timeline.sequence().clone();
-    let dissolve = Transition {
-        kind: TransitionKind::DipToBlack,
-        duration: Ticks(10),
-    };
+    let dissolve = Transition::new(TransitionKind::DipToBlack, Ticks(10));
     sequence.video[0].clips[1].transition_in = Some(dissolve);
     sequence.audio[0].clips[0].gain = Gain::from_db(-6.0);
     let mut timeline = Timeline::new(sequence.clone());

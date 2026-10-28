@@ -6,8 +6,10 @@ use std::collections::HashMap;
 use std::fmt::{Display, Write};
 use std::path::{Path, PathBuf};
 
-use crate::plan::cut_window;
-use crate::{Clip, ClipId, FrameRate, MediaItem, Sequence, Ticks, Track, TrackKind, Transition};
+use crate::{
+    cut_window, Alignment, Clip, ClipId, FrameRate, MediaItem, Sequence, Ticks, Track, TrackKind,
+    Transition,
+};
 
 /// `sequence` as an xmeml document, named `title`.
 pub fn to_xmeml(sequence: &Sequence, title: &str) -> String {
@@ -120,7 +122,12 @@ impl Writer<'_> {
                         // Both clips run on under a transition at their cut.
                         start = -1;
                         let (before, after) = cut_window(previous, clip, transition);
-                        (clip.start - before, clip.start + after, "center")
+                        let alignment = match transition.alignment {
+                            Alignment::Center => "center",
+                            Alignment::StartAtCut => "start",
+                            Alignment::EndAtCut => "end",
+                        };
+                        (clip.start - before, clip.start + after, alignment)
                     }
                     None => {
                         let length = transition.duration.min(clip.duration);
@@ -407,10 +414,8 @@ mod tests {
             timeline.apply(place).unwrap();
         }
         let mut sequence = timeline.sequence().clone();
-        sequence.video[0].clips[1].transition_in = Some(Transition {
-            kind: TransitionKind::CrossDissolve,
-            duration: Ticks(10),
-        });
+        sequence.video[0].clips[1].transition_in =
+            Some(Transition::new(TransitionKind::CrossDissolve, Ticks(10)));
         let [first, second] = [0, 1].map(|index| sequence.video[0].clips[index].id.0);
         let partner = sequence.audio[0].clips[1].id.0;
 

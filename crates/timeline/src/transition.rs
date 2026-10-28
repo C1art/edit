@@ -66,14 +66,54 @@ impl TransitionKind {
     }
 }
 
+/// Where a transition at a cut sits: Premiere's Center at Cut, Start at Cut and End at
+/// Cut. Only the clips under it run past their edges, so starting at the cut needs no
+/// handle on the outgoing clip and ending at it none on the incoming one.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Alignment {
+    #[default]
+    Center,
+    StartAtCut,
+    EndAtCut,
+}
+
+impl Alignment {
+    pub const ALL: [Self; 3] = [Self::Center, Self::StartAtCut, Self::EndAtCut];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Center => "Center at Cut",
+            Self::StartAtCut => "Start at Cut",
+            Self::EndAtCut => "End at Cut",
+        }
+    }
+
+    fn is_center(&self) -> bool {
+        *self == Self::Center
+    }
+}
+
 /// A transition at one end of a clip. At the head, when another clip ends exactly where
-/// this one starts, it is centered on the cut and plays both clips past their edges;
-/// otherwise it fades this clip in from nothing or out to nothing within its own length.
+/// this one starts, it sits on the cut as `alignment` says and plays both clips past
+/// their edges; otherwise it fades this clip in from nothing or out to nothing within
+/// its own length.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Transition {
     pub kind: TransitionKind,
     /// In the sequence timebase.
     pub duration: Ticks,
+    #[serde(default, skip_serializing_if = "Alignment::is_center")]
+    pub alignment: Alignment,
+}
+
+impl Transition {
+    pub const fn new(kind: TransitionKind, duration: Ticks) -> Self {
+        Self {
+            kind,
+            duration,
+            alignment: Alignment::Center,
+        }
+    }
 }
 
 /// The clip end nearest `position` that can hold a transition: the head of a clip that

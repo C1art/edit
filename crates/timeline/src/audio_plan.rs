@@ -101,10 +101,10 @@ mod tests {
 
     fn track_with_crossfade(duration: i64) -> Track {
         let mut incoming = Clip::new(ClipId(2), SourceId(1), Ticks(100), Ticks(100), Ticks(0));
-        incoming.transition_in = Some(Transition {
-            kind: TransitionKind::CrossDissolve,
-            duration: Ticks(duration),
-        });
+        incoming.transition_in = Some(Transition::new(
+            TransitionKind::CrossDissolve,
+            Ticks(duration),
+        ));
         let outgoing = Clip::new(ClipId(1), SourceId(1), Ticks(0), Ticks(100), Ticks(0));
         Track {
             clips: vec![outgoing, incoming],

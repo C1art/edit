@@ -1,4 +1,4 @@
-use crate::{Clip, Reveal, Sequence, Ticks, Track, Transition};
+use crate::{Alignment, Clip, Reveal, Sequence, Ticks, Track, Transition};
 
 /// One picture to draw for a track, before the clip's own look is applied.
 #[derive(Debug, Clone, PartialEq)]
@@ -89,16 +89,15 @@ pub fn track_layers_at<'a>(
 }
 
 /// How far a transition at the cut between `outgoing` and `incoming` reaches before and
-/// after the cut: centered, but never further than either clip's own length.
-pub(crate) fn cut_window(
-    outgoing: &Clip,
-    incoming: &Clip,
-    transition: Transition,
-) -> (Ticks, Ticks) {
-    let half = Ticks(transition.duration.0 / 2);
-    let before = half.min(outgoing.duration);
-    let after = (transition.duration - half).min(incoming.duration);
-    (before, after)
+/// after the cut, as aligned, but never further than either clip's own length.
+pub fn cut_window(outgoing: &Clip, incoming: &Clip, transition: Transition) -> (Ticks, Ticks) {
+    let before = match transition.alignment {
+        Alignment::Center => Ticks(transition.duration.0 / 2),
+        Alignment::StartAtCut => Ticks::ZERO,
+        Alignment::EndAtCut => transition.duration,
+    };
+    let after = transition.duration - before;
+    (before.min(outgoing.duration), after.min(incoming.duration))
 }
 
 /// `part / whole` clamped to 0..=1, with an empty whole counting as complete.
@@ -133,10 +132,7 @@ mod tests {
     }
 
     fn dissolve(kind: TransitionKind, duration: i64) -> Option<Transition> {
-        Some(Transition {
-            kind,
-            duration: Ticks(duration),
-        })
+        Some(Transition::new(kind, Ticks(duration)))
     }
 
     fn summary(layers: &[PlannedLayer<'_>]) -> Vec<(u64, i64, f32)> {
@@ -165,6 +161,24 @@ mod tests {
         // Past its out point the outgoing clip keeps reading its media.
         assert_eq!(at(110), vec![(1, 110, 1.0), (2, 510, 0.75)]);
         assert_eq!(at(120), vec![(2, 520, 1.0)]);
+    }
+
+    #[test]
+    fn a_dissolve_starting_at_the_cut_plays_the_outgoing_clip_on_past_it() {
+        let mut incoming = clip(2, 100, 100, 500);
+        incoming.transition_in = Some(Transition {
+            alignment: Alignment::StartAtCut,
+            ..Transition::new(TransitionKind::CrossDissolve, Ticks(40))
+        });
+        let track = Track {
+            clips: vec![clip(1, 0, 100, 0), incoming],
+            ..Track::default()
+        };
+        let sequence = sequence();
+        let at = |time| summary(&track_layers_at(&sequence, &track, Ticks(time)));
+        assert_eq!(at(99), vec![(1, 99, 1.0)]);
+        assert_eq!(at(110), vec![(1, 110, 1.0), (2, 510, 0.25)]);
+        assert_eq!(at(140), vec![(2, 540, 1.0)]);
     }
 
     #[test]

@@ -94,10 +94,7 @@ fn sample() -> ProjectFile {
     });
     let mut clip = Clip::new(ClipId(7), SourceId(1), Ticks(0), Ticks(90_000), Ticks(3));
     clip.gain = Gain(-600);
-    clip.transition_in = Some(Transition {
-        kind: TransitionKind::DipToBlack,
-        duration: Ticks(i64::MAX),
-    });
+    clip.transition_in = Some(Transition::new(TransitionKind::DipToBlack, Ticks(i64::MAX)));
     clip.look.motion.scale.keys.push(Keyframe {
         interpolation: Interpolation::EaseOut,
         ..Keyframe::new(Ticks(45_000), -12_345)

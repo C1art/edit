@@ -99,7 +99,7 @@ pub use model::{
 pub use multicam::MulticamLayout;
 pub use nest::Nest;
 pub use param::{Interpolation, Keyframe, Param};
-pub use plan::{track_layers_at, PlannedLayer};
+pub use plan::{cut_window, track_layers_at, PlannedLayer};
 pub use remap::{Anchor, TimeRemap};
 pub use render_segments::{render_segments, segment_content};
 pub use reveal::Reveal;
@@ -111,6 +111,6 @@ pub use submix::{Submix, SubmixId};
 pub use three_point::{edit_points, EditPoints, FourPoint};
 pub use time::{Ticks, Timebase};
 pub use timecode::{FrameRate, Timecode};
-pub use transition::{nearest_transition_edge, Transition, TransitionKind};
+pub use transition::{nearest_transition_edge, Alignment, Transition, TransitionKind};
 pub use xmeml::to_xmeml;
 pub use xmeml_import::{read_xmeml, ImportXmeml};

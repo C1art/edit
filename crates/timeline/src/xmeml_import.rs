@@ -3,8 +3,8 @@ use std::path::PathBuf;
 
 use crate::xml::{self, Element};
 use crate::{
-    Clip, ClipId, Edit, FrameRate, Gain, LinkId, MediaItem, Nest, Sequence, SourceId, Ticks,
-    TimelineError, Track, Transition, TransitionKind, VideoFormat,
+    Alignment, Clip, ClipId, Edit, FrameRate, Gain, LinkId, MediaItem, Nest, Sequence, SourceId,
+    Ticks, TimelineError, Track, Transition, TransitionKind, VideoFormat,
 };
 
 /// A sequence read from Final Cut Pro XML, as Premiere, Resolve and Final Cut Pro 7
@@ -42,7 +42,7 @@ struct XmlClip {
     disabled: bool,
     link: Option<usize>,
     gain: Gain,
-    transition_in: Option<(TransitionKind, i64)>,
+    transition_in: Option<(TransitionKind, i64, Alignment)>,
     transition_out: Option<(TransitionKind, i64)>,
 }
 
@@ -237,7 +237,7 @@ impl Reader {
 /// the clips, and hands each transition to the clip it belongs to.
 fn resolve(items: Vec<Item>) -> Vec<XmlClip> {
     let mut clips: Vec<XmlClip> = Vec::new();
-    let mut pending: Option<(i64, TransitionKind, i64)> = None;
+    let mut pending: Option<(i64, TransitionKind, i64, Alignment)> = None;
     let mut open_end = false;
     for item in items {
         match item {
@@ -263,17 +263,22 @@ fn resolve(items: Vec<Item>) -> Vec<XmlClip> {
                             last.end = cut;
                         }
                     }
-                    pending = Some((cut, kind, length));
+                    let aligned = match alignment.as_str() {
+                        "start" => Alignment::StartAtCut,
+                        "end" => Alignment::EndAtCut,
+                        _ => Alignment::Center,
+                    };
+                    pending = Some((cut, kind, length, aligned));
                 }
                 open_end = false;
             }
             Item::Clip { mut clip, out } => {
                 let length = (out - clip.source_in).max(0);
-                if let Some((cut, kind, length)) = pending.take() {
+                if let Some((cut, kind, length, alignment)) = pending.take() {
                     if clip.start < 0 {
                         clip.start = cut;
                     }
-                    clip.transition_in = Some((kind, length));
+                    clip.transition_in = Some((kind, length, alignment));
                 }
                 if clip.start < 0 {
                     clip.start = clips.last().map_or(0, |last| last.end);
@@ -351,10 +356,8 @@ impl Edit for ImportXmeml {
         let links: Vec<LinkId> = (0..self.links)
             .map(|_| LinkId(sequence.ids.next()))
             .collect();
-        let transition = |(kind, frames): (TransitionKind, i64)| Transition {
-            kind,
-            duration: ticks(self.rate, frames),
-        };
+        let transition =
+            |(kind, frames): (TransitionKind, i64)| Transition::new(kind, ticks(self.rate, frames));
         let mut tracks = |clips: &[Vec<XmlClip>]| -> Vec<Track> {
             clips
                 .iter()
@@ -372,7 +375,12 @@ impl Edit for ImportXmeml {
                         clip.disabled = xml.disabled;
                         clip.gain = xml.gain;
                         clip.link = xml.link.map(|index| links[index]);
-                        clip.transition_in = xml.transition_in.map(transition);
+                        clip.transition_in =
+                            xml.transition_in
+                                .map(|(kind, frames, alignment)| Transition {
+                                    alignment,
+                                    ..transition((kind, frames))
+                                });
                         clip.transition_out = xml.transition_out.map(transition);
                         track.clips.push(clip);
                     }
