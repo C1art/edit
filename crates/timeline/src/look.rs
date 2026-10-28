@@ -7,16 +7,54 @@ use crate::{BlendMode, ColorCorrection, Mask, Param, Ticks, VideoEffect};
 pub struct Motion {
     /// Offset of the picture's center from the frame's, in sequence pixels, +y down.
     pub position: [Param; 2],
-    /// Percent.
+    /// Percent; of the height alone unless the scale is uniform.
     pub scale: Param,
+    /// Percent, used only when the scale isn't uniform.
+    #[serde(default = "full_size")]
+    pub scale_width: Param,
+    #[serde(default = "uniform")]
+    pub uniform_scale: bool,
     /// Degrees clockwise.
     pub rotation: Param,
+    /// The point of the fitted picture placed at `position` and scaled and turned
+    /// about, from the picture's center in sequence pixels, +y down.
+    #[serde(default)]
+    pub anchor: [Param; 2],
+}
+
+fn full_size() -> Param {
+    Param::new(10_000)
+}
+
+fn uniform() -> bool {
+    true
 }
 
 impl Motion {
     pub fn params_mut(&mut self) -> impl Iterator<Item = &mut Param> {
         let [x, y] = &mut self.position;
-        [x, y, &mut self.scale, &mut self.rotation].into_iter()
+        let [anchor_x, anchor_y] = &mut self.anchor;
+        [
+            x,
+            y,
+            &mut self.scale,
+            &mut self.scale_width,
+            &mut self.rotation,
+            anchor_x,
+            anchor_y,
+        ]
+        .into_iter()
+    }
+
+    /// Percent of the width and of the height at source time `time`.
+    pub fn scale_at(&self, time: Ticks) -> [f32; 2] {
+        let height = self.scale.value_at(time);
+        let width = if self.uniform_scale {
+            height
+        } else {
+            self.scale_width.value_at(time)
+        };
+        [width, height]
     }
 }
 
@@ -35,8 +73,11 @@ impl Default for Motion {
     fn default() -> Self {
         Self {
             position: [Param::default(), Param::default()],
-            scale: Param::new(10_000),
+            scale: full_size(),
+            scale_width: full_size(),
+            uniform_scale: true,
             rotation: Param::default(),
+            anchor: [Param::default(), Param::default()],
         }
     }
 }

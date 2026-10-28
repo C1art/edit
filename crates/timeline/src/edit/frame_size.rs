@@ -38,8 +38,10 @@ impl Edit for SetToFrameSize {
             };
             let scale = Param::new(scale_hundredths(picture, frame, self.fit));
             let clip = ops::clip_mut(sequence, id)?;
-            changed |= clip.look.motion.scale != scale;
-            clip.look.motion.scale = scale;
+            let motion = &mut clip.look.motion;
+            changed |= motion.scale != scale || motion.scale_width != scale;
+            motion.scale_width = scale.clone();
+            motion.scale = scale;
         }
         if changed {
             Ok(())
