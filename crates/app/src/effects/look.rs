@@ -45,7 +45,23 @@ pub(super) fn controls(
             rows.param(ui, "Position X", x, -10_000.0..=10_000.0, "");
             rows.param(ui, "Position Y", y, -10_000.0..=10_000.0, "");
             let motion = &mut look.motion;
-            rows.param(ui, "Scale", &mut motion.scale, 0.0..=1_000.0, "%");
+            if motion.uniform_scale {
+                rows.param(ui, "Scale", &mut motion.scale, 0.0..=1_000.0, "%");
+            } else {
+                rows.param(ui, "Scale Height", &mut motion.scale, 0.0..=1_000.0, "%");
+                let width = &mut motion.scale_width;
+                rows.param(ui, "Scale Width", width, 0.0..=1_000.0, "%");
+            }
+            if ui
+                .checkbox(&mut motion.uniform_scale, "Uniform Scale")
+                .changed()
+            {
+                // Unlinking starts the width where the shared scale left it.
+                if !motion.uniform_scale {
+                    motion.scale_width = motion.scale.clone();
+                }
+                rows.commit();
+            }
             rows.param(
                 ui,
                 "Rotation",
@@ -53,6 +69,9 @@ pub(super) fn controls(
                 -3_600.0..=3_600.0,
                 "°",
             );
+            let [x, y] = &mut motion.anchor;
+            rows.param(ui, "Anchor X", x, -10_000.0..=10_000.0, "");
+            rows.param(ui, "Anchor Y", y, -10_000.0..=10_000.0, "");
         });
     egui::CollapsingHeader::new("Opacity")
         .default_open(true)

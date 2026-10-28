@@ -1,5 +1,5 @@
 use egui::{Color32, CursorIcon, Pos2, Sense, Shape, Stroke, Vec2};
-use timeline::{Clip, Motion, SetClipLook, Ticks, TrackKind};
+use timeline::{Clip, Motion, Param, SetClipLook, Ticks, TrackKind};
 
 use super::picture_frame::PictureFrame;
 use super::{adjust_look, keyframe_time, shown_look, SideTab};
@@ -20,20 +20,31 @@ enum Grip {
     Move,
     Scale,
     Rotate,
+    /// Moves the anchor point, and the position with it so the picture stays put.
+    Anchor,
 }
 
-/// A drag in progress: what it holds, where it started and the motion it started from,
-/// as position x and y, scale and rotation.
+/// A drag in progress: what it holds, where it started and the motion it started from.
 #[derive(Debug, Clone, Copy)]
 struct Held {
     grip: Grip,
     from: Pos2,
-    motion: [f32; 4],
+    motion: Start,
+}
+
+/// The motion's values at the playhead when a drag started.
+#[derive(Debug, Clone, Copy)]
+struct Start {
+    position: Vec2,
+    /// Width and height, percent.
+    scale: [f32; 2],
+    rotation: f32,
+    anchor: Vec2,
 }
 
 /// Outlines the selected clip's picture over the program picture in `area` while the
 /// effect controls show, as Premiere does with Motion selected: dragging inside moves
-/// it, a corner scales it and just past a corner turns it. Masked clips leave the
+/// it, a corner scales it, just past a corner turns it and the cross moves its anchor point. Masked clips leave the
 /// picture to their mask handles.
 pub fn motion_overlay(editor: &mut Editor, ui: &egui::Ui, area: egui::Rect) {
     if editor.side_tab != SideTab::EffectControls {
@@ -62,7 +73,7 @@ pub fn motion_overlay(editor: &mut Editor, ui: &egui::Ui, area: egui::Rect) {
             .map(|(from, grip)| Held {
                 grip,
                 from,
-                motion: values(&look.motion, time),
+                motion: Start::at(&look.motion, time),
             });
     }
     if let Some(drag) = held {
@@ -72,25 +83,35 @@ pub fn motion_overlay(editor: &mut Editor, ui: &egui::Ui, area: egui::Rect) {
                 change = Some(Change::Commit);
             }
         } else if let Some(pointer) = ui.input(|input| input.pointer.latest_pos()) {
-            let [x, y, scale, rotation] = drag.motion;
-            let center = frame.center;
+            let start = drag.motion;
+            let center = frame.anchor;
             let motion = &mut look.motion;
+            let dragged = (pointer - drag.from) / per_pixel.max(f32::EPSILON);
             match drag.grip {
-                Grip::Move => {
-                    let shift = (pointer - drag.from) / per_pixel.max(f32::EPSILON);
-                    motion.position[0].set_at(time, (x + shift.x).round());
-                    motion.position[1].set_at(time, (y + shift.y).round());
+                Grip::Move => set_position(motion, time, start.position + dragged),
+                Grip::Anchor => {
+                    // The picture holds still, so its frame is the same as at the start.
+                    let moved = frame.to_picture(pointer) - frame.to_picture(drag.from);
+                    let anchor = start.anchor + moved * frame.flip;
+                    let [x, y] = &mut motion.anchor;
+                    x.set_at(time, anchor.x.round());
+                    y.set_at(time, anchor.y.round());
+                    set_position(motion, time, start.position + dragged);
                 }
                 Grip::Scale => {
                     let ratio = (pointer - center).length()
                         / (drag.from - center).length().max(f32::EPSILON);
-                    motion
+                    let [width, height] = start
                         .scale
-                        .set_at(time, (scale * ratio * 10.0).round() / 10.0);
+                        .map(|percent| (percent * ratio * 10.0).round() / 10.0);
+                    motion.scale.set_at(time, height);
+                    if !motion.uniform_scale {
+                        motion.scale_width.set_at(time, width);
+                    }
                 }
                 Grip::Rotate => {
                     let turn = (pointer - center).angle() - (drag.from - center).angle();
-                    let mut degrees = rotation + turn.to_degrees();
+                    let mut degrees = start.rotation + turn.to_degrees();
                     if shift {
                         degrees = (degrees / ROTATE_STEP).round() * ROTATE_STEP;
                     }
@@ -110,6 +131,7 @@ pub fn motion_overlay(editor: &mut Editor, ui: &egui::Ui, area: egui::Rect) {
             Grip::Move => CursorIcon::Move,
             Grip::Scale => CursorIcon::ResizeNwSe,
             Grip::Rotate => CursorIcon::Alias,
+            Grip::Anchor => CursorIcon::Crosshair,
         });
     }
     ui.data_mut(|data| match held {
@@ -142,13 +164,22 @@ fn moved_clip(editor: &Editor) -> Option<Clip> {
     (shown && shown_look(editor, clip).masks.is_empty()).then(|| clip.clone())
 }
 
-fn values(motion: &Motion, time: Ticks) -> [f32; 4] {
-    [
-        motion.position[0].value_at(time),
-        motion.position[1].value_at(time),
-        motion.scale.value_at(time),
-        motion.rotation.value_at(time),
-    ]
+impl Start {
+    fn at(motion: &Motion, time: Ticks) -> Self {
+        let pair = |[x, y]: &[Param; 2]| Vec2::new(x.value_at(time), y.value_at(time));
+        Self {
+            position: pair(&motion.position),
+            scale: motion.scale_at(time),
+            rotation: motion.rotation.value_at(time),
+            anchor: pair(&motion.anchor),
+        }
+    }
+}
+
+fn set_position(motion: &mut Motion, time: Ticks, position: Vec2) {
+    let [x, y] = &mut motion.position;
+    x.set_at(time, position.x.round());
+    y.set_at(time, position.y.round());
 }
 
 /// The picture's corners on screen, clockwise from the top left.
@@ -170,6 +201,8 @@ fn grip_at(frame: &PictureFrame, corners: &[Pos2; 4], pointer: Pos2) -> Option<G
     let inside = local.x.abs() <= half.x && local.y.abs() <= half.y;
     if nearest <= SCALE_REACH {
         Some(Grip::Scale)
+    } else if frame.anchor.distance(pointer) <= SCALE_REACH {
+        Some(Grip::Anchor)
     } else if inside {
         Some(Grip::Move)
     } else if nearest <= ROTATE_REACH {
@@ -195,12 +228,13 @@ fn paint(ui: &egui::Ui, corners: &[Pos2; 4], frame: &PictureFrame) {
             egui::StrokeKind::Inside,
         );
     }
-    let center = frame.center;
+    let anchor = frame.anchor;
     let cross = HANDLE_SIZE;
     for axis in [Vec2::X, Vec2::Y] {
         painter.line_segment(
-            [center - axis * cross, center + axis * cross],
+            [anchor - axis * cross, anchor + axis * cross],
             Stroke::new(1.0, OUTLINE),
         );
     }
+    painter.circle_stroke(anchor, cross * 0.6, Stroke::new(1.0, OUTLINE));
 }
