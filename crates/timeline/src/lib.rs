@@ -1,6 +1,7 @@
 mod audio_plan;
 mod color;
 mod edit;
+mod effect;
 mod error;
 mod history;
 mod look;
@@ -26,9 +27,10 @@ pub use edit::{
     SetMasterGain, SetProxy, SetSequenceFormat, SetTrackMix, SetTrackSwitch, SetTransition, Slide,
     Slip, TrackSwitch, Trim, TrimMode, UpdateMarker,
 };
+pub use effect::{Rgb, VideoEffect};
 pub use error::TimelineError;
 pub use history::{preview, Edit, EditCommand, Timeline};
-pub use look::{Crop, Look, Motion, VideoEffect};
+pub use look::{Crop, Look, Motion};
 pub use marker::{Marker, MarkerColor, MarkerId};
 pub use media::{MediaItem, SourceId};
 pub use mix::{Gain, Pan};

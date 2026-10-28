@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{ColorCorrection, Param, Ticks};
+use crate::{ColorCorrection, Param, Ticks, VideoEffect};
 
 /// Where the clip's picture sits in the frame, after it is fitted to the frame.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -30,14 +30,6 @@ pub struct Crop {
     pub top: Param,
     pub right: Param,
     pub bottom: Param,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum VideoEffect {
-    GaussianBlur {
-        /// Blur radius in sequence pixels.
-        blurriness: Param,
-    },
 }
 
 /// Everything that changes how a video clip's picture looks; ignored for audio.
@@ -80,6 +72,7 @@ impl Look {
             .iter()
             .map(|effect| match effect {
                 VideoEffect::GaussianBlur { blurriness } => blurriness.value_at(time).powi(2),
+                _ => 0.0,
             })
             .sum::<f32>()
             .sqrt()
@@ -90,9 +83,7 @@ impl Look {
     pub fn params(&self) -> impl Iterator<Item = &Param> {
         let motion = &self.motion;
         let crop = &self.crop;
-        let effects = self.effects.iter().map(|effect| match effect {
-            VideoEffect::GaussianBlur { blurriness } => blurriness,
-        });
+        let effects = self.effects.iter().flat_map(VideoEffect::params);
         motion
             .position
             .iter()
