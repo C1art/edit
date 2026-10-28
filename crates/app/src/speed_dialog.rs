@@ -14,6 +14,8 @@ pub struct SpeedPrompt {
     /// through the percentage.
     duration_typed: bool,
     ripple: bool,
+    reverse: bool,
+    maintain_pitch: bool,
 }
 
 /// Like `150%` or `33.33%`.
@@ -38,6 +40,8 @@ impl Editor {
             duration: clip.duration,
             duration_typed: false,
             ripple: false,
+            reverse: clip.reverse,
+            maintain_pitch: clip.maintain_pitch,
         });
     }
 }
@@ -91,6 +95,8 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                     }
                     ui.end_row();
                 });
+            ui.checkbox(&mut prompt.reverse, "Reverse Speed");
+            ui.checkbox(&mut prompt.maintain_pitch, "Maintain Audio Pitch");
             ui.checkbox(&mut prompt.ripple, "Ripple Edit, Shifting Trailing Clips");
             ui.horizontal(|ui| {
                 if ui.button("OK").clicked() || ui.input(|input| input.key_pressed(Key::Enter)) {
@@ -122,6 +128,8 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                 clips: prompt.clips,
                 speed,
                 ripple: prompt.ripple,
+                reverse: prompt.reverse,
+                maintain_pitch: prompt.maintain_pitch,
             });
         }
         None => editor.notice("Cannot change speed: the duration must be positive"),

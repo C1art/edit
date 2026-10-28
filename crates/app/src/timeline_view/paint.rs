@@ -174,10 +174,14 @@ pub fn clips(
         } else {
             String::new()
         };
-        let speed = if clip.speed.is_normal() {
-            String::new()
-        } else {
-            format!(" [{}]", crate::speed_dialog::percent_text(clip.speed))
+        let speed = match (clip.speed.is_normal(), clip.reverse) {
+            (true, false) => String::new(),
+            (true, true) => " [-100%]".to_owned(),
+            (false, reverse) => format!(
+                " [{}{}]",
+                if reverse { "-" } else { "" },
+                crate::speed_dialog::percent_text(clip.speed)
+            ),
         };
         painter.with_clip_rect(rect.shrink(2.0)).text(
             rect.left_top() + egui::vec2(5.0, 4.0),
