@@ -3,6 +3,7 @@ mod autosave;
 mod captions;
 mod clip_art;
 mod clip_menu;
+mod clip_moves;
 mod commands;
 mod duck_dialog;
 mod editor;

@@ -85,6 +85,8 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         Command::Clear => editor.lift(),
         Command::RippleDelete => editor.ripple_delete(),
         Command::CancelDrag => editor.view.cancel_drag(),
+        Command::SelectAll => editor.select_all(),
+        Command::DeselectAll => editor.view.selection.clear(),
         Command::KeyboardShortcuts => {
             editor.keymap_window = Some(KeymapWindow::default());
         }
@@ -93,9 +95,17 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         Command::ToggleEnabled => editor.toggle_enabled(),
         Command::ToggleLink => editor.toggle_link(),
         Command::MakeSubclip => editor.make_subclip(),
+        Command::NudgeLeft => editor.nudge(-1),
+        Command::NudgeRight => editor.nudge(1),
+        Command::NudgeLeftFive => editor.nudge(-5),
+        Command::NudgeRightFive => editor.nudge(5),
+        Command::NudgeUp => editor.nudge_track(true),
+        Command::NudgeDown => editor.nudge_track(false),
         Command::Insert => placing::edit_from_source(editor, PlaceMode::Insert),
         Command::Overwrite => placing::edit_from_source(editor, PlaceMode::Overwrite),
         Command::AddEdit => editor.add_edit(),
+        Command::ExtendEdit => editor.extend_edit(),
+        Command::SelectAtPlayhead => editor.select_at_playhead(),
         Command::VideoTransition => {
             crate::effects::apply_default_transition(editor, TrackKind::Video);
         }
