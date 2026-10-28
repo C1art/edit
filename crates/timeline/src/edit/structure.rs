@@ -110,6 +110,7 @@ impl Edit for ImportMedia {
             duration: self.duration,
             video: self.video,
             has_audio: self.has_audio,
+            proxy: None,
         });
         Ok(())
     }
@@ -139,6 +140,32 @@ impl Edit for RemoveMedia {
         if sequence.media.len() == count {
             return Err(TimelineError::MediaNotFound(self.source));
         }
+        Ok(())
+    }
+}
+
+/// Attaches a proxy to a media item, or detaches it with `None`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetProxy {
+    pub source: SourceId,
+    pub proxy: Option<PathBuf>,
+}
+
+impl Edit for SetProxy {
+    fn name(&self) -> &'static str {
+        "Attach Proxy"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let item = sequence
+            .media
+            .iter_mut()
+            .find(|item| item.id == self.source)
+            .ok_or(TimelineError::MediaNotFound(self.source))?;
+        if item.proxy == self.proxy {
+            return Err(TimelineError::NothingToEdit);
+        }
+        item.proxy.clone_from(&self.proxy);
         Ok(())
     }
 }

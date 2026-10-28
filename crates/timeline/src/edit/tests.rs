@@ -406,3 +406,25 @@ fn clip_gain_reaches_linked_audio_but_not_video() {
         crate::Gain::UNITY
     );
 }
+
+#[test]
+fn proxy_replaces_only_the_decoded_path_and_undoes() {
+    let (mut timeline, source) = timeline();
+    let proxy = std::path::PathBuf::from("Proxies/a_Proxy.mp4");
+    let attach = SetProxy {
+        source,
+        proxy: Some(proxy.clone()),
+    };
+    timeline.apply(attach.clone()).unwrap();
+    assert_eq!(timeline.apply(attach), Err(TimelineError::NothingToEdit));
+
+    let decoded = timeline.sequence().with_proxies();
+    assert_eq!(decoded.media[0].path, proxy);
+    assert_eq!(
+        timeline.sequence().media[0].path,
+        std::path::Path::new("a.mp4")
+    );
+
+    assert!(timeline.undo());
+    assert_eq!(timeline.sequence().media[0].proxy, None);
+}

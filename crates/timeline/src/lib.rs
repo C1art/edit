@@ -19,8 +19,8 @@ pub use color::ColorCorrection;
 pub use edit::{
     clamp_delta, AddTrack, CloseGap, Edge, ImportMedia, Lift, MoveClips, PlaceClip, PlaceMode,
     Razor, RazorTarget, RemoveMedia, RemoveTrack, RippleDelete, Roll, SetClipGain, SetClipLook,
-    SetMasterGain, SetSequenceFormat, SetTrackMix, SetTrackSwitch, SetTransition, Slide, Slip,
-    TrackSwitch, Trim, TrimMode,
+    SetMasterGain, SetProxy, SetSequenceFormat, SetTrackMix, SetTrackSwitch, SetTransition, Slide,
+    Slip, TrackSwitch, Trim, TrimMode,
 };
 pub use error::TimelineError;
 pub use history::{preview, Edit, EditCommand, Timeline};

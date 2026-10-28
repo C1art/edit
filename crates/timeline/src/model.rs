@@ -278,6 +278,18 @@ impl Sequence {
         all
     }
 
+    /// This sequence with each media item's proxy in place of its file, for decoding
+    /// pictures only, since proxies carry no sound.
+    pub fn with_proxies(&self) -> Self {
+        let mut sequence = self.clone();
+        for item in &mut sequence.media {
+            if let Some(proxy) = item.proxy.take() {
+                item.path = proxy;
+            }
+        }
+        sequence
+    }
+
     /// The end of the last clip on any track.
     pub fn duration(&self) -> Ticks {
         self.tracks()

@@ -18,4 +18,7 @@ pub struct MediaItem {
     pub duration: Ticks,
     pub video: Option<VideoFormat>,
     pub has_audio: bool,
+    /// A smaller copy of the pictures for smoother playback; it carries no sound.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub proxy: Option<PathBuf>,
 }

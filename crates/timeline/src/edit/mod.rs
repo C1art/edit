@@ -14,7 +14,8 @@ pub use levels::{SetClipGain, SetMasterGain, SetTrackMix};
 pub use look::{SetClipLook, SetTransition};
 pub use place::{PlaceClip, PlaceMode, Razor, RazorTarget};
 pub use structure::{
-    AddTrack, ImportMedia, RemoveMedia, RemoveTrack, SetSequenceFormat, SetTrackSwitch, TrackSwitch,
+    AddTrack, ImportMedia, RemoveMedia, RemoveTrack, SetProxy, SetSequenceFormat, SetTrackSwitch,
+    TrackSwitch,
 };
 pub use trim::{Edge, Roll, Slide, Slip, Trim, TrimMode};
 
