@@ -15,6 +15,7 @@ mod look;
 mod marker;
 mod marks;
 mod mask;
+mod mask_path;
 mod media;
 mod mix;
 mod model;
@@ -59,6 +60,10 @@ pub use look::{Crop, Look, Motion};
 pub use marker::{Marker, MarkerColor, MarkerId};
 pub use marks::Marks;
 pub use mask::{Mask, MaskShape};
+pub use mask_path::{
+    flatten_path, key_path, path_is_animated, path_side_point, split_path_side,
+    toggle_path_animation, PathVertex, VertexAt,
+};
 pub use media::{MediaItem, SourceId};
 pub use mix::{Gain, Pan};
 pub use model::{
