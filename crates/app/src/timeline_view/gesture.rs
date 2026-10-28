@@ -1,10 +1,11 @@
 use egui::Rangef;
 use timeline::{
     clamp_delta, preview, ClipId, Edge, MoveClips, RateStretch, Roll, Sequence, SetClipVolume,
-    Slide, Slip, Ticks, Timeline, TimelineError, TrackKind, TrackRef, Trim, TrimMode,
+    SetTrackAutomation, Slide, Slip, Ticks, Timeline, TimelineError, TrackKind, TrackRef, Trim,
+    TrimMode,
 };
 
-use super::rubber_band::{self, BandHit};
+use super::rubber_band::{self, BandHit, BandOwner, Envelope};
 
 /// What a drag in the timeline is doing, fixed when the drag starts.
 #[derive(Debug, Clone)]
@@ -32,9 +33,9 @@ pub enum Gesture {
     Slide {
         clips: Vec<ClipId>,
     },
-    /// Drags an audio clip's volume line or one of its keyframes.
+    /// Drags a volume line or one of its keyframes.
     Volume {
-        clip: ClipId,
+        owner: BandOwner,
         grabbed: BandHit,
         band: Rangef,
         origin_y: f32,
@@ -51,6 +52,7 @@ pub enum PendingEdit {
     Slip(Slip),
     Slide(Slide),
     Volume(SetClipVolume),
+    Automation(SetTrackAutomation),
 }
 
 impl PendingEdit {
@@ -63,6 +65,7 @@ impl PendingEdit {
             Self::Slip(edit) => preview(sequence, edit),
             Self::Slide(edit) => preview(sequence, edit),
             Self::Volume(edit) => preview(sequence, edit),
+            Self::Automation(edit) => preview(sequence, edit),
         }
     }
 
@@ -75,6 +78,7 @@ impl PendingEdit {
             Self::Slip(edit) => timeline.apply(edit),
             Self::Slide(edit) => timeline.apply(edit),
             Self::Volume(edit) => timeline.apply(edit),
+            Self::Automation(edit) => timeline.apply(edit),
         }
     }
 }
@@ -101,12 +105,11 @@ impl Gesture {
             Self::Roll { at, .. } => vec![*at],
             Self::Slip { .. } => Vec::new(),
             Self::Volume {
-                clip,
+                owner,
                 grabbed: BandHit::Key(index),
                 ..
-            } => sequence
-                .clip(*clip)
-                .and_then(|(_, clip)| Some(clip.position_of(clip.volume.keys.get(*index)?.time)))
+            } => Envelope::of(sequence, *owner, sequence.duration())
+                .and_then(|envelope| envelope.key_position(*index))
                 .into_iter()
                 .collect(),
             Self::Volume { .. } => Vec::new(),
@@ -179,21 +182,23 @@ impl Gesture {
                 PendingEdit::Slide(make(clamp_delta(sequence, delta, make)))
             }
             Self::Volume {
-                clip,
+                owner,
                 grabbed,
                 band,
                 origin_y,
             } => {
                 let db = rubber_band::db_for_drag(*band, y - origin_y);
-                let volume = sequence
-                    .clip(*clip)
-                    .map_or_else(Default::default, |(_, clip)| {
-                        rubber_band::dragged(clip, *grabbed, delta, db)
+                let volume = Envelope::of(sequence, *owner, sequence.duration())
+                    .map_or_else(Default::default, |envelope| {
+                        rubber_band::dragged(&envelope, *grabbed, delta, db)
                     });
-                PendingEdit::Volume(SetClipVolume {
-                    clip: *clip,
-                    volume,
-                })
+                match *owner {
+                    BandOwner::Clip(clip) => PendingEdit::Volume(SetClipVolume { clip, volume }),
+                    BandOwner::Track(track) => PendingEdit::Automation(SetTrackAutomation {
+                        track,
+                        automation: volume,
+                    }),
+                }
             }
         }
     }

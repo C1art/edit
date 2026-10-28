@@ -1,11 +1,12 @@
 use egui::{Pos2, Rangef};
 use timeline::{
-    ClipId, Razor, RazorTarget, Sequence, SetClipVolume, Ticks, Timeline, TrackKind, TrackRef,
+    ClipId, Razor, RazorTarget, Sequence, SetClipVolume, SetTrackAutomation, Ticks, Timeline,
+    TrackKind, TrackRef,
 };
 
 use super::gesture::Gesture;
 use super::layout::{self, Hit, Row};
-use super::rubber_band::{self, BandHit};
+use super::rubber_band::{self, BandHit, BandOwner, Envelope};
 use super::scale::{self, TimeScale};
 use super::{Drag, TimelineOutput, TimelineView, Tool, SNAP_POINTS};
 
@@ -48,10 +49,11 @@ impl TimelineView {
                             output.errors.push(error.to_string());
                         }
                     }
-                } else if let Some((clip, grabbed, _)) = band_hit(sequence, &rows, &scale, hit, pos)
+                } else if let Some((owner, grabbed, _)) = self
+                    .band_hit(sequence, &rows, &scale, hit, pos)
                     .filter(|_| command && self.tool == Tool::Selection)
                 {
-                    toggle_volume_key(timeline, clip, grabbed, output);
+                    toggle_volume_key(timeline, owner, grabbed, output);
                 } else {
                     self.click(sequence, hit, shift);
                 }
@@ -68,11 +70,12 @@ impl TimelineView {
                 .input(|input| input.pointer.press_origin())
                 .unwrap_or(pos);
             let hit = layout::hit(sequence, &rows, &scale, origin);
-            let band = band_hit(sequence, &rows, &scale, hit, origin)
+            let band = self
+                .band_hit(sequence, &rows, &scale, hit, origin)
                 .filter(|_| self.tool == Tool::Selection);
             let gesture = match band {
-                Some((clip, grabbed, band)) => Some(Gesture::Volume {
-                    clip,
+                Some((owner, grabbed, band)) => Some(Gesture::Volume {
+                    owner,
                     grabbed,
                     band,
                     origin_y: origin.y,
@@ -121,6 +124,43 @@ impl TimelineView {
                 }
             }
         }
+    }
+
+    /// The volume line the pointer is on, what it grabs there and the band the line
+    /// moves in: a shown track's automation anywhere along its row, else an audio
+    /// clip's own line.
+    fn band_hit(
+        &self,
+        sequence: &Sequence,
+        rows: &[Row],
+        scale: &TimeScale,
+        hit: Hit,
+        pointer: Pos2,
+    ) -> Option<(BandOwner, BandHit, Rangef)> {
+        if let Some(row) =
+            layout::row_at(rows, pointer.y).filter(|row| self.automation_shown.contains(&row.track))
+        {
+            let end = scale.time(scale.left + self.width);
+            let track = sequence.track(row.track)?;
+            let rect = layout::clip_rect(&row, scale, Ticks::ZERO, end).shrink(1.0);
+            let grabbed = rubber_band::hit(rect, scale, &Envelope::track(track, end), pointer)?;
+            return Some((
+                BandOwner::Track(row.track),
+                grabbed,
+                rubber_band::band(rect),
+            ));
+        }
+        let Hit::Body { clip, track } = hit else {
+            return None;
+        };
+        if track.kind != TrackKind::Audio {
+            return None;
+        }
+        let row = rows.iter().find(|row| row.track == track)?;
+        let (_, clip) = sequence.clip(clip)?;
+        let rect = layout::clip_rect(row, scale, clip.start, clip.end()).shrink(1.0);
+        let grabbed = rubber_band::hit(rect, scale, &Envelope::clip(clip), pointer)?;
+        Some((BandOwner::Clip(clip.id), grabbed, rubber_band::band(rect)))
     }
 
     fn click(&mut self, sequence: &Sequence, hit: Hit, shift: bool) {
@@ -200,39 +240,18 @@ impl TimelineView {
     }
 }
 
-/// The audio clip whose volume line the pointer is on, what it grabs there and the band
-/// the line moves in.
-fn band_hit(
-    sequence: &Sequence,
-    rows: &[Row],
-    scale: &TimeScale,
-    hit: Hit,
-    pointer: Pos2,
-) -> Option<(ClipId, BandHit, Rangef)> {
-    let Hit::Body { clip, track } = hit else {
-        return None;
-    };
-    if track.kind != TrackKind::Audio {
-        return None;
-    }
-    let row = rows.iter().find(|row| row.track == track)?;
-    let (_, clip) = sequence.clip(clip)?;
-    let rect = layout::clip_rect(row, scale, clip.start, clip.end()).shrink(1.0);
-    let grabbed = rubber_band::hit(rect, scale, clip, pointer)?;
-    Some((clip.id, grabbed, rubber_band::band(rect)))
-}
-
 /// Adds a keyframe where the line was clicked, or removes the one clicked.
 fn toggle_volume_key(
     timeline: &mut Timeline,
-    clip: ClipId,
+    owner: BandOwner,
     grabbed: BandHit,
     output: &mut TimelineOutput,
 ) {
-    let Some((_, clip)) = timeline.sequence().clip(clip) else {
+    let sequence = timeline.sequence();
+    let Some(envelope) = Envelope::of(sequence, owner, sequence.duration()) else {
         return;
     };
-    let mut volume = clip.volume.clone();
+    let mut volume = envelope.volume().clone();
     let time = match grabbed {
         BandHit::Key(index) => volume.keys.get(index).map(|key| key.time),
         BandHit::Line(at) => Some(at),
@@ -241,11 +260,14 @@ fn toggle_volume_key(
         return;
     };
     volume.toggle_key(time);
-    let edit = SetClipVolume {
-        clip: clip.id,
-        volume,
+    let applied = match owner {
+        BandOwner::Clip(clip) => timeline.apply(SetClipVolume { clip, volume }),
+        BandOwner::Track(track) => timeline.apply(SetTrackAutomation {
+            track,
+            automation: volume,
+        }),
     };
-    if let Err(error) = timeline.apply(edit) {
+    if let Err(error) = applied {
         output.errors.push(error.to_string());
     }
 }

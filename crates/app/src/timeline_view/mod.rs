@@ -9,6 +9,8 @@ mod rubber_band;
 mod scale;
 mod tool;
 
+use std::collections::BTreeSet;
+
 use egui::{Rect, Sense};
 use timeline::{
     ClipId, MarkerId, Sequence, SetTrackSwitch, SourceId, Ticks, Timeline, TrackKind, TrackRef,
@@ -21,7 +23,7 @@ pub use markers::color as marker_color;
 use scale::TimeScale;
 pub use tool::Tool;
 
-const HEADER_WIDTH: f32 = 190.0;
+const HEADER_WIDTH: f32 = 250.0;
 const RULER_HEIGHT: f32 = 26.0;
 /// Snapping reach in points, so it feels the same at every zoom level.
 const SNAP_POINTS: f32 = 8.0;
@@ -106,6 +108,8 @@ pub struct TimelineView {
     drag: Option<Drag>,
     /// The marker a ruler context menu was opened on.
     context_marker: Option<MarkerId>,
+    /// Audio tracks showing their automation in place of their clips' volume lines.
+    automation_shown: BTreeSet<TrackRef>,
 }
 
 impl Default for TimelineView {
@@ -121,6 +125,7 @@ impl Default for TimelineView {
             width: 1000.0,
             drag: None,
             context_marker: None,
+            automation_shown: BTreeSet::new(),
         }
     }
 }
@@ -234,7 +239,22 @@ impl TimelineView {
                 sequence,
                 self.targets.contains(row.track),
             );
-            paint::clips(&painter, row, &scale, sequence, &self.selection, art);
+            let automation = self.automation_shown.contains(&row.track);
+            paint::clips(
+                &painter,
+                row,
+                &scale,
+                sequence,
+                &self.selection,
+                art,
+                !automation,
+            );
+            if let Some(track) = sequence.track(row.track).filter(|_| automation) {
+                let end = scale.time(tracks.right());
+                let rect = layout::clip_rect(row, &scale, Ticks::ZERO, end).shrink(1.0);
+                let envelope = rubber_band::Envelope::track(track, end);
+                rubber_band::paint(&painter, rect, &scale, &envelope);
+            }
         }
         if let Some(at) = drop_guide {
             paint::guide(&painter, scale.x(at), tracks.top(), tracks.bottom());
@@ -261,11 +281,26 @@ impl TimelineView {
         header_ui.set_clip_rect(header_column);
         let actions: Vec<HeaderAction> = rows
             .iter()
-            .filter_map(|row| header::header(&mut header_ui, headers, row, sequence, &self.targets))
+            .filter_map(|row| {
+                let automation = self.automation_shown.contains(&row.track);
+                header::header(
+                    &mut header_ui,
+                    headers,
+                    row,
+                    sequence,
+                    &self.targets,
+                    automation,
+                )
+            })
             .collect();
         for action in actions {
             match action {
                 HeaderAction::ToggleTarget(track) => self.targets.toggle(track),
+                HeaderAction::ToggleAutomation(track) => {
+                    if !self.automation_shown.remove(&track) {
+                        self.automation_shown.insert(track);
+                    }
+                }
                 HeaderAction::Switch(track, switch, on) => {
                     if let Err(error) = timeline.apply(SetTrackSwitch { track, switch, on }) {
                         output.errors.push(error.to_string());

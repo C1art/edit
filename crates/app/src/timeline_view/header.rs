@@ -7,17 +7,20 @@ use super::Targets;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HeaderAction {
     ToggleTarget(TrackRef),
+    /// Shows the track's volume automation in place of its clips' volume lines, or back.
+    ToggleAutomation(TrackRef),
     Switch(TrackRef, TrackSwitch, bool),
 }
 
 /// The track name, which doubles as the source-patching target toggle, and the mute,
-/// lock and, for audio, solo switches.
+/// lock and, for audio, solo switches and the automation toggle.
 pub fn header(
     ui: &mut egui::Ui,
     column: egui::Rangef,
     row: &Row,
     sequence: &Sequence,
     targets: &Targets,
+    automation: bool,
 ) -> Option<HeaderAction> {
     let track = sequence.track(row.track)?;
     let rect = Rect::from_x_y_ranges(column, row.y_range()).shrink2(egui::vec2(4.0, 0.0));
@@ -49,6 +52,14 @@ pub fn header(
             for (label, switch, on) in switches.into_iter().chain(solo) {
                 if ui.selectable_label(on, label).clicked() {
                     action = Some(HeaderAction::Switch(row.track, switch, !on));
+                }
+            }
+            if row.track.kind == TrackKind::Audio {
+                let toggle = ui
+                    .selectable_label(automation, "Auto")
+                    .on_hover_text("Show and edit the track's volume keyframes");
+                if toggle.clicked() {
+                    action = Some(HeaderAction::ToggleAutomation(row.track));
                 }
             }
         });

@@ -89,6 +89,7 @@ pub fn clips(
     sequence: &Sequence,
     selection: &[ClipId],
     art: &mut ClipArt,
+    volume_lines: bool,
 ) {
     let Some(track) = sequence.track(row.track) else {
         return;
@@ -163,7 +164,11 @@ pub fn clips(
         transition_marks(painter, row, scale, track, clip);
         match row.track.kind {
             TrackKind::Video => keyframe_marks(painter, rect, scale, clip),
-            TrackKind::Audio => rubber_band::paint(painter, rect.shrink(1.0), scale, clip),
+            TrackKind::Audio if volume_lines => {
+                let envelope = rubber_band::Envelope::clip(clip);
+                rubber_band::paint(painter, rect.shrink(1.0), scale, &envelope);
+            }
+            TrackKind::Audio => {}
         }
         let item = sequence.media_item(clip.source);
         let name = item.map_or("Missing media", |item| item.name.as_str());
