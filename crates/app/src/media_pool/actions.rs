@@ -1,8 +1,9 @@
 use std::path::{Path, PathBuf};
 
 use timeline::{
-    AddBin, CreateMulticam, Edit, InterpretFootage, MakeSubclip, MoveToBin, RelinkMedia, RemoveBin,
-    RemoveMedia, RenameBin, RenameMedia, SetProxy, SourceId, Ticks, TimelineError,
+    AddBin, CreateMulticam, DuplicateMedia, Edit, InterpretFootage, MakeSubclip, MoveToBin,
+    RelinkMedia, RemoveBin, RemoveMedia, RenameBin, RenameMedia, SetProxy, SourceId, Ticks,
+    TimelineError,
 };
 
 use super::{PoolAction, PoolEntry};
@@ -20,6 +21,9 @@ impl Editor {
                     self.source = None;
                 }
                 self.apply_to_pool(RemoveMedia { source: id });
+            }
+            PoolAction::Duplicate(source) => {
+                self.apply_to_pool(DuplicateMedia { source });
             }
             PoolAction::Rename(source, name) => {
                 self.apply_to_pool(RenameMedia { source, name });

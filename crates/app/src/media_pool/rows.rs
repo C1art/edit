@@ -56,14 +56,9 @@ pub(super) fn item_row(
     building: Option<f32>,
     offline: bool,
 ) -> egui::Response {
-    let rate = item
-        .played_format()
-        .map_or(FrameRate::FPS_25, |video| video.frame_rate);
-    let range = item.default_range(timebase);
-    let played = item.conform().sequence_span(range.end - range.start);
     let mut details = vec![match &item.generator {
         Some(generator) => generator.kind_name().to_owned(),
-        None => Timecode::new(played, timebase, rate).to_string(),
+        None => played_length(item, timebase).to_string(),
     }];
     if item.nest.is_some() {
         details.insert(0, "Sequence".to_owned());
@@ -115,4 +110,14 @@ pub(super) fn item_row(
             (None, None) if offline => format!("Missing: {}", item.path.display()),
             (None, None) => item.path.display().to_string(),
         })
+}
+
+/// How long the item's default range plays for, at its interpreted rate.
+pub(super) fn played_length(item: &MediaItem, timebase: Timebase) -> Timecode {
+    let rate = item
+        .played_format()
+        .map_or(FrameRate::FPS_25, |video| video.frame_rate);
+    let range = item.default_range(timebase);
+    let played = item.conform().sequence_span(range.end - range.start);
+    Timecode::new(played, timebase, rate)
 }

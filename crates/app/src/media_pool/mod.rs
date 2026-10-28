@@ -1,14 +1,15 @@
-use std::collections::HashSet;
-
 mod actions;
 mod rows;
+mod tiles;
 
 use egui::{CollapsingHeader, DragAndDrop, Response, RichText, Sense, StrokeKind, TextEdit};
 use timeline::{Bin, BinId, MediaItem, Sequence, SourceId};
 
+use crate::clip_art::ClipArt;
 use crate::multicam_sync::MulticamSync;
 use crate::proxies::ProxyMaker;
 use rows::{item_row, proxy_menu, rename_field, Field};
+use tiles::{tile, PoolLayout, PoolSort};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PoolAction {
@@ -16,6 +17,7 @@ pub enum PoolAction {
     /// Opens a nested sequence in the timeline.
     OpenNest(SourceId),
     Remove(SourceId),
+    Duplicate(SourceId),
     Rename(SourceId, String),
     /// Asks for a file to replace the item's.
     Replace(SourceId),
@@ -38,13 +40,15 @@ pub enum PoolEntry {
     Bin(BinId),
 }
 
-/// The project panel's search text, its selected items, and the entry being renamed with
-/// its name so far.
+/// The project panel's search text, its selected items, the entry being renamed with
+/// its name so far, and how items are laid out and ordered.
 #[derive(Debug, Default)]
 pub struct PoolView {
     search: String,
     pub(crate) selected: Vec<SourceId>,
     renaming: Option<(PoolEntry, String)>,
+    layout: PoolLayout,
+    sort: PoolSort,
 }
 
 /// Lists imported media in its bins. Click opens an item in the source monitor;
@@ -55,7 +59,7 @@ pub fn ui(
     sequence: &Sequence,
     importing: bool,
     proxies: Option<&ProxyMaker>,
-    offline: &HashSet<SourceId>,
+    art: &mut ClipArt,
 ) -> Option<PoolAction> {
     if sequence.media.is_empty() && sequence.bins.is_empty() && !importing {
         ui.label("Drop files here or use File → Import (Ctrl+I).");
@@ -63,7 +67,7 @@ pub fn ui(
     let mut pool = Pool {
         sequence,
         proxies,
-        offline,
+        art,
         view,
         action: None,
     };
@@ -74,12 +78,13 @@ pub fn ui(
         if new_bin.clicked() {
             pool.action = Some(PoolAction::NewBin(None));
         }
-        ui.add(
-            TextEdit::singleline(&mut pool.view.search)
-                .hint_text("Search")
-                .desired_width(f32::INFINITY),
-        );
+        pool.view_options(ui);
     });
+    ui.add(
+        TextEdit::singleline(&mut pool.view.search)
+            .hint_text("Search")
+            .desired_width(f32::INFINITY),
+    );
     let wanted = pool.view.search.to_lowercase();
     egui::ScrollArea::vertical()
         .auto_shrink([false, true])
@@ -93,9 +98,7 @@ pub fn ui(
                     .media
                     .iter()
                     .filter(|item| item.name.to_lowercase().contains(&wanted));
-                for item in found {
-                    pool.item(ui, item);
-                }
+                pool.items(ui, found);
             }
         });
     if importing {
@@ -110,7 +113,7 @@ pub fn ui(
 struct Pool<'a> {
     sequence: &'a Sequence,
     proxies: Option<&'a ProxyMaker>,
-    offline: &'a HashSet<SourceId>,
+    art: &'a mut ClipArt,
     view: &'a mut PoolView,
     action: Option<PoolAction>,
 }
@@ -122,9 +125,43 @@ impl Pool<'_> {
         for child in sequence.bins.iter().filter(|child| child.parent == bin) {
             self.bin(ui, child);
         }
-        for item in sequence.media.iter().filter(|item| item.bin == bin) {
-            self.item(ui, item);
+        self.items(ui, sequence.media.iter().filter(|item| item.bin == bin));
+    }
+
+    /// `items` in the chosen order, as rows or as tiles wrapped across the panel.
+    fn items<'s>(&mut self, ui: &mut egui::Ui, items: impl Iterator<Item = &'s MediaItem>) {
+        let items = self.view.sort.sorted(items);
+        match self.view.layout {
+            PoolLayout::List => {
+                for item in items {
+                    self.item(ui, item);
+                }
+            }
+            PoolLayout::Icons => {
+                ui.horizontal_wrapped(|ui| {
+                    for item in items {
+                        self.item(ui, item);
+                    }
+                });
+            }
         }
+    }
+
+    fn view_options(&mut self, ui: &mut egui::Ui) {
+        let view = &mut *self.view;
+        ui.selectable_value(&mut view.layout, PoolLayout::List, "List")
+            .on_hover_text("List View");
+        ui.selectable_value(&mut view.layout, PoolLayout::Icons, "Icons")
+            .on_hover_text("Icon View: hover over a picture to scrub through it");
+        egui::ComboBox::from_id_salt("pool sort")
+            .selected_text(view.sort.name())
+            .show_ui(ui, |ui| {
+                for sort in PoolSort::ALL {
+                    ui.selectable_value(&mut view.sort, sort, sort.name());
+                }
+            })
+            .response
+            .on_hover_text("Sort Items");
     }
 
     fn bin(&mut self, ui: &mut egui::Ui, bin: &Bin) {
@@ -178,8 +215,12 @@ impl Pool<'_> {
             return;
         }
         let building = self.proxies.and_then(|maker| maker.progress(item.id));
-        let offline = self.offline.contains(&item.id);
-        let response = item_row(ui, item, self.sequence.timebase, building, offline);
+        let offline = self.art.offline.contains(&item.id);
+        let timebase = self.sequence.timebase;
+        let response = match self.view.layout {
+            PoolLayout::List => item_row(ui, item, timebase, building, offline),
+            PoolLayout::Icons => tile(ui, item, timebase, self.art, offline),
+        };
         if response.drag_started() {
             response.dnd_set_drag_payload(item.id);
         }
@@ -239,6 +280,9 @@ impl Pool<'_> {
             }
             if ui.button("Rename").clicked() {
                 self.view.renaming = Some((entry, item.name.clone()));
+            }
+            if ui.button("Duplicate").clicked() {
+                self.action = Some(PoolAction::Duplicate(item.id));
             }
             if item.bin.is_some() && ui.button("Move to Top").clicked() {
                 self.action = Some(PoolAction::Move(entry, None));
