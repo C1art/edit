@@ -261,15 +261,21 @@ impl Editor {
             let tabs = [
                 (SideTab::EffectControls, "Effect Controls"),
                 (SideTab::AudioMixer, "Audio Mixer"),
+                (SideTab::Scopes, "Scopes"),
             ];
             for (tab, name) in tabs {
                 ui.selectable_value(&mut self.side_tab, tab, RichText::new(name).heading());
             }
         });
         ui.separator();
+        // Measuring costs GPU time, so only while someone is looking.
+        if let Some(program) = &mut self.program {
+            program.set_waveform(self.side_tab == SideTab::Scopes);
+        }
         match self.side_tab {
             SideTab::EffectControls => effects::ui(self, ui),
             SideTab::AudioMixer => mixer::ui(self, ui),
+            SideTab::Scopes => crate::scopes::ui(self, ui),
         }
     }
 

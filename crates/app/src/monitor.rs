@@ -8,6 +8,7 @@ pub struct Monitor {
     render_state: egui_wgpu::RenderState,
     compositor: Compositor,
     texture: Option<TextureId>,
+    waveform: Option<TextureId>,
 }
 
 impl Monitor {
@@ -16,6 +17,7 @@ impl Monitor {
             compositor: Compositor::new(&render_state.device, &render_state.queue),
             render_state,
             texture: None,
+            waveform: None,
         }
     }
 
@@ -46,6 +48,27 @@ impl Monitor {
         Ok(())
     }
 
+    pub fn set_waveform(&mut self, enabled: bool) {
+        if enabled == self.waveform.is_some() {
+            return;
+        }
+        self.compositor.set_waveform(enabled);
+        let mut renderer = self.render_state.renderer.write();
+        match (self.waveform.take(), self.compositor.waveform_view()) {
+            (Some(id), _) => renderer.free_texture(&id),
+            (None, Some(view)) => {
+                let device = &self.render_state.device;
+                self.waveform =
+                    Some(renderer.register_native_texture(device, view, wgpu::FilterMode::Linear));
+            }
+            (None, None) => {}
+        }
+    }
+
+    pub fn waveform(&self) -> Option<TextureId> {
+        self.waveform
+    }
+
     /// Draws the picture letterboxed to `size` on a black background.
     pub fn ui(&self, ui: &mut egui::Ui, size: Vec2) -> Response {
         let (rect, response) = ui.allocate_exact_size(size, Sense::click());
@@ -65,8 +88,9 @@ impl Monitor {
 
 impl Drop for Monitor {
     fn drop(&mut self) {
-        if let Some(id) = self.texture {
-            self.render_state.renderer.write().free_texture(&id);
+        let mut renderer = self.render_state.renderer.write();
+        for id in [self.texture, self.waveform].into_iter().flatten() {
+            renderer.free_texture(&id);
         }
     }
 }

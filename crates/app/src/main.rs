@@ -9,6 +9,7 @@ mod mixer;
 mod monitor;
 mod monitors;
 mod placing;
+mod scopes;
 mod shortcuts;
 mod source;
 mod timeline_view;

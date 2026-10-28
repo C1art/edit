@@ -16,6 +16,7 @@ pub enum SideTab {
     #[default]
     EffectControls,
     AudioMixer,
+    Scopes,
 }
 
 /// The look being dragged, shown live and committed on release.

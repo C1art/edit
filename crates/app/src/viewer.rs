@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use audio::AudioOutput;
 use eframe::egui_wgpu::RenderState;
-use egui::Vec2;
+use egui::{TextureId, Vec2};
 use playback::{PlaybackError, Player};
 use timeline::Sequence;
 
@@ -46,6 +46,16 @@ impl Viewer {
             ctx.request_repaint();
         }
         notices
+    }
+
+    pub fn set_waveform(&mut self, enabled: bool) {
+        if let Some(monitor) = &mut self.monitor {
+            monitor.set_waveform(enabled);
+        }
+    }
+
+    pub fn waveform(&self) -> Option<TextureId> {
+        self.monitor.as_ref().and_then(Monitor::waveform)
     }
 
     pub fn picture(&self, ui: &mut egui::Ui, size: Vec2) -> egui::Response {
