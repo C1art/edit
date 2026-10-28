@@ -1,13 +1,23 @@
+mod commands;
 mod editor;
+mod import;
+mod media_pool;
+mod menus;
 mod monitor;
+mod monitors;
+mod placing;
+mod shortcuts;
+mod source;
+mod timeline_view;
 mod transport;
+mod viewer;
 
 use std::path::PathBuf;
 
 use editor::Editor;
 
 fn main() -> eframe::Result {
-    let initial = std::env::args_os().nth(1).map(PathBuf::from);
+    let initial: Vec<PathBuf> = std::env::args_os().skip(1).map(PathBuf::from).collect();
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("Edit")

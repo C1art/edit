@@ -1,9 +1,9 @@
 use eframe::egui_wgpu::{self, wgpu};
-use egui::{Color32, Rect, Sense, TextureId, Vec2};
-use media::VideoFrame;
-use render::{Compositor, Presented, RenderError};
+use egui::{Color32, Rect, Response, Sense, TextureId, Vec2};
+use playback::ComposedFrame;
+use render::{Compositor, LayerImage, Presented, RenderError};
 
-/// The program monitor: composites frames on the GPU and shows the result in the UI.
+/// A video monitor: composites frames on the GPU and shows the result in the UI.
 pub struct Monitor {
     render_state: egui_wgpu::RenderState,
     compositor: Compositor,
@@ -19,10 +19,22 @@ impl Monitor {
         }
     }
 
-    pub fn present(&mut self, frame: &VideoFrame) -> Result<(), RenderError> {
-        let presented = self
-            .compositor
-            .present_frame(frame.width, frame.height, &frame.pixels)?;
+    pub fn present(
+        &mut self,
+        frame: &ComposedFrame,
+        canvas: (u32, u32),
+    ) -> Result<(), RenderError> {
+        let layers: Vec<LayerImage<'_>> = frame
+            .layers
+            .iter()
+            .map(|layer| LayerImage {
+                width: layer.frame.width,
+                height: layer.frame.height,
+                rgba: &layer.frame.pixels,
+                opacity: 1.0,
+            })
+            .collect();
+        let presented = self.compositor.composite(canvas, &layers)?;
         let (Presented::NewTarget, Some(view)) = (presented, self.compositor.output_view()) else {
             return Ok(());
         };
@@ -43,19 +55,20 @@ impl Monitor {
         Ok(())
     }
 
-    /// Draws the frame letterboxed to the available space on a black background.
-    pub fn ui(&self, ui: &mut egui::Ui) {
-        let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
+    /// Draws the picture letterboxed to `size` on a black background.
+    pub fn ui(&self, ui: &mut egui::Ui, size: Vec2) -> Response {
+        let (rect, response) = ui.allocate_exact_size(size, Sense::click());
         ui.painter().rect_filled(rect, 0.0, Color32::BLACK);
-        let (Some(texture), Some((width, height))) = (self.texture, self.compositor.output_size())
-        else {
-            return;
-        };
-        let frame = Vec2::new(width as f32, height as f32);
-        let scale = (rect.width() / frame.x).min(rect.height() / frame.y);
-        let shown = Rect::from_center_size(rect.center(), frame * scale);
-        let uv = Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
-        ui.painter().image(texture, shown, uv, Color32::WHITE);
+        if let (Some(texture), Some((width, height))) =
+            (self.texture, self.compositor.output_size())
+        {
+            let frame = Vec2::new(width as f32, height as f32);
+            let scale = (rect.width() / frame.x).min(rect.height() / frame.y);
+            let shown = Rect::from_center_size(rect.center(), frame * scale);
+            let uv = Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
+            ui.painter().image(texture, shown, uv, Color32::WHITE);
+        }
+        response
     }
 }
 
