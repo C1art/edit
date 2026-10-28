@@ -1,4 +1,4 @@
-use timeline::KeyOutput;
+use timeline::{AlphaInterpretation, KeyOutput};
 
 use crate::recolor::Recolor;
 use crate::reshape::Reshape;
@@ -22,6 +22,8 @@ pub struct PixelEffects {
     pub style: PictureStyle,
     pub reshape: Reshape,
     pub recolor: Recolor,
+    /// How the source's alpha channel is read.
+    pub alpha: AlphaInterpretation,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -86,6 +88,7 @@ impl PixelEffects {
         style: PictureStyle::NONE,
         reshape: Reshape::NONE,
         recolor: Recolor::NONE,
+        alpha: AlphaInterpretation::Straight,
     };
 
     /// The shader's view, as five vec4s.
@@ -119,8 +122,8 @@ impl PixelEffects {
         ]
     }
 
-    /// The key's matte cleanup and spill, as two vec4s. The shader numbers outputs in
-    /// declaration order.
+    /// The key's matte cleanup and spill, then what becomes of the source's alpha, as
+    /// two vec4s. The shader numbers outputs in declaration order.
     pub(crate) fn key_uniform(&self) -> [f32; 8] {
         let key = self.key.unwrap_or(ChromaKey::OFF);
         [
@@ -130,7 +133,11 @@ impl PixelEffects {
             key.soften,
             key.spill,
             key.output as u32 as f32,
-            0.0,
+            match self.alpha {
+                AlphaInterpretation::Straight | AlphaInterpretation::Premultiplied => 0.0,
+                AlphaInterpretation::Ignore => 1.0,
+                AlphaInterpretation::Invert => 2.0,
+            },
             0.0,
         ]
     }

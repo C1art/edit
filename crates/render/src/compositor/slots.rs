@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use timeline::BlendMode;
+use timeline::{AlphaInterpretation, BlendMode};
 
 use super::{extent, Compositor, LayerImage};
 use crate::blit::Blit;
@@ -100,9 +100,10 @@ impl Compositor {
         };
         slot.blend = look.blend;
         let size = (slot.width, slot.height);
+        let shown = look.shown_size(size);
         // The blur radius is in canvas pixels, but the blur runs on the layer itself.
         let sigma = look.blur
-            / (fit_scale(size, canvas) * (look.scale[0] * look.scale[1]).abs().sqrt().max(0.01));
+            / (fit_scale(shown, canvas) * (look.scale[0] * look.scale[1]).abs().sqrt().max(0.01));
         slot.blurred = sigma >= 0.5;
         if slot.blurred && slot.blur.is_none() {
             let blur =
@@ -114,9 +115,10 @@ impl Compositor {
         }
         let placement = Placement {
             // Compositing leaves a group's colors multiplied by its coverage.
-            premultiplied: slot.kind == SlotKind::Group,
+            premultiplied: slot.kind == SlotKind::Group
+                || look.effects.alpha == AlphaInterpretation::Premultiplied,
             grade: Grade::uniform(layer.grade.as_deref(), look.color.look_intensity),
-            ..Placement::new(size, canvas, look)
+            ..Placement::new(shown, canvas, look)
         };
         Blit::write_placement(&self.queue, &slot.placement, placement);
     }

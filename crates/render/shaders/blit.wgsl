@@ -104,8 +104,8 @@ struct Placement {
     recolor_change_from: vec4<f32>,
     recolor_change_to: vec4<f32>,
     recolor_change_detail: vec4<f32>,
-    // Ultra Key's pedestal, contrast, choke and soften in source pixels; then its spill
-    // and its output (see key.wgsl).
+    // Ultra Key's pedestal, contrast, choke and soften in source pixels; then its spill,
+    // its output (see key.wgsl), and 1 to ignore the source's alpha or 2 to invert it.
     key_matte: vec4<f32>,
     key_spill: vec4<f32>,
 };

@@ -173,6 +173,12 @@ fn picture_at(uv: vec2<f32>) -> vec4<f32> {
     if offset.z > 0.0 {
         color = mix(color, smeared(fract(uv - offset.xy)), offset.z);
     }
+    let alpha = placement.key_spill.z;
+    if alpha > 1.5 {
+        color.a = 1.0 - color.a;
+    } else if alpha > 0.5 {
+        color.a = 1.0;
+    }
     let inside = all(uv >= vec2<f32>(0.0)) && all(uv <= vec2<f32>(1.0));
     return color * f32(inside);
 }

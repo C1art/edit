@@ -33,6 +33,8 @@ pub struct LayerLook {
     pub wash: f32,
     pub effects: PixelEffects,
     pub blend: BlendMode,
+    /// The width over height of one of the picture's pixels; wider pixels show it wider.
+    pub pixel_aspect: f32,
 }
 
 /// Color correction in linear light, every field neutral at zero except saturation.
@@ -99,7 +101,14 @@ impl LayerLook {
         wash: 0.0,
         effects: PixelEffects::NONE,
         blend: BlendMode::Normal,
+        pixel_aspect: 1.0,
     };
+
+    /// How big the picture of `size` stored pixels looks once its pixels are square.
+    pub(crate) fn shown_size(&self, (width, height): (u32, u32)) -> (u32, u32) {
+        let width = (width as f32 * self.pixel_aspect).round().max(1.0) as u32;
+        (width, height)
+    }
 }
 
 /// Where a layer lands in normalized device coordinates (the canvas spans -1..1, +y
