@@ -1,4 +1,5 @@
 mod audio_plan;
+mod color;
 mod edit;
 mod error;
 mod history;
@@ -14,6 +15,7 @@ mod transition;
 mod validate;
 
 pub use audio_plan::{audio_fade, audio_span};
+pub use color::ColorCorrection;
 pub use edit::{
     clamp_delta, AddTrack, CloseGap, Edge, ImportMedia, Lift, MoveClips, PlaceClip, PlaceMode,
     Razor, RazorTarget, RemoveMedia, RemoveTrack, RippleDelete, Roll, SetClipGain, SetClipLook,

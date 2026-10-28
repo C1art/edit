@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{Param, Ticks};
+use crate::{ColorCorrection, Param, Ticks};
 
 /// Where the clip's picture sits in the frame, after it is fitted to the frame.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -53,6 +53,8 @@ pub struct Look {
     /// Applied in order, before motion.
     #[serde(default)]
     pub effects: Vec<VideoEffect>,
+    #[serde(default)]
+    pub color: ColorCorrection,
 }
 
 fn full_opacity() -> Param {
@@ -66,6 +68,7 @@ impl Default for Look {
             opacity: full_opacity(),
             crop: Crop::default(),
             effects: Vec::new(),
+            color: ColorCorrection::default(),
         }
     }
 }
@@ -96,6 +99,7 @@ impl Look {
             .chain([&motion.scale, &motion.rotation, &self.opacity])
             .chain([&crop.left, &crop.top, &crop.right, &crop.bottom])
             .chain(effects)
+            .chain(self.color.params())
     }
 
     /// Source times of every keyframe, sorted and deduplicated.
