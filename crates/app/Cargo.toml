@@ -1,0 +1,20 @@
+[package]
+name = "app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+timeline.workspace = true
+media.workspace = true
+render.workspace = true
+audio.workspace = true
+playback.workspace = true
+project.workspace = true
+eframe.workspace = true
+egui.workspace = true
+crossbeam.workspace = true
+
+[lints]
+workspace = true

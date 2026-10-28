@@ -1,0 +1,41 @@
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.95"
+publish = false
+
+[workspace.dependencies]
+timeline = { path = "crates/timeline" }
+media = { path = "crates/media" }
+render = { path = "crates/render" }
+audio = { path = "crates/audio" }
+playback = { path = "crates/playback" }
+project = { path = "crates/project" }
+
+eframe = { version = "0.37", default-features = false, features = ["accesskit", "default_fonts", "wgpu"] }
+egui = "0.37"
+wgpu = { version = "30", default-features = false, features = ["std", "dx12", "vulkan", "wgsl"] }
+ffmpeg-sys-next = "9"
+cpal = "0.18"
+rubato = "5"
+crossbeam = "0.8"
+serde = { version = "1", features = ["derive"] }
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+undocumented_unsafe_blocks = "deny"
+unwrap_used = "warn"
+expect_used = "warn"
+
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
