@@ -17,6 +17,8 @@ pub enum MediaError {
     InvalidSettings(&'static str),
     InvalidFrame,
     OutOfMemory,
+    /// The caller stopped the work before it finished.
+    Cancelled,
 }
 
 impl fmt::Display for MediaError {
@@ -33,6 +35,7 @@ impl fmt::Display for MediaError {
             Self::InvalidSettings(reason) => write!(f, "invalid export settings: {reason}"),
             Self::InvalidFrame => f.write_str("decoder produced a frame that cannot be converted"),
             Self::OutOfMemory => f.write_str("FFmpeg could not allocate memory"),
+            Self::Cancelled => f.write_str("cancelled"),
         }
     }
 }

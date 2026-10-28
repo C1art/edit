@@ -12,6 +12,8 @@ struct ScalerKey {
     format: sys::AVPixelFormat,
     colorspace: sys::AVColorSpace,
     range: sys::AVColorRange,
+    output_width: i32,
+    output_height: i32,
 }
 
 /// Converts decoded frames to tightly packed, gamma-encoded RGBA8, rebuilding the
@@ -19,30 +21,52 @@ struct ScalerKey {
 #[derive(Default)]
 pub(crate) struct Scaler {
     context: Option<(NonNull<sys::SwsContext>, ScalerKey)>,
+    /// Pictures are resized to this; `None` keeps the decoded size.
+    output_size: Option<(i32, i32)>,
 }
 
 // SAFETY: the swscale context is exclusively owned and only used through `&mut self`.
 unsafe impl Send for Scaler {}
 
 impl Scaler {
+    pub(crate) fn set_output_size(&mut self, size: Option<(u32, u32)>) -> Result<(), MediaError> {
+        let invalid = || MediaError::InvalidSettings("picture size out of range");
+        self.output_size = size
+            .map(|(width, height)| {
+                let width = i32::try_from(width).map_err(|_| invalid())?;
+                let height = i32::try_from(height).map_err(|_| invalid())?;
+                if width == 0 || height == 0 {
+                    return Err(invalid());
+                }
+                Ok((width, height))
+            })
+            .transpose()?;
+        Ok(())
+    }
+
     pub(crate) fn convert(
         &mut self,
         decoder: &Decoder,
         frame: &Frame,
     ) -> Result<(u32, u32, Vec<u8>), MediaError> {
         let raw = frame.raw();
+        let (output_width, output_height) = self.output_size.unwrap_or((raw.width, raw.height));
         let key = ScalerKey {
             width: raw.width,
             height: raw.height,
             format: decoder.raw().pix_fmt,
             colorspace: raw.colorspace,
             range: raw.color_range,
+            output_width,
+            output_height,
         };
         let context = self.context_for(key)?;
 
-        let width = u32::try_from(key.width).map_err(|_| MediaError::InvalidFrame)?;
-        let height = u32::try_from(key.height).map_err(|_| MediaError::InvalidFrame)?;
-        let stride = key.width.checked_mul(4).ok_or(MediaError::InvalidFrame)?;
+        let width = u32::try_from(output_width).map_err(|_| MediaError::InvalidFrame)?;
+        let height = u32::try_from(output_height).map_err(|_| MediaError::InvalidFrame)?;
+        let stride = output_width
+            .checked_mul(4)
+            .ok_or(MediaError::InvalidFrame)?;
         let mut pixels = vec![0u8; width as usize * height as usize * 4];
         let destination = [
             pixels.as_mut_ptr(),
@@ -52,7 +76,8 @@ impl Scaler {
         ];
         let destination_stride = [stride, 0, 0, 0];
         // SAFETY: the source planes and strides come from a decoded frame matching `key`, and
-        // `pixels` holds exactly `height` rows of `stride` bytes for the single RGBA plane.
+        // `pixels` holds exactly `output_height` rows of `stride` bytes for the single RGBA
+        // plane.
         let rows = unsafe {
             sys::sws_scale(
                 context.as_ptr(),
@@ -64,7 +89,7 @@ impl Scaler {
                 destination_stride.as_ptr(),
             )
         };
-        if rows != key.height {
+        if rows != output_height {
             return Err(MediaError::InvalidFrame);
         }
         Ok((width, height, pixels))
@@ -83,8 +108,8 @@ impl Scaler {
                 key.width,
                 key.height,
                 key.format,
-                key.width,
-                key.height,
+                key.output_width,
+                key.output_height,
                 sys::AVPixelFormat::AV_PIX_FMT_RGBA,
                 sys::SWS_BILINEAR | sys::SWS_ACCURATE_RND | sys::SWS_FULL_CHR_H_INT,
                 ptr::null_mut(),

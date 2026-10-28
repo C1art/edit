@@ -142,6 +142,15 @@ impl MediaReader {
         &self.info
     }
 
+    /// Resizes pictures to `size` from the next decoded frame on; `None` restores the
+    /// decoded size.
+    pub fn set_video_size(&mut self, size: Option<(u32, u32)>) -> Result<(), MediaError> {
+        match &mut self.video {
+            Some(video) => video.converter.set_output_size(size),
+            None => Ok(()),
+        }
+    }
+
     /// Positions the reader so that the next frames are the picture showing at `position`
     /// and the audio starting exactly there.
     pub fn seek(&mut self, position: Ticks) -> Result<(), MediaError> {

@@ -16,6 +16,16 @@ pub struct VideoSettings {
     /// x264 constant rate factor: lower is better and larger; 18 looks lossless on
     /// most material.
     pub crf: u8,
+    pub profile: EncodeProfile,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum EncodeProfile {
+    /// Compresses well for viewing and sharing.
+    #[default]
+    Delivery,
+    /// Encodes quickly and seeks cheaply, with a keyframe every half second, for proxies.
+    Editing,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,7 +79,8 @@ impl MediaWriter {
                 }
                 let size = (settings.width, settings.height);
                 let rate = (settings.frame_rate.num(), settings.frame_rate.den());
-                let encoder = Encoder::video(size, rate, settings.crf, global_header)?;
+                let encoder =
+                    Encoder::video(size, rate, settings.crf, settings.profile, global_header)?;
                 Ok(VideoStream {
                     index: output.add_stream(&encoder)?,
                     encoder,
@@ -243,6 +254,7 @@ mod tests {
             height: 36,
             frame_rate: FrameRate::FPS_25,
             crf: 23,
+            profile: EncodeProfile::Delivery,
         };
         let audio = AudioSettings {
             sample_rate: 48_000,

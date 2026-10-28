@@ -5,7 +5,7 @@ use ffmpeg_sys_next as sys;
 
 use super::error::check;
 use super::{Frame, Packet, Received};
-use crate::MediaError;
+use crate::{EncodeProfile, MediaError};
 
 pub(crate) const VIDEO_FORMAT: sys::AVPixelFormat = sys::AVPixelFormat::AV_PIX_FMT_YUV420P;
 pub(crate) const AUDIO_FORMAT: sys::AVSampleFormat = sys::AVSampleFormat::AV_SAMPLE_FMT_FLTP;
@@ -21,6 +21,7 @@ impl Encoder {
         (width, height): (u32, u32),
         (rate_num, rate_den): (u32, u32),
         crf: u8,
+        profile: EncodeProfile,
         global_header: bool,
     ) -> Result<Self, MediaError> {
         let invalid = || MediaError::InvalidSettings("frame size or rate out of range");
@@ -52,11 +53,18 @@ impl Encoder {
         raw.color_range = sys::AVColorRange::AVCOL_RANGE_MPEG;
         raw.thread_count = 0;
         let crf = std::ffi::CString::new(crf.to_string()).map_err(|_| invalid())?;
-        encoder.open(
-            codec,
-            global_header,
-            &[(c"crf", crf.as_c_str()), (c"preset", c"medium")],
-        )
+        let crf = (c"crf", crf.as_c_str());
+        match profile {
+            EncodeProfile::Delivery => {
+                encoder.open(codec, global_header, &[crf, (c"preset", c"medium")])
+            }
+            EncodeProfile::Editing => {
+                raw.gop_size = (num / den / 2).max(1);
+                raw.max_b_frames = 0;
+                let options = [crf, (c"preset", c"veryfast"), (c"tune", c"fastdecode")];
+                encoder.open(codec, global_header, &options)
+            }
+        }
     }
 
     /// AAC stereo.
