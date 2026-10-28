@@ -2,15 +2,19 @@ mod block_match;
 mod codec;
 mod error;
 mod ffi;
+mod fit;
 mod frames;
 mod motion;
 mod peaks;
 mod probe;
 mod proxy;
 mod reader;
+mod region_track;
 mod scenes;
 mod seek_trim;
 mod still;
+#[cfg(test)]
+mod test_picture;
 mod writer;
 
 pub use codec::{AudioCodec, RateControl, VideoCodec};
@@ -32,6 +36,7 @@ pub use peaks::{read_peaks, Peaks};
 pub use probe::{probe, MediaInfo, StreamInfo, StreamKind};
 pub use proxy::{create_proxy, proxy_size};
 pub use reader::{MediaReader, SourceInfo, Streams, VideoInfo};
+pub use region_track::{track_region, RegionTrack, TrackDirection, TrackedFrame};
 pub use scenes::detect_scenes;
 pub use still::{write_still, StillFormat};
 pub use writer::{AudioSettings, EncodeProfile, MediaWriter, VideoSettings};

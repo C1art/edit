@@ -5,7 +5,7 @@ const GLOBAL_REACH: i32 = 8;
 /// How far each block's match is refined around the coarser level's, in pixels.
 const REFINE_REACH: i32 = 2;
 /// Half a block's side, in pixels of whichever level it is matched at.
-const HALF_BLOCK: i32 = 6;
+pub(crate) const HALF_BLOCK: i32 = 6;
 const GRID: (i32, i32) = (16, 9);
 /// The least mean squared step between neighboring pixels, across the block's weakest
 /// direction, of a block worth matching. Flat sky matches anywhere, and a straight edge
@@ -132,29 +132,78 @@ impl Pyramid {
         let margin = HALF_BLOCK + 1;
         let step = |extent: i32, count: i32| (extent - 2 * margin) as f32 / (count - 1) as f32;
         let (step_x, step_y) = (step(width, GRID.0), step(height, GRID.1));
-        let finest = &self.0[0];
-        (0..GRID.1)
+        let centers = (0..GRID.1)
             .flat_map(|row| (0..GRID.0).map(move |column| (column, row)))
             .map(|(column, row)| {
                 [
                     margin + (column as f32 * step_x).round() as i32,
                     margin + (row as f32 * step_y).round() as i32,
                 ]
-            })
+            });
+        self.match_blocks(next, centers, global.map(|d| d << coarsest))
+    }
+
+    /// Where the blocks around `centers` moved to in `next`, as pairs of their centers
+    /// in pixels, searched for around `shift` in pixels. Blocks too plain to place are
+    /// left out.
+    pub(crate) fn match_blocks(
+        &self,
+        next: &Self,
+        centers: impl Iterator<Item = [i32; 2]>,
+        shift: [i32; 2],
+    ) -> Vec<([f64; 2], [f64; 2])> {
+        let coarsest = LEVELS - 1;
+        let finest = &self.0[0];
+        centers
             .filter(|&center| finest.cornerness(center, HALF_BLOCK) >= MIN_CORNERNESS)
             .filter_map(|center| {
-                let mut shift = global.map(|d| d << coarsest);
+                let mut found = shift;
                 for level in (0..coarsest).rev() {
                     let at = center.map(|c| c >> level);
-                    let guess = shift.map(|d| d >> level);
-                    let (found, _) = refine(&self.0[level], &next.0[level], at, guess)?;
-                    shift = found.map(|d| d << level);
+                    let guess = found.map(|d| d >> level);
+                    let (refined, _) = refine(&self.0[level], &next.0[level], at, guess)?;
+                    found = refined.map(|d| d << level);
                 }
-                let fine = subpixel(finest, &next.0[0], center, shift)?;
+                let fine = subpixel(finest, &next.0[0], center, found)?;
                 let from = center.map(f64::from);
                 Some((from, [from[0] + fine[0], from[1] + fine[1]]))
             })
             .collect()
+    }
+
+    /// The shift in pixels, searched for around `guess` on the coarsest level, that best
+    /// matches the picture around `samples` to `next`.
+    pub(crate) fn region_shift(
+        &self,
+        next: &Self,
+        samples: &[[i32; 2]],
+        guess: [i32; 2],
+    ) -> [i32; 2] {
+        let coarsest = LEVELS - 1;
+        let (picture, next) = (&self.0[coarsest], &next.0[coarsest]);
+        let guess = guess.map(|d| d >> coarsest);
+        let mut best = (guess, f32::INFINITY);
+        for dy in -GLOBAL_REACH..=GLOBAL_REACH {
+            for dx in -GLOBAL_REACH..=GLOBAL_REACH {
+                let shift = [guess[0] + dx, guess[1] + dy];
+                let differences = samples
+                    .iter()
+                    .map(|sample| sample.map(|c| c >> coarsest))
+                    .filter_map(|at| picture.difference(next, at, shift, 1));
+                let (sum, count) = differences.fold((0.0, 0), |(sum, count), difference| {
+                    (sum + difference, count + 1)
+                });
+                if count == 0 {
+                    continue;
+                }
+                // Ties go to the smaller change, so a plain region keeps its course.
+                let mean = sum / count as f32 + 1e-4 * (dx.abs() + dy.abs()) as f32;
+                if mean < best.1 {
+                    best = (shift, mean);
+                }
+            }
+        }
+        best.0.map(|d| d << coarsest)
     }
 }
 
