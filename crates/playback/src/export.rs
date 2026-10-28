@@ -7,7 +7,7 @@ use std::thread;
 use audio::SampleRate;
 use crossbeam::channel::{Receiver, Sender};
 use media::{AudioSettings, EncodeProfile, MediaWriter, RateControl, VideoCodec, VideoSettings};
-use render::{Compositor, LayerImage};
+use render::{Background, Compositor, LayerImage};
 use timeline::{Sequence, Ticks};
 
 use crate::sequence_mix::{SequenceMix, CHUNK_FRAMES};
@@ -63,8 +63,16 @@ impl ExportJob {
     ) -> Result<Self, PlaybackError> {
         let (sender, events) = crossbeam::channel::unbounded();
         let cancel = Arc::new(AtomicBool::new(false));
+        let mut compositor = Compositor::new(&device, &queue);
+        let keeps_alpha = settings
+            .video
+            .as_ref()
+            .is_some_and(|video| video.codec.keeps_alpha());
+        if keeps_alpha {
+            compositor.set_background(Background::Transparent);
+        }
         let worker = Worker {
-            compositor: Compositor::new(&device, &queue),
+            compositor,
             sequence,
             settings,
             events: sender,
