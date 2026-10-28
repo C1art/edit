@@ -23,6 +23,7 @@ pub fn generated_frame(generator: &Generator, width: u32, height: u32) -> Arc<Vi
     match generator {
         Generator::ColorMatte { color } => canvas.fill(*color),
         Generator::Title(title) => draw_title(&mut canvas, title),
+        Generator::AdjustmentLayer => {}
     }
     Arc::new(VideoFrame {
         pts: Ticks::ZERO,
