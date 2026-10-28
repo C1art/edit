@@ -14,6 +14,7 @@ mod reshape;
 mod scope;
 mod secondary;
 mod style;
+mod wipe;
 
 pub use blit::DISPLAY_FORMAT;
 pub use compositor::{Compositor, LayerImage, Picture, Presented};
@@ -28,6 +29,7 @@ pub use reshape::{Mirror, Reshape};
 pub use scope::Scope;
 pub use secondary::SecondaryAdjust;
 pub use style::PictureStyle;
+pub use wipe::LayerWipe;
 
 /// Compositing happens in linear light at half-float precision.
 pub const WORKING_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;

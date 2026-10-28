@@ -5,6 +5,7 @@ use crate::mask::{self, LayerMask, MAX_MASKS};
 use crate::mask::{Outline, MAX_OUTLINE_POINTS};
 use crate::pixel::PixelEffects;
 use crate::secondary::SecondaryAdjust;
+use crate::wipe::{self, LayerWipe};
 
 /// How a layer is drawn: everything except the picture itself.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -23,9 +24,8 @@ pub struct LayerLook {
     /// Gaussian blur standard deviation in canvas pixels.
     pub blur: f32,
     pub color: ColorAdjust,
-    /// Fractions of the canvas hidden from the left, top, right and bottom, whatever the
-    /// picture's placement.
-    pub mask: [f32; 4],
+    /// What of the canvas transitions show the layer in, whatever its placement.
+    pub wipes: [Option<LayerWipe>; 2],
     /// 0 to 1: how far the picture is washed out to white.
     pub wash: f32,
     pub effects: PixelEffects,
@@ -91,7 +91,7 @@ impl LayerLook {
         opacity_masks: [None; MAX_MASKS],
         blur: 0.0,
         color: ColorAdjust::IDENTITY,
-        mask: [0.0; 4],
+        wipes: [None; 2],
         wash: 0.0,
         effects: PixelEffects::NONE,
         blend: BlendMode::Normal,
@@ -112,7 +112,7 @@ pub(crate) struct Placement {
     /// The picture fitted to the canvas, in canvas pixels, which masks are measured in.
     pub(crate) fitted: [f32; 2],
     pub(crate) color: ColorAdjust,
-    pub(crate) mask: [f32; 4],
+    pub(crate) wipes: [Option<LayerWipe>; 2],
     pub(crate) wash: f32,
     pub(crate) effects: PixelEffects,
     pub(crate) blend: BlendMode,
@@ -132,7 +132,7 @@ impl Placement {
         opacity_masks: [None; MAX_MASKS],
         fitted: [0.0; 2],
         color: ColorAdjust::IDENTITY,
-        mask: [0.0; 4],
+        wipes: [None; 2],
         wash: 0.0,
         effects: PixelEffects::NONE,
         blend: BlendMode::Normal,
@@ -159,7 +159,7 @@ impl Placement {
             opacity_masks: look.opacity_masks,
             fitted,
             color: look.color,
-            mask: look.mask.map(|side| side.clamp(0.0, 1.0)),
+            wipes: look.wipes,
             wash: look.wash.clamp(0.0, 1.0),
             effects: look.effects,
             blend: look.blend,
@@ -184,7 +184,7 @@ impl Placement {
                 color.shadows,
             ])
             .chain([color.temperature, color.tint, color.saturation, self.wash])
-            .chain(self.mask)
+            .chain(wipe::uniform(&self.wipes))
             .chain(self.effects.uniform())
             // The shader numbers blend modes in declaration order.
             .chain([
@@ -249,13 +249,13 @@ mod tests {
             ..LayerLook::IDENTITY
         };
         let bytes = Placement::new((1920, 1080), (1920, 1080), &look).to_bytes();
-        // The shader's struct ends with the masks: the header, three vec4s each, then
-        // their outlines at two points a vec4; then the picture style's nine, the
-        // reshape's five and the recolor's six.
+        // Twenty vec4s, three of them added by the wipes, lead the shader's struct. The
+        // masks follow: the header, three vec4s each, then their outlines at two points
+        // a vec4; then the picture style's nine, the reshape's five and the recolor's six.
         let outlines = MAX_MASKS * MAX_OUTLINE_POINTS / 2;
         assert_eq!(
             bytes.len(),
-            (20 + 1 + 3 * MAX_MASKS + outlines + 9 + 5 + 6) * 16
+            (23 + 1 + 3 * MAX_MASKS + outlines + 9 + 5 + 6) * 16
         );
         assert!(bytes.len() as u64 <= crate::blit::UNIFORM_BYTES);
     }

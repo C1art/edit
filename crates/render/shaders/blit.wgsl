@@ -13,8 +13,10 @@ struct Placement {
     tone: vec4<f32>,
     // Temperature, tint, saturation, then how far to wash out to white.
     balance: vec4<f32>,
-    // Fractions of the canvas hidden from the left, top, right and bottom.
-    mask: vec4<f32>,
+    // Two transition wipes (see wipe.wgsl): each pattern's number (negative when unused),
+    // the side it enters from, its progress and 1 when reversed; then its border's
+    // width as a share of the canvas height and its color, linear.
+    wipes: array<vec4<f32>, 4>,
     // Key color (linear), then tolerance; keying is off when the tolerance is negative.
     key: vec4<f32>,
     // Key softness, sharpen amount, invert amount, tint amount.
@@ -475,8 +477,7 @@ fn layer_color(in: VertexOutput) -> vec4<f32> {
     let pinned = unpinned(in.uv);
     let uv = warp(pinned);
     let color = source_color(uv);
-    let mask = placement.mask;
-    let shown = all(in.canvas >= mask.xy) && all(in.canvas <= vec2<f32>(1.0) - mask.zw);
+    let wiped = wipe_cover(in.canvas);
     let keyed = key_alpha(color.rgb);
     // Desaturating the key's edge suppresses the screen's color spilling onto it.
     let unspilled = mix(vec3<f32>(dot(color.rgb, LUMA)), color.rgb, keyed);
@@ -488,5 +489,8 @@ fn layer_color(in: VertexOutput) -> vec4<f32> {
     let covered = picture + shadow * (1.0 - picture);
     rgb = mix(placement.style_shadow_color.rgb, rgb, picture / max(covered, 1e-6));
     let opacity = placement.axis_y_opacity.z * mask_coverage(in.uv);
-    return vec4<f32>(rgb, covered * opacity * f32(shown));
+    let shown = covered * wiped.picture;
+    let border = 1.0 - wiped.picture;
+    rgb = (rgb * shown + wiped.border * border) / max(shown + border, 1e-6);
+    return vec4<f32>(rgb, (shown + border) * wiped.shown * opacity);
 }
