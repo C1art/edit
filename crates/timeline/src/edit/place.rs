@@ -119,3 +119,42 @@ impl Edit for Razor {
         }
     }
 }
+
+/// Cuts clips and those linked to them at sequence times, as scene edit detection does:
+/// each cut is a clip and a time on it, which later cuts can't move, as they're all
+/// placed before any is made.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AddEdits {
+    pub cuts: Vec<(ClipId, Ticks)>,
+}
+
+impl Edit for AddEdits {
+    fn name(&self) -> &'static str {
+        "Add Edits"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let planned: Vec<(Vec<TrackRef>, Ticks)> = self
+            .cuts
+            .iter()
+            .map(|&(clip, at)| {
+                let tracks = sequence
+                    .with_links(&[clip])
+                    .into_iter()
+                    .filter_map(|id| sequence.clip(id))
+                    .filter(|(_, clip)| clip.covers(at))
+                    .map(|(track, _)| track)
+                    .collect();
+                (tracks, at)
+            })
+            .collect();
+        let made: usize = planned
+            .iter()
+            .map(|(tracks, at)| ops::split(sequence, tracks, *at, &mut Relinks::default()))
+            .sum();
+        if made == 0 {
+            return Err(TimelineError::NothingToEdit);
+        }
+        Ok(())
+    }
+}

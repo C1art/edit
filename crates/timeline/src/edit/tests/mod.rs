@@ -122,6 +122,46 @@ fn razor_on_a_clip_cuts_its_linked_partner_too() {
 }
 
 #[test]
+fn added_edits_cut_each_clip_and_its_partner_only_where_asked() {
+    let (mut timeline, source) = timeline();
+    timeline
+        .apply(place(source, 0, 0, 300, PlaceMode::Overwrite))
+        .unwrap();
+    timeline
+        .apply(place(source, 300, 0, 300, PlaceMode::Overwrite))
+        .unwrap();
+    let mut beside = place(source, 0, 0, 600, PlaceMode::Overwrite);
+    beside.video_track = Some(1);
+    beside.audio_track = None;
+    timeline.apply(beside).unwrap();
+    let (first, second) = (clip_on(&timeline, V1, 0), clip_on(&timeline, V1, 1));
+
+    let cuts = vec![
+        (first, Ticks(100)),
+        (first, Ticks(200)),
+        (second, Ticks(450)),
+    ];
+    timeline.apply(AddEdits { cuts }).unwrap();
+
+    let expected = [
+        (0, 100, 0),
+        (100, 200, 100),
+        (200, 300, 200),
+        (300, 450, 0),
+        (450, 600, 150),
+    ];
+    assert_eq!(spans(&timeline, V1), expected);
+    assert_eq!(spans(&timeline, A1), expected);
+    assert_eq!(spans(&timeline, V2), [(0, 600, 0)]);
+    let sequence = timeline.sequence();
+    let link = |track: TrackRef, index: usize| sequence.track(track).unwrap().clips[index].link;
+    for index in 0..5 {
+        assert_eq!(link(V1, index), link(A1, index));
+    }
+    assert_ne!(link(V1, 1), link(V1, 2));
+}
+
+#[test]
 fn normal_trim_cannot_run_into_the_next_clip_and_clamp_stops_at_it() {
     let (mut timeline, source) = timeline();
     timeline
