@@ -6,6 +6,7 @@ mod clock;
 mod command;
 mod compose;
 mod composed;
+mod envelope;
 mod error;
 mod export;
 mod frame_picker;
@@ -26,6 +27,7 @@ mod tracks_mix;
 mod video_worker;
 
 pub use composed::{ComposedFrame, Layer, LayerPicture, Levels};
+pub use envelope::{EnvelopeEvent, EnvelopeJob};
 pub use error::PlaybackError;
 pub use export::{ExportEvent, ExportJob, ExportSettings, VideoExport};
 pub use generated::generated_frame;
