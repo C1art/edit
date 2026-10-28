@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
 use timeline::{
-    AudioEffect, Caption, Clip, ClipId, CurvePoint, Gain, Generator, Interpolation, Keyframe,
-    Marks, Mask, MaskShape, MediaItem, Nest, Pan, Param, Rgb, SourceId, TextAlign, Ticks, Timebase,
-    Title, TitleFont, Track, Transition, TransitionKind, VideoEffect, VideoFormat,
+    AudioEffect, Bin, BinId, Caption, Clip, ClipId, CurvePoint, Gain, Generator, Interpolation,
+    Keyframe, Marks, Mask, MaskShape, MediaItem, Nest, Pan, Param, Rgb, SourceId, TextAlign, Ticks,
+    Timebase, Title, TitleFont, Track, Transition, TransitionKind, VideoEffect, VideoFormat,
 };
 
 use super::*;
@@ -18,6 +18,7 @@ fn sample() -> ProjectFile {
         video: Some(VideoFormat::default()),
         has_audio: true,
         proxy: Some(PathBuf::from(r"C:\Footage\Proxies\interview_Proxy.mp4")),
+        bin: None,
         generator: None,
         nest: None,
     });
@@ -29,6 +30,7 @@ fn sample() -> ProjectFile {
         video: Some(VideoFormat::default()),
         has_audio: false,
         proxy: None,
+        bin: Some(BinId(5)),
         generator: Some(Generator::Title(Title {
             text: "Line one\n«two»".to_owned(),
             size: 72,
@@ -40,6 +42,18 @@ fn sample() -> ProjectFile {
         })),
         nest: None,
     });
+    sequence.bins = vec![
+        Bin {
+            id: BinId(4),
+            name: "Graphics".to_owned(),
+            parent: None,
+        },
+        Bin {
+            id: BinId(5),
+            name: "Titles".to_owned(),
+            parent: Some(BinId(4)),
+        },
+    ];
     let mut nest = Nest::with_default_tracks();
     nest.audio[1].clips.push(Clip::new(
         ClipId(8),
@@ -59,6 +73,7 @@ fn sample() -> ProjectFile {
         video: Some(VideoFormat::default()),
         has_audio: true,
         proxy: None,
+        bin: None,
         generator: None,
         nest: Some(nest),
     });
