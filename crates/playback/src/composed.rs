@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use media::VideoFrame;
+use render::{LayerImage, LayerLook};
 use timeline::{Ticks, TrackRef};
 
 /// One source picture placed in the program picture.
@@ -8,6 +9,18 @@ use timeline::{Ticks, TrackRef};
 pub struct Layer {
     pub track: TrackRef,
     pub frame: Arc<VideoFrame>,
+    pub look: LayerLook,
+}
+
+impl Layer {
+    pub fn image(&self) -> LayerImage<'_> {
+        LayerImage {
+            width: self.frame.width,
+            height: self.frame.height,
+            rgba: &self.frame.pixels,
+            look: self.look,
+        }
+    }
 }
 
 /// Everything visible at one frame of the sequence, bottom layer first.

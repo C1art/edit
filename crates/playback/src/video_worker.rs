@@ -7,7 +7,6 @@ use timeline::{Sequence, SourceId, Ticks};
 
 use crate::command::{coalesce, Coalesced, Command, Event};
 use crate::frame_picker::TaggedFrame;
-use crate::track_video::TrackVideo;
 use crate::{compose, ComposedFrame};
 
 /// How long the worker waits for room in the frame queue before checking commands again.
@@ -45,7 +44,7 @@ pub(crate) fn spawn(
 struct VideoWorker {
     sequence: Arc<Sequence>,
     channels: VideoChannels,
-    tracks: Vec<TrackVideo>,
+    tracks: Vec<compose::TrackDecoders>,
     generation: u64,
     /// Index of the next frame to compose, at the sequence frame rate.
     next_frame: i64,

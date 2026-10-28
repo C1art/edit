@@ -10,7 +10,7 @@ use render::{Compositor, LayerImage};
 use timeline::{Sequence, Ticks};
 
 use crate::sequence_mix::{SequenceMix, CHUNK_FRAMES};
-use crate::{compose, PlaybackError};
+use crate::{compose, Layer, PlaybackError};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExportSettings {
@@ -144,15 +144,7 @@ impl Worker {
             let pts = rate.frame_start(frame, timebase);
             let layers =
                 compose::layers_at(&sequence, pts, &mut tracks, &mut warned, &mut warnings);
-            let images: Vec<LayerImage<'_>> = layers
-                .iter()
-                .map(|layer| LayerImage {
-                    width: layer.frame.width,
-                    height: layer.frame.height,
-                    rgba: &layer.frame.pixels,
-                    opacity: 1.0,
-                })
-                .collect();
+            let images: Vec<LayerImage<'_>> = layers.iter().map(Layer::image).collect();
             self.compositor
                 .composite((format.width, format.height), &images)?;
             writer.write_video(&self.compositor.read_output()?)?;

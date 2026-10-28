@@ -1,5 +1,6 @@
 use crate::blit::{self, Blit, DISPLAY_FORMAT};
-use crate::placement::NdcRect;
+use crate::blur::BlurTargets;
+use crate::placement::{fit_scale, LayerLook, Placement};
 use crate::{RenderError, WORKING_FORMAT};
 
 /// Decoded frames arrive gamma-encoded. BT.709 video is treated as sRGB, which matches
@@ -20,7 +21,7 @@ pub struct LayerImage<'a> {
     pub width: u32,
     pub height: u32,
     pub rgba: &'a [u8],
-    pub opacity: f32,
+    pub look: LayerLook,
 }
 
 /// Upload texture and placement for one layer, reused while the layer's size holds.
@@ -28,8 +29,21 @@ struct Slot {
     width: u32,
     height: u32,
     texture: wgpu::Texture,
+    view: wgpu::TextureView,
     placement: wgpu::Buffer,
     binding: wgpu::BindGroup,
+    /// Created the first time the layer is blurred.
+    blur: Option<BlurTargets>,
+    blurred: bool,
+}
+
+impl Slot {
+    fn placed(&self) -> &wgpu::BindGroup {
+        match &self.blur {
+            Some(blur) if self.blurred => &blur.placed,
+            _ => &self.binding,
+        }
+    }
 }
 
 struct Targets {
@@ -79,7 +93,8 @@ impl Compositor {
             .map(|targets| (targets.width, targets.height))
     }
 
-    /// Draws `layers` bottom first over black, each scaled to fit `canvas`.
+    /// Draws `layers` bottom first over black, each fitted to `canvas` and then moved,
+    /// scaled, turned, cropped, blurred and faded by its look.
     pub fn composite(
         &mut self,
         canvas: (u32, u32),
@@ -117,10 +132,13 @@ impl Compositor {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("compositor"),
             });
-        let layer_bindings: Vec<&wgpu::BindGroup> = self.slots[..layers.len()]
-            .iter()
-            .map(|slot| &slot.binding)
-            .collect();
+        let slots = &self.slots[..layers.len()];
+        for slot in slots.iter().filter(|slot| slot.blurred) {
+            if let Some(blur) = &slot.blur {
+                blur.draw(&mut encoder, &self.blit);
+            }
+        }
+        let layer_bindings: Vec<&wgpu::BindGroup> = slots.iter().map(Slot::placed).collect();
         blit::draw(
             &mut encoder,
             &targets.working,
@@ -157,7 +175,19 @@ impl Compositor {
                 None => self.slots.push(slot),
             }
         }
-        let slot = &self.slots[index];
+        let size = (layer.width, layer.height);
+        // The blur radius is in canvas pixels, but the blur runs on the layer itself.
+        let sigma = layer.look.blur / (fit_scale(size, canvas) * layer.look.scale.max(0.01));
+        let slot = &mut self.slots[index];
+        slot.blurred = sigma >= 0.5;
+        if slot.blurred && slot.blur.is_none() {
+            let blur =
+                BlurTargets::new(&self.device, &self.blit, &slot.view, &slot.placement, size);
+            slot.blur = Some(blur);
+        }
+        if let Some(blur) = slot.blur.as_ref().filter(|_| slot.blurred) {
+            blur.write(&self.queue, size, sigma);
+        }
         self.queue.write_texture(
             wgpu::TexelCopyTextureInfo {
                 texture: &slot.texture,
@@ -173,8 +203,8 @@ impl Compositor {
             },
             extent(layer.width, layer.height),
         );
-        let rect = NdcRect::fit((layer.width, layer.height), canvas);
-        Blit::write_placement(&self.queue, &slot.placement, rect, layer.opacity);
+        let placement = Placement::new(size, canvas, &layer.look);
+        Blit::write_placement(&self.queue, &slot.placement, placement);
     }
 
     fn create_slot(&self, width: u32, height: u32) -> Slot {
@@ -190,8 +220,11 @@ impl Compositor {
             width,
             height,
             binding: self.blit.bind(&self.device, &view, &placement),
+            view,
             texture,
             placement,
+            blur: None,
+            blurred: false,
         }
     }
 
@@ -208,7 +241,7 @@ impl Compositor {
             usage | wgpu::TextureUsages::COPY_SRC,
         );
         let placement = Blit::placement_buffer(&self.device);
-        Blit::write_placement(&self.queue, &placement, NdcRect::FULL, 1.0);
+        Blit::write_placement(&self.queue, &placement, Placement::FULL);
         Targets {
             width,
             height,

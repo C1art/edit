@@ -24,16 +24,7 @@ impl Monitor {
         frame: &ComposedFrame,
         canvas: (u32, u32),
     ) -> Result<(), RenderError> {
-        let layers: Vec<LayerImage<'_>> = frame
-            .layers
-            .iter()
-            .map(|layer| LayerImage {
-                width: layer.frame.width,
-                height: layer.frame.height,
-                rgba: &layer.frame.pixels,
-                opacity: 1.0,
-            })
-            .collect();
+        let layers: Vec<LayerImage<'_>> = frame.layers.iter().map(playback::Layer::image).collect();
         let presented = self.compositor.composite(canvas, &layers)?;
         let (Presented::NewTarget, Some(view)) = (presented, self.compositor.output_view()) else {
             return Ok(());
