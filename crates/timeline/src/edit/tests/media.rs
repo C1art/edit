@@ -10,6 +10,7 @@ fn relink(source: SourceId, path: &str, duration: i64) -> RelinkMedia {
             video: None,
             has_audio: true,
             still: false,
+            interpreted_rate: None,
         },
     }
 }
@@ -108,6 +109,7 @@ fn a_still_places_its_usual_length_but_holds_for_as_long_as_a_clip_runs() {
             video: Some(VideoFormat::default()),
             has_audio: false,
             still: true,
+            interpreted_rate: None,
         })
         .unwrap();
     let still = timeline.sequence().media.last().unwrap().clone();

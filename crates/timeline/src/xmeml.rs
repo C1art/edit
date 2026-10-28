@@ -399,6 +399,7 @@ mod tests {
             video: Some(format),
             has_audio: true,
             still: false,
+            interpreted_rate: None,
         };
         timeline.apply(import).unwrap();
         let source = timeline.sequence().media[0].id;

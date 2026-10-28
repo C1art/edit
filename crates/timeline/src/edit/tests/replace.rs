@@ -11,6 +11,7 @@ fn replacing_a_clip_moves_it_and_its_link_onto_the_new_media_in_sync() {
             video: timeline.sequence().media[0].video,
             has_audio: true,
             still: false,
+            interpreted_rate: None,
         })
         .unwrap();
     let second = timeline.sequence().media[1].id;

@@ -2,8 +2,8 @@ use std::path::PathBuf;
 
 use crate::edit::ops;
 use crate::{
-    Edit, MediaItem, Sequence, SourceId, Ticks, TimelineError, Track, TrackKind, TrackRef,
-    VideoFormat,
+    Edit, FrameRate, MediaItem, Sequence, SourceId, Ticks, TimelineError, Track, TrackKind,
+    TrackRef, VideoFormat,
 };
 
 /// Adds a track above the existing ones of its kind.
@@ -130,6 +130,8 @@ pub struct ImportMedia {
     pub video: Option<VideoFormat>,
     pub has_audio: bool,
     pub still: bool,
+    /// The frame rate to play the file at instead of its own, as Interpret Footage sets.
+    pub interpreted_rate: Option<FrameRate>,
 }
 
 impl Edit for ImportMedia {
@@ -154,7 +156,7 @@ impl Edit for ImportMedia {
             generator: None,
             nest: None,
             subclip: None,
-            interpreted_rate: None,
+            interpreted_rate: self.interpreted_rate,
             interpreted_aspect: None,
             alpha: Default::default(),
             log: Default::default(),
