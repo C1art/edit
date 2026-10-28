@@ -9,6 +9,50 @@ pub(crate) fn pixel_effects(effects: &[VideoEffect], time: Ticks) -> PixelEffect
     for effect in effects {
         match effect {
             VideoEffect::GaussianBlur { .. } | VideoEffect::TrackMatteKey { .. } => {}
+            VideoEffect::BrightnessContrast {
+                brightness,
+                contrast,
+            } => {
+                pixel.style.brightness = unit(brightness).clamp(-1.0, 1.0);
+                pixel.style.contrast = unit(contrast).clamp(-1.0, 1.0);
+            }
+            VideoEffect::GammaCorrection { gamma } => {
+                pixel.style.gamma = gamma.value_at(time).max(0.01);
+            }
+            VideoEffect::Posterize { levels } => {
+                pixel.style.posterize = levels.value_at(time).round().clamp(2.0, 64.0);
+            }
+            VideoEffect::Noise { amount } => {
+                pixel.style.noise = unit(amount).clamp(0.0, 1.0);
+                // Any number that changes every frame will do; wrapping keeps it exact.
+                pixel.style.noise_seed = time.0.rem_euclid(4093) as f32;
+            }
+            VideoEffect::FindEdges { invert, blend } => {
+                pixel.style.edges = 1.0 - unit(blend).clamp(0.0, 1.0);
+                pixel.style.edges_inverted = *invert;
+            }
+            VideoEffect::Mosaic {
+                horizontal,
+                vertical,
+            } => {
+                pixel.style.mosaic =
+                    [horizontal, vertical].map(|blocks| blocks.value_at(time).round().max(1.0));
+            }
+            VideoEffect::Offset { shift, blend } => {
+                pixel.style.offset = shift.each_ref().map(|to| unit(to) - 0.5);
+                pixel.style.offset_mix = 1.0 - unit(blend).clamp(0.0, 1.0);
+            }
+            VideoEffect::Twirl { angle, radius } => {
+                pixel.style.twirl = angle.value_at(time).to_radians();
+                pixel.style.twirl_radius = unit(radius).max(0.0);
+            }
+            VideoEffect::LensDistortion { curvature } => {
+                pixel.style.lens = unit(curvature).clamp(-1.0, 1.0);
+            }
+            VideoEffect::DirectionalBlur { direction, length } => {
+                pixel.style.blur_direction = direction.value_at(time).to_radians();
+                pixel.style.blur_length = length.value_at(time).max(0.0);
+            }
             VideoEffect::HorizontalFlip => pixel.flip[0] = !pixel.flip[0],
             VideoEffect::VerticalFlip => pixel.flip[1] = !pixel.flip[1],
             VideoEffect::BlackAndWhite => {
