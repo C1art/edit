@@ -1,5 +1,5 @@
 use crate::edit::ops;
-use crate::{ClipId, Edit, Param, Sequence, TimelineError, TrackKind, VideoFormat};
+use crate::{ClipId, Edit, MediaItem, Param, Sequence, TimelineError, TrackKind, VideoFormat};
 
 /// How a picture of another shape is matched to the sequence frame.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,7 +33,10 @@ impl Edit for SetToFrameSize {
             if track.kind != TrackKind::Video {
                 continue;
             }
-            let Some(picture) = sequence.media_item(clip.source).and_then(|item| item.video) else {
+            let Some(picture) = sequence
+                .media_item(clip.source)
+                .and_then(MediaItem::played_format)
+            else {
                 continue;
             };
             let scale = Param::new(scale_hundredths(picture, frame, self.fit));

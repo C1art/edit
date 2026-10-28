@@ -1,12 +1,18 @@
-use crate::{Clip, Edit, FrameRate, Sequence, SourceId, Speed, Ticks, TimelineError, Track};
+use crate::{
+    AlphaInterpretation, Clip, Edit, FrameRate, PixelAspect, Sequence, SourceId, Speed, Ticks,
+    TimelineError, Track,
+};
 
 /// Plays a file's pictures at `rate` instead of the rate it was recorded at, or at its
 /// own again for `None`. Its clips keep the frames they show, so they grow or shrink,
-/// stopping at the next clip on their track.
+/// stopping at the next clip on their track. The pictures are drawn with `aspect`
+/// pixels, or the file's own for `None`, and their alpha read as `alpha` says.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InterpretFootage {
     pub source: SourceId,
     pub rate: Option<FrameRate>,
+    pub aspect: Option<PixelAspect>,
+    pub alpha: AlphaInterpretation,
 }
 
 impl Edit for InterpretFootage {
@@ -20,10 +26,19 @@ impl Edit for InterpretFootage {
             .iter_mut()
             .find(|item| item.id == self.source)
             .ok_or(TimelineError::MediaNotFound(self.source))?;
-        let native = item.video.map(|video| video.frame_rate);
-        let rate = self.rate.filter(|&rate| Some(rate) != native);
-        if !item.is_file() || native.is_none() || item.interpreted_rate == rate {
+        let Some(native) = item.video.filter(|_| item.is_file()) else {
             return Err(TimelineError::NothingToEdit);
+        };
+        let rate = self.rate.filter(|&rate| rate != native.frame_rate);
+        let aspect = self.aspect.filter(|&aspect| aspect != native.pixel_aspect);
+        let interpreted = (item.interpreted_rate, item.interpreted_aspect, item.alpha);
+        if interpreted == (rate, aspect, self.alpha) {
+            return Err(TimelineError::NothingToEdit);
+        }
+        item.interpreted_aspect = aspect;
+        item.alpha = self.alpha;
+        if item.interpreted_rate == rate {
+            return Ok(());
         }
         item.interpreted_rate = rate;
         let conform = item.conform();

@@ -1,7 +1,15 @@
 use super::*;
+use crate::{AlphaInterpretation, PixelAspect};
 
 fn interpret(timeline: &mut Timeline, source: SourceId, rate: Option<FrameRate>) {
-    timeline.apply(InterpretFootage { source, rate }).unwrap();
+    timeline
+        .apply(InterpretFootage {
+            source,
+            rate,
+            aspect: None,
+            alpha: AlphaInterpretation::Straight,
+        })
+        .unwrap();
 }
 
 #[test]
@@ -38,4 +46,36 @@ fn interpreted_media_places_as_long_as_its_frames_play() {
 
     interpret(&mut timeline, source, None);
     assert_eq!(spans(&timeline, V1), vec![(0, 400, 100)]);
+}
+
+#[test]
+fn reinterpreting_pixels_keeps_clip_lengths_and_the_files_own_shape_clears_it() {
+    let (mut timeline, source) = timeline();
+    timeline
+        .apply(place(source, 0, 0, 200, PlaceMode::Overwrite))
+        .unwrap();
+    let anamorphic = PixelAspect::new(4, 3);
+    let interpret = |aspect, alpha| InterpretFootage {
+        source,
+        rate: None,
+        aspect,
+        alpha,
+    };
+    timeline
+        .apply(interpret(anamorphic, AlphaInterpretation::Ignore))
+        .unwrap();
+    let item = &timeline.sequence().media[0];
+    assert_eq!(item.pixel_aspect(), anamorphic.unwrap());
+    assert_eq!(item.alpha, AlphaInterpretation::Ignore);
+    assert_eq!(spans(&timeline, V1), vec![(0, 200, 0)]);
+
+    let own = Some(PixelAspect::SQUARE);
+    timeline
+        .apply(interpret(own, AlphaInterpretation::Ignore))
+        .unwrap();
+    assert_eq!(timeline.sequence().media[0].interpreted_aspect, None);
+    assert_eq!(
+        timeline.apply(interpret(None, AlphaInterpretation::Ignore)),
+        Err(TimelineError::NothingToEdit)
+    );
 }

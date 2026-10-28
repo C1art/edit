@@ -4,7 +4,10 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::generator::placed_length;
-use crate::{BinId, FrameRate, Generator, Nest, Speed, Ticks, Timebase, VideoFormat};
+use crate::{
+    AlphaInterpretation, BinId, FrameRate, Generator, Nest, PixelAspect, Speed, Ticks, Timebase,
+    VideoFormat,
+};
 
 /// Identifies a media item in the sequence's media pool.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -40,6 +43,12 @@ pub struct MediaItem {
     /// slowing high-frame-rate footage; the sound follows.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub interpreted_rate: Option<FrameRate>,
+    /// The pixel shape the pictures are drawn with instead of the file's own, as for
+    /// anamorphic footage the file doesn't flag.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interpreted_aspect: Option<PixelAspect>,
+    #[serde(default, skip_serializing_if = "AlphaInterpretation::is_straight")]
+    pub alpha: AlphaInterpretation,
     #[serde(default, skip_serializing_if = "MediaLog::is_empty")]
     pub log: MediaLog,
 }
@@ -92,12 +101,29 @@ impl MediaItem {
         .unwrap_or(Speed::NORMAL)
     }
 
-    /// The item's picture format as it plays, at its interpreted frame rate.
+    /// The item's picture format as it plays: at its interpreted frame rate, and as
+    /// wide in square pixels as its own pixels make it look.
     pub fn played_format(&self) -> Option<VideoFormat> {
         self.video.map(|video| VideoFormat {
+            width: self.pixel_aspect().display_width(video.width),
             frame_rate: self.interpreted_rate.unwrap_or(video.frame_rate),
+            pixel_aspect: PixelAspect::SQUARE,
             ..video
         })
+    }
+
+    /// Whether the file is read otherwise than it describes itself.
+    pub fn is_interpreted(&self) -> bool {
+        self.interpreted_rate.is_some()
+            || self.interpreted_aspect.is_some()
+            || !self.alpha.is_straight()
+    }
+
+    /// The pixel shape the pictures are drawn with: the interpreted one or the file's.
+    pub fn pixel_aspect(&self) -> PixelAspect {
+        self.interpreted_aspect
+            .or(self.video.map(|video| video.pixel_aspect))
+            .unwrap_or_default()
     }
 
     pub fn is_file(&self) -> bool {

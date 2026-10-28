@@ -13,6 +13,7 @@ fn wide_pictures_fit_by_width_and_fill_by_height() {
                 width: 1280,
                 height: 720,
                 frame_rate: FrameRate::FPS_25,
+                ..VideoFormat::default()
             }),
             has_audio: true,
         })

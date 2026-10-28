@@ -345,6 +345,7 @@ impl Edit for ImportXmeml {
                             width,
                             height,
                             frame_rate: file.rate,
+                            ..VideoFormat::default()
                         }),
                         has_audio: file.audio,
                         proxy: None,
@@ -353,6 +354,8 @@ impl Edit for ImportXmeml {
                         bin: None,
                         subclip: None,
                         interpreted_rate: None,
+                        interpreted_aspect: None,
+                        alpha: Default::default(),
                         log: Default::default(),
                     });
                     id
@@ -426,6 +429,8 @@ impl Edit for ImportXmeml {
             bin: None,
             subclip: None,
             interpreted_rate: None,
+            interpreted_aspect: None,
+            alpha: Default::default(),
             log: Default::default(),
         });
         sequence.fit_nest(id);

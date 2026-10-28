@@ -16,6 +16,7 @@ fn timeline() -> (Timeline, SourceId) {
         width: 320,
         height: 240,
         frame_rate: FrameRate::FPS_25,
+        ..VideoFormat::default()
     };
     let mut sequence = Sequence::new(Timebase::HZ_90K, format);
     sequence.video.resize_with(2, Default::default);

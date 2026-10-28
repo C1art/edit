@@ -16,6 +16,7 @@ mod file_url;
 mod generator;
 mod group;
 mod history;
+mod interpretation;
 mod label;
 mod links;
 mod look;
@@ -93,6 +94,7 @@ pub use generator::{
 };
 pub use group::GroupId;
 pub use history::{preview, Edit, EditCommand, Timeline};
+pub use interpretation::{AlphaInterpretation, PixelAspect};
 pub use label::Label;
 pub use links::LinkedSelection;
 pub use look::{Crop, Look, Motion};
