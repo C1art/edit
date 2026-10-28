@@ -1,7 +1,7 @@
 use egui::DragValue;
 use timeline::{
-    nearest_transition_edge, Alignment, Clip, Edge, Sequence, SetTransition, TrackKind, TrackRef,
-    Transition, TransitionKind,
+    nearest_transition_edge, Alignment, Clip, Edge, Sequence, SetTransition, Side, TrackKind,
+    TrackRef, Transition, TransitionKind,
 };
 
 use crate::editor::Editor;
@@ -84,6 +84,14 @@ fn transition_row(
             if response.changed() {
                 transition.duration = rate.frame_start(frames, timebase);
             }
+        }
+    });
+    if let Some(transition) = chosen
+        .as_mut()
+        .filter(|transition| at_cut || transition.kind.has_direction())
+    {
+        ui.horizontal(|ui| {
+            ui.add_space(38.0);
             if at_cut {
                 egui::ComboBox::from_id_salt((label, "alignment"))
                     .selected_text(transition.alignment.name())
@@ -97,8 +105,21 @@ fn transition_row(
                         }
                     });
             }
-        }
-    });
+            if transition.kind.has_direction() {
+                let mut side = transition.side();
+                egui::ComboBox::from_id_salt((label, "side"))
+                    .selected_text(side.name())
+                    .show_ui(ui, |ui| {
+                        for choice in Side::ALL {
+                            ui.selectable_value(&mut side, choice, choice.name());
+                        }
+                    });
+                if side != transition.side() {
+                    transition.from = Some(side);
+                }
+            }
+        });
+    }
     (chosen != current).then_some(chosen)
 }
 
