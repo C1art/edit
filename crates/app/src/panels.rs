@@ -14,10 +14,17 @@ pub(crate) enum MediaTab {
     Markers,
     History,
     Effects,
+    Metadata,
 }
 
 impl MediaTab {
-    pub(crate) const ALL: [Self; 4] = [Self::Project, Self::Markers, Self::Effects, Self::History];
+    pub(crate) const ALL: [Self; 5] = [
+        Self::Project,
+        Self::Markers,
+        Self::Effects,
+        Self::Metadata,
+        Self::History,
+    ];
 
     /// How the tab is written in the workspaces file, and its title.
     pub(crate) fn words(self) -> (&'static str, &'static str) {
@@ -26,6 +33,7 @@ impl MediaTab {
             Self::Markers => ("markers", "Markers"),
             Self::History => ("history", "History"),
             Self::Effects => ("effects", "Effects"),
+            Self::Metadata => ("metadata", "Metadata"),
         }
     }
 }
@@ -77,6 +85,7 @@ impl Editor {
             MediaTab::Markers => crate::markers_panel::ui(self, ui),
             MediaTab::History => crate::history_panel::ui(self, ui),
             MediaTab::Effects => crate::effects_panel::ui(self, ui),
+            MediaTab::Metadata => crate::metadata_panel::ui(self, ui),
         }
         if !self.notices.is_empty() {
             ui.separator();

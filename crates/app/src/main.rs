@@ -32,6 +32,7 @@ mod markers_panel;
 mod mask_tracking;
 mod media_pool;
 mod menus;
+mod metadata_panel;
 mod mixer;
 mod monitor;
 mod monitors;

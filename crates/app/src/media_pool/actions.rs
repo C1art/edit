@@ -164,7 +164,7 @@ impl Editor {
         self.apply_to_pool(edit);
     }
 
-    fn apply_to_pool(&mut self, edit: impl Edit) -> bool {
+    pub(crate) fn apply_to_pool(&mut self, edit: impl Edit) -> bool {
         match self.timeline.apply_to_project(edit) {
             Ok(()) => true,
             Err(TimelineError::NothingToEdit) => false,
