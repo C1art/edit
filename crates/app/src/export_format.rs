@@ -10,6 +10,7 @@ pub enum Format {
     ProRes422Hq,
     ProRes4444,
     Dnxhr(DnxhrQuality),
+    AnimatedGif,
     Aac,
     Mp3,
     Wav,
@@ -17,7 +18,7 @@ pub enum Format {
 }
 
 impl Format {
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 15] = [
         Self::H264,
         Self::Hevc,
         Self::ProRes422,
@@ -28,6 +29,7 @@ impl Format {
         Self::Dnxhr(DnxhrQuality::Hq),
         Self::Dnxhr(DnxhrQuality::Hqx),
         Self::Dnxhr(DnxhrQuality::Dnx444),
+        Self::AnimatedGif,
         Self::Aac,
         Self::Mp3,
         Self::Wav,
@@ -46,6 +48,7 @@ impl Format {
             Self::Dnxhr(DnxhrQuality::Hq) => "Avid DNxHR HQ",
             Self::Dnxhr(DnxhrQuality::Hqx) => "Avid DNxHR HQX 10-bit",
             Self::Dnxhr(DnxhrQuality::Dnx444) => "Avid DNxHR 444 10-bit",
+            Self::AnimatedGif => "Animated GIF",
             Self::Aac => "AAC Audio",
             Self::Mp3 => "MP3",
             Self::Wav => "Waveform Audio",
@@ -57,6 +60,7 @@ impl Format {
         match self {
             Self::H264 | Self::Hevc => "mp4",
             Self::ProRes422 | Self::ProRes422Hq | Self::ProRes4444 | Self::Dnxhr(_) => "mov",
+            Self::AnimatedGif => "gif",
             Self::Aac => "m4a",
             Self::Mp3 => "mp3",
             Self::Wav => "wav",
@@ -72,20 +76,23 @@ impl Format {
             Self::ProRes422Hq => Some(VideoCodec::ProRes422Hq),
             Self::ProRes4444 => Some(VideoCodec::ProRes4444),
             Self::Dnxhr(quality) => Some(VideoCodec::Dnxhr(quality)),
+            Self::AnimatedGif => Some(VideoCodec::Gif),
             Self::Aac | Self::Mp3 | Self::Wav | Self::Flac => None,
         }
     }
 
-    pub fn audio_codec(self) -> AudioCodec {
+    /// `None` for formats that can't carry sound.
+    pub fn audio_codec(self) -> Option<AudioCodec> {
         match self {
-            Self::H264 | Self::Hevc | Self::Aac => AudioCodec::Aac,
+            Self::H264 | Self::Hevc | Self::Aac => Some(AudioCodec::Aac),
             // Mastering formats carry uncompressed sound, as cameras and Premiere do.
             Self::ProRes422 | Self::ProRes422Hq | Self::ProRes4444 | Self::Dnxhr(_) => {
-                AudioCodec::Pcm24
+                Some(AudioCodec::Pcm24)
             }
-            Self::Mp3 => AudioCodec::Mp3,
-            Self::Wav => AudioCodec::Pcm16,
-            Self::Flac => AudioCodec::Flac,
+            Self::AnimatedGif => None,
+            Self::Mp3 => Some(AudioCodec::Mp3),
+            Self::Wav => Some(AudioCodec::Pcm16),
+            Self::Flac => Some(AudioCodec::Flac),
         }
     }
 }
@@ -139,7 +146,7 @@ const fn format_preset(name: &'static str, format: Format) -> Preset {
     }
 }
 
-pub const PRESETS: [Preset; 14] = [
+pub const PRESETS: [Preset; 15] = [
     Preset {
         name: "Match Source - High Bitrate",
         format: MATCH_SOURCE,
@@ -160,6 +167,14 @@ pub const PRESETS: [Preset; 14] = [
     format_preset("Apple ProRes 4444 with Alpha", Format::ProRes4444),
     format_preset("DNxHR HQ", Format::Dnxhr(DnxhrQuality::Hq)),
     format_preset("DNxHR HQX 10-bit", Format::Dnxhr(DnxhrQuality::Hqx)),
+    Preset {
+        name: "Animated GIF 480p",
+        format: ExportFormat {
+            format: Format::AnimatedGif,
+            height: Some(480),
+            ..MATCH_SOURCE
+        },
+    },
     format_preset("AAC Audio 320 kbps", Format::Aac),
     format_preset("MP3 320 kbps", Format::Mp3),
     format_preset("Waveform Audio 48 kHz 16-bit", Format::Wav),
@@ -199,7 +214,7 @@ impl ExportFormat {
                 unused.rate_control
             },
             with_audio: codec.is_none() || self.with_audio,
-            audio_kbps: if self.has_audio() && self.format.audio_codec().is_lossy() {
+            audio_kbps: if self.has_audio() && self.audio_is_lossy() {
                 self.audio_kbps
             } else {
                 unused.audio_kbps
@@ -214,7 +229,12 @@ impl ExportFormat {
     }
 
     pub fn has_audio(&self) -> bool {
-        self.with_audio || self.format.video_codec().is_none()
+        let wanted = self.with_audio || self.format.video_codec().is_none();
+        wanted && self.format.audio_codec().is_some()
+    }
+
+    pub fn audio_is_lossy(&self) -> bool {
+        self.format.audio_codec().is_some_and(AudioCodec::is_lossy)
     }
 
     pub fn video(&self, sequence_size: (u32, u32)) -> Option<VideoExport> {
@@ -231,8 +251,9 @@ impl ExportFormat {
     }
 
     pub fn audio(&self) -> Option<AudioSettings> {
-        self.has_audio().then(|| AudioSettings {
-            codec: self.format.audio_codec(),
+        let codec = self.format.audio_codec().filter(|_| self.has_audio())?;
+        Some(AudioSettings {
+            codec,
             sample_rate: self.sample_rate,
             bits_per_second: self.audio_kbps * 1_000,
         })

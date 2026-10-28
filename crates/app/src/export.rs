@@ -262,7 +262,7 @@ fn settings(ui: &mut egui::Ui, format: &mut ExportFormat, sequence_size: (u32, u
                     }
                 });
                 ui.end_row();
-                if format.format.audio_codec().is_lossy() {
+                if format.audio_is_lossy() {
                     ui.label("Audio bitrate:");
                     ui.horizontal(|ui| {
                         for kbps in AUDIO_KBPS {
@@ -333,9 +333,11 @@ fn video_rows(
         });
         ui.end_row();
     }
-    ui.label("Audio:");
-    ui.checkbox(&mut format.with_audio, "Export audio");
-    ui.end_row();
+    if format.format.audio_codec().is_some() {
+        ui.label("Audio:");
+        ui.checkbox(&mut format.with_audio, "Export audio");
+        ui.end_row();
+    }
 }
 
 fn summary(format: &ExportFormat, sequence_size: (u32, u32)) -> String {
