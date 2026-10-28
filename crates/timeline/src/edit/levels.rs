@@ -1,0 +1,76 @@
+use crate::edit::ops;
+use crate::{ClipId, Edit, Gain, Pan, Sequence, TimelineError, TrackKind, TrackRef};
+
+/// Sets the gain of the audio clips among `clips` and the clips linked to them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetClipGain {
+    pub clips: Vec<ClipId>,
+    pub gain: Gain,
+}
+
+impl Edit for SetClipGain {
+    fn name(&self) -> &'static str {
+        "Audio Gain"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let audio: Vec<ClipId> = sequence
+            .with_links(&self.clips)
+            .into_iter()
+            .filter(|&id| {
+                sequence
+                    .clip(id)
+                    .is_some_and(|(track, _)| track.kind == TrackKind::Audio)
+            })
+            .collect();
+        if audio.is_empty() {
+            return Err(TimelineError::NothingToEdit);
+        }
+        for id in audio {
+            ops::clip_mut(sequence, id)?.gain = self.gain;
+        }
+        Ok(())
+    }
+}
+
+/// Sets an audio track's fader and balance.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetTrackMix {
+    pub track: TrackRef,
+    pub volume: Gain,
+    pub pan: Pan,
+}
+
+impl Edit for SetTrackMix {
+    fn name(&self) -> &'static str {
+        "Track Volume"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        if self.track.kind != TrackKind::Audio {
+            return Err(TimelineError::NothingToEdit);
+        }
+        let track = sequence
+            .track_mut(self.track)
+            .ok_or(TimelineError::TrackNotFound(self.track))?;
+        track.volume = self.volume;
+        track.pan = self.pan;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetMasterGain {
+    pub gain: Gain,
+}
+
+impl Edit for SetMasterGain {
+    fn name(&self) -> &'static str {
+        "Master Volume"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        sequence.master = self.gain;
+        Ok(())
+    }
+}

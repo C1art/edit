@@ -1,4 +1,5 @@
 mod arrange;
+mod levels;
 mod ops;
 mod place;
 mod structure;
@@ -8,6 +9,7 @@ mod trim;
 mod tests;
 
 pub use arrange::{CloseGap, Lift, MoveClips, RippleDelete};
+pub use levels::{SetClipGain, SetMasterGain, SetTrackMix};
 pub use place::{PlaceClip, PlaceMode, Razor, RazorTarget};
 pub use structure::{
     AddTrack, ImportMedia, RemoveMedia, RemoveTrack, SetSequenceFormat, SetTrackSwitch, TrackSwitch,

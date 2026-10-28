@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{FrameRate, MediaItem, SourceId, Ticks, Timebase};
+use crate::{FrameRate, Gain, MediaItem, Pan, SourceId, Ticks, Timebase};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct ClipId(pub u64);
@@ -60,6 +60,9 @@ pub struct Clip {
     pub source_in: Ticks,
     #[serde(default)]
     pub link: Option<LinkId>,
+    /// Level of an audio clip; ignored for video.
+    #[serde(default)]
+    pub gain: Gain,
 }
 
 impl Clip {
@@ -96,6 +99,11 @@ pub struct Track {
     /// Edits that would change a locked track's clips are rejected.
     #[serde(default)]
     pub locked: bool,
+    /// Fader level of an audio track; ignored for video.
+    #[serde(default)]
+    pub volume: Gain,
+    #[serde(default)]
+    pub pan: Pan,
 }
 
 impl Track {
@@ -153,6 +161,8 @@ pub struct Sequence {
     #[serde(default)]
     pub audio: Vec<Track>,
     #[serde(default)]
+    pub master: Gain,
+    #[serde(default)]
     pub(crate) ids: IdGenerator,
 }
 
@@ -164,6 +174,7 @@ impl Sequence {
             media: Vec::new(),
             video: Vec::new(),
             audio: Vec::new(),
+            master: Gain::UNITY,
             ids: IdGenerator::default(),
         }
     }

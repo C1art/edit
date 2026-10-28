@@ -384,3 +384,25 @@ fn failed_edit_leaves_sequence_and_history_untouched() {
     assert_eq!(timeline.sequence(), &before);
     assert_eq!(timeline.undo_name(), Some("Import"));
 }
+
+#[test]
+fn clip_gain_reaches_linked_audio_but_not_video() {
+    let (mut timeline, source) = timeline();
+    timeline
+        .apply(place(source, 0, 0, 300, PlaceMode::Overwrite))
+        .unwrap();
+    let gain = crate::Gain::from_db(-6.0);
+    let video = clip_on(&timeline, V1, 0);
+    timeline
+        .apply(SetClipGain {
+            clips: vec![video],
+            gain,
+        })
+        .unwrap();
+    let sequence = timeline.sequence();
+    assert_eq!(sequence.track(A1).unwrap().clips[0].gain, gain);
+    assert_eq!(
+        sequence.track(V1).unwrap().clips[0].gain,
+        crate::Gain::UNITY
+    );
+}
