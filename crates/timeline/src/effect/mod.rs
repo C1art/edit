@@ -339,4 +339,49 @@ pub enum VideoEffect {
     ColorBalanceRgb {
         gains: [Param; 3],
     },
+    /// Covers every other square of a board laid from `anchor` with `color`.
+    Checkerboard {
+        /// Percent of the picture's width and height.
+        anchor: [Param; 2],
+        /// Each square's width and height in the picture's pixels.
+        size: [Param; 2],
+        color: Rgb,
+        /// Percent.
+        opacity: Param,
+    },
+    /// Draws lines `border` pixels wide around cells laid from `anchor`.
+    Grid {
+        /// Percent of the picture's width and height.
+        anchor: [Param; 2],
+        /// Each cell's width and height in the picture's pixels.
+        size: [Param; 2],
+        border: Param,
+        color: Rgb,
+        /// Percent.
+        opacity: Param,
+        /// Fills the cells instead of the lines.
+        invert: bool,
+    },
+    Circle {
+        /// Percent of the picture's width and height.
+        center: [Param; 2],
+        /// In the picture's pixels, as is the feather fading its outer edge.
+        radius: Param,
+        feather: Param,
+        color: Rgb,
+        /// Percent.
+        opacity: Param,
+        /// Fills outside the circle instead.
+        invert: bool,
+    },
+    /// Fills the picture with four colors, each strongest at its point.
+    FourColorGradient {
+        /// Percent of the picture's width and height.
+        points: [[Param; 2]; 4],
+        colors: [Rgb; 4],
+        /// How smoothly the colors run together, from 1.
+        blend: Param,
+        /// Percent.
+        opacity: Param,
+    },
 }

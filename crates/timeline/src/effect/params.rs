@@ -158,6 +158,40 @@ macro_rules! effect_params {
             VideoEffect::LumaKey { threshold, cutoff } => vec![threshold, cutoff],
             VideoEffect::AlphaAdjust { opacity, .. } => vec![opacity],
             VideoEffect::ColorBalanceRgb { gains } => gains.$iter().collect(),
+            VideoEffect::Checkerboard {
+                anchor,
+                size,
+                opacity,
+                ..
+            } => anchor
+                .$iter()
+                .chain(size.$iter())
+                .chain([opacity])
+                .collect(),
+            VideoEffect::Grid {
+                anchor,
+                size,
+                border,
+                opacity,
+                ..
+            } => anchor
+                .$iter()
+                .chain(size.$iter())
+                .chain([border, opacity])
+                .collect(),
+            VideoEffect::Circle {
+                center,
+                radius,
+                feather,
+                opacity,
+                ..
+            } => center.$iter().chain([radius, feather, opacity]).collect(),
+            VideoEffect::FourColorGradient {
+                points,
+                blend,
+                opacity,
+                ..
+            } => points.$iter().flatten().chain([blend, opacity]).collect(),
         }
     };
 }

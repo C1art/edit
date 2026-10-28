@@ -6,7 +6,7 @@ use crate::{Param, Stabilizer};
 
 impl VideoEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 44] {
+    pub fn catalog() -> [Self; 48] {
         [
             Self::GaussianBlur {
                 blurriness: Param::from_value(10.0),
@@ -205,6 +205,40 @@ impl VideoEffect {
             Self::ColorBalanceRgb {
                 gains: [100.0; 3].map(Param::from_value),
             },
+            Self::Checkerboard {
+                anchor: [50.0; 2].map(Param::from_value),
+                size: [64.0; 2].map(Param::from_value),
+                color: Rgb::WHITE,
+                opacity: Param::from_value(100.0),
+            },
+            Self::Grid {
+                anchor: [50.0; 2].map(Param::from_value),
+                size: [64.0; 2].map(Param::from_value),
+                border: Param::from_value(5.0),
+                color: Rgb::WHITE,
+                opacity: Param::from_value(100.0),
+                invert: false,
+            },
+            Self::Circle {
+                center: [50.0; 2].map(Param::from_value),
+                radius: Param::from_value(75.0),
+                feather: Param::default(),
+                color: Rgb::WHITE,
+                opacity: Param::from_value(100.0),
+                invert: false,
+            },
+            Self::FourColorGradient {
+                points: [[10.0, 10.0], [90.0, 10.0], [10.0, 90.0], [90.0, 90.0]]
+                    .map(|point| point.map(Param::from_value)),
+                colors: [
+                    Rgb::new(255, 255, 0),
+                    Rgb::new(0, 255, 0),
+                    Rgb::new(255, 0, 255),
+                    Rgb::new(0, 0, 255),
+                ],
+                blend: Param::from_value(100.0),
+                opacity: Param::from_value(100.0),
+            },
         ]
     }
 
@@ -227,7 +261,11 @@ impl VideoEffect {
             Self::LeaveColor { .. } | Self::ChannelMixer { .. } | Self::ChangeToColor { .. } => {
                 EffectCategory::ColorCorrection
             }
-            Self::GradientRamp { .. } => EffectCategory::Generate,
+            Self::GradientRamp { .. }
+            | Self::Checkerboard { .. }
+            | Self::Grid { .. }
+            | Self::Circle { .. }
+            | Self::FourColorGradient { .. } => EffectCategory::Generate,
             Self::DropShadow { .. } | Self::Basic3D { .. } => EffectCategory::Perspective,
             Self::BlackAndWhite | Self::GammaCorrection { .. } | Self::ColorBalanceRgb { .. } => {
                 EffectCategory::ImageControl
@@ -300,6 +338,10 @@ impl VideoEffect {
             Self::Threshold { .. } => "Threshold",
             Self::Replicate { .. } => "Replicate",
             Self::ColorBalanceRgb { .. } => "Color Balance (RGB)",
+            Self::Checkerboard { .. } => "Checkerboard",
+            Self::Grid { .. } => "Grid",
+            Self::Circle { .. } => "Circle",
+            Self::FourColorGradient { .. } => "4-Color Gradient",
         }
     }
 }
