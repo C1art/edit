@@ -71,6 +71,10 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                 editor.prompt_path(PathPurpose::Export(Interchange::FinalCutXml));
             }
             ui.separator();
+            if ui.button("Project Manager…").clicked() {
+                editor.open_project_manager();
+            }
+            ui.separator();
             if ui.button("Quit").clicked() {
                 ui.ctx().send_viewport_cmd(ViewportCommand::Close);
             }

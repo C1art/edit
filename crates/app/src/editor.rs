@@ -71,6 +71,7 @@ pub struct Editor {
     pub(crate) gain_dialog: Option<crate::gain_dialog::GainDialog>,
     pub(crate) duck_dialog: Option<crate::duck_dialog::DuckDialog>,
     pub(crate) interpret_dialog: Option<crate::interpret_dialog::InterpretDialog>,
+    pub(crate) project_manager: Option<crate::project_manager::ProjectManager>,
     pub(crate) sequence_settings: Option<crate::sequence_settings::SequenceSettings>,
     /// An edit from the source waiting on how to fit its clip to the sequence marks.
     pub(crate) fit_clip: Option<timeline::PlaceMode>,
@@ -186,6 +187,7 @@ impl Editor {
             gain_dialog: None,
             duck_dialog: None,
             interpret_dialog: None,
+            project_manager: None,
             sequence_settings: None,
             fit_clip: None,
             attributes_dialog: None,
@@ -439,6 +441,7 @@ impl eframe::App for Editor {
         crate::keymap::window(self, &ctx);
         crate::link_media::dialog(self, &ctx);
         crate::render_previews::window(self, &ctx);
+        crate::project_manager::window(self, &ctx);
     }
 }
 
