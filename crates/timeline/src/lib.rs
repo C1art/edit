@@ -111,6 +111,6 @@ pub use submix::{Submix, SubmixId};
 pub use three_point::{edit_points, EditPoints, FourPoint};
 pub use time::{Ticks, Timebase};
 pub use timecode::{FrameRate, Timecode};
-pub use transition::{nearest_transition_edge, Alignment, Transition, TransitionKind};
+pub use transition::{nearest_transition_edge, Alignment, Side, Transition, TransitionKind};
 pub use xmeml::to_xmeml;
 pub use xmeml_import::{read_xmeml, ImportXmeml};

@@ -1,4 +1,4 @@
-use crate::TransitionKind;
+use crate::{Side, TransitionKind};
 
 /// How a transition shows one picture, on top of the clip's own look. Distances are
 /// fractions of the canvas.
@@ -53,8 +53,9 @@ impl Reveal {
 
 impl TransitionKind {
     /// The outgoing and incoming pictures `progress` of the way through, where the cut
-    /// falls at `cut`. The incoming picture is drawn over the outgoing one.
-    pub fn reveals(self, progress: f32, cut: f32) -> (Reveal, Reveal) {
+    /// falls at `cut` and the incoming picture enters `from` a side. The incoming
+    /// picture is drawn over the outgoing one.
+    pub fn reveals(self, progress: f32, cut: f32, from: Side) -> (Reveal, Reveal) {
         let before = phase(progress, 0.0, cut);
         let after = phase(progress, cut, 1.0);
         let crossed = progress >= cut;
@@ -71,14 +72,24 @@ impl TransitionKind {
                 unless(crossed, zoomed(1.0 + 4.0 * before)),
                 unless(!crossed, zoomed(5.0 - 4.0 * after)),
             ),
-            Self::Wipe => incoming(masked([0.0, 0.0, 1.0 - progress, 0.0])),
+            Self::Wipe => {
+                let mut mask = [0.0; 4];
+                mask[opposite(from)] = 1.0 - progress;
+                incoming(masked(mask))
+            }
             Self::BarnDoors => {
                 let side = (1.0 - progress) / 2.0;
-                incoming(masked([side, 0.0, side, 0.0]))
+                incoming(masked(match from {
+                    Side::Left | Side::Right => [side, 0.0, side, 0.0],
+                    Side::Top | Side::Bottom => [0.0, side, 0.0, side],
+                }))
             }
             Self::IrisBox => incoming(masked([(1.0 - progress) / 2.0; 4])),
-            Self::Slide => incoming(shifted(1.0 - progress)),
-            Self::Push => (shifted(-progress), shifted(1.0 - progress)),
+            Self::Slide => incoming(shifted(toward(from, 1.0 - progress))),
+            Self::Push => (
+                shifted(toward(from, -progress)),
+                shifted(toward(from, 1.0 - progress)),
+            ),
         }
     }
 }
@@ -104,10 +115,30 @@ fn masked(mask: [f32; 4]) -> Reveal {
     }
 }
 
-fn shifted(x: f32) -> Reveal {
+fn shifted(shift: [f32; 2]) -> Reveal {
     Reveal {
-        shift: [x, 0.0],
+        shift,
         ..Reveal::FULL
+    }
+}
+
+/// The index in a mask of the edge across the canvas from `side`.
+fn opposite(side: Side) -> usize {
+    match side {
+        Side::Left => 2,
+        Side::Top => 3,
+        Side::Right => 0,
+        Side::Bottom => 1,
+    }
+}
+
+/// A shift of `amount` canvases out toward `side`.
+fn toward(side: Side, amount: f32) -> [f32; 2] {
+    match side {
+        Side::Left => [-amount, 0.0],
+        Side::Top => [0.0, -amount],
+        Side::Right => [amount, 0.0],
+        Side::Bottom => [0.0, amount],
     }
 }
 
@@ -117,4 +148,22 @@ fn phase(progress: f32, from: f32, to: f32) -> f32 {
         return if progress >= to { 1.0 } else { 0.0 };
     }
     ((progress - from) / (to - from)).clamp(0.0, 1.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_incoming_picture_enters_from_the_chosen_side() {
+        let (_, wipe) = TransitionKind::Wipe.reveals(0.25, 0.5, Side::Top);
+        assert_eq!(wipe.mask, [0.0, 0.0, 0.0, 0.75]);
+        let (outgoing, incoming) = TransitionKind::Push.reveals(0.25, 0.5, Side::Left);
+        assert_eq!(
+            (outgoing.shift, incoming.shift),
+            ([0.25, 0.0], [-0.75, 0.0])
+        );
+        let (_, doors) = TransitionKind::BarnDoors.reveals(0.5, 0.5, Side::Bottom);
+        assert_eq!(doors.mask, [0.0, 0.25, 0.0, 0.25]);
+    }
 }

@@ -60,9 +60,47 @@ impl TransitionKind {
         }
     }
 
+    /// Whether the side the incoming picture enters from can be chosen.
+    pub fn has_direction(self) -> bool {
+        matches!(
+            self,
+            Self::Wipe | Self::BarnDoors | Self::Slide | Self::Push
+        )
+    }
+
+    pub fn default_side(self) -> Side {
+        match self {
+            Self::Slide | Self::Push => Side::Right,
+            _ => Side::Left,
+        }
+    }
+
     /// Whether audio goes silent at the cut instead of crossfading through it.
     pub fn is_dip(self) -> bool {
         matches!(self, Self::DipToBlack | Self::DipToWhite)
+    }
+}
+
+/// The canvas edge a transition's incoming picture enters from. Barn doors open across
+/// it: left or right opens from a vertical line, top or bottom from a horizontal one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Side {
+    Left,
+    Top,
+    Right,
+    Bottom,
+}
+
+impl Side {
+    pub const ALL: [Self; 4] = [Self::Left, Self::Right, Self::Top, Self::Bottom];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Left => "From Left",
+            Self::Top => "From Top",
+            Self::Right => "From Right",
+            Self::Bottom => "From Bottom",
+        }
     }
 }
 
@@ -104,6 +142,9 @@ pub struct Transition {
     pub duration: Ticks,
     #[serde(default, skip_serializing_if = "Alignment::is_center")]
     pub alignment: Alignment,
+    /// The kind's usual side when unset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from: Option<Side>,
 }
 
 impl Transition {
@@ -112,7 +153,12 @@ impl Transition {
             kind,
             duration,
             alignment: Alignment::Center,
+            from: None,
         }
+    }
+
+    pub fn side(self) -> Side {
+        self.from.unwrap_or(self.kind.default_side())
     }
 }
 
