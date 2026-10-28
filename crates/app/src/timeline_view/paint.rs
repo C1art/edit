@@ -164,7 +164,10 @@ pub fn clips(
         painter.rect_stroke(rect, 3.0, stroke, StrokeKind::Inside);
         transition_marks(painter, row, scale, track, clip);
         match row.track.kind {
-            TrackKind::Video => keyframe_marks(painter, rect, scale, clip),
+            TrackKind::Video => {
+                keyframe_marks(painter, rect, scale, clip);
+                speed_marks(painter, rect, scale, clip);
+            }
             TrackKind::Audio if volume_lines => {
                 let envelope = rubber_band::Envelope::clip(clip);
                 rubber_band::paint(painter, rect.shrink(1.0), scale, &envelope);
@@ -185,6 +188,7 @@ pub fn clips(
             String::new()
         };
         let speed = match (clip.speed.is_normal(), clip.reverse) {
+            _ if clip.remap.is_some() => " [remapped]".to_owned(),
             (true, false) => String::new(),
             (true, true) => " [-100%]".to_owned(),
             (false, reverse) => format!(
@@ -220,6 +224,25 @@ fn keyframe_marks(painter: &Painter, rect: Rect, scale: &TimeScale, clip: &Clip)
             Color32::from_rgb(250, 210, 60),
             Stroke::new(1.0, Color32::from_black_alpha(160)),
         ));
+    }
+}
+
+/// A notch along the top of the clip at each speed keyframe.
+fn speed_marks(painter: &Painter, rect: Rect, scale: &TimeScale, clip: &Clip) {
+    let Some(remap) = &clip.remap else {
+        return;
+    };
+    let stroke = Stroke::new(2.0, Color32::WHITE);
+    for anchor in remap.anchors() {
+        let position = clip.start + anchor.offset;
+        if position <= clip.start || !clip.covers(position) {
+            continue;
+        }
+        let x = scale.x(position);
+        painter.line_segment(
+            [egui::pos2(x, rect.top()), egui::pos2(x, rect.top() + 8.0)],
+            stroke,
+        );
     }
 }
 

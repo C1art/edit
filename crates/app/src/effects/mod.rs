@@ -4,6 +4,7 @@ mod generated;
 mod look;
 mod mask_overlay;
 mod masks;
+mod remap;
 mod sound;
 mod transitions;
 
@@ -42,6 +43,8 @@ pub struct EffectControls {
     leveling: Option<(ClipId, Param)>,
     processing: Option<(ClipId, Vec<AudioEffect>)>,
     drawing: Option<(SourceId, Generator)>,
+    /// The clip, segment and speed in percent of a time remapping drag.
+    remapping: Option<(ClipId, usize, f64)>,
 }
 
 pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
@@ -68,6 +71,7 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
     egui::ScrollArea::vertical().show(ui, |ui| {
         if let Some((_, clip)) = &picture {
             picture_controls(editor, ui, clip);
+            remap::controls(editor, ui, clip);
         }
         if let Some((_, clip)) = &sound {
             volume_controls(editor, ui, clip);
