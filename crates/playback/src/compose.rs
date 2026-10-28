@@ -308,7 +308,11 @@ fn layer_look(
         [0, 1].map(|axis| (position[axis] + reveal.shift[axis] * canvas[axis]) * reveal.zoom);
     LayerLook {
         offset,
-        scale: percent(&look.motion.scale) * reveal.zoom,
+        scale: look
+            .motion
+            .scale_at(time)
+            .map(|percent| percent / 100.0 * reveal.zoom),
+        anchor: look.motion.anchor.each_ref().map(value),
         rotation_degrees: value(&look.motion.rotation),
         crop: [&crop.left, &crop.top, &crop.right, &crop.bottom].map(percent),
         opacity: percent(&look.opacity) * transform_opacity(&look.effects, time) * reveal.fade,
