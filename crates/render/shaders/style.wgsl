@@ -1,21 +1,38 @@
 
 // The picture style's effects: warps that move where the picture is read from, a
 // directional blur and offset when reading it, then outlines, tone and grain on the
-// encoded result.
+// encoded result, and a shadow cast behind it.
 
 const BLUR_TAPS: i32 = 24;
+const SHADOW_TAPS: i32 = 32;
+const TAU: f32 = 6.2831853;
+// Turning each tap by this spreads them evenly over a disc.
+const GOLDEN_ANGLE: f32 = 2.3999632;
 
 fn picture_size() -> vec2<f32> {
     return max(placement.mask_space.xy, vec2<f32>(1.0));
 }
 
-// Where the picture at `uv` is read from once lensed, twirled and cut into mosaic
-// blocks. Warps measure in square units, so circles stay round on any picture.
+// Pushes the picture back and forth across waves that run along their direction.
+fn wave(uv: vec2<f32>) -> vec2<f32> {
+    let wave = placement.style_wave;
+    if wave.x == 0.0 {
+        return uv;
+    }
+    let picture = picture_size();
+    let along = vec2<f32>(sin(wave.z), -cos(wave.z));
+    let across = vec2<f32>(-along.y, along.x);
+    let waves = dot(uv * picture, along) / wave.y - wave.w;
+    return uv + across * wave.x * sin(TAU * waves) / picture;
+}
+
+// Where the picture at `uv` is read from once waved, lensed, twirled and cut into
+// mosaic blocks. Warps measure in square units, so circles stay round on any picture.
 fn warp(uv_in: vec2<f32>) -> vec2<f32> {
     let picture = picture_size();
     let aspect = picture / max(picture.x, picture.y);
     let half_diagonal = length(aspect * 0.5);
-    var p = (uv_in - vec2<f32>(0.5)) * aspect;
+    var p = (wave(uv_in) - vec2<f32>(0.5)) * aspect;
     // Scaling with the squared radius, normalized so the corners stay put: a bulge
     // reads nearer the center there, magnifying it.
     let lens = placement.style_warp.w * 0.5;
@@ -115,4 +132,24 @@ fn restyle(rgb_in: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
         encoded += noise * grain.x;
     }
     return to_linear(max(encoded, vec3<f32>(0.0)));
+}
+
+// How much shadow the picture casts on `uv`, softened by averaging it over a disc.
+fn shadow_alpha(uv: vec2<f32>) -> f32 {
+    let shadow = placement.style_shadow;
+    if shadow.w <= 0.0 {
+        return 0.0;
+    }
+    let picture = picture_size();
+    let caster = uv - shadow.xy / picture;
+    if shadow.z < 0.5 {
+        return cast_alpha(caster) * shadow.w;
+    }
+    var sum = 0.0;
+    for (var tap = 0; tap < SHADOW_TAPS; tap++) {
+        let radius = sqrt((f32(tap) + 0.5) / f32(SHADOW_TAPS)) * shadow.z;
+        let angle = f32(tap) * GOLDEN_ANGLE;
+        sum += cast_alpha(caster + vec2<f32>(cos(angle), sin(angle)) * radius / picture);
+    }
+    return sum / f32(SHADOW_TAPS) * shadow.w;
 }

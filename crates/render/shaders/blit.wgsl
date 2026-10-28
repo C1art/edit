@@ -59,6 +59,12 @@ struct Placement {
     style_shape: vec4<f32>,
     // The directional blur's reach in pixels and its direction in radians.
     style_blur: vec4<f32>,
+    // Wave height and width in pixels, their direction in radians, then waves travelled.
+    style_wave: vec4<f32>,
+    // The drop shadow's offset and softness in pixels, then its opacity.
+    style_shadow: vec4<f32>,
+    // The shadow's color, linear.
+    style_shadow_color: vec4<f32>,
 };
 
 const OUTLINE_VEC4S: u32 = 32u;
@@ -97,7 +103,19 @@ fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
         vec2<f32>(0.0, 0.0), vec2<f32>(1.0, 0.0), vec2<f32>(0.0, 1.0),
         vec2<f32>(0.0, 1.0), vec2<f32>(1.0, 0.0), vec2<f32>(1.0, 1.0),
     );
-    let uv = mix(placement.crop.xy, vec2<f32>(1.0) - placement.crop.zw, corners[index]);
+    // Waves and a shadow reach past the picture, so the quad grows to hold them.
+    let shadow = placement.style_shadow;
+    let reach = abs(placement.style_wave.x) + select(
+        0.0,
+        max(abs(shadow.x), abs(shadow.y)) + shadow.z,
+        shadow.w > 0.0,
+    );
+    let margin = vec2<f32>(reach) / picture_size();
+    let uv = mix(
+        placement.crop.xy - margin,
+        vec2<f32>(1.0) - placement.crop.zw + margin,
+        corners[index],
+    );
     let center = placement.center_axis_x.xy;
     let axis_x = placement.center_axis_x.zw;
     let axis_y = placement.axis_y_opacity.xy;
@@ -414,14 +432,29 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     return layer_color(in);
 }
 
-// The layer's graded, keyed and masked color, not yet premultiplied.
-fn layer_color(in: VertexOutput) -> vec4<f32> {
-    let uv = warp(in.uv);
+fn in_crop(uv: vec2<f32>) -> bool {
+    return all(uv >= placement.crop.xy) && all(uv <= vec2<f32>(1.0) - placement.crop.zw);
+}
+
+// The picture at the warped `uv`, unpremultiplied and through the input LUT.
+fn source_color(uv: vec2<f32>) -> vec4<f32> {
     var color = picture_at(uv);
     if placement.axis_y_opacity.w > 0.5 {
         color = vec4<f32>(color.rgb / max(color.a, 1e-6), color.a);
     }
-    color = vec4<f32>(input_grade(color.rgb), color.a);
+    return vec4<f32>(input_grade(color.rgb), color.a);
+}
+
+// How much of the cropped, keyed picture covers `uv`, which casts the shadow.
+fn cast_alpha(uv: vec2<f32>) -> f32 {
+    let color = source_color(warp(uv));
+    return color.a * key_alpha(color.rgb) * f32(in_crop(uv));
+}
+
+// The layer's graded, keyed and masked color, not yet premultiplied.
+fn layer_color(in: VertexOutput) -> vec4<f32> {
+    let uv = warp(in.uv);
+    let color = source_color(uv);
     let mask = placement.mask;
     let shown = all(in.canvas >= mask.xy) && all(in.canvas <= vec2<f32>(1.0) - mask.zw);
     let keyed = key_alpha(color.rgb);
@@ -430,6 +463,10 @@ fn layer_color(in: VertexOutput) -> vec4<f32> {
     let sharp = sharpen(unspilled, uv);
     var rgb = restyle(stylize(secondary(creative_grade(correct(sharp))), in.uv), uv);
     rgb = mix(rgb, vec3<f32>(1.0), placement.balance.w);
+    let picture = color.a * keyed * f32(in_crop(in.uv));
+    let shadow = shadow_alpha(in.uv);
+    let covered = picture + shadow * (1.0 - picture);
+    rgb = mix(placement.style_shadow_color.rgb, rgb, picture / max(covered, 1e-6));
     let opacity = placement.axis_y_opacity.z * mask_coverage(in.uv);
-    return vec4<f32>(rgb, color.a * keyed * opacity * f32(shown));
+    return vec4<f32>(rgb, covered * opacity * f32(shown));
 }

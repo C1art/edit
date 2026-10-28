@@ -33,6 +33,22 @@ pub struct PictureStyle {
     pub blur_length: f32,
     /// Radians clockwise from vertical.
     pub blur_direction: f32,
+    /// Pixels of the fitted picture the waves push it across their direction.
+    pub wave_height: f32,
+    /// Pixels of the fitted picture from one wave to the next.
+    pub wave_width: f32,
+    /// Radians clockwise from up that the waves run along.
+    pub wave_direction: f32,
+    /// Waves travelled so far, so they move as the clip plays.
+    pub wave_phase: f32,
+    /// Pixels of the fitted picture right and down the shadow falls.
+    pub shadow_offset: [f32; 2],
+    /// Pixels of the fitted picture the shadow's edge softens over.
+    pub shadow_softness: f32,
+    /// 0 (no shadow) to 1.
+    pub shadow_opacity: f32,
+    /// Linear.
+    pub shadow_color: [f32; 3],
 }
 
 impl PictureStyle {
@@ -53,13 +69,23 @@ impl PictureStyle {
         lens: 0.0,
         blur_length: 0.0,
         blur_direction: 0.0,
+        wave_height: 0.0,
+        wave_width: 1.0,
+        wave_direction: 0.0,
+        wave_phase: 0.0,
+        shadow_offset: [0.0; 2],
+        shadow_softness: 0.0,
+        shadow_opacity: 0.0,
+        shadow_color: [0.0; 3],
     };
 
-    /// The shader's view, as five vec4s.
-    pub(crate) fn uniform(&self) -> [f32; 20] {
+    /// The shader's view, as eight vec4s.
+    pub(crate) fn uniform(&self) -> [f32; 32] {
         let inverted = if self.edges_inverted { 1.0 } else { 0.0 };
         let [mosaic_x, mosaic_y] = self.mosaic;
         let [offset_x, offset_y] = self.offset;
+        let [shadow_x, shadow_y] = self.shadow_offset;
+        let [red, green, blue] = self.shadow_color;
         [
             self.brightness,
             self.contrast,
@@ -80,6 +106,18 @@ impl PictureStyle {
             self.blur_length.max(0.0),
             self.blur_direction,
             0.0,
+            0.0,
+            self.wave_height,
+            self.wave_width.max(1.0),
+            self.wave_direction,
+            self.wave_phase,
+            shadow_x,
+            shadow_y,
+            self.shadow_softness.max(0.0),
+            self.shadow_opacity.clamp(0.0, 1.0),
+            red,
+            green,
+            blue,
             0.0,
         ]
     }
