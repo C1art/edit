@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::generator::placed_length;
-use crate::{Generator, Nest, Ticks, Timebase, VideoFormat};
+use crate::{BinId, Generator, Nest, Ticks, Timebase, VideoFormat};
 
 /// Identifies a media item in the sequence's media pool.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -29,6 +29,9 @@ pub struct MediaItem {
     /// Set for a sequence nested in the project's, which has no file behind `path`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nest: Option<Nest>,
+    /// The bin the item sits in, or none at the top of the project.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bin: Option<BinId>,
 }
 
 impl MediaItem {

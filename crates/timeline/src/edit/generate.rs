@@ -27,6 +27,7 @@ impl Edit for AddGenerated {
             video: Some(sequence.format),
             has_audio: false,
             proxy: None,
+            bin: None,
             generator: Some(self.generator.clone()),
             nest: None,
         });

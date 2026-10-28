@@ -85,6 +85,7 @@ impl Edit for NestClips {
             video: video.map(|_| sequence.format),
             has_audio: audio.is_some(),
             proxy: None,
+            bin: None,
             generator: None,
             nest: Some(nest),
         });
@@ -126,6 +127,7 @@ impl Edit for AddNest {
             video: Some(sequence.format),
             has_audio: true,
             proxy: None,
+            bin: None,
             generator: None,
             nest: Some(Nest::with_default_tracks()),
         });

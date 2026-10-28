@@ -255,6 +255,7 @@ mod tests {
             video: None,
             has_audio: true,
             proxy: None,
+            bin: None,
             generator: None,
             nest: None,
         }

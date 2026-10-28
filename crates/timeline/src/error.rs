@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::{ClipId, MarkerId, SourceId, Ticks, TrackRef};
+use crate::{BinId, ClipId, MarkerId, SourceId, Ticks, TrackRef};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TimelineError {
@@ -10,6 +10,9 @@ pub enum TimelineError {
     MarkerNotFound(MarkerId),
     MediaNotFound(SourceId),
     MediaInUse(SourceId),
+    BinNotFound(BinId),
+    /// The bin would go inside itself.
+    BinCycle(BinId),
     ClipOverlap {
         track: TrackRef,
         at: Ticks,
@@ -41,6 +44,8 @@ impl fmt::Display for TimelineError {
             Self::MarkerNotFound(marker) => write!(f, "marker {} does not exist", marker.0),
             Self::MediaNotFound(source) => write!(f, "media {} is not in the project", source.0),
             Self::MediaInUse(source) => write!(f, "media {} is used in the sequence", source.0),
+            Self::BinNotFound(bin) => write!(f, "bin {} does not exist", bin.0),
+            Self::BinCycle(_) => f.write_str("a bin can't go inside itself"),
             Self::ClipOverlap { track, at } => {
                 write!(
                     f,

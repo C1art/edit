@@ -1,5 +1,6 @@
 mod audio_effect;
 mod audio_plan;
+mod bin;
 mod caption;
 mod color;
 mod curves;
@@ -28,18 +29,19 @@ mod validate;
 
 pub use audio_effect::AudioEffect;
 pub use audio_plan::{audio_fade, audio_span, clip_level, track_automation};
+pub use bin::{Bin, BinId};
 pub use caption::{captions_from_cues, Caption, CaptionStyle, Captions};
 pub use color::{ColorCorrection, ColorWheel};
 pub use curves::{Curve, CurvePoint, Curves, CURVE_RANGE};
 pub use edit::{
-    clamp_delta, AddFrameHold, AddGenerated, AddMarker, AddNest, AddTrack, Clipboard, CloseGap,
-    Edge, ExtractMarked, ImportMedia, InNest, Lift, LiftMarked, MoveClips, NestClips,
-    NormalizeClipGains, PasteClips, PlaceClip, PlaceMode, RateStretch, Razor, RazorTarget,
-    RelinkMedia, RemoveMarker, RemoveMedia, RemoveTrack, RenameMedia, RippleDelete,
-    RippleTrimToPlayhead, Roll, SetCaptions, SetClipAudioEffects, SetClipGain, SetClipLook,
-    SetClipSpeed, SetClipVolume, SetClipsEnabled, SetGenerator, SetMarks, SetMasterGain, SetProxy,
-    SetSequenceFormat, SetTrackAutomation, SetTrackMix, SetTrackSwitch, SetTransition, Slide, Slip,
-    TrackSwitch, Trim, TrimMode, UpdateMarker,
+    clamp_delta, AddBin, AddFrameHold, AddGenerated, AddMarker, AddNest, AddTrack, Clipboard,
+    CloseGap, Edge, ExtractMarked, ImportMedia, InNest, Lift, LiftMarked, MoveClips, MoveToBin,
+    NestClips, NormalizeClipGains, PasteClips, PlaceClip, PlaceMode, RateStretch, Razor,
+    RazorTarget, RelinkMedia, RemoveBin, RemoveMarker, RemoveMedia, RemoveTrack, RenameBin,
+    RenameMedia, RippleDelete, RippleTrimToPlayhead, Roll, SetCaptions, SetClipAudioEffects,
+    SetClipGain, SetClipLook, SetClipSpeed, SetClipVolume, SetClipsEnabled, SetGenerator, SetMarks,
+    SetMasterGain, SetProxy, SetSequenceFormat, SetTrackAutomation, SetTrackMix, SetTrackSwitch,
+    SetTransition, Slide, Slip, TrackSwitch, Trim, TrimMode, UpdateMarker,
 };
 pub use effect::{Rgb, VideoEffect};
 pub use error::TimelineError;
