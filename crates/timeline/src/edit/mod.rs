@@ -1,4 +1,5 @@
 mod arrange;
+mod caption;
 mod enable;
 mod generate;
 mod hold;
@@ -19,6 +20,7 @@ mod trim;
 mod tests;
 
 pub use arrange::{CloseGap, Lift, MoveClips, RippleDelete};
+pub use caption::SetCaptions;
 pub use enable::SetClipsEnabled;
 pub use generate::{AddGenerated, SetGenerator};
 pub use hold::AddFrameHold;

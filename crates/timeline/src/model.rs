@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AudioEffect, FrameRate, Gain, Look, Marker, Marks, MediaItem, Pan, Param, SourceId, Speed,
-    Ticks, Timebase, Transition,
+    AudioEffect, Captions, FrameRate, Gain, Look, Marker, Marks, MediaItem, Pan, Param, SourceId,
+    Speed, Ticks, Timebase, Transition,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -272,6 +272,8 @@ pub struct Sequence {
     #[serde(default)]
     pub marks: Marks,
     #[serde(default)]
+    pub captions: Captions,
+    #[serde(default)]
     pub(crate) ids: IdGenerator,
 }
 
@@ -286,6 +288,7 @@ impl Sequence {
             master: Gain::UNITY,
             markers: Vec::new(),
             marks: Marks::default(),
+            captions: Captions::default(),
             ids: IdGenerator::default(),
         }
     }

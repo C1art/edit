@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
 use timeline::{
-    AudioEffect, Clip, ClipId, Gain, Generator, Interpolation, Keyframe, Marks, MediaItem, Nest,
-    Pan, Param, Rgb, SourceId, TextAlign, Ticks, Timebase, Title, TitleFont, Track, Transition,
-    TransitionKind, VideoEffect, VideoFormat,
+    AudioEffect, Caption, Clip, ClipId, Gain, Generator, Interpolation, Keyframe, Marks, MediaItem,
+    Nest, Pan, Param, Rgb, SourceId, TextAlign, Ticks, Timebase, Title, TitleFont, Track,
+    Transition, TransitionKind, VideoEffect, VideoFormat,
 };
 
 use super::*;
@@ -88,6 +88,12 @@ fn sample() -> ProjectFile {
         ..Track::default()
     });
     sequence.marks = Marks::default().with_out(Ticks(45_000));
+    sequence.captions.items.push(Caption {
+        start: Ticks(9_000),
+        end: Ticks(90_000),
+        text: "Two\nlines «quoted»".to_owned(),
+    });
+    sequence.captions.style.background = None;
     ProjectFile::new(sequence)
 }
 

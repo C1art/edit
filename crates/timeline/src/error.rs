@@ -24,6 +24,12 @@ pub enum TimelineError {
     NothingToEdit,
     /// The nested sequence would show itself.
     NestCycle(SourceId),
+    /// A caption ends before it starts or overlaps the one before.
+    CaptionOutOfOrder(Ticks),
+    /// A subtitle file's timing can't be read at this line, counting from one.
+    InvalidSubtitles {
+        line: usize,
+    },
 }
 
 impl fmt::Display for TimelineError {
@@ -49,6 +55,12 @@ impl fmt::Display for TimelineError {
             Self::OutsideMedia(_) => f.write_str("not enough source media for this edit"),
             Self::NothingToEdit => f.write_str("nothing to edit"),
             Self::NestCycle(_) => f.write_str("a sequence can't contain itself"),
+            Self::CaptionOutOfOrder(_) => {
+                f.write_str("captions must not overlap and must end after they start")
+            }
+            Self::InvalidSubtitles { line } => {
+                write!(f, "subtitle timing on line {line} is not HH:MM:SS,mmm")
+            }
         }
     }
 }
