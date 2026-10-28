@@ -1,6 +1,7 @@
 mod arrange;
 mod enable;
 mod generate;
+mod hold;
 mod levels;
 mod look;
 mod marker;
@@ -19,6 +20,7 @@ mod tests;
 pub use arrange::{CloseGap, Lift, MoveClips, RippleDelete};
 pub use enable::SetClipsEnabled;
 pub use generate::{AddGenerated, SetGenerator};
+pub use hold::AddFrameHold;
 pub use levels::{SetClipAudioEffects, SetClipGain, SetClipVolume, SetMasterGain, SetTrackMix};
 pub use look::{SetClipLook, SetTransition};
 pub use marker::{AddMarker, RemoveMarker, UpdateMarker};

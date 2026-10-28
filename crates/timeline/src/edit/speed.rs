@@ -21,7 +21,12 @@ impl Edit for SetClipSpeed {
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
-        let ids = sequence.with_links(&self.clips);
+        // A frame hold has no speed; its length is set by trimming.
+        let ids: Vec<ClipId> = sequence
+            .with_links(&self.clips)
+            .into_iter()
+            .filter(|&id| sequence.clip(id).is_some_and(|(_, clip)| !clip.hold))
+            .collect();
         let Some(&first) = ids.first() else {
             return Err(TimelineError::NothingToEdit);
         };
@@ -86,8 +91,10 @@ impl Edit for RateStretch {
                 Edge::Head => clip.duration - self.delta,
                 Edge::Tail => clip.duration + self.delta,
             };
-            clip.speed =
-                Speed::stretch(source, duration).ok_or(TimelineError::NonPositiveDuration)?;
+            if !clip.hold {
+                clip.speed =
+                    Speed::stretch(source, duration).ok_or(TimelineError::NonPositiveDuration)?;
+            }
             clip.duration = duration;
             if self.edge == Edge::Head {
                 clip.start = clip.start + self.delta;
