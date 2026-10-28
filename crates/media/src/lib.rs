@@ -1,7 +1,9 @@
+mod block_match;
 mod codec;
 mod error;
 mod ffi;
 mod frames;
+mod motion;
 mod peaks;
 mod probe;
 mod proxy;
@@ -25,6 +27,7 @@ pub fn hardware_decoder() -> Option<&'static str> {
     ffi::hardware_device_name()
 }
 
+pub use motion::{track_motion, Motion};
 pub use peaks::{read_peaks, Peaks};
 pub use probe::{probe, MediaInfo, StreamInfo, StreamKind};
 pub use proxy::{create_proxy, proxy_size};
