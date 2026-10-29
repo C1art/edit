@@ -128,7 +128,9 @@ impl Editor {
             playing,
         );
         if let Some(response) = output.clip_menu {
-            response.context_menu(|ui| crate::clip_menu::context(self, ui));
+            response.context_menu(|ui| {
+                theme::scrolling_menu(ui, |ui| crate::clip_menu::context(self, ui));
+            });
         }
         if let Some(response) = output.gap_menu {
             response.context_menu(|ui| {

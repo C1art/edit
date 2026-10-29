@@ -299,7 +299,9 @@ impl Pool<'_> {
         if response.double_clicked() && item.nest.is_some() {
             self.action = Some(PoolAction::OpenNest(item.id));
         }
-        response.context_menu(|ui| self.item_menu(ui, item, offline, building));
+        response.context_menu(|ui| {
+            crate::theme::scrolling_menu(ui, |ui| self.item_menu(ui, item, offline, building));
+        });
     }
 
     /// Shows the name field in place of `entry` while it is being renamed.
