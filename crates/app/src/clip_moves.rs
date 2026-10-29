@@ -95,6 +95,19 @@ impl Editor {
             .collect();
     }
 
+    /// Selects what's under the playhead each time it moves while Selection Follows
+    /// Playhead is on, so grading can go shot by shot without clicking each clip.
+    pub(crate) fn follow_playhead_with_selection(&mut self) {
+        if !self.selection_follows_playhead {
+            self.selection_followed = None;
+            return;
+        }
+        let playhead = self.playhead();
+        if self.selection_followed.replace(playhead) != Some(playhead) {
+            self.select_at_playhead();
+        }
+    }
+
     pub(crate) fn select_all(&mut self) {
         self.view.selection = self
             .timeline

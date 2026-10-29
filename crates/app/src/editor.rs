@@ -50,6 +50,9 @@ pub struct Editor {
     pub(crate) use_proxies: bool,
     /// Whether dragging the playhead and stepping frames sound the audio there.
     pub(crate) scrub_audio: bool,
+    pub(crate) selection_follows_playhead: bool,
+    /// Where the playhead was when the selection last followed it.
+    pub(crate) selection_followed: Option<Ticks>,
     /// Outlines the action and title safe areas over the program picture.
     pub(crate) safe_margins: bool,
     pub(crate) dropped_frame_indicator: bool,
@@ -210,6 +213,8 @@ impl Editor {
             clip_art,
             use_proxies: false,
             scrub_audio: true,
+            selection_follows_playhead: false,
+            selection_followed: None,
             safe_margins: false,
             dropped_frame_indicator: false,
             program_zoom: Default::default(),
@@ -448,6 +453,7 @@ impl eframe::App for Editor {
         self.update_window();
         self.sync_program();
         self.update_viewers(&ctx);
+        self.follow_playhead_with_selection();
 
         self.lay_out_panels(ui);
 

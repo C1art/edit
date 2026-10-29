@@ -1,7 +1,5 @@
 use egui::{Button, MenuBar, ViewportCommand};
-use timeline::{
-    Edge, Generator, LinkedSelection, PlaceMode, Rgb, Shape, ShapeKind, Title, TrackKind,
-};
+use timeline::{Generator, LinkedSelection, PlaceMode, Rgb, Shape, ShapeKind, Title, TrackKind};
 
 use crate::editor::Editor;
 use crate::icons::{self, Icon, Look};
@@ -238,18 +236,9 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             crate::clip_menu::items(editor, ui);
         });
         crate::theme::menu(ui, "Markers", |ui| {
-            crate::marker_dialog::menu(editor, ui);
+            crate::sequence_menu::in_out_items(editor, ui);
             ui.separator();
-            let go_to_in =
-                Button::new("Go to In").shortcut_text(editor.keymap.label(Command::GoToIn));
-            if ui.add(go_to_in).clicked() {
-                editor.go_to_mark(Edge::Head);
-            }
-            let go_to_out =
-                Button::new("Go to Out").shortcut_text(editor.keymap.label(Command::GoToOut));
-            if ui.add(go_to_out).clicked() {
-                editor.go_to_mark(Edge::Tail);
-            }
+            crate::marker_dialog::menu(editor, ui);
         });
         crate::theme::menu(ui, "Sequence", |ui| {
             crate::sequence_menu::sequence_menu(editor, ui)

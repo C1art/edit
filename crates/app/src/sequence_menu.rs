@@ -86,40 +86,6 @@ pub(crate) fn sequence_menu(editor: &mut Editor, ui: &mut egui::Ui) {
     }
     ui.separator();
     if ui
-        .add(Button::new("Mark In").shortcut_text(editor.keymap.label(Command::MarkIn)))
-        .clicked()
-    {
-        editor.mark_sequence_in();
-    }
-    if ui
-        .add(Button::new("Mark Out").shortcut_text(editor.keymap.label(Command::MarkOut)))
-        .clicked()
-    {
-        editor.mark_sequence_out();
-    }
-    for (command, run) in [
-        (Command::MarkClip, Editor::mark_clip as fn(&mut Editor)),
-        (Command::MarkSelection, Editor::mark_selection),
-    ] {
-        let button = Button::new(command.name()).shortcut_text(editor.keymap.label(command));
-        if ui.add(button).clicked() {
-            run(editor);
-        }
-    }
-    for (command, clear) in [
-        (
-            Command::ClearInOut,
-            Editor::clear_sequence_marks as fn(&mut Editor),
-        ),
-        (Command::ClearIn, Editor::clear_sequence_in),
-        (Command::ClearOut, Editor::clear_sequence_out),
-    ] {
-        let button = Button::new(command.name()).shortcut_text(editor.keymap.label(command));
-        if ui.add(button).clicked() {
-            clear(editor);
-        }
-    }
-    if ui
         .add(Button::new("Lift In to Out").shortcut_text(editor.keymap.label(Command::LiftMarked)))
         .clicked()
     {
@@ -188,8 +154,59 @@ pub(crate) fn sequence_menu(editor: &mut Editor, ui: &mut egui::Ui) {
             Command::ToggleAudioScrubbing,
         ));
     ui.checkbox(
+        &mut editor.selection_follows_playhead,
+        "Selection Follows Playhead",
+    )
+    .on_hover_text("Select the clips under the playhead on the targeted tracks as it moves");
+    ui.checkbox(
         &mut editor.clip_art.show_thumbnails,
         "Show Video Thumbnails",
     );
     ui.checkbox(&mut editor.clip_art.show_waveforms, "Show Audio Waveforms");
+}
+
+/// Setting, finding and clearing In and Out, which Premiere keeps in its Markers menu.
+pub(crate) fn in_out_items(editor: &mut Editor, ui: &mut egui::Ui) {
+    if ui
+        .add(Button::new("Mark In").shortcut_text(editor.keymap.label(Command::MarkIn)))
+        .clicked()
+    {
+        editor.mark_sequence_in();
+    }
+    if ui
+        .add(Button::new("Mark Out").shortcut_text(editor.keymap.label(Command::MarkOut)))
+        .clicked()
+    {
+        editor.mark_sequence_out();
+    }
+    for (command, run) in [
+        (Command::MarkClip, Editor::mark_clip as fn(&mut Editor)),
+        (Command::MarkSelection, Editor::mark_selection),
+    ] {
+        let button = Button::new(command.name()).shortcut_text(editor.keymap.label(command));
+        if ui.add(button).clicked() {
+            run(editor);
+        }
+    }
+    for (command, clear) in [
+        (
+            Command::ClearInOut,
+            Editor::clear_sequence_marks as fn(&mut Editor),
+        ),
+        (Command::ClearIn, Editor::clear_sequence_in),
+        (Command::ClearOut, Editor::clear_sequence_out),
+    ] {
+        let button = Button::new(command.name()).shortcut_text(editor.keymap.label(command));
+        if ui.add(button).clicked() {
+            clear(editor);
+        }
+    }
+    let go_to_in = Button::new("Go to In").shortcut_text(editor.keymap.label(Command::GoToIn));
+    if ui.add(go_to_in).clicked() {
+        editor.go_to_mark(Edge::Head);
+    }
+    let go_to_out = Button::new("Go to Out").shortcut_text(editor.keymap.label(Command::GoToOut));
+    if ui.add(go_to_out).clicked() {
+        editor.go_to_mark(Edge::Tail);
+    }
 }

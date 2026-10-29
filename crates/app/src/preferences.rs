@@ -8,6 +8,7 @@ pub(crate) struct Preferences {
     autosave: bool,
     autosave_minutes: u32,
     scrub_audio: bool,
+    selection_follows_playhead: bool,
     dropped_frame_indicator: bool,
     /// `None` follows the system default.
     audio_device: Option<String>,
@@ -20,6 +21,7 @@ impl Preferences {
             autosave: editor.autosave.enabled,
             autosave_minutes: editor.autosave.minutes,
             scrub_audio: editor.scrub_audio,
+            selection_follows_playhead: editor.selection_follows_playhead,
             dropped_frame_indicator: editor.dropped_frame_indicator,
             audio_device: editor.audio_switch.chosen.clone(),
         }
@@ -28,11 +30,12 @@ impl Preferences {
     pub(crate) fn to_text(&self) -> String {
         format!(
             "hardware_decoding\t{}\nautosave\t{}\nautosave_minutes\t{}\nscrub_audio\t{}\n\
-             dropped_frame_indicator\t{}\naudio_device\t{}\n",
+             selection_follows_playhead\t{}\ndropped_frame_indicator\t{}\naudio_device\t{}\n",
             self.hardware_decoding,
             self.autosave,
             self.autosave_minutes,
             self.scrub_audio,
+            self.selection_follows_playhead,
             self.dropped_frame_indicator,
             self.audio_device.as_deref().unwrap_or_default(),
         )
@@ -48,6 +51,7 @@ impl Preferences {
                 "autosave" => set(&mut self.autosave, flag),
                 "autosave_minutes" => set(&mut self.autosave_minutes, value.parse().ok()),
                 "scrub_audio" => set(&mut self.scrub_audio, flag),
+                "selection_follows_playhead" => set(&mut self.selection_follows_playhead, flag),
                 "dropped_frame_indicator" => set(&mut self.dropped_frame_indicator, flag),
                 "audio_device" => {
                     self.audio_device = Some(value.to_owned()).filter(|name| !name.is_empty());
@@ -73,6 +77,7 @@ impl Editor {
         self.autosave.enabled = preferences.autosave;
         self.autosave.minutes = preferences.autosave_minutes.clamp(1, 60);
         self.scrub_audio = preferences.scrub_audio;
+        self.selection_follows_playhead = preferences.selection_follows_playhead;
         self.dropped_frame_indicator = preferences.dropped_frame_indicator;
         self.audio_switch.chosen = preferences.audio_device;
         self.saved_preferences = Some(Preferences::of(self));
@@ -100,6 +105,7 @@ mod tests {
         autosave: true,
         autosave_minutes: 5,
         scrub_audio: true,
+        selection_follows_playhead: false,
         dropped_frame_indicator: false,
         audio_device: None,
     };
@@ -111,6 +117,7 @@ mod tests {
             autosave: false,
             autosave_minutes: 12,
             scrub_audio: false,
+            selection_follows_playhead: true,
             dropped_frame_indicator: true,
             audio_device: Some("Speakers (USB Audio)".to_owned()),
         };
