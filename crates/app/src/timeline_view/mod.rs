@@ -289,6 +289,7 @@ impl TimelineView {
             .as_ref()
             .filter(|point| point.is_on(sequence));
         let shown = painter.clip_rect().y_range();
+        let states = paint::ClipStates::new(sequence, &self.selection);
         for row in rows.iter().filter(|row| row.y_range().intersects(shown)) {
             paint::row_background(
                 &painter,
@@ -298,15 +299,7 @@ impl TimelineView {
                 self.targets.contains(row.track),
             );
             let automation = self.automation_shown.contains(&row.track);
-            paint::clips(
-                &painter,
-                row,
-                &scale,
-                sequence,
-                &self.selection,
-                art,
-                !automation,
-            );
+            paint::clips(&painter, row, &scale, sequence, &states, art, !automation);
             let selected_gap = self.gap.filter(|&(track, _)| track == row.track);
             if let Some(range) = selected_gap.and_then(|(track, at)| gap(sequence, track, at)) {
                 paint::gap(&painter, row, &scale, range);

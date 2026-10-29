@@ -1,3 +1,5 @@
+use std::collections::{HashMap, HashSet};
+
 use egui::{Align2, Color32, FontId, Painter, Rect, Stroke, StrokeKind};
 use timeline::{
     cut_window, is_through_edit, Clip, ClipId, Gain, Label, Sequence, Ticks, Timecode, Track,
@@ -15,9 +17,26 @@ const VIDEO_CLIP: Color32 = Color32::from_rgb(64, 104, 160);
 const AUDIO_CLIP: Color32 = Color32::from_rgb(58, 128, 92);
 const CLIP_RADIUS: f32 = 4.0;
 const NAME_STRIP: f32 = 17.0;
+const DETAIL_WIDTH: f32 = 8.0;
 const OFFLINE_CLIP: Color32 = Color32::from_rgb(170, 40, 40);
 const OUT_OF_SYNC: Color32 = Color32::from_rgb(200, 30, 30);
 const MIN_LABEL_SPACING: f32 = 90.0;
+
+/// What's looked up for every clip drawn, worked out once a frame rather than by a
+/// search per clip, which slows a long timeline to a crawl.
+pub struct ClipStates {
+    selected: HashSet<ClipId>,
+    sync_offsets: HashMap<ClipId, Ticks>,
+}
+
+impl ClipStates {
+    pub fn new(sequence: &Sequence, selection: &[ClipId]) -> Self {
+        Self {
+            selected: selection.iter().copied().collect(),
+            sync_offsets: sequence.sync_offsets(),
+        }
+    }
+}
 
 /// A strip along the foot of the ruler over the segments that need rendering to play
 /// smoothly: red until rendered, green once a preview is ready, as Premiere's.
@@ -129,7 +148,7 @@ pub fn clips(
     row: &Row,
     scale: &TimeScale,
     sequence: &Sequence,
-    selection: &[ClipId],
+    states: &ClipStates,
     art: &mut ClipArt,
     volume_lines: bool,
 ) {
@@ -151,7 +170,7 @@ pub fn clips(
         if rect.right() < visible.min || rect.left() > visible.max {
             continue;
         }
-        let selected = selection.contains(&clip.id);
+        let selected = states.selected.contains(&clip.id);
         let offline = art.offline.contains(&clip.source);
         let base = if offline {
             OFFLINE_CLIP
@@ -169,6 +188,17 @@ pub fn clips(
         // A hair of space between neighbours keeps back-to-back clips apart.
         let body = rect.shrink2(egui::vec2(0.5, 0.0));
         painter.rect_filled(body, CLIP_RADIUS, fill);
+        let stroke = if selected {
+            Stroke::new(1.5, Color32::WHITE)
+        } else {
+            Stroke::new(1.0, fill.lerp_to_gamma(Color32::WHITE, 0.18))
+        };
+        // Nothing more could be made out on a clip this thin, and drawing it all for
+        // hundreds of clips zoomed out slows every frame.
+        if body.width() < DETAIL_WIDTH {
+            painter.rect_stroke(body, CLIP_RADIUS, stroke, StrokeKind::Inside);
+            continue;
+        }
         let strip = Rect::from_min_max(
             body.left_top(),
             egui::pos2(body.right(), (body.top() + NAME_STRIP).min(body.bottom())),
@@ -218,11 +248,6 @@ pub fn clips(
                 _ => {}
             }
         }
-        let stroke = if selected {
-            Stroke::new(1.5, Color32::WHITE)
-        } else {
-            Stroke::new(1.0, fill.lerp_to_gamma(Color32::WHITE, 0.18))
-        };
         painter.rect_stroke(body, CLIP_RADIUS, stroke, StrokeKind::Inside);
         transition_marks(painter, row, scale, track, clip);
         super::markers::paint_on_clip(painter, rect, scale, clip);
@@ -275,7 +300,7 @@ pub fn clips(
             }
             _ => String::new(),
         };
-        let badge = sync_badge(painter, rect, sequence, clip);
+        let badge = sync_badge(painter, rect, sequence, states.sync_offsets.get(&clip.id));
         painter.with_clip_rect(strip.shrink(1.0)).text(
             egui::pos2(strip.left() + 5.0 + badge, strip.center().y),
             Align2::LEFT_CENTER,
@@ -311,8 +336,8 @@ fn through_edit_marks(painter: &Painter, row: &Row, scale: &TimeScale, track: &T
 
 /// Premiere's red frame count on a clip slipped out of sync with its link; returns the
 /// width it takes so the name can follow it.
-fn sync_badge(painter: &Painter, rect: Rect, sequence: &Sequence, clip: &Clip) -> f32 {
-    let Some(offset) = sequence.sync_offset(clip) else {
+fn sync_badge(painter: &Painter, rect: Rect, sequence: &Sequence, offset: Option<&Ticks>) -> f32 {
+    let Some(&offset) = offset else {
         return 0.0;
     };
     let frames = sequence
