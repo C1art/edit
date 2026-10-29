@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::thread;
 
+use crate::error::AppError;
 use crate::recovery::{self, Recoverable};
 use crossbeam::channel::{self, Receiver, Sender};
 use project::ProjectFile;
@@ -38,16 +39,16 @@ enum Request {
 
 pub enum StoreEvent {
     /// The timeline revision that was written, so later edits still count as unsaved.
-    Saved(PathBuf, u64, Result<(), String>),
-    Opened(PathBuf, Result<Box<Sequence>, String>),
-    Autosaved(PathBuf, Result<(), String>),
-    CaptionsRead(PathBuf, Result<Vec<Caption>, String>),
-    CaptionsWritten(PathBuf, Result<(), String>),
+    Saved(PathBuf, u64, Result<(), AppError>),
+    Opened(PathBuf, Result<Box<Sequence>, AppError>),
+    Autosaved(PathBuf, Result<(), AppError>),
+    CaptionsRead(PathBuf, Result<Vec<Caption>, AppError>),
+    CaptionsWritten(PathBuf, Result<(), AppError>),
     /// The settings file's text, or none where there is no file yet.
-    SettingRead(Setting, Result<Option<String>, String>),
-    SettingWritten(Setting, Result<(), String>),
-    InterchangeRead(PathBuf, Result<Box<ImportXmeml>, String>),
-    InterchangeWritten(PathBuf, Result<(), String>),
+    SettingRead(Setting, Result<Option<String>, AppError>),
+    SettingWritten(Setting, Result<(), AppError>),
+    InterchangeRead(PathBuf, Result<Box<ImportXmeml>, AppError>),
+    InterchangeWritten(PathBuf, Result<(), AppError>),
     Recoverable(Option<Recoverable>),
     SessionMarked,
 }
@@ -245,31 +246,31 @@ fn handle(request: Request) -> StoreEvent {
         } => {
             let result = ProjectFile::new(*sequence)
                 .save(&path)
-                .map_err(|error| error.to_string());
+                .map_err(AppError::from);
             StoreEvent::Saved(path, revision, result)
         }
         Request::Open(path) => {
             let result = ProjectFile::load(&path)
                 .map(|file| Box::new(file.sequence))
-                .map_err(|error| error.to_string());
+                .map_err(AppError::from);
             StoreEvent::Opened(path, result)
         }
         Request::Autosave { path, sequence } => {
             let result = path
                 .parent()
                 .map_or(Ok(()), std::fs::create_dir_all)
-                .map_err(|error| error.to_string())
+                .map_err(AppError::from)
                 .and_then(|()| {
                     ProjectFile::new(*sequence)
                         .save(&path)
-                        .map_err(|error| error.to_string())
+                        .map_err(AppError::from)
                 });
             StoreEvent::Autosaved(path, result)
         }
         Request::ReadCaptions(path, timebase) => {
             let result = std::fs::read_to_string(&path)
-                .map_err(|error| error.to_string())
-                .and_then(|text| parse_srt(&text, timebase).map_err(|error| error.to_string()))
+                .map_err(AppError::from)
+                .and_then(|text| Ok(parse_srt(&text, timebase)?))
                 .map(captions_from_cues);
             StoreEvent::CaptionsRead(path, result)
         }
@@ -278,15 +279,14 @@ fn handle(request: Request) -> StoreEvent {
             captions,
             timebase,
         } => {
-            let result = std::fs::write(&path, to_srt(&captions, timebase))
-                .map_err(|error| error.to_string());
+            let result = std::fs::write(&path, to_srt(&captions, timebase)).map_err(AppError::from);
             StoreEvent::CaptionsWritten(path, result)
         }
         Request::ReadSetting(setting) => {
             let result = match std::fs::read_to_string(setting.path()) {
                 Ok(text) => Ok(Some(text)),
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-                Err(error) => Err(error.to_string()),
+                Err(error) => Err(error.into()),
             };
             StoreEvent::SettingRead(setting, result)
         }
@@ -296,18 +296,18 @@ fn handle(request: Request) -> StoreEvent {
                 .parent()
                 .map_or(Ok(()), std::fs::create_dir_all)
                 .and_then(|()| std::fs::write(&path, text))
-                .map_err(|error| error.to_string());
+                .map_err(AppError::from);
             StoreEvent::SettingWritten(setting, result)
         }
         Request::ReadInterchange(path) => {
             let result = std::fs::read_to_string(&path)
-                .map_err(|error| error.to_string())
-                .and_then(|text| read_xmeml(&text).map_err(|error| error.to_string()))
+                .map_err(AppError::from)
+                .and_then(|text| Ok(read_xmeml(&text)?))
                 .map(Box::new);
             StoreEvent::InterchangeRead(path, result)
         }
         Request::WriteInterchange(path, text) => {
-            let result = std::fs::write(&path, text).map_err(|error| error.to_string());
+            let result = std::fs::write(&path, text).map_err(AppError::from);
             StoreEvent::InterchangeWritten(path, result)
         }
         Request::FindRecoverable => StoreEvent::Recoverable(recovery::find_recoverable()),

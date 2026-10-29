@@ -136,8 +136,8 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     let name = naming.name.clone();
     editor.naming_workspace = None;
     if keep {
-        if let Err(message) = editor.save_new_workspace(&name) {
-            editor.notice(message);
+        if let Err(error) = editor.save_new_workspace(&name) {
+            editor.notice(error.to_string());
         }
     }
 }

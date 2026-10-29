@@ -10,6 +10,7 @@ use project::ProjectFile;
 use timeline::{collect_files, Collect, FileCopy, Sequence};
 
 use crate::editor::Editor;
+use crate::error::AppError;
 
 /// Premiere's Project Manager: copies the files a project uses into one folder and saves
 /// a copy of the project that reads them from there, to archive or hand it on.
@@ -29,7 +30,7 @@ struct CollectJob {
 enum CollectEvent {
     Copied,
     /// The saved project and the files that could not be copied.
-    Finished(Result<(PathBuf, Vec<String>), String>),
+    Finished(Result<(PathBuf, Vec<String>), AppError>),
 }
 
 impl Editor {
@@ -130,7 +131,7 @@ fn poll(editor: &mut Editor, ctx: &egui::Context) {
             Ok(CollectEvent::Copied) => job.copied += 1,
             Ok(CollectEvent::Finished(result)) => break Some(result),
             Err(TryRecvError::Empty) => break None,
-            Err(TryRecvError::Disconnected) => break Some(Err("the copy stopped".to_owned())),
+            Err(TryRecvError::Disconnected) => break Some(Err(AppError::WorkerStopped)),
         }
     };
     let Some(result) = finished else {
@@ -175,13 +176,13 @@ fn collect(
     project: &Path,
     stop: &AtomicBool,
     events: &Sender<CollectEvent>,
-) -> Result<(PathBuf, Vec<String>), String> {
+) -> Result<(PathBuf, Vec<String>), AppError> {
     let folder = project.parent().unwrap_or(Path::new("."));
-    std::fs::create_dir_all(folder).map_err(|error| error.to_string())?;
+    std::fs::create_dir_all(folder)?;
     let mut failed = Vec::new();
     for copy in copies {
         if stop.load(Ordering::Relaxed) {
-            return Err("cancelled".to_owned());
+            return Err(AppError::Cancelled);
         }
         if copy.from != copy.to {
             if let Err(error) = copy_source(&copy.from, &copy.to) {
@@ -190,9 +191,7 @@ fn collect(
         }
         let _ = events.send(CollectEvent::Copied);
     }
-    ProjectFile::new(sequence)
-        .save(project)
-        .map_err(|error| error.to_string())?;
+    ProjectFile::new(sequence).save(project)?;
     Ok((project.to_path_buf(), failed))
 }
 

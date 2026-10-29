@@ -10,8 +10,9 @@ use timeline::{
 };
 
 use crate::editor::Editor;
+use crate::error::AppError;
 
-type Probed = Result<(MediaInfo, u64), String>;
+type Probed = Result<(MediaInfo, u64), AppError>;
 
 /// Narrower than this, a property's name goes above its value.
 const SIDE_BY_SIDE_WIDTH: f32 = 240.0;
@@ -62,7 +63,7 @@ impl MetadataPanel {
         for (path, probed) in self.receiver.try_iter() {
             let probe = match probed {
                 Ok((info, bytes)) => Probe::Read { info, bytes },
-                Err(message) => Probe::Failed(message),
+                Err(error) => Probe::Failed(error.to_string()),
             };
             self.probes.insert(path, probe);
         }
@@ -74,12 +75,10 @@ impl MetadataPanel {
             let spawned = thread::Builder::new()
                 .name("metadata-probe".to_owned())
                 .spawn(move || {
-                    let probed = media::probe(&path)
-                        .map_err(|error| error.to_string())
-                        .and_then(|info| {
-                            let bytes = std::fs::metadata(&path).map_err(|e| e.to_string())?;
-                            Ok((info, bytes.len()))
-                        });
+                    let probed = (|| {
+                        let info = media::probe(&path)?;
+                        Ok((info, std::fs::metadata(&path)?.len()))
+                    })();
                     let _ = sender.send((path, probed));
                 });
             match spawned {

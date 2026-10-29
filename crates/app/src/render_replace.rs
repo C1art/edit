@@ -13,6 +13,7 @@ use timeline::{
 };
 
 use crate::editor::Editor;
+use crate::error::AppError;
 
 /// Extra source rendered past the last frame the clips use, so they can still be
 /// trimmed out a little.
@@ -165,21 +166,21 @@ impl Editor {
                 }
             }
             Ok(None) => {}
-            Err(message) => {
+            Err(error) => {
                 self.render_replace = None;
-                self.notice(message);
+                self.notice(format!("Cannot render and replace: {error}"));
             }
         }
     }
 
     /// Moves `running` on as far as its work allows; `None` once its source is done.
-    fn advance(&mut self, mut running: Running) -> Result<Option<Running>, String> {
+    fn advance(&mut self, mut running: Running) -> Result<Option<Running>, AppError> {
         match &mut running.stage {
             Stage::Naming(receiver) => {
                 let Ok(named) = receiver.try_recv() else {
                     return Ok(Some(running));
                 };
-                let path = named.map_err(|error| format!("Cannot render: {error}"))?;
+                let path = named?;
                 let job = self.start_render(&running.pending, path.clone())?;
                 running.stage = Stage::Rendering {
                     job,
@@ -208,9 +209,7 @@ impl Editor {
                             break;
                         }
                         ExportEvent::Cancelled => return Ok(None),
-                        ExportEvent::Failed(error) => {
-                            return Err(format!("Render failed: {error}"))
-                        }
+                        ExportEvent::Failed(error) => return Err(error.into()),
                     }
                 }
             }
@@ -218,7 +217,7 @@ impl Editor {
                 let Ok(probed) = receiver.try_recv() else {
                     return Ok(Some(running));
                 };
-                let import = probed.map_err(|error| format!("Cannot use the render: {error}"))?;
+                let import = probed?;
                 self.replace_with_render(running.pending, import);
                 return Ok(None);
             }
@@ -226,15 +225,12 @@ impl Editor {
         Ok(Some(running))
     }
 
-    fn start_render(&self, pending: &Pending, path: PathBuf) -> Result<ExportJob, String> {
+    fn start_render(&self, pending: &Pending, path: PathBuf) -> Result<ExportJob, AppError> {
         let sequence = self.timeline.sequence();
         let view = sequence
             .render_view(pending.original)
-            .ok_or_else(|| format!("{} can no longer be rendered", pending.name))?;
-        let render_state = self
-            .render_state
-            .as_ref()
-            .ok_or("Cannot render: there is no GPU renderer")?;
+            .ok_or_else(|| AppError::NotRenderable(pending.name.clone()))?;
+        let render_state = self.render_state.as_ref().ok_or(AppError::NoRenderer)?;
         let has_audio = sequence
             .media_item(pending.original)
             .is_some_and(|item| item.has_audio);
@@ -258,7 +254,7 @@ impl Editor {
             render_state.queue.clone(),
             settings,
         )
-        .map_err(|error| format!("Cannot render: {error}"))
+        .map_err(AppError::from)
     }
 
     fn replace_with_render(&mut self, pending: Pending, import: ImportMedia) {

@@ -10,6 +10,7 @@ use crossbeam::channel::{self, Receiver, Sender};
 use timeline::{SetProxy, SourceId};
 
 use crate::editor::Editor;
+use crate::error::AppError;
 
 /// Tall enough to judge focus and framing, small enough to decode several at once.
 const PROXY_HEIGHT: u32 = 540;
@@ -23,7 +24,7 @@ struct Request {
 
 pub enum ProxyEvent {
     Progress(SourceId, f32),
-    Finished(SourceId, Result<PathBuf, String>),
+    Finished(SourceId, Result<PathBuf, AppError>),
 }
 
 /// Builds proxies one at a time on a worker thread.
@@ -81,7 +82,7 @@ impl ProxyMaker {
     }
 
     /// Finished jobs since the last poll.
-    pub fn poll(&mut self) -> Vec<(SourceId, Result<PathBuf, String>)> {
+    pub fn poll(&mut self) -> Vec<(SourceId, Result<PathBuf, AppError>)> {
         let mut finished = Vec::new();
         for event in self.events.try_iter() {
             match event {
@@ -142,11 +143,13 @@ fn make(
     request: &Request,
     cancel: &AtomicBool,
     events: &Sender<ProxyEvent>,
-) -> Result<PathBuf, String> {
+) -> Result<PathBuf, AppError> {
     let destination = proxy_path(&request.path);
     if let Some(folder) = destination.parent() {
-        std::fs::create_dir_all(folder)
-            .map_err(|error| format!("cannot create {}: {error}", folder.display()))?;
+        std::fs::create_dir_all(folder).map_err(|error| AppError::CreateFolder {
+            path: folder.to_owned(),
+            error,
+        })?;
     }
     let mut reported = 0.0;
     media::create_proxy(&request.path, &destination, PROXY_HEIGHT, |done| {
@@ -159,7 +162,6 @@ fn make(
             let _ = events.send(ProxyEvent::Progress(request.source, step));
         }
         ControlFlow::Continue(())
-    })
-    .map_err(|error| error.to_string())?;
+    })?;
     Ok(destination)
 }

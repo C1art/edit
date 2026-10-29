@@ -6,6 +6,7 @@ use egui::{CentralPanel, Frame, Margin, Panel, Rect, Vec2};
 
 use crate::editor::Editor;
 use crate::effects::SideTab;
+use crate::error::AppError;
 use crate::monitors;
 use crate::panels::MediaTab;
 use crate::project_store::Setting;
@@ -183,14 +184,14 @@ impl Editor {
     }
 
     /// Keeps the current layout under `name`, which must not already be taken.
-    pub(crate) fn save_new_workspace(&mut self, name: &str) -> Result<(), String> {
+    pub(crate) fn save_new_workspace(&mut self, name: &str) -> Result<(), AppError> {
         // The workspaces file is written a line to a workspace and a tab between fields.
         let name = name.split_whitespace().collect::<Vec<_>>().join(" ");
         if name.is_empty() {
-            return Err("Name the workspace".to_owned());
+            return Err(AppError::UnnamedWorkspace);
         }
         if self.workspaces.list.iter().any(|kept| kept.name == name) {
-            return Err(format!("There is already a workspace called {name}"));
+            return Err(AppError::WorkspaceTaken(name));
         }
         let layout = self.workspaces.current();
         self.workspaces.list.push(Workspace {
