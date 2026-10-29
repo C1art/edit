@@ -1,4 +1,4 @@
-use timeline::{AddNest, ClipId, NestClips, SourceId, Ticks};
+use timeline::{AddNest, ClipId, NestClips, NestFromMedia, SourceId, Ticks};
 
 use crate::editor::Editor;
 
@@ -36,6 +36,25 @@ impl Editor {
         let name = self.next_sequence_name("Sequence");
         if self.apply(AddNest { name }) {
             if let Some(id) = self.timeline.sequence().media.last().map(|item| item.id) {
+                self.enter_nest(id, Ticks::ZERO);
+            }
+        }
+    }
+
+    /// Makes a sequence named after media item `source` that holds all of it, matching
+    /// the project's format to it while the project is empty, and opens it.
+    pub(crate) fn new_sequence_from(&mut self, source: SourceId) {
+        let Some(name) = self
+            .timeline
+            .project()
+            .media_item(source)
+            .map(|item| item.name.clone())
+        else {
+            return;
+        };
+        self.match_format(source);
+        if self.apply_to_pool(NestFromMedia { source, name }) {
+            if let Some(id) = self.timeline.project().media.last().map(|item| item.id) {
                 self.enter_nest(id, Ticks::ZERO);
             }
         }

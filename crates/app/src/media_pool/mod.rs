@@ -36,6 +36,8 @@ pub enum PoolAction {
     Move(PoolEntry, Option<BinId>),
     /// Makes a multi-camera source sequence of the items, each a camera.
     CreateMulticam(Vec<SourceId>, MulticamSync),
+    /// Makes a sequence holding all of the item and opens it.
+    NewSequenceFrom(SourceId),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -289,6 +291,10 @@ impl Pool<'_> {
             })
             .response
             .on_disabled_hover_text("Ctrl+click two or more video clips to use as cameras");
+            let playable = item.video.is_some() || item.has_audio;
+            if playable && ui.button("New Sequence From Clip").clicked() {
+                self.action = Some(PoolAction::NewSequenceFrom(item.id));
+            }
             if item.nest.is_some() && ui.button("Open in Timeline").clicked() {
                 self.action = Some(PoolAction::OpenNest(item.id));
             }

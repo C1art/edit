@@ -62,6 +62,7 @@ impl Editor {
                 self.apply_to_pool(MoveToBin { media, bins, to });
             }
             PoolAction::CreateMulticam(sources, sync) => self.sync_multicam(sources, sync),
+            PoolAction::NewSequenceFrom(source) => self.new_sequence_from(source),
         }
     }
 
