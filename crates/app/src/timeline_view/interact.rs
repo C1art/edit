@@ -144,20 +144,14 @@ impl TimelineView {
                 origin: frame_time(origin.x),
                 pending: None,
                 preview: None,
+                unlinked: matches!(links, LinkedSelection::Apart).then(|| gesture::apart(sequence)),
             });
         }
 
         let Some(drag) = &mut self.drag else {
             return;
         };
-        let unlinked;
-        let sequence = match drag.links {
-            LinkedSelection::Together => sequence,
-            LinkedSelection::Apart => {
-                unlinked = gesture::apart(sequence);
-                &unlinked
-            }
-        };
+        let sequence = drag.unlinked.as_ref().unwrap_or(sequence);
         if response.dragged() {
             if let Some(pos) = response.interact_pointer_pos() {
                 let mut delta = frame_time(pos.x) - drag.origin;
@@ -185,8 +179,11 @@ impl TimelineView {
                     (false, _) => MoveMode::Overwrite,
                 };
                 let pending = drag.gesture.edit(sequence, delta, over, pos.y, mode);
-                drag.preview = pending.preview(sequence).ok();
-                drag.pending = Some(pending);
+                // The pointer moves far more often than a frame-snapped edit changes.
+                if drag.pending.as_ref() != Some(&pending) {
+                    drag.preview = pending.preview(sequence).ok();
+                    drag.pending = Some(pending);
+                }
             }
         }
         if response.drag_stopped() {

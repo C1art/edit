@@ -43,7 +43,7 @@ pub enum Gesture {
 }
 
 /// An edit a gesture would make, previewed while dragging and applied on release.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum PendingEdit {
     Move(MoveClips),
     Trim(Trim),

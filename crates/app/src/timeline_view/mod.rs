@@ -106,6 +106,8 @@ struct Drag {
     origin: Ticks,
     pending: Option<PendingEdit>,
     preview: Option<Sequence>,
+    /// The sequence with linked partners left be, made once as an `Apart` drag starts.
+    unlinked: Option<Sequence>,
 }
 
 pub struct TimelineView {
