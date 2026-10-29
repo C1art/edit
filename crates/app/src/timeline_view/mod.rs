@@ -23,6 +23,7 @@ mod track_heights;
 mod track_scroll;
 mod track_select;
 mod trim_view;
+mod zoom;
 
 use std::collections::BTreeSet;
 
@@ -153,6 +154,8 @@ pub struct TimelineView {
     pub render_bar: Vec<(std::ops::Range<Ticks>, bool)>,
     /// The playhead at the last layout, to notice it jumping.
     last_playhead: Ticks,
+    /// Whether the sequence had anything in it at the last layout.
+    filled: bool,
 }
 
 impl Default for TimelineView {
@@ -178,28 +181,12 @@ impl Default for TimelineView {
             heights: TrackHeights::default(),
             render_bar: Vec::new(),
             last_playhead: Ticks::ZERO,
+            filled: false,
         }
     }
 }
 
 impl TimelineView {
-    /// Zooms by `factor` (above one zooms in) keeping time at screen x `anchor` fixed.
-    pub fn zoom(&mut self, factor: f32, anchor: Option<f32>) {
-        let anchor = anchor.unwrap_or(self.width / 2.0);
-        let scale = self.scale(0.0);
-        let fixed = scale.time(anchor);
-        self.ticks_per_point = (self.ticks_per_point / f64::from(factor)).clamp(1.0, 1.0e6);
-        self.scroll = (fixed - self.scale(0.0).span(anchor)).max(Ticks::ZERO);
-    }
-
-    pub fn zoom_to_fit(&mut self, sequence: &Sequence) {
-        let duration = sequence.duration().max(Ticks(
-            i64::from(sequence.timebase.den()) / i64::from(sequence.timebase.num()),
-        ));
-        self.ticks_per_point = (duration.0 as f64 / f64::from(self.width.max(1.0)) * 1.05).max(1.0);
-        self.scroll = Ticks::ZERO;
-    }
-
     /// Drops selected clips that no longer exist, e.g. after undo.
     pub fn prune_selection(&mut self, sequence: &Sequence) {
         self.selection.retain(|&id| sequence.clip(id).is_some());
@@ -252,14 +239,7 @@ impl TimelineView {
         self.handle_scroll(ui, area, tracks, timeline.sequence());
         let ruler_id = ui.scope_id().with("ruler");
         self.edge_scroll(ui, tracks, ruler_id);
-        // A jump by keyboard or an edit is followed too; a drag scrolls at the edges instead.
-        let jumped = playhead != self.last_playhead && !ui.input(|input| input.pointer.any_down());
-        self.last_playhead = playhead;
-        if playing {
-            self.follow(playhead, tracks.width(), 0.1);
-        } else if jumped {
-            self.follow(playhead, tracks.width(), 0.5);
-        }
+        self.keep_in_view(ui, timeline.sequence(), playhead, playing);
         let scale = self.scale(tracks.left());
 
         let corner = Rect::from_x_y_ranges(headers, ruler.y_range());
@@ -447,44 +427,6 @@ impl TimelineView {
                 output.clear_marker = Some((MarkerOwner::Sequence, id));
             }
         });
-    }
-
-    fn handle_scroll(&mut self, ui: &egui::Ui, area: Rect, tracks: Rect, sequence: &Sequence) {
-        if !ui.rect_contains_pointer(area) {
-            return;
-        }
-        let (mut scroll, mut zoom, pointer, alt) = ui.input(|input| {
-            (
-                input.smooth_scroll_delta,
-                input.zoom_delta(),
-                input.pointer.hover_pos(),
-                input.modifiers.alt,
-            )
-        });
-        if alt {
-            // Alt-scrolling zooms, as in Premiere, alongside egui's Ctrl-scrolling.
-            zoom *= (scroll.y / 200.0).exp();
-            scroll.y = 0.0;
-        }
-        if zoom != 1.0 {
-            self.zoom(zoom, pointer.map(|pos| pos.x - tracks.left()));
-        }
-        if scroll.x != 0.0 {
-            let scale = self.scale(0.0);
-            self.scroll = (self.scroll - scale.span(scroll.x)).max(Ticks::ZERO);
-        }
-        if scroll.y != 0.0 {
-            self.scroll_tracks(-scroll.y, sequence, tracks);
-        }
-    }
-
-    /// Brings the playhead into view when it's out of it, `lead` of the way across.
-    fn follow(&mut self, playhead: Ticks, width: f32, lead: f32) {
-        let scale = self.scale(0.0);
-        let x = scale.x(playhead);
-        if x > width - 10.0 || x < 0.0 {
-            self.scroll = (playhead - scale.span(width * lead)).max(Ticks::ZERO);
-        }
     }
 }
 
