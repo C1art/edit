@@ -35,13 +35,18 @@ impl Viewer {
             .iter()
             .map(ToString::to_string)
             .collect();
+        let mut shown = Ok(());
         if self.player.update() {
             let format = self.player.sequence().format;
             if let (Some(monitor), Some(frame)) = (&mut self.monitor, self.player.current_frame()) {
-                if let Err(error) = monitor.present(frame, (format.width, format.height)) {
-                    notices.push(format!("Cannot display frame: {error}"));
-                }
+                shown = monitor.present(frame, (format.width, format.height));
             }
+        }
+        if let Some(monitor) = &mut self.monitor {
+            shown = shown.and_then(|()| monitor.catch_up(ctx));
+        }
+        if let Err(error) = shown {
+            notices.push(format!("Cannot display frame: {error}"));
         }
         if self.player.is_busy() {
             ctx.request_repaint();

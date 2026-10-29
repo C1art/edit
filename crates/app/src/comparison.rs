@@ -129,6 +129,8 @@ impl Comparison {
     fn picture(&mut self, ui: &egui::Ui, area: Rect, program: &Viewer, playhead: Ticks) {
         let sequence = program.player.sequence().clone();
         self.refresh(&sequence);
+        // A frame that can't be shown leaves the last one, as when presenting.
+        let _ = self.reference.catch_up(ui.ctx());
         if self.waiting {
             ui.ctx().request_repaint();
         }

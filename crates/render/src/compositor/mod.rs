@@ -6,9 +6,10 @@ use std::sync::Arc;
 use timeline::MatteChannel;
 
 use crate::backdrop::{Backdrop, Drawn};
-use crate::blit::{self, Blit, LayerPass, DISPLAY_FORMAT};
+use crate::blit::{self, Blit, DISPLAY_FORMAT};
 use crate::combine::Combine;
 use crate::grade::Grade;
+use crate::layer_pipelines::LayerPass;
 use crate::layer_shader::Features;
 use crate::placement::{LayerLook, Placement};
 use crate::scope::{Scope, ScopeTrace};
@@ -21,6 +22,10 @@ pub enum Presented {
     SameTarget,
     /// The canvas size changed, so the output texture was recreated and must be rebound.
     NewTarget,
+    /// Nothing was drawn, as a shader the frame needs is still being built in the
+    /// background; the last frame stays. Present again once [`Compositor::compiling`]
+    /// is false.
+    Pending,
 }
 
 /// A picture to composite and how to draw it.
@@ -117,6 +122,9 @@ pub struct Compositor {
     targets: Option<Targets>,
     scope: Option<ScopeTrace>,
     background: Background,
+    /// Whether the output texture was recreated for a frame left pending, so the next
+    /// frame shown must report it.
+    unshown_target: bool,
 }
 
 impl Compositor {
@@ -135,7 +143,28 @@ impl Compositor {
             targets: None,
             scope: None,
             background: Background::Black,
+            unshown_target: false,
         }
+    }
+
+    /// Builds the shaders of effects not used before on a worker from now on, so
+    /// compositing never waits for the driver's compiler; frames that need one still
+    /// being built come back [`Presented::Pending`]. For compositors on the UI thread.
+    pub fn compile_in_background(&mut self) {
+        self.blit.layers.build_in_background();
+        // What a plain frame needs, so the first one is ready as soon as possible.
+        let working = Placement {
+            premultiplied: true,
+            ..Placement::FULL
+        };
+        let working = self.blit.features(&working.to_bytes());
+        self.blit.pipeline(working, LayerPass::Display);
+        self.blit.pipeline(Features::NONE, LayerPass::Over);
+    }
+
+    /// Whether shaders asked for are still being built in the background.
+    pub fn compiling(&self) -> bool {
+        self.blit.layers.building()
     }
 
     /// The presented frame, valid until the next [`Presented::NewTarget`].
@@ -206,6 +235,7 @@ impl Compositor {
                 Presented::NewTarget
             }
         };
+        self.blit.layers.take_missed();
         let mut steps = Vec::new();
         let top = self.prepare(layers, canvas, &mut 0, &mut steps);
         let Some(targets) = &self.targets else {
@@ -254,13 +284,15 @@ impl Compositor {
                     );
                     let matte_slot = &self.slots[*matte];
                     let pass = LayerPass::Matte(*channel, *reverse);
-                    blit::draw(
-                        &mut encoder,
-                        &group.view,
-                        &self.blit.pipeline(matte_slot.features, pass),
-                        &[[matte_slot.placed(), &self.blit.grade.none]],
-                        wgpu::LoadOp::Load,
-                    );
+                    if let Some(pipeline) = self.blit.pipeline(matte_slot.features, pass) {
+                        blit::draw(
+                            &mut encoder,
+                            &group.view,
+                            &pipeline,
+                            &[[matte_slot.placed(), &self.blit.grade.none]],
+                            wgpu::LoadOp::Load,
+                        );
+                    }
                 }
                 Step::Combine {
                     index,
@@ -272,13 +304,16 @@ impl Compositor {
                         .bind_backdrop(&self.device, &self.slots[*other].view);
                     let layer = &self.slots[*layer];
                     let groups = [layer.placed(), &self.blit.grade.none, &other];
-                    blit::draw(
-                        &mut encoder,
-                        &self.slots[*index].view,
-                        &self.blit.pipeline(layer.features, LayerPass::Combined),
-                        &[groups],
-                        wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                    );
+                    if let Some(pipeline) = self.blit.pipeline(layer.features, LayerPass::Combined)
+                    {
+                        blit::draw(
+                            &mut encoder,
+                            &self.slots[*index].view,
+                            &pipeline,
+                            &[groups],
+                            wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        );
+                    }
                 }
             }
         }
@@ -292,19 +327,30 @@ impl Compositor {
                 Background::Transparent => wgpu::Color::TRANSPARENT,
             },
         );
-        blit::draw(
-            &mut encoder,
-            &targets.output,
-            &self
-                .blit
-                .pipeline(targets.working_features, LayerPass::Display),
-            &[[&targets.working_binding, &self.blit.grade.none]],
-            wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-        );
+        let display = self
+            .blit
+            .pipeline(targets.working_features, LayerPass::Display);
+        if let Some(display) = &display {
+            blit::draw(
+                &mut encoder,
+                &targets.output,
+                display,
+                &[[&targets.working_binding, &self.blit.grade.none]],
+                wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+            );
+        }
+        // The encoder is dropped unsubmitted: a frame with layers left out isn't shown.
+        if self.blit.layers.take_missed() {
+            self.unshown_target |= presented == Presented::NewTarget;
+            return Ok(Presented::Pending);
+        }
         if let Some(trace) = &self.scope {
             trace.record(&mut encoder);
         }
         self.queue.submit([encoder.finish()]);
+        if std::mem::take(&mut self.unshown_target) {
+            return Ok(Presented::NewTarget);
+        }
         Ok(presented)
     }
 

@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use eframe::egui_wgpu::{self, wgpu};
 use egui::{Color32, Rect, Response, Sense, TextureId, Vec2};
 use playback::ComposedFrame;
@@ -9,25 +11,40 @@ pub struct Monitor {
     compositor: Compositor,
     texture: Option<TextureId>,
     scope: Option<TextureId>,
+    /// The last frame asked for, while a shader it needs is still being built.
+    pending: Option<(ComposedFrame, (u32, u32))>,
 }
+
+/// How often a monitor looks again for a shader being built.
+const COMPILE_POLL: Duration = Duration::from_millis(15);
 
 impl Monitor {
     pub fn new(render_state: egui_wgpu::RenderState) -> Self {
+        let mut compositor = Compositor::new(&render_state.device, &render_state.queue);
+        compositor.compile_in_background();
         Self {
-            compositor: Compositor::new(&render_state.device, &render_state.queue),
+            compositor,
             render_state,
             texture: None,
             scope: None,
+            pending: None,
         }
     }
 
+    /// Shows `frame`, or keeps the last one shown until the shaders `frame` needs are
+    /// built; [`Monitor::catch_up`] then shows it.
     pub fn present(
         &mut self,
         frame: &ComposedFrame,
         canvas: (u32, u32),
     ) -> Result<(), RenderError> {
+        self.pending = None;
         let layers: Vec<LayerImage<'_>> = frame.layers.iter().map(playback::Layer::image).collect();
         let presented = self.compositor.composite(canvas, &layers)?;
+        if presented == Presented::Pending {
+            self.pending = Some((frame.clone(), canvas));
+            return Ok(());
+        }
         let (Presented::NewTarget, Some(view)) = (presented, self.compositor.output_view()) else {
             return Ok(());
         };
@@ -45,6 +62,24 @@ impl Monitor {
                     Some(renderer.register_native_texture(device, view, wgpu::FilterMode::Linear));
             }
         }
+        Ok(())
+    }
+
+    /// Shows a frame left waiting for its shaders once they're built; call every UI
+    /// frame.
+    pub fn catch_up(&mut self, ctx: &egui::Context) -> Result<(), RenderError> {
+        if self.pending.is_none() {
+            return Ok(());
+        }
+        if self.compositor.compiling() {
+            ctx.request_repaint_after(COMPILE_POLL);
+            return Ok(());
+        }
+        let Some((frame, canvas)) = self.pending.take() else {
+            return Ok(());
+        };
+        self.present(&frame, canvas)?;
+        ctx.request_repaint();
         Ok(())
     }
 

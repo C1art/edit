@@ -1,10 +1,6 @@
-use std::cell::RefCell;
-use std::collections::HashMap;
-
-use timeline::MatteChannel;
-
 use crate::grade::GradeLayout;
-use crate::layer_shader::{Features, LayerShader};
+use crate::layer_pipelines::{LayerPass, LayerPipelines};
+use crate::layer_shader::Features;
 use crate::placement::Placement;
 use crate::WORKING_FORMAT;
 
@@ -29,47 +25,16 @@ pub(crate) const UNIFORM_BYTES: u64 = 8_192;
 /// pipelines are built the first time a layer needs them, each from the layer shader
 /// cut down to the effects it uses.
 pub(crate) struct Blit {
-    device: wgpu::Device,
     pub(crate) layout: wgpu::BindGroupLayout,
     /// The second bind group of layer and display blits; blurs have none.
     pub(crate) grade: GradeLayout,
     sampler: wgpu::Sampler,
     /// The third bind group of blend-mode blits: a copy of what lies under the layer.
     backdrop_layout: wgpu::BindGroupLayout,
-    blit_layout: wgpu::PipelineLayout,
-    blended_layout: wgpu::PipelineLayout,
-    shader: LayerShader,
-    modules: RefCell<HashMap<Features, wgpu::ShaderModule>>,
-    pipelines: RefCell<HashMap<(Features, LayerPass), wgpu::RenderPipeline>>,
+    pub(crate) layers: LayerPipelines,
     /// One direction of a Gaussian blur into a working-format texture.
     pub(crate) blur: wgpu::RenderPipeline,
 }
-
-/// What a layer pipeline draws.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) enum LayerPass {
-    /// Blends a layer over the working texture.
-    Over,
-    /// Draws a layer over the working texture by its blend mode.
-    Blended,
-    /// Draws a group combined with another, bound as the backdrop.
-    Combined,
-    /// Keeps the part of a fill its track matte shows, by channel, then reversed or not.
-    Matte(MatteChannel, bool),
-    /// Copies the working texture to the display texture.
-    Display,
-}
-
-/// The matte entry points, in `MatteChannel`'s order.
-const MATTE_ENTRIES: [&str; 7] = [
-    "fs_matte_alpha",
-    "fs_matte_luma",
-    "fs_matte_red",
-    "fs_matte_green",
-    "fs_matte_blue",
-    "fs_matte_saturation",
-    "fs_matte_lightness",
-];
 
 impl Blit {
     pub(crate) fn new(device: &wgpu::Device) -> Self {
@@ -149,73 +114,26 @@ impl Blit {
                 min_filter: wgpu::FilterMode::Linear,
                 ..Default::default()
             }),
-            device: device.clone(),
+            layers: LayerPipelines::new(device, blit_layout, blended_layout),
             layout,
             grade,
             backdrop_layout,
-            blit_layout,
-            blended_layout,
-            shader: LayerShader::new(),
-            modules: RefCell::default(),
-            pipelines: RefCell::default(),
         }
     }
 
     /// Which effects a layer drawn with `placement` uses.
     pub(crate) fn features(&self, placement: &[u8]) -> Features {
-        self.shader.features(placement)
+        self.layers.features(placement)
     }
 
-    /// The pipeline drawing `pass` with only the effects in `features`, built and kept
-    /// the first time it's asked for.
-    pub(crate) fn pipeline(&self, features: Features, pass: LayerPass) -> wgpu::RenderPipeline {
-        if let Some(pipeline) = self.pipelines.borrow().get(&(features, pass)) {
-            return pipeline.clone();
-        }
-        let module = self
-            .modules
-            .borrow_mut()
-            .entry(features)
-            .or_insert_with(|| {
-                self.device
-                    .create_shader_module(wgpu::ShaderModuleDescriptor {
-                        label: Some("layer.wgsl"),
-                        source: wgpu::ShaderSource::Wgsl(self.shader.source(features).into()),
-                    })
-            })
-            .clone();
-        let over = Some(wgpu::BlendState::ALPHA_BLENDING);
-        let (layout, target, entry) = match pass {
-            LayerPass::Over => (&self.blit_layout, (WORKING_FORMAT, over), "fs_main"),
-            LayerPass::Blended => (&self.blended_layout, (WORKING_FORMAT, over), "fs_blend"),
-            LayerPass::Combined => (&self.blended_layout, (WORKING_FORMAT, over), "fs_combine"),
-            LayerPass::Matte(channel, reverse) => {
-                let keep = wgpu::BlendComponent {
-                    src_factor: wgpu::BlendFactor::Zero,
-                    dst_factor: if reverse {
-                        wgpu::BlendFactor::OneMinusSrcAlpha
-                    } else {
-                        wgpu::BlendFactor::SrcAlpha
-                    },
-                    operation: wgpu::BlendOperation::Add,
-                };
-                let blend = wgpu::BlendState {
-                    color: keep,
-                    alpha: keep,
-                };
-                (
-                    &self.blit_layout,
-                    (WORKING_FORMAT, Some(blend)),
-                    MATTE_ENTRIES[channel as usize],
-                )
-            }
-            LayerPass::Display => (&self.blit_layout, (DISPLAY_FORMAT, None), "fs_main"),
-        };
-        let pipeline = render_pipeline(&self.device, &module, layout, target, entry);
-        self.pipelines
-            .borrow_mut()
-            .insert((features, pass), pipeline.clone());
-        pipeline
+    /// The pipeline drawing `pass` with only the effects in `features`, or `None` while
+    /// it's being built in the background.
+    pub(crate) fn pipeline(
+        &self,
+        features: Features,
+        pass: LayerPass,
+    ) -> Option<wgpu::RenderPipeline> {
+        self.layers.get(features, pass)
     }
 
     /// Binds `view` where blend-mode blits read their backdrop.
@@ -328,7 +246,7 @@ pub(crate) fn draw_each<const GROUPS: usize>(
     }
 }
 
-fn render_pipeline(
+pub(crate) fn render_pipeline(
     device: &wgpu::Device,
     shader: &wgpu::ShaderModule,
     layout: &wgpu::PipelineLayout,

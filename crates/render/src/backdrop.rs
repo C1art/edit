@@ -1,7 +1,8 @@
 use timeline::BlendMode;
 
-use crate::blit::{self, Blit, LayerPass};
+use crate::blit::{self, Blit};
 use crate::compositor::extent;
+use crate::layer_pipelines::LayerPass;
 use crate::layer_shader::Features;
 use crate::WORKING_FORMAT;
 
@@ -59,7 +60,10 @@ impl Backdrop {
         };
         for layer in layers {
             if layer.blend == BlendMode::Normal {
-                normal.push((blit.pipeline(layer.features, LayerPass::Over), layer.groups));
+                // A pipeline still being built leaves the frame unshown, so it's skipped.
+                if let Some(pipeline) = blit.pipeline(layer.features, LayerPass::Over) {
+                    normal.push((pipeline, layer.groups));
+                }
                 continue;
             }
             if !normal.is_empty() || load != wgpu::LoadOp::Load {
@@ -74,8 +78,9 @@ impl Backdrop {
             );
             let [placed, grade] = layer.groups;
             let groups = [placed, grade, &self.binding];
-            let blended = blit.pipeline(layer.features, LayerPass::Blended);
-            blit::draw(encoder, view, &blended, &[groups], load);
+            if let Some(blended) = blit.pipeline(layer.features, LayerPass::Blended) {
+                blit::draw(encoder, view, &blended, &[groups], load);
+            }
         }
         if !normal.is_empty() || load != wgpu::LoadOp::Load {
             draw_normal(encoder, &normal, load);

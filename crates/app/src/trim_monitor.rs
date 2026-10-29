@@ -51,6 +51,10 @@ impl TrimMonitor {
                 }
             }
         }
+        for monitor in &mut self.sides {
+            // A frame that can't be shown leaves the last one, as when presenting.
+            let _ = monitor.catch_up(ui.ctx());
+        }
         ui.ctx().request_repaint();
         let painter = ui.painter_at(area);
         painter.rect_filled(area, 0.0, Color32::BLACK);
