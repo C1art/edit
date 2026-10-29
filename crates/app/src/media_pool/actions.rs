@@ -2,8 +2,8 @@ use std::path::{Path, PathBuf};
 
 use timeline::{
     AddBin, BinSearch, CreateMulticam, DuplicateMedia, Edit, InterpretFootage, MakeOffline,
-    MakeSubclip, MergeClips, MoveToBin, RelinkMedia, RemoveBin, RemoveMedia, RenameBin,
-    RenameMedia, SetBinSearch, SetProxy, SourceId, Ticks, TimelineError,
+    MakeSubclip, MergeClips, MoveToBin, RelinkMedia, RemoveBin, RenameBin, RenameMedia,
+    SetBinSearch, SetProxy, SourceId, Ticks, TimelineError,
 };
 
 use super::{PoolAction, PoolEntry};
@@ -17,12 +17,7 @@ impl Editor {
         match action {
             PoolAction::Open(id) => self.open_source(id),
             PoolAction::OpenNest(id) => self.enter_nest(id, Ticks::ZERO),
-            PoolAction::Remove(id) => {
-                if self.source_shows(id) {
-                    self.source = None;
-                }
-                self.apply_to_pool(RemoveMedia { source: id });
-            }
+            PoolAction::Remove(id) => self.remove_media(id),
             PoolAction::Duplicate(source) => {
                 self.apply_to_pool(DuplicateMedia { source });
             }
@@ -217,7 +212,7 @@ impl Editor {
         }
     }
 
-    fn source_shows(&self, id: SourceId) -> bool {
+    pub(super) fn source_shows(&self, id: SourceId) -> bool {
         self.source
             .as_ref()
             .is_some_and(|source| source.source == id)

@@ -105,3 +105,24 @@ fn a_sequence_from_a_clip_holds_all_of_it_linked_and_undoes_at_once() {
     timeline.undo();
     assert_eq!(timeline.project().media.len(), 1);
 }
+
+#[test]
+fn clearing_media_removes_its_clips_in_nests_too_and_undoes_at_once() {
+    let (mut timeline, source) = timeline();
+    timeline
+        .apply(place(source, 0, 0, 300, PlaceMode::Overwrite))
+        .unwrap();
+    timeline
+        .apply(NestFromMedia {
+            source,
+            name: "Nest".into(),
+        })
+        .unwrap();
+    let before = timeline.project().clone();
+    timeline.apply(RemoveMedia { source }).unwrap();
+    let project = timeline.project();
+    assert_eq!(project.all_clips().count(), 0);
+    assert!(project.media_item(source).is_none());
+    timeline.undo();
+    assert_eq!(timeline.project(), &before);
+}

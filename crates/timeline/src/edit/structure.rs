@@ -170,7 +170,8 @@ impl Edit for ImportMedia {
     }
 }
 
-/// Removes an item from the media pool; refused while clips use it.
+/// Removes an item from the media pool and every clip of it, in nested sequences too.
+/// Refused while clips rendered and replaced from it keep it to restore their original.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoveMedia {
     pub source: SourceId,
@@ -178,20 +179,39 @@ pub struct RemoveMedia {
 
 impl Edit for RemoveMedia {
     fn name(&self) -> &'static str {
-        "Clear Media"
+        "Remove from Project"
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
-        let in_use = sequence
-            .all_clips()
-            .any(|clip| clip.source == self.source || clip.unrendered == Some(self.source));
-        if in_use {
-            return Err(TimelineError::MediaInUse(self.source));
+        let source = self.source;
+        if sequence.media_item(source).is_none() {
+            return Err(TimelineError::MediaNotFound(source));
         }
-        let count = sequence.media.len();
-        sequence.media.retain(|item| item.id != self.source);
-        if sequence.media.len() == count {
-            return Err(TimelineError::MediaNotFound(self.source));
+        if sequence
+            .all_clips()
+            .any(|clip| clip.unrendered == Some(source))
+        {
+            return Err(TimelineError::MediaInUse(source));
+        }
+        for (_, track) in sequence.tracks_mut() {
+            track.clips.retain(|clip| clip.source != source);
+        }
+        let mut emptied = Vec::new();
+        for item in &mut sequence.media {
+            let Some(nest) = &mut item.nest else {
+                continue;
+            };
+            for track in nest.video.iter_mut().chain(&mut nest.audio) {
+                let count = track.clips.len();
+                track.clips.retain(|clip| clip.source != source);
+                if track.clips.len() != count && !emptied.contains(&item.id) {
+                    emptied.push(item.id);
+                }
+            }
+        }
+        sequence.media.retain(|item| item.id != source);
+        for nest in emptied {
+            sequence.fit_nest(nest);
         }
         Ok(())
     }

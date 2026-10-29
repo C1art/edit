@@ -463,6 +463,7 @@ impl eframe::App for Editor {
         crate::path_dialog::path_dialog(self, &ctx);
         crate::project_files::discard_dialog(self, &ctx);
         crate::recovery::dialog(self, &ctx);
+        crate::media_pool::remove::dialog(self, &ctx);
         crate::marker_dialog::dialog(self, &ctx);
         crate::gain_dialog::dialog(self, &ctx);
         crate::duck_dialog::dialog(self, &ctx);

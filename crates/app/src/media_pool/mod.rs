@@ -1,5 +1,6 @@
 mod actions;
 mod item_menu;
+pub(crate) mod remove;
 mod rows;
 mod search_bins;
 mod tiles;
@@ -69,6 +70,8 @@ pub struct PoolView {
     remove_camera_audio: bool,
     /// How tall a plain list row came out, the space kept for rows scrolled away.
     row_height: Option<f32>,
+    /// An item in use, waiting on the user to confirm removing it with its clips.
+    removing: Option<SourceId>,
 }
 
 /// Lists imported media in its bins. Click opens an item in the source monitor;
