@@ -11,6 +11,8 @@ pub struct KeymapWindow {
     /// The command the next key press is bound to.
     pub(crate) recording: Option<Command>,
     message: Option<String>,
+    /// Whether the search field has had the focus it takes on opening.
+    search_focused: bool,
 }
 
 /// Lists every command with its keys, as Premiere's Keyboard Shortcuts dialog does:
@@ -41,7 +43,10 @@ pub fn window(editor: &mut Editor, ctx: &egui::Context) {
                 let search = TextEdit::singleline(&mut state.search)
                     .hint_text("Search commands or keys")
                     .desired_width(260.0);
-                ui.add(search);
+                let search = ui.add(search);
+                if !std::mem::replace(&mut state.search_focused, true) {
+                    search.request_focus();
+                }
                 if ui.button("Reset to Defaults").clicked() {
                     editor.keymap = Keymap::default();
                     state.message = Some("Every command has its default keys again.".into());
