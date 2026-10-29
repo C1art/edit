@@ -12,6 +12,7 @@ mod rubber_band;
 mod scale;
 mod tool;
 mod track_heights;
+mod track_scroll;
 mod track_select;
 mod trim_view;
 
@@ -121,6 +122,8 @@ pub struct TimelineView {
     pub targets: Targets,
     scroll: Ticks,
     scroll_y: f32,
+    /// Whether the tracks have been scrolled by hand, ending their automatic placement.
+    tracks_scrolled: bool,
     ticks_per_point: f64,
     /// Width of the clip area at the last layout, for zoom-to-fit.
     width: f32,
@@ -149,6 +152,7 @@ impl Default for TimelineView {
             targets: Targets::default(),
             scroll: Ticks::ZERO,
             scroll_y: 0.0,
+            tracks_scrolled: false,
             ticks_per_point: DEFAULT_TICKS_PER_POINT,
             width: 1000.0,
             drag: None,
@@ -224,6 +228,7 @@ impl TimelineView {
         let tracks = Rect::from_x_y_ranges(ruler.x_range(), ruler.bottom()..=area.bottom());
         self.width = tracks.width();
 
+        self.place_tracks(timeline.sequence(), tracks);
         self.handle_scroll(ui, area, tracks, timeline.sequence());
         if playing {
             self.follow(playhead, tracks.width());
@@ -389,6 +394,7 @@ impl TimelineView {
                 }
             }
         }
+        self.track_scrollbar(ui, timeline.sequence(), tracks);
         output
     }
 
@@ -441,9 +447,7 @@ impl TimelineView {
             self.scroll = (self.scroll - scale.span(scroll.x)).max(Ticks::ZERO);
         }
         if scroll.y != 0.0 {
-            let overflow =
-                (layout::total_height(sequence, &self.heights) - tracks.height() + 20.0).max(0.0);
-            self.scroll_y = (self.scroll_y - scroll.y).clamp(0.0, overflow);
+            self.scroll_tracks(-scroll.y, sequence, tracks);
         }
     }
 
