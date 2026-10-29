@@ -151,6 +151,8 @@ pub struct TimelineView {
     pub heights: TrackHeights,
     /// The costly segments, each with whether a render preview of it is ready.
     pub render_bar: Vec<(std::ops::Range<Ticks>, bool)>,
+    /// The playhead at the last layout, to notice it jumping.
+    last_playhead: Ticks,
 }
 
 impl Default for TimelineView {
@@ -175,6 +177,7 @@ impl Default for TimelineView {
             renaming: None,
             heights: TrackHeights::default(),
             render_bar: Vec::new(),
+            last_playhead: Ticks::ZERO,
         }
     }
 }
@@ -249,8 +252,13 @@ impl TimelineView {
         self.handle_scroll(ui, area, tracks, timeline.sequence());
         let ruler_id = ui.scope_id().with("ruler");
         self.edge_scroll(ui, tracks, ruler_id);
+        // A jump by keyboard or an edit is followed too; a drag scrolls at the edges instead.
+        let jumped = playhead != self.last_playhead && !ui.input(|input| input.pointer.any_down());
+        self.last_playhead = playhead;
         if playing {
-            self.follow(playhead, tracks.width());
+            self.follow(playhead, tracks.width(), 0.1);
+        } else if jumped {
+            self.follow(playhead, tracks.width(), 0.5);
         }
         let scale = self.scale(tracks.left());
 
@@ -470,12 +478,12 @@ impl TimelineView {
         }
     }
 
-    /// Pages the view along so the playhead stays visible during playback.
-    fn follow(&mut self, playhead: Ticks, width: f32) {
+    /// Brings the playhead into view when it's out of it, `lead` of the way across.
+    fn follow(&mut self, playhead: Ticks, width: f32, lead: f32) {
         let scale = self.scale(0.0);
         let x = scale.x(playhead);
         if x > width - 10.0 || x < 0.0 {
-            self.scroll = (playhead - scale.span(width * 0.1)).max(Ticks::ZERO);
+            self.scroll = (playhead - scale.span(width * lead)).max(Ticks::ZERO);
         }
     }
 }
