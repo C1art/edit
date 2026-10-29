@@ -243,6 +243,7 @@ impl Placement {
             .chain(self.effects.generate.uniform().into_iter().flatten())
             .chain(self.effects.optics.uniform().into_iter().flatten())
             .chain(self.effects.clip_wipes.uniform().into_iter().flatten())
+            .chain(self.effects.detail.uniform().into_iter().flatten())
             .flat_map(f32::to_le_bytes)
             .collect()
     }
@@ -292,11 +293,11 @@ mod tests {
         // a vec4; then the picture style's thirteen, the reshape's six, the recolor's twelve,
         // the key's two, the adjustments' six, Lumetri Creative's three,
         // the Generate effects' thirteen, Lens Flare and Magnify's three and the
-        // Transition effects' five.
+        // Transition effects' five and the detail effects' three.
         let outlines = MAX_MASKS * MAX_OUTLINE_POINTS / 2;
         assert_eq!(
             bytes.len(),
-            (25 + 1 + 3 * MAX_MASKS + outlines + 13 + 6 + 12 + 2 + 6 + 3 + 13 + 3 + 5) * 16
+            (25 + 1 + 3 * MAX_MASKS + outlines + 13 + 6 + 12 + 2 + 6 + 3 + 13 + 3 + 5 + 3) * 16
         );
         assert!(bytes.len() as u64 <= crate::blit::UNIFORM_BYTES);
     }

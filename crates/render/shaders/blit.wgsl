@@ -154,6 +154,12 @@ struct Placement {
     clip_radial_detail: vec4<f32>,
     clip_blinds: vec4<f32>,
     clip_blocks: vec4<f32>,
+    // Unsharp Mask's amount, radius and threshold, then the median's radius; the
+    // median's threshold, Edge Feather's width, Noise HLS's grain size and phase; then
+    // its hue, lightness and saturation amounts (see detail.wgsl).
+    detail_unsharp: vec4<f32>,
+    detail_median: vec4<f32>,
+    detail_noise: vec4<f32>,
 };
 
 const OUTLINE_VEC4S: u32 = 32u;
@@ -383,8 +389,8 @@ fn layer_color(in: VertexOutput) -> vec4<f32> {
     let wiped = wipe_cover(in.canvas);
     let matte = key_alpha(color.rgb, uv);
     let keyed = key_shown(matte);
-    let sharp = sharpen(despill(color.rgb, matte), uv);
-    var rgb = adjusted(restyle(stylize(secondary(creative_grade(correct(change_to_color(mix_channels(leave_color(sharp)))))), pinned), uv));
+    let sharp = unsharp(sharpen(median_filtered(despill(color.rgb, matte), uv), uv), uv);
+    var rgb = noise_hls(adjusted(restyle(stylize(secondary(creative_grade(correct(change_to_color(mix_channels(leave_color(sharp)))))), pinned), uv)), pinned);
     rgb = page_side(key_view(rgb, matte), page);
     rgb = mix(rgb, vec3<f32>(1.0), placement.balance.w);
     let viewed = alpha_view(rgb, adjusted_alpha(color.a) * keyed * luma_matte(color.rgb) * f32(in_crop(pinned)));
@@ -393,7 +399,8 @@ fn layer_color(in: VertexOutput) -> vec4<f32> {
     let shadow = shadow_alpha(pinned);
     let covered = picture + shadow * (1.0 - picture);
     rgb = mix(placement.style_shadow_color.rgb, rgb, picture / max(covered, 1e-6));
-    let opacity = placement.axis_y_opacity.z * mask_coverage(page.uv) * clip_wipes_shown(page.uv);
+    let opacity = placement.axis_y_opacity.z * mask_coverage(page.uv) * clip_wipes_shown(page.uv)
+        * edge_feathered(pinned);
     let shown = covered * wiped.picture;
     let border = 1.0 - wiped.picture;
     rgb = (rgb * shown + wiped.border * border) / max(shown + border, 1e-6);

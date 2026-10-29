@@ -5,6 +5,7 @@ mod blur;
 mod clip_wipes;
 mod compositor;
 mod creative;
+mod detail;
 mod error;
 mod generate;
 mod grade;
@@ -29,6 +30,7 @@ pub use clip_wipes::{
 };
 pub use compositor::{Background, Compositor, LayerImage, Picture, Presented};
 pub use creative::{Creative, CreativeVignette};
+pub use detail::{Detail, MedianFilter, NoiseHls, UnsharpMask};
 pub use error::RenderError;
 pub use generate::{Checkerboard, Circle, FourColorGradient, Generate, Grid};
 pub use grade::{Grade, CURVE_SIZE};

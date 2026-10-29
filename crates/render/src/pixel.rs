@@ -2,6 +2,7 @@ use timeline::{AlphaInterpretation, KeyOutput};
 
 use crate::adjust::Adjust;
 use crate::clip_wipes::ClipWipes;
+use crate::detail::Detail;
 use crate::generate::Generate;
 use crate::optics::Optics;
 use crate::recolor::Recolor;
@@ -30,6 +31,7 @@ pub struct PixelEffects {
     pub generate: Generate,
     pub optics: Optics,
     pub clip_wipes: ClipWipes,
+    pub detail: Detail,
     /// How the source's alpha channel is read.
     pub alpha: AlphaInterpretation,
 }
@@ -100,6 +102,7 @@ impl PixelEffects {
         generate: Generate::NONE,
         optics: Optics::NONE,
         clip_wipes: ClipWipes::NONE,
+        detail: Detail::NONE,
         alpha: AlphaInterpretation::Straight,
     };
 
