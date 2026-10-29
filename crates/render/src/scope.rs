@@ -1,0 +1,283 @@
+use crate::compositor::extent;
+use crate::DISPLAY_FORMAT;
+
+/// Horizontal resolution of the waveforms; narrower frames use one column per pixel.
+const MAX_COLUMNS: u32 = 512;
+/// One level per 8-bit code value, and one vectorscope bin per pair of chroma codes.
+const LEVELS: u32 = 256;
+/// The drawn trace is square so the vectorscope keeps its shape.
+const TRACE_SIZE: u32 = 512;
+const PARAMS_BYTES: u64 = 32;
+const WORKGROUP: u32 = 16;
+
+/// What a scope measures of the presented frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Scope {
+    /// Luma by column, black at the bottom and white at the top.
+    #[default]
+    LumaWaveform,
+    /// Red, green and blue waveforms side by side.
+    RgbParade,
+    /// Chroma as Cb across and Cr up, centered on neutral.
+    Vectorscope,
+    /// How many pixels sit at each red, green and blue level: levels up, counts across.
+    Histogram,
+}
+
+impl Scope {
+    fn code(self) -> u32 {
+        match self {
+            Self::LumaWaveform => 0,
+            Self::RgbParade => 1,
+            Self::Vectorscope => 2,
+            Self::Histogram => 3,
+        }
+    }
+}
+
+/// A scope of the presented frame, measured and drawn on the GPU.
+pub(crate) struct ScopeTrace {
+    bin: wgpu::ComputePipeline,
+    bin_layout: wgpu::BindGroupLayout,
+    draw: wgpu::RenderPipeline,
+    draw_binding: wgpu::BindGroup,
+    counts: wgpu::Buffer,
+    params: wgpu::Buffer,
+    /// The binding of the frame being measured and its size.
+    source: Option<(wgpu::BindGroup, (u32, u32))>,
+    scope: Scope,
+    view: wgpu::TextureView,
+    pub(crate) ui_view: wgpu::TextureView,
+}
+
+impl ScopeTrace {
+    pub(crate) fn new(device: &wgpu::Device, scope: Scope) -> Self {
+        let counts = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("scope_counts"),
+            size: u64::from((MAX_COLUMNS * LEVELS).max(LEVELS * LEVELS)) * 4,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let params = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("scope_params"),
+            size: PARAMS_BYTES,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let compute = wgpu::ShaderStages::COMPUTE;
+        let fragment = wgpu::ShaderStages::FRAGMENT;
+        let bin_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("scope_bin_layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: compute,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                storage_entry(1, compute, false),
+                uniform_entry(2, compute),
+            ],
+        });
+        let draw_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("scope_draw_layout"),
+            entries: &[storage_entry(0, fragment, true), uniform_entry(1, fragment)],
+        });
+        let draw_binding = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("scope_draw_binding"),
+            layout: &draw_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: counts.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: params.as_entire_binding(),
+                },
+            ],
+        });
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("scope"),
+            size: extent(TRACE_SIZE, TRACE_SIZE),
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: DISPLAY_FORMAT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: crate::blit::UI_VIEW_FORMATS,
+        });
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        Self {
+            bin: bin_pipeline(device, &bin_layout),
+            draw: draw_pipeline(device, &draw_layout),
+            bin_layout,
+            draw_binding,
+            counts,
+            params,
+            source: None,
+            scope,
+            view,
+            ui_view: crate::blit::ui_view(&texture),
+        }
+    }
+
+    pub(crate) fn scope(&self) -> Scope {
+        self.scope
+    }
+
+    /// Measures `scope` from the next recording on.
+    pub(crate) fn set_scope(&mut self, queue: &wgpu::Queue, scope: Scope) {
+        self.scope = scope;
+        if let Some((_, size)) = self.source {
+            self.write_params(queue, size);
+        }
+    }
+
+    fn write_params(&self, queue: &wgpu::Queue, (width, height): (u32, u32)) {
+        let columns = width.min(MAX_COLUMNS);
+        let params: Vec<u8> = [width, height, columns, LEVELS, self.scope.code(), 0, 0, 0]
+            .iter()
+            .flat_map(|value| value.to_le_bytes())
+            .collect();
+        queue.write_buffer(&self.params, 0, &params);
+    }
+
+    /// Measures `frame` from now on; call whenever the presented texture is replaced.
+    pub(crate) fn bind(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        frame: &wgpu::TextureView,
+        (width, height): (u32, u32),
+    ) {
+        self.write_params(queue, (width, height));
+        let binding = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("scope_bin_binding"),
+            layout: &self.bin_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(frame),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: self.counts.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: self.params.as_entire_binding(),
+                },
+            ],
+        });
+        self.source = Some((binding, (width, height)));
+    }
+
+    pub(crate) fn record(&self, encoder: &mut wgpu::CommandEncoder) {
+        let Some((binding, (width, height))) = &self.source else {
+            return;
+        };
+        encoder.clear_buffer(&self.counts, 0, None);
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("scope_bin"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&self.bin);
+            pass.set_bind_group(0, binding, &[]);
+            pass.dispatch_workgroups(width.div_ceil(WORKGROUP), height.div_ceil(WORKGROUP), 1);
+        }
+        crate::blit::draw(
+            encoder,
+            &self.view,
+            &self.draw,
+            &[[&self.draw_binding]],
+            wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+        );
+    }
+}
+
+fn storage_entry(
+    binding: u32,
+    visibility: wgpu::ShaderStages,
+    read_only: bool,
+) -> wgpu::BindGroupLayoutEntry {
+    wgpu::BindGroupLayoutEntry {
+        binding,
+        visibility,
+        ty: wgpu::BindingType::Buffer {
+            ty: wgpu::BufferBindingType::Storage { read_only },
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        },
+        count: None,
+    }
+}
+
+fn uniform_entry(binding: u32, visibility: wgpu::ShaderStages) -> wgpu::BindGroupLayoutEntry {
+    wgpu::BindGroupLayoutEntry {
+        binding,
+        visibility,
+        ty: wgpu::BindingType::Buffer {
+            ty: wgpu::BufferBindingType::Uniform,
+            has_dynamic_offset: false,
+            min_binding_size: wgpu::BufferSize::new(PARAMS_BYTES),
+        },
+        count: None,
+    }
+}
+
+fn bin_pipeline(device: &wgpu::Device, layout: &wgpu::BindGroupLayout) -> wgpu::ComputePipeline {
+    let shader = device.create_shader_module(wgpu::include_wgsl!("../shaders/scope_bin.wgsl"));
+    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("scope_bin_pipeline_layout"),
+        bind_group_layouts: &[Some(layout)],
+        immediate_size: 0,
+    });
+    device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        label: Some("scope_bin"),
+        layout: Some(&layout),
+        module: &shader,
+        entry_point: Some("main"),
+        compilation_options: wgpu::PipelineCompilationOptions::default(),
+        cache: None,
+    })
+}
+
+fn draw_pipeline(device: &wgpu::Device, layout: &wgpu::BindGroupLayout) -> wgpu::RenderPipeline {
+    let shader = device.create_shader_module(wgpu::include_wgsl!("../shaders/scope_draw.wgsl"));
+    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("scope_draw_pipeline_layout"),
+        bind_group_layouts: &[Some(layout)],
+        immediate_size: 0,
+    });
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("scope_draw"),
+        layout: Some(&layout),
+        vertex: wgpu::VertexState {
+            module: &shader,
+            entry_point: Some("vs_main"),
+            buffers: &[],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        },
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        fragment: Some(wgpu::FragmentState {
+            module: &shader,
+            entry_point: Some("fs_main"),
+            targets: &[Some(wgpu::ColorTargetState {
+                format: DISPLAY_FORMAT,
+                blend: None,
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        }),
+        multiview_mask: None,
+        cache: None,
+    })
+}

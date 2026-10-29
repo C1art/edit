@@ -1,0 +1,213 @@
+use std::path::PathBuf;
+
+use serde::{Deserialize, Serialize};
+
+use crate::{Curves, HslSecondary, HueCurves, Param};
+
+/// Color correction in the manner of a grading panel, applied before the clip is
+/// placed: an input LUT, then in linear light white balance, tone, wheels for the
+/// shadows, midtones and highlights and saturation, then a creative look LUT, curves and hue curves,
+/// then a secondary correction of the colors a key selects.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ColorCorrection {
+    /// Temperature, -100 (cool) to 100 (warm).
+    pub temperature: Param,
+    /// -100 (green) to 100 (magenta).
+    pub tint: Param,
+    /// Stops.
+    pub exposure: Param,
+    /// -100 to 100.
+    pub contrast: Param,
+    /// -100 to 100.
+    pub highlights: Param,
+    /// -100 to 100.
+    pub shadows: Param,
+    /// -100 to 100: the brightest tones.
+    pub whites: Param,
+    /// -100 to 100: the black point.
+    pub blacks: Param,
+    pub shadow_wheel: ColorWheel,
+    pub midtone_wheel: ColorWheel,
+    pub highlight_wheel: ColorWheel,
+    /// Percent; 0 is monochrome.
+    pub saturation: Param,
+    /// -100 to 100: saturates muted colors more than vivid ones.
+    pub vibrance: Param,
+    /// A `.cube` file turning the source's encoding into display color, as for log
+    /// footage.
+    pub input_lut: Option<PathBuf>,
+    /// A `.cube` file giving the picture a creative look after the corrections.
+    pub look: Option<PathBuf>,
+    /// Percent of the look applied.
+    pub look_intensity: Param,
+    /// Percent: lifts the blacks and dulls the whites as faded print stock does.
+    pub faded_film: Param,
+    /// Percent of the Sharpen effect's default.
+    pub sharpen: Param,
+    /// Pushes toward blue and red, -100 to 100, of the shadows and of the highlights.
+    pub shadow_tint: [Param; 2],
+    pub highlight_tint: [Param; 2],
+    /// -100 to 100: above 0 the highlight tint reaches into darker tones.
+    pub tint_balance: Param,
+    pub vignette: ColorVignette,
+    pub curves: Curves,
+    pub hue_curves: HueCurves,
+    pub secondary: HslSecondary,
+}
+
+/// Lumetri's vignette, which darkens or lightens the picture's edges.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ColorVignette {
+    /// -5 (black edges) to 5 (white edges).
+    pub amount: Param,
+    /// Percent of the way to the corners that the falloff starts.
+    pub midpoint: Param,
+    /// -100 (rectangular) to 100 (circular).
+    pub roundness: Param,
+    /// Percent.
+    pub feather: Param,
+}
+
+impl Default for ColorVignette {
+    fn default() -> Self {
+        Self {
+            amount: Param::default(),
+            midpoint: Param::from_value(50.0),
+            roundness: Param::default(),
+            feather: Param::from_value(50.0),
+        }
+    }
+}
+
+/// A shift of one tonal range toward a hue, with a brightness offset.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ColorWheel {
+    /// -100 to 100 toward blue (positive) or yellow, as Cb.
+    pub blue: Param,
+    /// -100 to 100 toward red (positive) or cyan, as Cr.
+    pub red: Param,
+    /// -100 to 100.
+    pub level: Param,
+}
+
+impl Default for ColorCorrection {
+    fn default() -> Self {
+        Self {
+            temperature: Param::default(),
+            tint: Param::default(),
+            exposure: Param::default(),
+            contrast: Param::default(),
+            highlights: Param::default(),
+            shadows: Param::default(),
+            whites: Param::default(),
+            blacks: Param::default(),
+            shadow_wheel: ColorWheel::default(),
+            midtone_wheel: ColorWheel::default(),
+            highlight_wheel: ColorWheel::default(),
+            saturation: Param::new(10_000),
+            vibrance: Param::default(),
+            input_lut: None,
+            look: None,
+            look_intensity: Param::new(10_000),
+            faded_film: Param::default(),
+            sharpen: Param::default(),
+            shadow_tint: Default::default(),
+            highlight_tint: Default::default(),
+            tint_balance: Param::default(),
+            vignette: ColorVignette::default(),
+            curves: Curves::default(),
+            hue_curves: HueCurves::default(),
+            secondary: HslSecondary::default(),
+        }
+    }
+}
+
+impl ColorCorrection {
+    pub fn params_mut(&mut self) -> impl Iterator<Item = &mut Param> {
+        let wheels = [
+            &mut self.shadow_wheel,
+            &mut self.midtone_wheel,
+            &mut self.highlight_wheel,
+        ];
+        [
+            &mut self.temperature,
+            &mut self.tint,
+            &mut self.exposure,
+            &mut self.contrast,
+            &mut self.highlights,
+            &mut self.shadows,
+            &mut self.whites,
+            &mut self.blacks,
+            &mut self.saturation,
+            &mut self.vibrance,
+            &mut self.look_intensity,
+            &mut self.faded_film,
+            &mut self.sharpen,
+            &mut self.tint_balance,
+        ]
+        .into_iter()
+        .chain(&mut self.shadow_tint)
+        .chain(&mut self.highlight_tint)
+        .chain(self.vignette.params_mut())
+        .chain(wheels.into_iter().flat_map(ColorWheel::params_mut))
+        .chain(self.secondary.params_mut())
+    }
+
+    pub fn params(&self) -> impl Iterator<Item = &Param> {
+        let wheels = [
+            &self.shadow_wheel,
+            &self.midtone_wheel,
+            &self.highlight_wheel,
+        ];
+        [
+            &self.temperature,
+            &self.tint,
+            &self.exposure,
+            &self.contrast,
+            &self.highlights,
+            &self.shadows,
+            &self.whites,
+            &self.blacks,
+            &self.saturation,
+            &self.vibrance,
+            &self.look_intensity,
+            &self.faded_film,
+            &self.sharpen,
+            &self.tint_balance,
+        ]
+        .into_iter()
+        .chain(&self.shadow_tint)
+        .chain(&self.highlight_tint)
+        .chain(self.vignette.params())
+        .chain(wheels.into_iter().flat_map(ColorWheel::params))
+        .chain(self.secondary.params())
+    }
+}
+
+impl ColorVignette {
+    pub fn params(&self) -> [&Param; 4] {
+        [&self.amount, &self.midpoint, &self.roundness, &self.feather]
+    }
+
+    pub fn params_mut(&mut self) -> [&mut Param; 4] {
+        [
+            &mut self.amount,
+            &mut self.midpoint,
+            &mut self.roundness,
+            &mut self.feather,
+        ]
+    }
+}
+
+impl ColorWheel {
+    pub fn params(&self) -> [&Param; 3] {
+        [&self.blue, &self.red, &self.level]
+    }
+
+    pub fn params_mut(&mut self) -> [&mut Param; 3] {
+        [&mut self.blue, &mut self.red, &mut self.level]
+    }
+}

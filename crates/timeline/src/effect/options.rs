@@ -1,0 +1,233 @@
+use serde::{Deserialize, Serialize};
+
+/// What Change to Color changes of a matching color.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ColorChange {
+    #[default]
+    Hue,
+    HueLightness,
+    HueLightnessSaturation,
+    /// Takes the target's hue and saturation, keeping its own lightness.
+    Colorize,
+}
+
+impl ColorChange {
+    pub const ALL: [Self; 4] = [
+        Self::Hue,
+        Self::HueLightness,
+        Self::HueLightnessSaturation,
+        Self::Colorize,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Hue => "Hue",
+            Self::HueLightness => "Hue & Lightness",
+            Self::HueLightnessSaturation => "Hue, Lightness & Saturation",
+            Self::Colorize => "Colorize",
+        }
+    }
+}
+
+/// Which time the Timecode effect shows.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum TimecodeSource {
+    /// The time in the media file, at its own frame rate.
+    #[default]
+    Media,
+    /// The time since the clip's first frame, at the sequence's frame rate.
+    Clip,
+}
+
+impl TimecodeSource {
+    pub const ALL: [Self; 2] = [Self::Media, Self::Clip];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Media => "Media",
+            Self::Clip => "Clip",
+        }
+    }
+}
+
+/// Which name the Clip Name effect shows.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ClipNameSource {
+    /// The clip's item in the project, as renamed there.
+    #[default]
+    ProjectItem,
+    /// The file the clip plays, as it is named on disk.
+    File,
+    /// The clip as renamed on the timeline, or its item's name.
+    SequenceClip,
+}
+
+impl ClipNameSource {
+    pub const ALL: [Self; 3] = [Self::SequenceClip, Self::ProjectItem, Self::File];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::ProjectItem => "Project Item Name",
+            Self::File => "File Name",
+            Self::SequenceClip => "Sequence Clip Name",
+        }
+    }
+}
+
+/// How Leave Color tells colors apart.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ColorMatch {
+    /// By distance between the encoded colors.
+    #[default]
+    Rgb,
+    /// By hue alone, keeping every shade of it.
+    Hue,
+}
+
+impl ColorMatch {
+    pub const ALL: [Self; 2] = [Self::Rgb, Self::Hue];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Rgb => "Using RGB",
+            Self::Hue => "Using Hue",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum RampShape {
+    #[default]
+    Linear,
+    /// Rings around the start, reaching the end color at the end point's distance.
+    Radial,
+}
+
+impl RampShape {
+    pub const ALL: [Self; 2] = [Self::Linear, Self::Radial];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Linear => "Linear Ramp",
+            Self::Radial => "Radial Ramp",
+        }
+    }
+}
+
+/// The lens a Lens Flare imitates, which sets how its glare and reflections look.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub enum LensType {
+    /// Streaked glare and a long chain of small reflections.
+    #[default]
+    Zoom50To300,
+    /// A wide halo with a few large reflections.
+    Prime35,
+    /// A tight glare with reflections bunched near the middle.
+    Prime105,
+}
+
+impl LensType {
+    pub const ALL: [Self; 3] = [Self::Zoom50To300, Self::Prime35, Self::Prime105];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Zoom50To300 => "50-300mm Zoom",
+            Self::Prime35 => "35mm Prime",
+            Self::Prime105 => "105mm Prime",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub enum MagnifyShape {
+    #[default]
+    Circle,
+    Square,
+}
+
+impl MagnifyShape {
+    pub const ALL: [Self; 2] = [Self::Circle, Self::Square];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Circle => "Circle",
+            Self::Square => "Square",
+        }
+    }
+}
+
+/// Which way Radial Wipe sweeps from its start angle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub enum RadialWipeDirection {
+    #[default]
+    Clockwise,
+    Counterclockwise,
+    /// Both ways at once, meeting opposite the start.
+    Both,
+}
+
+impl RadialWipeDirection {
+    pub const ALL: [Self; 3] = [Self::Clockwise, Self::Counterclockwise, Self::Both];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Clockwise => "Clockwise",
+            Self::Counterclockwise => "Counterclockwise",
+            Self::Both => "Both",
+        }
+    }
+}
+
+/// The groups the effects menu lists effects in, as Premiere's Effects panel does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EffectCategory {
+    Adjust,
+    BlurAndSharpen,
+    ColorCorrection,
+    Distort,
+    Generate,
+    ImageControl,
+    Keying,
+    Perspective,
+    Stylize,
+    Time,
+    Transform,
+    Transition,
+    Video,
+}
+
+impl EffectCategory {
+    pub const ALL: [Self; 13] = [
+        Self::Adjust,
+        Self::BlurAndSharpen,
+        Self::ColorCorrection,
+        Self::Distort,
+        Self::Generate,
+        Self::ImageControl,
+        Self::Keying,
+        Self::Perspective,
+        Self::Stylize,
+        Self::Time,
+        Self::Transform,
+        Self::Transition,
+        Self::Video,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Adjust => "Adjust",
+            Self::BlurAndSharpen => "Blur & Sharpen",
+            Self::ColorCorrection => "Color Correction",
+            Self::Distort => "Distort",
+            Self::Generate => "Generate",
+            Self::ImageControl => "Image Control",
+            Self::Keying => "Keying",
+            Self::Perspective => "Perspective",
+            Self::Stylize => "Stylize",
+            Self::Time => "Time",
+            Self::Transform => "Transform",
+            Self::Transition => "Transition",
+            Self::Video => "Video",
+        }
+    }
+}
