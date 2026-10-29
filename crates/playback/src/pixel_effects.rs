@@ -297,7 +297,9 @@ pub(crate) fn pixel_effects(
             | VideoEffect::Timecode { .. }
             | VideoEffect::ClipName { .. }
             | VideoEffect::SimpleText(_)
-            | VideoEffect::Lightning(_) => {}
+            | VideoEffect::Lightning(_)
+            | VideoEffect::PaintBucket(_)
+            | VideoEffect::WriteOn(_) => {}
             VideoEffect::HorizontalFlip => pixel.flip[0] = !pixel.flip[0],
             VideoEffect::VerticalFlip => pixel.flip[1] = !pixel.flip[1],
             VideoEffect::BlackAndWhite => {

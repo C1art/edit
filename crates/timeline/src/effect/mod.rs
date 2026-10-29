@@ -1,3 +1,4 @@
+mod bucket;
 mod catalog;
 mod detail;
 mod echo;
@@ -21,7 +22,9 @@ mod shift;
 mod text;
 mod tone;
 mod video_effect;
+mod write_on;
 
+pub use bucket::{BucketBlend, FillSelector, PaintBucket};
 pub use detail::{EdgeFeather, Median, NoiseHls, UnsharpMask};
 pub use echo::{ChannelBlur, Echo, EchoOperator};
 pub use edges::{AlphaGlow, Bevel, ColorEmboss, RoughenEdgeType, RoughenEdges};
@@ -44,5 +47,6 @@ pub use text::SimpleText;
 pub use tone::{
     AscCdl, ColorReplace, ConvolutionKernel, Extract, LimiterMethod, ShadowHighlight, VideoLimiter,
 };
+pub use write_on::{WriteOn, WriteOnStyle};
 
 pub use video_effect::VideoEffect;

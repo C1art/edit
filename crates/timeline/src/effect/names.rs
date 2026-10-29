@@ -102,6 +102,8 @@ impl VideoEffect {
             Self::DifferenceMatte(_) => "Difference Matte",
             Self::CompoundBlur(_) => "Compound Blur",
             Self::Texturize(_) => "Texturize",
+            Self::PaintBucket(_) => "Paint Bucket",
+            Self::WriteOn(_) => "Write-on",
         }
     }
 }

@@ -3,8 +3,8 @@ use super::{
     CineonConverter, Circle, ColorBalance, ColorEmboss, ColorPass, ColorReplace, CompoundBlur,
     ConvolutionKernel, DifferenceMatte, Echo, EdgeFeather, Ellipse, Extract, EyedropperFill,
     FourColorGradient, Grid, Light, LightingEffects, Lightning, Median, NoiseAlpha, NoiseHls,
-    NoiseHlsAuto, RadialShadow, ReduceInterlaceFlicker, RoughenEdges, SdrConform, ShadowHighlight,
-    SimpleText, Texturize, UnsharpMask, VideoEffect, VideoLimiter,
+    NoiseHlsAuto, PaintBucket, RadialShadow, ReduceInterlaceFlicker, RoughenEdges, SdrConform,
+    ShadowHighlight, SimpleText, Texturize, UnsharpMask, VideoEffect, VideoLimiter, WriteOn,
 };
 use crate::{AutoReframe, Param};
 
@@ -398,6 +398,8 @@ macro_rules! effect_params {
             | VideoEffect::ReduceInterlaceFlicker(_)
             | VideoEffect::RoughenEdges(_)
             | VideoEffect::SdrConform(_)
+            | VideoEffect::PaintBucket(_)
+            | VideoEffect::WriteOn(_)
             | VideoEffect::DifferenceMatte(_)
             | VideoEffect::CompoundBlur(_)
             | VideoEffect::Texturize(_)

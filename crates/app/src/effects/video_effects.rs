@@ -315,6 +315,8 @@ impl Rows {
             | VideoEffect::CineonConverter(_) => self.image(ui, effect),
             VideoEffect::BrushStrokes(_)
             | VideoEffect::EyedropperFill(_)
+            | VideoEffect::PaintBucket(_)
+            | VideoEffect::WriteOn(_)
             | VideoEffect::SdrConform(_) => self.paint(ui, effect),
             VideoEffect::LensFlare { .. } | VideoEffect::Magnify { .. } => self.optics(ui, effect),
             VideoEffect::LinearWipe { .. }

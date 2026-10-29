@@ -154,7 +154,7 @@ fn distance(a: [f32; 2], b: [f32; 2]) -> f32 {
     (b[0] - a[0]).hypot(b[1] - a[1])
 }
 
-fn to_segment(p: [f32; 2], a: [f32; 2], b: [f32; 2]) -> f32 {
+pub(crate) fn to_segment(p: [f32; 2], a: [f32; 2], b: [f32; 2]) -> f32 {
     let along = [b[0] - a[0], b[1] - a[1]];
     let length = along[0] * along[0] + along[1] * along[1];
     let t = match length > 0.0 {

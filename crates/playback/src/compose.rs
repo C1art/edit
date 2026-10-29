@@ -13,8 +13,10 @@ use crate::grades::grade_for;
 use crate::layer_look::{interpreted, layer_look};
 use crate::layered::{combination, combined, matted, track_matte};
 use crate::morph_cut::morphed;
+use crate::paint_bucket::bucket_filled;
 use crate::time_effects::{posterized, with_burn_ins};
 use crate::track_video::TrackVideo;
+use crate::write_on::written_on;
 use crate::{Layer, LayerPicture, PlaybackError, Resolution};
 
 /// The decoders of one video track.
@@ -200,6 +202,8 @@ fn clip_picture(
             match frame {
                 Ok(frame) => frame
                     .map(|frame| scrolled(frame, sequence, plan.clip, media, time))
+                    .map(|frame| bucket_filled(frame, effects, time))
+                    .map(|frame| written_on(frame, plan.clip, sequence.timebase, time))
                     .map(|frame| with_burn_ins(frame, sequence, plan.clip, media, time))
                     .map(LayerPicture::Frame),
                 Err(error) => {

@@ -36,6 +36,7 @@ mod morph_cut;
 mod noise_effects;
 mod optical_flow;
 mod optics_effects;
+mod paint_bucket;
 mod pixel_effects;
 mod player;
 mod previews;
@@ -53,6 +54,7 @@ mod track_audio;
 mod track_video;
 mod tracks_mix;
 mod video_worker;
+mod write_on;
 
 pub use composed::{ComposedFrame, Layer, LayerPicture, Levels};
 pub use envelope::{EnvelopeEvent, EnvelopeJob};

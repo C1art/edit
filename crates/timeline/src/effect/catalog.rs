@@ -9,7 +9,7 @@ use crate::{AutoReframe, Param, RollingShutterRepair, Stabilizer};
 
 impl VideoEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 101] {
+    pub fn catalog() -> [Self; 103] {
         [
             Self::GaussianBlur {
                 blurriness: Param::from_value(10.0),
@@ -351,6 +351,8 @@ impl VideoEffect {
             Self::CompoundBlur(Default::default()),
             Self::Texturize(Default::default()),
             Self::RollingShutterRepair(RollingShutterRepair::default()),
+            Self::PaintBucket(Default::default()),
+            Self::WriteOn(Default::default()),
         ]
     }
 
@@ -445,7 +447,9 @@ impl VideoEffect {
             Self::BrushStrokes(_) | Self::Texturize(_) => EffectCategory::Stylize,
             Self::DifferenceMatte(_) => EffectCategory::Keying,
             Self::CompoundBlur(_) => EffectCategory::BlurAndSharpen,
-            Self::EyedropperFill(_) => EffectCategory::Generate,
+            Self::EyedropperFill(_) | Self::PaintBucket(_) | Self::WriteOn(_) => {
+                EffectCategory::Generate
+            }
             Self::LinearWipe { .. }
             | Self::RadialWipe { .. }
             | Self::VenetianBlinds { .. }

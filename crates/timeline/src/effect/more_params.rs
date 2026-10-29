@@ -179,6 +179,31 @@ macro_rules! more_effect_params {
                 maintain_original_alpha: _,
                 blend_with_original,
             }) => vec![x, y, sample_radius, blend_with_original],
+            VideoEffect::PaintBucket(PaintBucket {
+                fill_point: [x, y],
+                tolerance,
+                spread,
+                feather,
+                opacity,
+                ..
+            }) => vec![x, y, tolerance, spread, feather, opacity],
+            VideoEffect::WriteOn(WriteOn {
+                brush_position: [x, y],
+                brush_size,
+                brush_hardness,
+                brush_opacity,
+                stroke_length,
+                brush_spacing,
+                ..
+            }) => vec![
+                x,
+                y,
+                brush_size,
+                brush_hardness,
+                brush_opacity,
+                stroke_length,
+                brush_spacing,
+            ],
             VideoEffect::SdrConform(SdrConform {
                 brightness,
                 contrast,

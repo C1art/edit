@@ -453,4 +453,6 @@ pub enum VideoEffect {
     CompoundBlur(CompoundBlur),
     Texturize(Texturize),
     RollingShutterRepair(RollingShutterRepair),
+    PaintBucket(PaintBucket),
+    WriteOn(WriteOn),
 }
