@@ -5,6 +5,7 @@ use crate::lighting::Lighting;
 use crate::mask::{self, LayerMask, MAX_MASKS};
 #[cfg(test)]
 use crate::mask::{Outline, MAX_OUTLINE_POINTS};
+use crate::noise_alpha::NoisyAlpha;
 use crate::pixel::PixelEffects;
 use crate::point_shadow::PointShadow;
 use crate::reframe::Reframe;
@@ -264,6 +265,11 @@ impl Placement {
                     .into_iter()
                     .flatten(),
             )
+            .chain(
+                NoisyAlpha::uniform(self.effects.noise_alpha.as_ref())
+                    .into_iter()
+                    .flatten(),
+            )
             .flat_map(f32::to_le_bytes)
             .collect()
     }
@@ -316,7 +322,8 @@ mod tests {
         // the Generate effects' thirteen, Lens Flare and Magnify's three and the
         // Transition effects' five, the detail effects' three, the edge effects' eleven
         // the tone effects' thirteen, Change Color and Color Balance's six, Ellipse
-        // and Cell Pattern's seven, Lighting Effects' eighteen and Radial Shadow's two.
+        // and Cell Pattern's seven, Lighting Effects' eighteen, Radial Shadow's two and
+        // Noise Alpha's two.
         let outlines = MAX_MASKS * MAX_OUTLINE_POINTS / 2;
         assert_eq!(
             bytes.len(),
@@ -338,6 +345,7 @@ mod tests {
                 + 6
                 + 7
                 + 18
+                + 2
                 + 2)
                 * 16
         );

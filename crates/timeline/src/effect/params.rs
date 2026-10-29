@@ -1,8 +1,9 @@
 use super::{
     AlphaGlow, AscCdl, Bevel, CellPattern, ChangeColor, ChannelBlur, Checkerboard, Circle,
     ColorBalance, ColorReplace, ConvolutionKernel, Echo, EdgeFeather, Ellipse, Extract,
-    FourColorGradient, Grid, Light, LightingEffects, Lightning, Median, NoiseHls, RadialShadow,
-    RoughenEdges, ShadowHighlight, SimpleText, UnsharpMask, VideoEffect, VideoLimiter,
+    FourColorGradient, Grid, Light, LightingEffects, Lightning, Median, NoiseAlpha, NoiseHls,
+    NoiseHlsAuto, RadialShadow, RoughenEdges, ShadowHighlight, SimpleText, UnsharpMask,
+    VideoEffect, VideoLimiter,
 };
 use crate::{AutoReframe, Param};
 
@@ -365,6 +366,19 @@ macro_rules! effect_params {
                 grain_size,
                 phase,
             }) => vec![hue, lightness, saturation, grain_size, phase],
+            VideoEffect::NoiseHlsAuto(NoiseHlsAuto {
+                hue,
+                lightness,
+                saturation,
+                grain_size,
+                animation_speed,
+            }) => vec![hue, lightness, saturation, grain_size, animation_speed],
+            VideoEffect::NoiseAlpha(NoiseAlpha {
+                amount,
+                noise_phase,
+                cycle,
+                ..
+            }) => vec![amount, noise_phase, cycle],
             VideoEffect::ChannelBlur(ChannelBlur {
                 red,
                 green,

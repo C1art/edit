@@ -95,14 +95,14 @@ pub use edit::{
 };
 pub use edl::to_edl;
 pub use effect::{
-    AlphaGlow, AscCdl, Bevel, CellKind, CellPattern, ChangeColor, ChangeColorView, ChannelBlur,
-    Checkerboard, Circle, ClipNameSource, ColorBalance, ColorChange, ColorMatch, ColorReplace,
-    ConvolutionKernel, Echo, EchoOperator, EdgeFeather, EffectCategory, Ellipse, Extract,
-    FourColorGradient, GarbageMatte, Grid, KeyOutput, LensType, Light, LightKind, LightingEffects,
-    Lightning, LimiterMethod, MagnifyShape, MatchColors, MatteChannel, Median, NoiseHls,
-    RadialShadow, RadialWipeDirection, RampShape, Rgb, RoughenEdgeType, RoughenEdges,
-    ShadowHighlight, ShadowRender, SimpleText, TimecodeSource, UnsharpMask, VideoEffect,
-    VideoLimiter, MAX_LIGHTS, ULTRA_KEY_REACH,
+    AlphaGlow, AlphaNoise, AlphaOverflow, AscCdl, Bevel, CellKind, CellPattern, ChangeColor,
+    ChangeColorView, ChannelBlur, Checkerboard, Circle, ClipNameSource, ColorBalance, ColorChange,
+    ColorMatch, ColorReplace, ConvolutionKernel, Echo, EchoOperator, EdgeFeather, EffectCategory,
+    Ellipse, Extract, FourColorGradient, GarbageMatte, Grid, KeyOutput, LensType, Light, LightKind,
+    LightingEffects, Lightning, LimiterMethod, MagnifyShape, MatchColors, MatteChannel, Median,
+    NoiseAlpha, NoiseHls, NoiseHlsAuto, OriginalAlpha, RadialShadow, RadialWipeDirection,
+    RampShape, Rgb, RoughenEdgeType, RoughenEdges, ShadowHighlight, ShadowRender, SimpleText,
+    TimecodeSource, UnsharpMask, VideoEffect, VideoLimiter, MAX_LIGHTS, ULTRA_KEY_REACH,
 };
 pub use error::TimelineError;
 pub use find::{next_found, FindOperator, FindQuery, Found};

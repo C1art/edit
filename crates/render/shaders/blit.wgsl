@@ -211,6 +211,10 @@ struct Placement {
     // hides the picture and tints by it.
     point_shadow: vec4<f32>,
     point_shadow_look: vec4<f32>,
+    // Noise Alpha's amount, squaring, mix and overflow, then its seed, phase, cycle and
+    // kind: 0 off, 1 still, 2 animated.
+    noise_alpha: vec4<f32>,
+    noise_alpha_timing: vec4<f32>,
 };
 
 const OUTLINE_VEC4S: u32 = 32u;
@@ -452,7 +456,7 @@ fn layer_color(in: VertexOutput) -> vec4<f32> {
     rgb = roughen_colored(edge_lit(lighting_effects(rgb, uv), pinned, uv), rough.y);
     rgb = page_side(key_view(limited(rgb), matte), page);
     rgb = mix(rgb, vec3<f32>(1.0), placement.balance.w);
-    let viewed = alpha_view(rgb, adjusted_alpha(color.a) * keyed * luma_matte(color.rgb) * f32(in_crop(pinned)) * rough.x);
+    let viewed = alpha_view(rgb, noise_alpha(adjusted_alpha(color.a), uv) * keyed * luma_matte(color.rgb) * f32(in_crop(pinned)) * rough.x);
     rgb = viewed.rgb;
     let picture = viewed.a * (1.0 - placement.point_shadow_look.x);
     let shadow = shadow_alpha(pinned);

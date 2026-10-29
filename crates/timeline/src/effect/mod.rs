@@ -11,6 +11,7 @@ mod generate;
 mod key;
 mod lighting;
 mod names;
+mod noise;
 mod options;
 mod params;
 mod pattern;
@@ -26,6 +27,7 @@ pub use garbage::GarbageMatte;
 pub use generate::{Checkerboard, Circle, FourColorGradient, Grid};
 pub use key::{KeyOutput, MatteChannel, ULTRA_KEY_REACH};
 pub use lighting::{Light, LightKind, LightingEffects, MAX_LIGHTS};
+pub use noise::{AlphaNoise, AlphaOverflow, NoiseAlpha, NoiseHlsAuto, OriginalAlpha};
 pub use options::{
     ClipNameSource, ColorChange, ColorMatch, EffectCategory, LensType, MagnifyShape,
     RadialWipeDirection, RampShape, Rgb, TimecodeSource,
@@ -482,4 +484,6 @@ pub enum VideoEffect {
     Lightning(Lightning),
     LightingEffects(LightingEffects),
     RadialShadow(RadialShadow),
+    NoiseHlsAuto(NoiseHlsAuto),
+    NoiseAlpha(NoiseAlpha),
 }

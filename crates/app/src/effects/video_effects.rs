@@ -314,7 +314,9 @@ impl Rows {
             | VideoEffect::Median(_)
             | VideoEffect::DustAndScratches(_)
             | VideoEffect::EdgeFeather(_)
-            | VideoEffect::NoiseHls(_) => self.detail(ui, effect),
+            | VideoEffect::NoiseHls(_)
+            | VideoEffect::NoiseHlsAuto(_)
+            | VideoEffect::NoiseAlpha(_) => self.detail(ui, effect),
             VideoEffect::RoughenEdges(_)
             | VideoEffect::BevelEdges(_)
             | VideoEffect::BevelAlpha(_)

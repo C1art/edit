@@ -28,6 +28,7 @@ mod lightning;
 mod loudness;
 mod mixdown;
 mod morph_cut;
+mod noise_effects;
 mod optical_flow;
 mod optics_effects;
 mod pixel_effects;

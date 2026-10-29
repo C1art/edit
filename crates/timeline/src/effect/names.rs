@@ -90,6 +90,8 @@ impl VideoEffect {
             Self::Lightning(_) => "Lightning",
             Self::LightingEffects(_) => "Lighting Effects",
             Self::RadialShadow(_) => "Radial Shadow",
+            Self::NoiseHlsAuto(_) => "Noise HLS Auto",
+            Self::NoiseAlpha(_) => "Noise Alpha",
         }
     }
 }
