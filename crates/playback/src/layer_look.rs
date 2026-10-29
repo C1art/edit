@@ -71,6 +71,7 @@ pub(crate) fn layer_look(
         effects: smeared(turned(effects, reveal, canvas), reveal, canvas),
         blend: reveal.blend.unwrap_or(look.blend),
         pixel_aspect: 1.0,
+        reframe: None,
     }
 }
 

@@ -5,6 +5,7 @@ use crate::mask::{self, LayerMask, MAX_MASKS};
 #[cfg(test)]
 use crate::mask::{Outline, MAX_OUTLINE_POINTS};
 use crate::pixel::PixelEffects;
+use crate::reframe::Reframe;
 use crate::secondary::SecondaryAdjust;
 use crate::wipe::{self, LayerWipe};
 
@@ -37,6 +38,7 @@ pub struct LayerLook {
     pub blend: BlendMode,
     /// The width over height of one of the picture's pixels; wider pixels show it wider.
     pub pixel_aspect: f32,
+    pub reframe: Option<Reframe>,
 }
 
 /// Color correction in linear light, every field neutral at zero except saturation.
@@ -106,6 +108,7 @@ impl LayerLook {
         effects: PixelEffects::NONE,
         blend: BlendMode::Normal,
         pixel_aspect: 1.0,
+        reframe: None,
     };
 
     /// How big the picture of `size` stored pixels looks once its pixels are square.
