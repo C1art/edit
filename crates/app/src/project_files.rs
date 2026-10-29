@@ -10,6 +10,7 @@ use crate::effects::LutSlot;
 use crate::export::ExportDialog;
 use crate::file_browser::FileBrowser;
 use crate::project_store::{Setting, StoreEvent};
+use crate::recent_projects::RecentProjects;
 
 /// What a picked path is for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -253,6 +254,7 @@ impl Editor {
         for event in events {
             match event {
                 StoreEvent::Saved(path, revision, Ok(())) => {
+                    self.remember_project(&path);
                     self.saved_revision = revision;
                     self.project_path = Some(path);
                     if let Some(action) = self.after_save.take() {
@@ -264,6 +266,7 @@ impl Editor {
                     self.notice(format!("Cannot save {}: {error}", path.display()));
                 }
                 StoreEvent::Opened(path, Ok(sequence)) => {
+                    self.remember_project(&path);
                     self.replace_sequence(*sequence, Some(path));
                 }
                 StoreEvent::Opened(path, Err(error)) => {
@@ -312,6 +315,9 @@ impl Editor {
                 }
                 StoreEvent::SettingRead(Setting::Workspaces, Ok(Some(text))) => {
                     self.load_workspaces(&text);
+                }
+                StoreEvent::SettingRead(Setting::RecentProjects, Ok(Some(text))) => {
+                    self.recent_projects = RecentProjects::from_text(&text);
                 }
                 StoreEvent::SettingRead(Setting::Folders, Ok(Some(text))) => {
                     self.browse_folders = crate::path_dialog::folders_from_text(&text);

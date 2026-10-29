@@ -24,6 +24,7 @@ use crate::path_dialog::FolderUse;
 use crate::project_files::{is_project, is_subrip, is_xml, AfterDiscard, PathPrompt};
 use crate::project_store::{ProjectStore, Setting};
 use crate::proxies::ProxyMaker;
+use crate::recent_projects::RecentProjects;
 use crate::source::SourceMonitor;
 use crate::timeline_view::TimelineView;
 use crate::trim_monitor::TrimMonitor;
@@ -101,6 +102,7 @@ pub struct Editor {
     pub(crate) marker_dialog: Option<(timeline::MarkerOwner, Marker)>,
     pub(crate) path_prompt: Option<PathPrompt>,
     pub(crate) browse_folders: HashMap<FolderUse, PathBuf>,
+    pub(crate) recent_projects: RecentProjects,
     pub(crate) store: Option<ProjectStore>,
     /// Where the project was last saved or opened from.
     pub(crate) project_path: Option<PathBuf>,
@@ -168,10 +170,9 @@ impl Editor {
             .map_err(|error| notices.push(format!("Saving disabled: {error}")))
             .ok();
         if let Some(store) = &mut store {
-            store.read_setting(Setting::Keymap);
-            store.read_setting(Setting::Presets);
-            store.read_setting(Setting::Workspaces);
-            store.read_setting(Setting::Folders);
+            Setting::ALL
+                .into_iter()
+                .for_each(|setting| store.read_setting(setting));
         }
         let program = Viewer::new(
             Arc::new(timeline.sequence().clone()),
@@ -240,6 +241,7 @@ impl Editor {
             marker_dialog: None,
             path_prompt: None,
             browse_folders: HashMap::new(),
+            recent_projects: RecentProjects::default(),
             store,
             project_path: None,
             confirm_discard: None,

@@ -53,15 +53,25 @@ pub enum Setting {
     Presets,
     Workspaces,
     Folders,
+    RecentProjects,
 }
 
 impl Setting {
+    pub const ALL: [Self; 5] = [
+        Self::Keymap,
+        Self::Presets,
+        Self::Workspaces,
+        Self::Folders,
+        Self::RecentProjects,
+    ];
+
     pub fn path(self) -> PathBuf {
         app_folder().join(match self {
             Self::Keymap => "Keyboard Shortcuts.txt",
             Self::Presets => "Effect Presets.json",
             Self::Workspaces => "Workspaces.txt",
             Self::Folders => "Recent Folders.txt",
+            Self::RecentProjects => "Recent Projects.txt",
         })
     }
 
@@ -72,6 +82,7 @@ impl Setting {
             Self::Presets => "effect presets",
             Self::Workspaces => "workspaces",
             Self::Folders => "recent folders",
+            Self::RecentProjects => "recent projects",
         }
     }
 }

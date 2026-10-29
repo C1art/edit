@@ -23,6 +23,7 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             if ui.add(open).clicked() {
                 editor.prompt_path(PathPurpose::OpenProject);
             }
+            crate::recent_projects::menu(editor, ui);
             let save = Button::new("Save").shortcut_text(editor.keymap.label(Command::Save));
             if ui.add(save).clicked() {
                 editor.save_project();
