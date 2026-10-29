@@ -2,7 +2,7 @@ use std::ptr::{self, NonNull};
 
 use ffmpeg_sys_next as sys;
 
-use super::sws_flags::{SWS_ACCURATE_RND, SWS_BILINEAR, SWS_FULL_CHR_H_INT};
+use super::sws_flags::{SWS_BILINEAR, SWS_FULL_CHR_H_INT};
 use timeline::FieldOrder;
 
 use super::error::check;
@@ -189,10 +189,9 @@ fn new_context(key: ScalerKey) -> Result<NonNull<sys::SwsContext>, MediaError> {
         (c"dstw", i64::from(key.output_width)),
         (c"dsth", i64::from(key.output_height)),
         (c"dst_format", sys::AVPixelFormat::AV_PIX_FMT_RGBA as i64),
-        (
-            c"sws_flags",
-            i64::from(SWS_BILINEAR | SWS_ACCURATE_RND | SWS_FULL_CHR_H_INT),
-        ),
+        // Exact rounding would take swscale off its fast paths, more than doubling the
+        // time a 4K picture takes, for at most one level of difference.
+        (c"sws_flags", i64::from(SWS_BILINEAR | SWS_FULL_CHR_H_INT)),
         (c"threads", 0),
     ];
     // SAFETY: `context` is a fresh, uninitialized context and every name is one of its
