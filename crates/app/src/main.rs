@@ -83,6 +83,8 @@ mod sequence_menu;
 mod sequence_settings;
 mod sequence_tabs;
 mod shortcuts;
+#[cfg(test)]
+mod smoke_tests;
 mod source;
 mod source_drag;
 mod source_waveform;
