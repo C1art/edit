@@ -33,7 +33,14 @@ impl fmt::Display for MediaError {
             Self::UnsupportedPath(path) => {
                 write!(f, "path cannot be passed to FFmpeg: {}", path.display())
             }
-            Self::Ffmpeg { code, message } => write!(f, "FFmpeg error {code}: {message}"),
+            // FFmpeg's own code means nothing to whoever reads this; its text says it all.
+            Self::Ffmpeg { message, .. } => {
+                let mut rest = message.chars();
+                match rest.next() {
+                    Some(first) => write!(f, "{}{}", first.to_lowercase(), rest.as_str()),
+                    None => f.write_str("FFmpeg failed"),
+                }
+            }
             Self::NoPlayableStream => f.write_str("file has no video or audio stream"),
             Self::UnreadableFile => {
                 f.write_str("not a media file that can be read, or the file is damaged")
