@@ -295,9 +295,12 @@ pub fn clips(
             }
             _ => String::new(),
         };
-        let badge = sync_badge(painter, rect, sequence, states.sync_offsets.get(&clip.id));
+        // Held at the view's edge while the clip's start is scrolled out of it.
+        let name_left = strip.left().max(visible.min);
+        let shown = rect.with_min_x(rect.left().max(visible.min));
+        let badge = sync_badge(painter, shown, sequence, states.sync_offsets.get(&clip.id));
         painter.with_clip_rect(strip.shrink(1.0)).text(
-            egui::pos2(strip.left() + 5.0 + badge, strip.center().y),
+            egui::pos2(name_left + 5.0 + badge, strip.center().y),
             Align2::LEFT_CENTER,
             format!("{camera}{name}{speed}{link}{gain}"),
             FontId::proportional(11.0),
