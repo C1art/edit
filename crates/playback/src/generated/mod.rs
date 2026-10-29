@@ -4,6 +4,7 @@ mod layers;
 mod leader;
 mod scroll;
 mod shape;
+mod title_fonts;
 
 use std::cell::RefCell;
 use std::sync::Arc;

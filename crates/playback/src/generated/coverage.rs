@@ -1,17 +1,16 @@
 use std::cell::RefCell;
 use std::sync::Arc;
 
-use egui::epaint::text::{FontDefinitions, Fonts, Galley, LayoutJob, TextFormat, TextOptions};
-use egui::epaint::{Color32, FontColorTransferFunction, FontFamily, FontId};
+use egui::epaint::text::{Galley, LayoutJob, TextFormat};
+use egui::epaint::{Color32, FontId};
 use egui::{Align, Rect};
-use timeline::{TextAlign, Title, TitleFont};
+use timeline::{TextAlign, Title};
 
+use super::title_fonts::TitleFonts;
 use super::Anchor;
 
 /// Titles never wrap closer than this to the canvas edges, as broadcast title safe.
 const TITLE_SAFE: f32 = 0.9;
-/// Font atlases only grow, so a long session of title edits starts a fresh one here.
-const ATLAS_REFILL: f32 = 0.8;
 /// Captions sit this fraction of the canvas height above its bottom, inside title safe.
 const CAPTION_MARGIN: f32 = 0.08;
 /// Faux italic leans each row this far right per pixel up, about eleven degrees.
@@ -20,22 +19,16 @@ const ITALIC_SLANT: f32 = 0.2;
 const FAR: f64 = 1e12;
 
 thread_local! {
-    static FONTS: RefCell<Option<Fonts>> = const { RefCell::new(None) };
+    static FONTS: RefCell<Option<TitleFonts>> = const { RefCell::new(None) };
 }
 
 /// `title` laid out to wrap within title safe of a canvas `width` wide, or on one line
 /// for a crawl, with the fonts made or refreshed first.
-fn title_galley(title: &Title, width: u32, fonts: &mut Option<Fonts>) -> Galley {
-    let fonts = match fonts {
-        Some(fonts) if fonts.font_atlas_fill_ratio() < ATLAS_REFILL => fonts,
-        _ => fonts.insert(new_fonts()),
-    };
+fn title_galley(title: &Title, width: u32, fonts: &mut TitleFonts) -> Galley {
     let size = title.size as f32;
-    let family = match title.font {
-        TitleFont::Sans => FontFamily::Proportional,
-        TitleFont::Mono => FontFamily::Monospace,
-    };
-    let font = FontId::new(size, family);
+    let font = FontId::new(size, fonts.family(&title.font));
+    fonts.make_room();
+    let fonts = fonts.fonts();
     let row_height = fonts.with_pixels_per_point(1.0).row_height(&font);
     let mut format = TextFormat::simple(font, Color32::WHITE);
     format.extra_letter_spacing = size * title.tracking as f32 / 1000.0;
@@ -72,7 +65,10 @@ impl Coverage {
         if title.text.trim().is_empty() || title.size == 0 {
             return None;
         }
-        FONTS.with_borrow_mut(|fonts| Some(title_galley(title, width, fonts).rect.size()))
+        FONTS.with_borrow_mut(|fonts| {
+            let fonts = fonts.get_or_insert_with(TitleFonts::new);
+            Some(title_galley(title, width, fonts).rect.size())
+        })
     }
 
     pub(super) fn of_title(title: &Title, width: u32, height: u32, anchor: Anchor) -> Option<Self> {
@@ -80,8 +76,8 @@ impl Coverage {
             return None;
         }
         FONTS.with_borrow_mut(|fonts| {
+            let fonts = fonts.get_or_insert_with(TitleFonts::new);
             let galley = title_galley(title, width, fonts);
-            let fonts = fonts.as_mut()?;
             let mut coverage = Self::empty(width as usize, height as usize);
             // The galley's rows sit around x = 0 as aligned; center the whole block.
             let rect = galley.rect;
@@ -92,7 +88,7 @@ impl Coverage {
             }
             coverage.bounds = bounds(rect.translate(origin));
             let slant = if title.italic { ITALIC_SLANT } else { 0.0 };
-            let atlas = fonts.texture_atlas().image();
+            let atlas = fonts.fonts().texture_atlas().image();
             for row in &galley.rows {
                 // Letters lean about the middle of their row, so the block stays centered.
                 let middle = origin.y + row.pos.y + row.row.size.y / 2.0;
@@ -358,16 +354,6 @@ fn bounds(rect: Rect) -> (i64, i64, i64, i64) {
         rect.right().ceil() as i64,
         rect.bottom().ceil() as i64,
     )
-}
-
-fn new_fonts() -> Fonts {
-    let options = TextOptions {
-        max_texture_side: 8192,
-        color_transfer_function: FontColorTransferFunction::Gamma(1.0),
-        subpixel_binning: false,
-        ..TextOptions::default()
-    };
-    Fonts::new(options, FontDefinitions::default())
 }
 
 #[cfg(test)]

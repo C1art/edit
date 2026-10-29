@@ -4,6 +4,7 @@ use timeline::{
 };
 
 use super::graphic_layers;
+use crate::installed_fonts;
 use crate::mixer::{response_state, Change};
 
 /// What a title, shape or color matte draws on a frame `height` pixels tall. Typing
@@ -74,18 +75,9 @@ pub(super) fn text_controls(ui: &mut egui::Ui, title: &mut Title) -> Option<Chan
                 .suffix(" px"),
         );
         change = response_state(&size, change);
-        egui::ComboBox::from_id_salt("title_font")
-            .selected_text(font_name(title.font))
-            .show_ui(ui, |ui| {
-                for font in [TitleFont::Sans, TitleFont::Mono] {
-                    if ui
-                        .selectable_value(&mut title.font, font, font_name(font))
-                        .changed()
-                    {
-                        change = Some(Change::Commit);
-                    }
-                }
-            });
+        if font_picker(ui, &mut title.font) {
+            change = Some(Change::Commit);
+        }
         for (on, label) in [
             (&mut title.bold, egui::RichText::new("B").strong()),
             (&mut title.italic, egui::RichText::new("I").italics()),
@@ -360,9 +352,36 @@ fn color_button(ui: &mut egui::Ui, color: &mut Rgb) -> Option<Change> {
     })
 }
 
-fn font_name(font: TitleFont) -> &'static str {
-    match font {
-        TitleFont::Sans => "Sans",
-        TitleFont::Mono => "Mono",
-    }
+/// egui's two fonts, then every installed one; true when another was picked.
+fn font_picker(ui: &mut egui::Ui, font: &mut TitleFont) -> bool {
+    let name = |font: &TitleFont| match font {
+        TitleFont::File(path) => {
+            installed_fonts::name_of(path).map_or_else(|| font.name(), str::to_owned)
+        }
+        _ => font.name(),
+    };
+    let mut picked = false;
+    egui::ComboBox::from_id_salt("title_font")
+        .selected_text(name(font))
+        .height(400.0)
+        .show_ui(ui, |ui| {
+            for builtin in [TitleFont::Sans, TitleFont::Mono] {
+                let label = name(&builtin);
+                picked |= ui.selectable_value(font, builtin, label).changed();
+            }
+            ui.separator();
+            match installed_fonts::list() {
+                Some(installed) => {
+                    for installed in installed {
+                        let file = TitleFont::File(installed.path.clone());
+                        picked |= ui.selectable_value(font, file, &installed.name).changed();
+                    }
+                }
+                None => {
+                    ui.weak("Finding installed fonts…");
+                    ui.ctx().request_repaint();
+                }
+            }
+        });
+    picked
 }

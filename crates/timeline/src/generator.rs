@@ -1,4 +1,5 @@
 use std::f64::consts::SQRT_2;
+use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
@@ -203,10 +204,25 @@ pub enum TextAlign {
     Right,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TitleFont {
     Sans,
     Mono,
+    /// A TrueType or OpenType file, as installed fonts are.
+    File(PathBuf),
+}
+
+impl TitleFont {
+    pub fn name(&self) -> String {
+        match self {
+            Self::Sans => "Sans".into(),
+            Self::Mono => "Mono".into(),
+            Self::File(path) => path.file_stem().map_or_else(
+                || path.display().to_string(),
+                |stem| stem.to_string_lossy().into_owned(),
+            ),
+        }
+    }
 }
 
 pub(crate) fn seconds(seconds: i64, timebase: Timebase) -> Ticks {

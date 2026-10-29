@@ -25,6 +25,7 @@ mod graphics_tools;
 mod history_panel;
 mod icons;
 mod import;
+mod installed_fonts;
 mod interpret_dialog;
 mod keyboard_trim;
 mod keymap;
