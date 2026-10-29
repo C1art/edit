@@ -13,6 +13,9 @@ use crate::editor::Editor;
 
 type Probed = Result<(MediaInfo, u64), String>;
 
+/// Narrower than this, a property's name goes above its value.
+const SIDE_BY_SIDE_WIDTH: f32 = 240.0;
+
 /// What a file's headers say, read once per file off the UI thread.
 enum Probe {
     Reading,
@@ -160,12 +163,7 @@ fn clip_section(editor: &Editor, ui: &mut egui::Ui, id: ClipId) {
     egui::CollapsingHeader::new("Clip")
         .default_open(true)
         .show(ui, |ui| {
-            Grid::new("metadata_clip").num_columns(2).show(ui, |ui| {
-                let mut row = |name: &str, value: String| {
-                    ui.label(RichText::new(name).weak());
-                    ui.label(value);
-                    ui.end_row();
-                };
+            properties(ui, "metadata_clip", |row| {
                 row("Track", track_name);
                 row("Sequence In", timecode(clip.start));
                 row("Sequence Out", timecode(clip.end()));
@@ -185,17 +183,12 @@ fn clip_section(editor: &Editor, ui: &mut egui::Ui, id: ClipId) {
 fn file_section(editor: &mut Editor, ui: &mut egui::Ui, media: &MediaItem) {
     let project = editor.timeline.project();
     let (timebase, rate) = (project.timebase, project.format.frame_rate);
-    ui.heading(&media.name);
+    ui.add(egui::Label::new(RichText::new(&media.name).heading()).truncate());
     let probe = media.is_file().then(|| editor.metadata.probe(&media.path));
     egui::CollapsingHeader::new("File")
         .default_open(true)
         .show(ui, |ui| {
-            Grid::new("metadata_file").num_columns(2).show(ui, |ui| {
-                let mut row = |name: &str, value: String| {
-                    ui.label(RichText::new(name).weak());
-                    ui.add(egui::Label::new(value).wrap());
-                    ui.end_row();
-                };
+            properties(ui, "metadata_file", |row| {
                 row("Type", kind(media).to_owned());
                 if media.is_file() {
                     row("File Path", media.path.display().to_string());
@@ -247,6 +240,25 @@ fn file_section(editor: &mut Editor, ui: &mut egui::Ui, media: &MediaItem) {
                 }
             });
         });
+}
+
+/// Names beside their values, or above them when the panel is too narrow for both.
+fn properties(ui: &mut egui::Ui, id: &str, rows: impl FnOnce(&mut dyn FnMut(&str, String))) {
+    if ui.available_width() < SIDE_BY_SIDE_WIDTH {
+        rows(&mut |name, value| {
+            ui.label(RichText::new(name).weak().small());
+            ui.add(egui::Label::new(value).wrap());
+            ui.add_space(2.0);
+        });
+    } else {
+        Grid::new(id).num_columns(2).show(ui, |ui| {
+            rows(&mut |name, value| {
+                ui.label(RichText::new(name).weak());
+                ui.add(egui::Label::new(value).wrap());
+                ui.end_row();
+            });
+        });
+    }
 }
 
 /// Returns the log to keep once a field is left changed.

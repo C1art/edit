@@ -24,7 +24,7 @@ enum RowAction {
 pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
     let playhead = editor.playhead();
     let filter = &mut editor.marker_filter;
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         for color in MarkerColor::ALL {
             let shown = !filter.hidden.contains(&color);
             let (rect, response) =
@@ -50,7 +50,11 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
             }
         }
     });
-    ui.add(egui::TextEdit::singleline(&mut filter.search).hint_text("Search"));
+    ui.add(
+        egui::TextEdit::singleline(&mut filter.search)
+            .hint_text("Search")
+            .desired_width(f32::INFINITY),
+    );
     let search = filter.search.to_lowercase();
     let sequence = editor.timeline.sequence();
     let (timebase, rate) = (sequence.timebase, sequence.format.frame_rate);
