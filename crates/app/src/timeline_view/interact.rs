@@ -146,6 +146,7 @@ impl TimelineView {
                 preview: None,
                 unlinked: matches!(links, LinkedSelection::Apart).then(|| gesture::apart(sequence)),
                 bounds: DeltaBounds::default(),
+                snapped_to: None,
             });
         }
 
@@ -156,11 +157,15 @@ impl TimelineView {
         if response.dragged() {
             if let Some(pos) = response.interact_pointer_pos() {
                 let mut delta = frame_time(pos.x) - drag.origin;
+                drag.snapped_to = None;
                 if self.snapping {
                     let moving = drag.gesture.moving_clips(sequence);
                     let targets = scale::snap_targets(sequence, &moving, playhead);
                     let edges = drag.gesture.moving_edges(sequence);
                     delta = scale::snap(delta, &edges, &targets, scale.span(SNAP_POINTS));
+                    drag.snapped_to = targets
+                        .into_iter()
+                        .find(|&target| edges.iter().any(|&edge| edge + delta == target));
                 }
                 let over = layout::row_at(&rows, pos.y).map(|row| row.track);
                 let mode = match (command, alt) {

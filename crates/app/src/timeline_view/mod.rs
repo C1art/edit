@@ -113,6 +113,7 @@ struct Drag {
     /// The sequence with linked partners left be, made once as an `Apart` drag starts.
     unlinked: Option<Sequence>,
     bounds: DeltaBounds,
+    snapped_to: Option<Ticks>,
 }
 
 pub struct TimelineView {
@@ -328,6 +329,9 @@ impl TimelineView {
             Some(hint) => drop::paint(&painter, hint, &rows, &scale, sequence, tracks),
             None if sequence.duration() == Ticks::ZERO => drop::paint_empty(&painter, tracks),
             None => {}
+        }
+        if let Some(at) = self.drag.as_ref().and_then(|drag| drag.snapped_to) {
+            paint::guide(&painter, scale.x(at), tracks.top(), tracks.bottom());
         }
         paint::ruler(&ui.painter_at(ruler), ruler, &scale, sequence);
         paint::render_bar(&ui.painter_at(ruler), ruler, &scale, &self.render_bar);
