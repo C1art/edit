@@ -55,16 +55,14 @@ pub(crate) fn sequence_menu(editor: &mut Editor, ui: &mut egui::Ui) {
     if ui.add(crossfade).clicked() {
         crate::effects::apply_default_transition(editor, TrackKind::Audio);
     }
-    if ui
-        .add(Button::new("Lift").shortcut_text(editor.keymap.label(Command::Clear)))
-        .clicked()
-    {
+    let removable = !editor.view.selection.is_empty() || editor.view.gap.is_some();
+    let lift = Button::new("Lift").shortcut_text(editor.keymap.label(Command::Clear));
+    if ui.add_enabled(removable, lift).clicked() {
         editor.lift();
     }
-    if ui
-        .add(Button::new("Ripple Delete").shortcut_text(editor.keymap.label(Command::RippleDelete)))
-        .clicked()
-    {
+    let ripple_delete =
+        Button::new("Ripple Delete").shortcut_text(editor.keymap.label(Command::RippleDelete));
+    if ui.add_enabled(removable, ripple_delete).clicked() {
         editor.ripple_delete();
     }
     ui.separator();

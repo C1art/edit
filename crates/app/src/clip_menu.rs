@@ -59,8 +59,56 @@ pub(crate) fn context(editor: &mut Editor, ui: &mut Ui) {
     items(editor, ui);
 }
 
-/// The Clip menu's commands on the selection.
+/// The Clip menu's commands on the selection, disabled while nothing is selected.
 pub(crate) fn items(editor: &mut Editor, ui: &mut Ui) {
+    let selected = !editor.view.selection.is_empty();
+    ui.add_enabled_ui(selected, |ui| on_selection(editor, ui));
+    ui.menu_button("Video Options", |ui| {
+        // A frame hold also takes the clips under the playhead.
+        if ui.button("Add Frame Hold").clicked() {
+            editor.add_frame_hold();
+        }
+        ui.add_enabled_ui(selected, |ui| {
+            if ui.button("Set to Frame Size").clicked() {
+                editor.set_to_frame_size(FrameFit::Fit);
+            }
+            if ui.button("Set to Fill Frame").clicked() {
+                editor.set_to_frame_size(FrameFit::Fill);
+            }
+        });
+        ui.menu_button("Time Interpolation", |ui| time_interpolation(editor, ui));
+    });
+    crate::multicam::camera_menu(editor, ui);
+    let scenes = Button::new("Scene Edit Detection");
+    if ui
+        .add_enabled(selected, scenes)
+        .on_hover_text("Cut the selected clips where their shots change")
+        .clicked()
+    {
+        editor.detect_scene_edits();
+    }
+    ui.separator();
+    if ui.add_enabled(selected, Button::new("Nest")).clicked() {
+        editor.nest_selection();
+    }
+    let render = Button::new("Render and Replace");
+    if ui
+        .add_enabled(editor.can_render_and_replace(), render)
+        .on_hover_text("Render the selected nests and graphics to files the clips then show")
+        .clicked()
+    {
+        editor.render_and_replace();
+    }
+    let restore = Button::new("Restore Unrendered");
+    if ui
+        .add_enabled(editor.can_restore_unrendered(), restore)
+        .clicked()
+    {
+        editor.restore_unrendered();
+    }
+}
+
+fn on_selection(editor: &mut Editor, ui: &mut Ui) {
     ui.menu_button("Replace With Clip", |ui| {
         let has_source = editor.source.is_some();
         if ui
@@ -125,45 +173,6 @@ pub(crate) fn items(editor: &mut Editor, ui: &mut Ui) {
         editor.open_remix();
     }
     ui.menu_button("Label", |ui| labels(editor, ui));
-    ui.menu_button("Video Options", |ui| {
-        if ui.button("Add Frame Hold").clicked() {
-            editor.add_frame_hold();
-        }
-        if ui.button("Set to Frame Size").clicked() {
-            editor.set_to_frame_size(FrameFit::Fit);
-        }
-        if ui.button("Set to Fill Frame").clicked() {
-            editor.set_to_frame_size(FrameFit::Fill);
-        }
-        ui.menu_button("Time Interpolation", |ui| time_interpolation(editor, ui));
-    });
-    crate::multicam::camera_menu(editor, ui);
-    if ui
-        .button("Scene Edit Detection")
-        .on_hover_text("Cut the selected clips where their shots change")
-        .clicked()
-    {
-        editor.detect_scene_edits();
-    }
-    ui.separator();
-    if ui.button("Nest").clicked() {
-        editor.nest_selection();
-    }
-    let render = Button::new("Render and Replace");
-    if ui
-        .add_enabled(editor.can_render_and_replace(), render)
-        .on_hover_text("Render the selected nests and graphics to files the clips then show")
-        .clicked()
-    {
-        editor.render_and_replace();
-    }
-    let restore = Button::new("Restore Unrendered");
-    if ui
-        .add_enabled(editor.can_restore_unrendered(), restore)
-        .clicked()
-    {
-        editor.restore_unrendered();
-    }
 }
 
 /// Radio choices for the selected video clips, checked where they all agree.

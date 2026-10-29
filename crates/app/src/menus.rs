@@ -218,23 +218,19 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             }
         });
         crate::theme::menu(ui, "Clip", |ui| {
-            if ui
-                .add(Button::new("Insert").shortcut_text(editor.keymap.label(Command::Insert)))
-                .clicked()
-            {
+            let has_source = editor.source.is_some();
+            let insert = Button::new("Insert").shortcut_text(editor.keymap.label(Command::Insert));
+            if ui.add_enabled(has_source, insert).clicked() {
                 placing::edit_from_source(editor, PlaceMode::Insert);
             }
-            if ui
-                .add(
-                    Button::new("Overwrite").shortcut_text(editor.keymap.label(Command::Overwrite)),
-                )
-                .clicked()
-            {
+            let overwrite =
+                Button::new("Overwrite").shortcut_text(editor.keymap.label(Command::Overwrite));
+            if ui.add_enabled(has_source, overwrite).clicked() {
                 placing::edit_from_source(editor, PlaceMode::Overwrite);
             }
             let subclip = Button::new("Make Subclip")
                 .shortcut_text(editor.keymap.label(Command::MakeSubclip));
-            if ui.add(subclip).clicked() {
+            if ui.add_enabled(has_source, subclip).clicked() {
                 editor.make_subclip();
             }
             ui.separator();
