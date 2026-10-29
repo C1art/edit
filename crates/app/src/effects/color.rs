@@ -8,7 +8,8 @@ use super::look::Rows;
 use crate::color_match::ToneGoal;
 use crate::mixer::response_state;
 
-const WHEEL_SIZE: f32 = 78.0;
+pub(super) const WHEEL_SIZE: f32 = 78.0;
+const MIN_WHEEL_SIZE: f32 = 44.0;
 /// How far a wheel's rim pushes toward its hue, as a percentage.
 const RIM: f32 = 100.0;
 /// Segments around a wheel's rim.
@@ -72,14 +73,10 @@ pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorr
         ("Midtones", &mut color.midtone_wheel),
         ("Highlights", &mut color.highlight_wheel),
     ];
-    ui.horizontal(|ui| {
-        for (name, wheel) in &mut wheels {
-            ui.vertical(|ui| {
-                ui.label(*name);
-                wheel_pad(ui, rows, [&mut wheel.blue, &mut wheel.red]);
-            });
-        }
-    });
+    let pads = wheels
+        .each_mut()
+        .map(|(name, wheel)| (*name, [&mut wheel.blue, &mut wheel.red]));
+    wheel_row(ui, rows, pads);
     for (name, wheel) in wheels {
         ui.push_id(name, |ui| {
             rows.param(ui, name, &mut wheel.level, -100.0..=100.0, "");
@@ -94,18 +91,11 @@ pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorr
 }
 
 fn split_tone(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorrection) {
-    ui.horizontal(|ui| {
-        let tints = [
-            ("Shadow Tint", &mut color.shadow_tint),
-            ("Highlight Tint", &mut color.highlight_tint),
-        ];
-        for (name, [blue, red]) in tints {
-            ui.vertical(|ui| {
-                ui.label(name);
-                wheel_pad(ui, rows, [blue, red]);
-            });
-        }
-    });
+    let tints = [
+        ("Shadow Tint", color.shadow_tint.each_mut()),
+        ("Highlight Tint", color.highlight_tint.each_mut()),
+    ];
+    wheel_row(ui, rows, tints);
     rows.param(
         ui,
         "Tint Balance",
@@ -175,14 +165,37 @@ fn lut_row(
     });
 }
 
+/// Named wheels side by side, shrunk to share the width of a narrow panel.
+fn wheel_row<const N: usize>(
+    ui: &mut egui::Ui,
+    rows: &mut Rows,
+    wheels: [(&str, [&mut Param; 2]); N],
+) {
+    let gaps = ui.spacing().item_spacing.x * (N as f32 - 1.0);
+    let size = ((ui.available_width() - gaps) / N as f32).clamp(MIN_WHEEL_SIZE, WHEEL_SIZE);
+    ui.horizontal(|ui| {
+        for (name, pad) in wheels {
+            ui.vertical(|ui| {
+                ui.set_width(size);
+                ui.add(egui::Label::new(name).truncate());
+                wheel_pad(ui, rows, pad, size);
+            });
+        }
+    });
+}
+
 /// A disc of hues with a puck at a push toward blue (right) and red (up), as on a
 /// vectorscope. Dragging moves the puck; double-clicking centres it.
-pub(super) fn wheel_pad(ui: &mut egui::Ui, rows: &mut Rows, [blue, red]: [&mut Param; 2]) {
+pub(super) fn wheel_pad(
+    ui: &mut egui::Ui,
+    rows: &mut Rows,
+    [blue, red]: [&mut Param; 2],
+    size: f32,
+) {
     let time = rows.time();
-    let (rect, mut response) =
-        ui.allocate_exact_size(Vec2::splat(WHEEL_SIZE), Sense::click_and_drag());
+    let (rect, mut response) = ui.allocate_exact_size(Vec2::splat(size), Sense::click_and_drag());
     let center = rect.center();
-    let radius = WHEEL_SIZE / 2.0 - 2.0;
+    let radius = size / 2.0 - 2.0;
     if response.double_clicked() {
         blue.set_at(time, 0.0);
         red.set_at(time, 0.0);
