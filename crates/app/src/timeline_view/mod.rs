@@ -4,6 +4,7 @@ mod corner;
 mod cursor;
 mod drag_readout;
 mod drop;
+mod edge_scroll;
 mod edit_point;
 mod gesture;
 mod header;
@@ -241,6 +242,8 @@ impl TimelineView {
 
         self.place_tracks(timeline.sequence(), tracks);
         self.handle_scroll(ui, area, tracks, timeline.sequence());
+        let ruler_id = ui.scope_id().with("ruler");
+        self.edge_scroll(ui, tracks, ruler_id);
         if playing {
             self.follow(playhead, tracks.width());
         }
@@ -248,8 +251,7 @@ impl TimelineView {
 
         let corner = Rect::from_x_y_ranges(headers, ruler.y_range());
         self.corner_timecode(ui, corner, timeline.sequence(), playhead, &mut output);
-        let ruler_response =
-            ui.interact(ruler, ui.scope_id().with("ruler"), Sense::click_and_drag());
+        let ruler_response = ui.interact(ruler, ruler_id, Sense::click_and_drag());
         self.ruler_markers(&ruler_response, timeline.sequence(), &scale, &mut output);
         if let Some(pointer) = ruler_response.interact_pointer_pos() {
             let sequence = timeline.sequence();
