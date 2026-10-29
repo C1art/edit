@@ -66,6 +66,9 @@ pub(crate) fn with_burn_ins(
             } => {
                 let text = match source {
                     ClipNameSource::ProjectItem => media.name.clone(),
+                    ClipNameSource::SequenceClip => {
+                        clip.name.clone().unwrap_or_else(|| media.name.clone())
+                    }
                     ClipNameSource::File => media
                         .path
                         .file_name()
