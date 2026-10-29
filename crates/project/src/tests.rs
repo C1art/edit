@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use timeline::{
     AlphaInterpretation, AudioEffect, Bin, BinId, Caption, Clip, ClipId, CurvePoint, Gain,
     Generator, Interpolation, Keyframe, Marks, Mask, MaskShape, MediaItem, MediaLog, Nest, Pan,
-    Param, PixelAspect, Rgb, Scroll, SourceId, TextAlign, TextStroke, Ticks, Timebase, Title,
-    TitleFont, TitleMotion, Track, Transition, TransitionKind, VideoEffect, VideoFormat,
+    Param, PixelAspect, Rgb, Scroll, ShadowStyle, SourceId, TextAlign, TextStroke, Ticks, Timebase,
+    Title, TitleFont, TitleMotion, Track, Transition, TransitionKind, VideoEffect, VideoFormat,
 };
 
 use super::*;
@@ -56,6 +56,10 @@ fn sample() -> ProjectFile {
             align: TextAlign::Right,
             font: TitleFont::Mono,
             shadow: false,
+            shadow_style: Some(ShadowStyle {
+                size: 3,
+                ..ShadowStyle::falling(11, 4)
+            }),
             background: Some(Rgb::BLACK),
             bold: true,
             italic: true,

@@ -1,6 +1,8 @@
+use std::f64::consts::SQRT_2;
+
 use serde::{Deserialize, Serialize};
 
-use crate::{Rgb, Ticks, Timebase, TitleMotion};
+use crate::{Rgb, ShadowStyle, Ticks, Timebase, TitleMotion};
 
 /// Generated pictures have no length of their own; they hold for as long as they're
 /// trimmed to, up to this many seconds.
@@ -41,6 +43,9 @@ pub struct Title {
     pub align: TextAlign,
     pub font: TitleFont,
     pub shadow: bool,
+    /// The shadow's look, scaled to the text when unset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shadow_style: Option<ShadowStyle>,
     /// A box behind the text, as lower thirds use.
     #[serde(default)]
     pub background: Option<Rgb>,
@@ -77,6 +82,18 @@ impl Default for TextStroke {
     }
 }
 
+impl Title {
+    pub fn shadow_look(&self) -> ShadowStyle {
+        self.shadow_style.unwrap_or_else(|| self.usual_shadow())
+    }
+
+    /// The shadow unless one is set: offset a 24th of the size each way.
+    pub fn usual_shadow(&self) -> ShadowStyle {
+        let offset = f64::from((self.size as f32 / 24.0).round().max(1.0));
+        ShadowStyle::falling((offset * SQRT_2).round() as u32, self.size / 32)
+    }
+}
+
 impl Default for Title {
     fn default() -> Self {
         Self {
@@ -86,6 +103,7 @@ impl Default for Title {
             align: TextAlign::Center,
             font: TitleFont::Sans,
             shadow: true,
+            shadow_style: None,
             background: None,
             bold: false,
             italic: false,
@@ -115,6 +133,9 @@ pub struct Shape {
     pub stroke: Option<TextStroke>,
     #[serde(default)]
     pub shadow: bool,
+    /// The shadow's look, scaled to the frame when unset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shadow_style: Option<ShadowStyle>,
 }
 
 impl Shape {
@@ -127,7 +148,21 @@ impl Shape {
             fill: Some(Rgb::new(200, 60, 60)),
             stroke: None,
             shadow: false,
+            shadow_style: None,
         }
+    }
+
+    /// The shadow as drawn on a frame `height` pixels tall.
+    pub fn shadow_look(&self, height: u32) -> ShadowStyle {
+        self.shadow_style
+            .unwrap_or_else(|| Self::usual_shadow(height))
+    }
+
+    /// The shadow unless one is set, scaled to the frame: a 1080-line frame offsets it 9
+    /// pixels each way.
+    pub fn usual_shadow(height: u32) -> ShadowStyle {
+        let offset = f64::from((height / 120).max(1));
+        ShadowStyle::falling((offset * SQRT_2).round() as u32, height / 160)
     }
 }
 
