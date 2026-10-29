@@ -361,6 +361,30 @@ impl Rows {
             VideoEffect::Replicate { count } => {
                 self.param(ui, "Count", count, 2.0..=16.0, "");
             }
+            VideoEffect::Levels {
+                input_black,
+                input_white,
+                output_black,
+                output_white,
+                gamma,
+            } => {
+                self.param(ui, "Input Black Level", input_black, 0.0..=255.0, "");
+                self.param(ui, "Input White Level", input_white, 0.0..=255.0, "");
+                self.param(ui, "Output Black Level", output_black, 0.0..=255.0, "");
+                self.param(ui, "Output White Level", output_white, 0.0..=255.0, "");
+                self.param(ui, "Gamma", gamma, 0.1..=10.0, "");
+            }
+            VideoEffect::ProcAmp {
+                brightness,
+                contrast,
+                hue,
+                saturation,
+            } => {
+                self.param(ui, "Brightness", brightness, -100.0..=100.0, "");
+                self.param(ui, "Contrast", contrast, 0.0..=200.0, "");
+                self.param(ui, "Hue", hue, -180.0..=180.0, "°");
+                self.param(ui, "Saturation", saturation, 0.0..=200.0, "");
+            }
             VideoEffect::ColorBalanceRgb { gains } => {
                 for (name, gain) in ["Red", "Green", "Blue"].into_iter().zip(gains) {
                     self.param(ui, name, gain, 0.0..=200.0, "%");
