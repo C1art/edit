@@ -1,5 +1,6 @@
 use std::ops::Range;
 use std::sync::Arc;
+use std::time::Duration;
 
 use egui::{Key, ProgressBar};
 use playback::{EnvelopeEvent, EnvelopeJob};
@@ -99,7 +100,7 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                 EnvelopeEvent::Measured(levels) => measured = Some(levels),
             }
         }
-        ctx.request_repaint();
+        ctx.request_repaint_after(Duration::from_millis(100));
     }
     let mut generate = false;
     let mut cancelled = false;

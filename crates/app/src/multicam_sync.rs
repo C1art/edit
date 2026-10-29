@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use std::thread;
+use std::time::Duration;
 
 use crossbeam::channel::{self, Receiver, TryRecvError};
 use media::Peaks;
@@ -59,7 +60,7 @@ impl Editor {
         let Some(job) = &mut self.multicam_sync else {
             return;
         };
-        ctx.request_repaint();
+        ctx.request_repaint_after(Duration::from_millis(100));
         let Some(matching) = &job.matching else {
             let pool = self.timeline.project();
             let paths: Vec<_> = job

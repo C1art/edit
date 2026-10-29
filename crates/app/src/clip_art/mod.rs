@@ -4,6 +4,7 @@ mod waveforms;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
 use egui::{ColorImage, TextureHandle, TextureId, TextureOptions};
 use media::{Peaks, VideoFrame};
@@ -91,7 +92,7 @@ impl ClipArt {
             .flat_map(BTreeMap::values)
             .any(|picture| matches!(picture, Picture::Pending));
         if reading || decoding {
-            ctx.request_repaint();
+            ctx.request_repaint_after(Duration::from_millis(50));
         }
     }
 

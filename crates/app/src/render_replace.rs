@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::thread;
 
 use crossbeam::channel::{self, Receiver};
-use egui::{ProgressBar, RichText};
+use egui::{Key, ProgressBar, RichText};
 use media::{AudioCodec, AudioSettings, MediaError, RateControl, VideoCodec};
 use playback::{ExportEvent, ExportJob, ExportSettings, VideoEncoding, VideoExport};
 use timeline::{
@@ -131,7 +131,7 @@ impl Editor {
         let Some(work) = &mut self.render_replace else {
             return;
         };
-        ctx.request_repaint();
+        ctx.request_repaint_after(crate::export_progress::REFRESH);
         let running = match work.running.take() {
             Some(running) => running,
             None => {
@@ -363,7 +363,10 @@ pub(crate) fn window(editor: &mut Editor, ctx: &egui::Context) {
                 .desired_width(260.0),
         );
         ui.label(RichText::new("Clips show the rendered file once it is done.").weak());
-        cancel = ui.button("Cancel").clicked();
+        crate::dialog::footer(ui, |ui| {
+            cancel =
+                ui.button("Cancel").clicked() || ui.input(|input| input.key_pressed(Key::Escape));
+        });
     });
     if cancel {
         // Dropping the export cancels it and removes its partial file.

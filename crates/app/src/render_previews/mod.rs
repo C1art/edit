@@ -4,7 +4,7 @@ use std::collections::{HashSet, VecDeque};
 use std::ops::Range;
 use std::sync::Arc;
 
-use egui::{ProgressBar, RichText};
+use egui::{Key, ProgressBar, RichText};
 use media::{RateControl, VideoCodec};
 use playback::{ExportEvent, ExportJob, ExportSettings, Preview, VideoEncoding, VideoExport};
 use timeline::{render_segments, segment_content, Sequence, Ticks};
@@ -113,7 +113,7 @@ impl Editor {
                 .collect();
         }
         if previews.job.is_some() {
-            ctx.request_repaint();
+            ctx.request_repaint_after(crate::export_progress::REFRESH);
             notices.extend(self.advance_render());
         }
         let Some(previews) = &mut self.render_previews else {
@@ -286,7 +286,10 @@ pub(crate) fn window(editor: &mut Editor, ctx: &egui::Context) {
                 .desired_width(260.0),
         );
         ui.label(RichText::new("Previews play in place of the segments they cover.").weak());
-        cancel = ui.button("Cancel").clicked();
+        crate::dialog::footer(ui, |ui| {
+            cancel =
+                ui.button("Cancel").clicked() || ui.input(|input| input.key_pressed(Key::Escape));
+        });
     });
     if cancel {
         // Dropping the export cancels it and removes its partial file.

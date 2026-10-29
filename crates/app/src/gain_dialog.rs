@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use egui::{Key, ProgressBar};
 use playback::{clip_alone, Loudness, LoudnessEvent, LoudnessJob};
 use timeline::{ClipId, Gain, NormalizeClipGains, SetClipGain, TrackKind};
@@ -65,7 +67,7 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                 LoudnessEvent::Measured(results) => measured = Some(results),
             }
         }
-        ctx.request_repaint();
+        ctx.request_repaint_after(Duration::from_millis(100));
     }
     let mut apply = false;
     let mut cancelled = false;

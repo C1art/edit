@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
+use std::time::Duration;
 
 use crossbeam::channel::{self, Receiver, Sender};
 use timeline::{SetProxy, SourceId};
@@ -106,7 +107,7 @@ impl Editor {
         };
         let finished = maker.poll();
         if maker.is_busy() {
-            ctx.request_repaint();
+            ctx.request_repaint_after(Duration::from_millis(100));
         }
         for (source, result) in finished {
             match result {

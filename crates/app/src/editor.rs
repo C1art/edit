@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 use audio::AudioOutput;
 use eframe::egui_wgpu::RenderState;
@@ -426,7 +427,7 @@ impl eframe::App for Editor {
         self.poll_export_frame(&ctx);
         self.poll_export_queue(&ctx);
         if self.importer.as_ref().is_some_and(Importer::is_busy) {
-            ctx.request_repaint();
+            ctx.request_repaint_after(Duration::from_millis(100));
         }
         // Panels edit after the sync below, and a key pressed in the next frame, such as
         // End, must already see that edit.

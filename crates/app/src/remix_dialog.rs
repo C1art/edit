@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use egui::{Key, ProgressBar};
 use playback::{RemixEvent, RemixJob};
 use timeline::{ClipId, RemixClip, Ticks, Timebase, Timecode, TrackKind};
@@ -64,7 +66,7 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                 RemixEvent::Planned(pieces) => planned = Some(pieces),
             }
         }
-        ctx.request_repaint();
+        ctx.request_repaint_after(Duration::from_millis(100));
     }
     let mut apply = false;
     let mut cancelled = false;

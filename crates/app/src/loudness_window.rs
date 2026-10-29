@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use egui::ProgressBar;
 use playback::{Loudness, LoudnessEvent, LoudnessJob};
@@ -78,7 +79,7 @@ pub(crate) fn window(editor: &mut Editor, ctx: &egui::Context) {
         if shown.measured.is_some() {
             shown.job = None;
         }
-        ctx.request_repaint();
+        ctx.request_repaint_after(Duration::from_millis(100));
     }
     let mut open = true;
     let mut again = false;

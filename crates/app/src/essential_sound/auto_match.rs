@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use egui::ProgressBar;
 use playback::{clip_alone, LoudnessEvent, LoudnessJob};
 use timeline::{AudioType, ClipId, Gain, NormalizeClipGains};
@@ -69,7 +71,7 @@ pub(crate) fn poll(editor: &mut Editor, ctx: &egui::Context) {
     let Some(matching) = &mut editor.essential_sound.matching else {
         return;
     };
-    ctx.request_repaint();
+    ctx.request_repaint_after(Duration::from_millis(100));
     let mut warnings = Vec::new();
     let mut measured = None;
     for event in matching.job.poll() {
