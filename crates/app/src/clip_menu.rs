@@ -1,4 +1,4 @@
-use egui::{Button, Ui};
+use egui::{Atom, Button, Checkbox, RichText, Ui};
 use timeline::{
     ClipId, Edit, FrameFit, IntoSync, Label, SetClipLabel, SetTimeInterpolation, SyncMethod,
     TimeInterpolation, TrackKind,
@@ -130,8 +130,21 @@ fn on_selection(editor: &mut Editor, ui: &mut Ui) {
     if ui.button("Rename…").clicked() {
         editor.rename_clips();
     }
-    let enable = Button::new("Enable").shortcut_text(editor.keymap.label(Command::ToggleEnabled));
-    if ui.add(enable).clicked() {
+    let sequence = editor.timeline.sequence();
+    let mut enabled = editor
+        .view
+        .selection
+        .iter()
+        .filter_map(|&id| sequence.clip(id))
+        .all(|(_, clip)| !clip.disabled);
+    let shortcut = RichText::new(editor.keymap.label(Command::ToggleEnabled)).weak();
+    if ui
+        .add(Checkbox::new(
+            &mut enabled,
+            ("Enable", Atom::grow(), shortcut),
+        ))
+        .clicked()
+    {
         editor.toggle_enabled();
     }
     let link = if editor.selection_linked() == Some(true) {
