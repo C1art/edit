@@ -8,12 +8,14 @@ use egui::{CollapsingHeader, DragAndDrop, Response, RichText, Sense, StrokeKind}
 use timeline::{Bin, BinId, BinSearch, MediaItem, Sequence, SourceId};
 
 use crate::clip_art::ClipArt;
-use crate::icons::{self, Icon};
+use crate::icons::{self, Icon, Look};
 use crate::multicam_sync::MulticamSync;
 use crate::proxies::ProxyMaker;
 use crate::theme;
 use rows::{item_row, rename_field, Field};
 use tiles::{tile, PoolLayout, PoolSort};
+
+const HEADER_BUTTON: egui::Vec2 = egui::vec2(24.0, 22.0);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PoolAction {
@@ -89,14 +91,15 @@ pub fn ui(
         view,
         action: None,
     };
-    ui.horizontal_wrapped(|ui| {
-        let new_bin = ui
-            .button("New Bin")
-            .on_hover_text("Add a bin at the top of the project");
-        if new_bin.clicked() {
-            pool.action = Some(PoolAction::NewBin(None));
-        }
+    ui.horizontal(|ui| {
         pool.view_options(ui);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let new_bin = icons::button(ui, Icon::NewBin, HEADER_BUTTON)
+                .on_hover_text("New Bin: add a bin at the top of the project");
+            if new_bin.clicked() {
+                pool.action = Some(PoolAction::NewBin(None));
+            }
+        });
     });
     pool.search_row(ui);
     let wanted = pool.view.search.to_lowercase();
@@ -163,19 +166,30 @@ impl Pool<'_> {
 
     fn view_options(&mut self, ui: &mut egui::Ui) {
         let view = &mut *self.view;
-        ui.selectable_value(&mut view.layout, PoolLayout::List, "List")
-            .on_hover_text("List View");
-        ui.selectable_value(&mut view.layout, PoolLayout::Icons, "Icons")
-            .on_hover_text("Icon View: hover over a picture to scrub through it");
-        egui::ComboBox::from_id_salt("pool sort")
-            .selected_text(view.sort.name())
-            .show_ui(ui, |ui| {
-                for sort in PoolSort::ALL {
-                    ui.selectable_value(&mut view.sort, sort, sort.name());
-                }
-            })
-            .response
-            .on_hover_text("Sort Items");
+        let layouts = [
+            (PoolLayout::List, Icon::List, "List View"),
+            (
+                PoolLayout::Icons,
+                Icon::Tiles,
+                "Icon View: hover over a picture to scrub through it",
+            ),
+        ];
+        for (layout, icon, tip) in layouts {
+            let on = view.layout == layout;
+            if icons::sized_toggle(ui, on, icon, Look::Filled, HEADER_BUTTON)
+                .on_hover_text(tip)
+                .clicked()
+            {
+                view.layout = layout;
+            }
+        }
+        let sort = icons::button(ui, Icon::Sort, HEADER_BUTTON)
+            .on_hover_text(format!("Sort Items: {}", view.sort.name()));
+        egui::Popup::menu(&sort).show(|ui| {
+            for sort in PoolSort::ALL {
+                ui.selectable_value(&mut view.sort, sort, sort.name());
+            }
+        });
     }
 
     fn bin(&mut self, ui: &mut egui::Ui, bin: &Bin) {

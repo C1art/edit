@@ -39,6 +39,10 @@ pub(crate) enum Icon {
     Subclip,
     Camera,
     Settings,
+    List,
+    Tiles,
+    Sort,
+    NewBin,
 }
 
 const BUTTON: egui::Vec2 = vec2(22.0, 20.0);
@@ -355,6 +359,33 @@ pub(crate) fn paint(painter: &Painter, rect: Rect, icon: Icon, color: Color32) {
                 rect.width() * 0.2,
                 Stroke::new(1.6, Color32::BLACK),
             );
+        }
+        Icon::List => {
+            for y in [0.2, 0.5, 0.8] {
+                painter.circle_filled(at(0.1, y), rect.width() * 0.08, color);
+                painter.line_segment([at(0.3, y), at(0.96, y)], stroke);
+            }
+        }
+        Icon::Tiles => {
+            for (x, y) in [(0.04, 0.04), (0.56, 0.04), (0.04, 0.56), (0.56, 0.56)] {
+                let tile = Rect::from_min_max(at(x, y), at(x + 0.4, y + 0.4));
+                painter.rect_filled(tile, 1.0, color);
+            }
+        }
+        Icon::Sort => {
+            for (row, length) in [0.9, 0.62, 0.34].into_iter().enumerate() {
+                let y = 0.2 + row as f32 * 0.3;
+                painter.line_segment([at(0.04, y), at(0.04 + length * 0.62, y)], stroke);
+            }
+            painter.line_segment([at(0.84, 0.08), at(0.84, 0.9)], stroke);
+            let head = vec![at(0.68, 0.72), at(0.84, 0.92), at(1.0, 0.72)];
+            painter.add(Shape::line(head, stroke));
+        }
+        Icon::NewBin => {
+            paint(painter, rect, Icon::Folder, color);
+            let plus = Stroke::new(1.6, Color32::BLACK);
+            painter.line_segment([at(0.5, 0.38), at(0.5, 0.78)], plus);
+            painter.line_segment([at(0.3, 0.58), at(0.7, 0.58)], plus);
         }
         Icon::Settings => {
             let center = rect.center();
