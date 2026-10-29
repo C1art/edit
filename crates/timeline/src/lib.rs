@@ -92,8 +92,9 @@ pub use edit::{
     SetClipsEnabled, SetClipsSound, SetGenerator, SetGrouped, SetLinked, SetLinkedSelection,
     SetMarks, SetMasterEffects, SetMasterGain, SetMediaLog, SetProxy, SetSegmentSpeed,
     SetSequenceFormat, SetSubmix, SetTimeInterpolation, SetToFrameSize, SetTrackAutomation,
-    SetTrackEffects, SetTrackMix, SetTrackOutput, SetTrackSwitch, SetTransition, Slide, Slip,
-    SwitchAngle, SyncMethod, TrackSwitch, Trim, TrimMode, TrimToPlayhead, Unlinked, UpdateMarker,
+    SetTrackEffects, SetTrackMix, SetTrackOutput, SetTrackSends, SetTrackSwitch, SetTransition,
+    Slide, Slip, SwitchAngle, SyncMethod, TrackSwitch, Trim, TrimMode, TrimToPlayhead, Unlinked,
+    UpdateMarker,
 };
 pub use edl::to_edl;
 pub use effect::{
@@ -157,7 +158,7 @@ pub use speed::{Speed, TimeInterpolation};
 pub use split::Split;
 pub use srt::{parse_srt, to_srt};
 pub use stabilize::{CameraPath, Framing, Pose, Similarity, StabilizeMethod, Stabilizer};
-pub use submix::{Submix, SubmixId};
+pub use submix::{SendTap, Submix, SubmixId, TrackSend};
 pub use three_point::{edit_points, EditPoints, FourPoint};
 pub use time::{Ticks, Timebase};
 pub use timecode::{FrameRate, Timecode};

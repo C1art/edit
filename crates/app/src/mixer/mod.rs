@@ -1,6 +1,7 @@
 mod automation;
 pub mod clip_mixer;
 mod inserts;
+mod sends;
 mod submixes;
 
 use std::collections::HashMap;
@@ -48,6 +49,7 @@ pub struct Mixer {
     modes: HashMap<TrackRef, AutomationMode>,
     passes: HashMap<TrackRef, Pass>,
     inserts: inserts::Inserts,
+    sends: sends::Sends,
     clips: clip_mixer::ClipMixer,
     /// The submix being renamed, with the name typed so far and whether the field has
     /// been given the keyboard yet.
@@ -134,7 +136,10 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
     submixes::add_button(editor, ui);
     egui::ScrollArea::vertical()
         .id_salt("track inserts")
-        .show(ui, |ui| inserts::panel(editor, ui));
+        .show(ui, |ui| {
+            inserts::panel(editor, ui);
+            sends::panel(editor, ui);
+        });
 }
 
 fn strip(editor: &mut Editor, ui: &mut egui::Ui, channel: Channel) {
@@ -230,12 +235,12 @@ fn strip(editor: &mut Editor, ui: &mut egui::Ui, channel: Channel) {
         if let Channel::Track(track) = channel {
             mode_picker(ui, &mut editor.mixer, track);
             submixes::output_picker(editor, ui, track);
+            sends::toggle(editor, ui, track);
         }
         // Rows a track strip has above its fader that this one lacks, so faders line up.
         let missing_rows = match channel {
             Channel::Track(_) => 0.0,
-            Channel::Submix(_) => 2.0,
-            Channel::Master => 2.0,
+            Channel::Submix(_) | Channel::Master => 3.0,
         };
         let spacing = ui.spacing();
         ui.add_space(missing_rows * (spacing.interact_size.y + spacing.item_spacing.y));

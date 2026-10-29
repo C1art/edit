@@ -1,7 +1,7 @@
 use audio::SampleRate;
 use timeline::{
     audio_fade, audio_span, clip_balance, clip_level, track_automation, AudioEffect, ClipId, Gain,
-    MediaItem, Sequence, SourceId, Submix, Ticks,
+    MediaItem, SendTap, Sequence, SourceId, Submix, Ticks,
 };
 use timeline::{Timebase, Track};
 
@@ -217,6 +217,14 @@ impl TracksMix {
                 let at = Ticks(start).rescale(self.rate, timebase);
                 inserts.process(None, &track.effects, at, &mut self.track_mix);
             }
+            let sends = (track, submixes);
+            send(
+                sends,
+                SendTap::PreFader,
+                1.0,
+                &self.track_mix,
+                &mut self.submix_mix,
+            );
             if track.automation.is_animated() || track.automation.value() != 0.0 {
                 let (pairs, _) = self.track_mix.as_chunks_mut::<2>();
                 for (frame, pair) in (start..end).zip(pairs) {
@@ -225,6 +233,13 @@ impl TracksMix {
                 }
             }
             let volume = track.volume.amplitude();
+            send(
+                sends,
+                SendTap::PostFader,
+                volume,
+                &self.track_mix,
+                &mut self.submix_mix,
+            );
             let [left, right] = track.pan.balance();
             let sent = track
                 .output
@@ -264,6 +279,33 @@ impl TracksMix {
             submixes: submix_levels,
             master: mixdown::scale_in_place(out, master.amplitude()),
         }
+    }
+}
+
+/// Adds `track_mix` to the submixes `track` sends to from `tap`, through the sends'
+/// levels and pans and `fader`.
+fn send(
+    (track, submixes): (&Track, &[Submix]),
+    tap: SendTap,
+    fader: f32,
+    track_mix: &[f32],
+    submix_mix: &mut [Vec<f32>],
+) {
+    let heard = track
+        .sends
+        .iter()
+        .filter(|send| !send.muted && send.tap == tap);
+    for send in heard {
+        let Some(index) = submixes.iter().position(|submix| submix.id == send.to) else {
+            continue;
+        };
+        let level = fader * send.level.amplitude();
+        let [left, right] = send.pan.balance();
+        mixdown::add_scaled(
+            track_mix,
+            [left * level, right * level],
+            &mut submix_mix[index],
+        );
     }
 }
 

@@ -78,7 +78,7 @@ pub use structure::{
     AddTrack, ImportMedia, RemoveMedia, RemoveTrack, RenameTrack, SetProxy, SetSequenceFormat,
     SetTrackSwitch, TrackSwitch,
 };
-pub use submix::{AddSubmix, RemoveSubmix, SetSubmix, SetTrackOutput};
+pub use submix::{AddSubmix, RemoveSubmix, SetSubmix, SetTrackOutput, SetTrackSends};
 pub use subsequence::{CloseGaps, MakeSubsequence};
 pub use sync::{IntoSync, SyncMethod};
 pub use through::{is_through_edit, JoinThroughEdits};

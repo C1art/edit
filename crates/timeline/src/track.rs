@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{AudioEffect, Clip, Gain, Pan, Param, SubmixId, Ticks};
+use crate::{AudioEffect, Clip, Gain, Pan, Param, SubmixId, Ticks, TrackSend};
 
 /// Clips are kept sorted by `start` and never overlap.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -40,6 +40,9 @@ pub struct Track {
     /// isn't in the sequence mixing it, as after nesting.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output: Option<SubmixId>,
+    /// Copies of an audio track's sound for submixes, besides its output.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sends: Vec<TrackSend>,
 }
 
 impl Track {

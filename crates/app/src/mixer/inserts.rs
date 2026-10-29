@@ -65,7 +65,7 @@ pub(super) fn panel(editor: &mut Editor, ui: &mut egui::Ui) {
     }
 }
 
-fn settle(editor: &mut Editor, change: Change, edit: impl Edit + 'static) {
+pub(super) fn settle(editor: &mut Editor, change: Change, edit: impl Edit + 'static) {
     match change {
         Change::Live => live(editor, &edit),
         Change::Commit => editor.apply_levels(edit),
