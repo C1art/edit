@@ -106,16 +106,26 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
         return;
     };
     let name = clip_name(sequence, clip).to_owned();
-    ui.horizontal(|ui| {
-        ui.label(RichText::new(name).strong());
-        let save = ui
-            .small_button("Save Preset…")
-            .on_hover_text("Keep this clip's effects to apply to others from the Effects panel");
-        if save.clicked() {
-            editor.name_new_preset(clip.id);
-        }
-    });
+    // A long clip name is cut short rather than widening the panel.
+    let row = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
+    ui.allocate_ui_with_layout(
+        row,
+        egui::Layout::right_to_left(egui::Align::Center),
+        |ui| {
+            let save = ui.small_button("Save Preset…").on_hover_text(
+                "Keep this clip's effects to apply to others from the Effects panel",
+            );
+            if save.clicked() {
+                editor.name_new_preset(clip.id);
+            }
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                ui.add(egui::Label::new(RichText::new(name).strong()).truncate());
+            });
+        },
+    );
     egui::ScrollArea::vertical().show(ui, |ui| {
+        // Sections nest a level or two deep, and the panel is often narrow.
+        ui.spacing_mut().indent = 10.0;
         if let Some((_, clip)) = &picture {
             picture_controls(editor, ui, clip);
             remap::controls(editor, ui, clip);

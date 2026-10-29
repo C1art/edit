@@ -84,6 +84,7 @@ pub(super) fn controls(
             ui.horizontal(|ui| {
                 ui.label("Blend Mode");
                 egui::ComboBox::from_id_salt("blend_mode")
+                    .width(ui.available_width().min(ui.spacing().combo_width))
                     .selected_text(look.blend.name())
                     .height(f32::INFINITY)
                     .show_ui(ui, |ui| {
@@ -211,16 +212,14 @@ impl Rows {
         let mut open = ui.data(|data| data.get_temp(graph)).unwrap_or(false);
         ui.horizontal(|ui| {
             let animated = param.is_animated();
-            let twirl = icon_button(
-                ui,
-                Icon::Twirl(open),
-                false,
-                self.lane.is_some() && animated,
-            )
-            .on_hover_text("Show the value graph");
-            if twirl.clicked() {
-                open = !open;
-                ui.data_mut(|data| data.insert_temp(graph, open));
+            // The graph only shows with the lane, which a narrow panel has no room for.
+            if self.lane.is_some() {
+                let twirl = icon_button(ui, Icon::Twirl(open), false, animated)
+                    .on_hover_text("Show the value graph");
+                if twirl.clicked() {
+                    open = !open;
+                    ui.data_mut(|data| data.insert_temp(graph, open));
+                }
             }
             let stopwatch =
                 icon_button(ui, Icon::Stopwatch, animated, true).on_hover_text("Toggle animation");
