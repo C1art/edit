@@ -4,10 +4,12 @@ use crate::Param;
 
 mod catalog;
 mod dynamics;
+mod guitar;
 mod scientific;
 mod vocal;
 
 pub use dynamics::{CompressorSection, Dynamics, ExpanderSection, GateSection, LimiterSection};
+pub use guitar::{AmpModel, GuitarFilter};
 pub use scientific::{FilterMode, FilterType};
 pub use vocal::VocalMode;
 
@@ -253,6 +255,18 @@ pub enum AudioEffect {
         ripple: Param,
         gain: Param,
     },
+    /// A guitar rig: `compressor` and `distortion` amounts in percent, an amp and its
+    /// cabinet, then a filter at `frequency` hertz that rings more as `resonance` (percent)
+    /// rises, with `mix` percent of the result over the dry sound.
+    GuitarSuite {
+        compressor: Param,
+        distortion: Param,
+        amp: AmpModel,
+        filter: GuitarFilter,
+        frequency: Param,
+        resonance: Param,
+        mix: Param,
+    },
     /// Finishes a mix in one go: low, mid and high bands in decibels, then reverb,
     /// exciter, width (100 leaves it as it is) and loudness maximizer in percent, then
     /// `output` decibels.
@@ -390,6 +404,14 @@ impl AudioEffect {
                 noise_threshold,
             } => vec![target, amount, noise_threshold],
             Self::SimpleParametricEq { frequency, gain, q } => vec![frequency, gain, q],
+            Self::GuitarSuite {
+                compressor,
+                distortion,
+                frequency,
+                resonance,
+                mix,
+                ..
+            } => vec![compressor, distortion, frequency, resonance, mix],
             Self::ScientificFilter {
                 cutoff,
                 high_cutoff,

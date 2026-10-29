@@ -1,4 +1,4 @@
-use timeline::{AudioEffect, FilterMode, FilterType, VocalMode};
+use timeline::{AmpModel, AudioEffect, FilterMode, FilterType, GuitarFilter, VocalMode};
 
 use super::look::Rows;
 
@@ -167,6 +167,26 @@ pub(super) fn effect_rows(ui: &mut egui::Ui, rows: &mut Rows, effect: &mut Audio
                 rows.param(ui, "Passband Ripple", ripple, 0.01..=6.0, " dB");
             }
             rows.param(ui, "Gain", gain, -24.0..=24.0, " dB");
+        }
+        AudioEffect::GuitarSuite {
+            compressor,
+            distortion,
+            amp,
+            filter,
+            frequency,
+            resonance,
+            mix,
+        } => {
+            rows.param(ui, "Compressor", compressor, 0.0..=100.0, "%");
+            rows.param(ui, "Distortion", distortion, 0.0..=100.0, "%");
+            rows.options(ui, "Amp", "guitar_amp", amp, AmpModel::ALL, AmpModel::name);
+            let (all, name) = (GuitarFilter::ALL, GuitarFilter::name);
+            rows.options(ui, "Filter", "guitar_filter", filter, all, name);
+            if *filter != GuitarFilter::None {
+                rows.param(ui, "Frequency", frequency, HEARING_HZ, " Hz");
+                rows.param(ui, "Resonance", resonance, 0.0..=100.0, "%");
+            }
+            rows.param(ui, "Mix", mix, 0.0..=100.0, "%");
         }
         _ => {}
     }

@@ -7,6 +7,7 @@ use audio::{
 use timeline::{AudioEffect, FilterMode, FilterType, Param, Ticks};
 
 use crate::audio_dynamics::{DynamicsChain, VocalChain};
+use crate::audio_guitar::{GuitarChain, GuitarSettings};
 use crate::audio_mastering::{MasteringChain, MasteringSettings};
 
 /// How far each way, in octaves, a phaser's full depth sweeps.
@@ -21,8 +22,8 @@ const CLICK_SENSITIVITY_PER_PERCENT: f32 = 0.25;
 /// The running state of the effects added after the first set: bandpass, phaser,
 /// distortion, stereo expander, the multitap and analog delays, Dynamics, Automatic Click
 /// Remover, Vocal Enhancer, the Tube-modeled Compressor, DeReverb, Speech Volume Leveler
-/// Simple Parametric EQ, the 20- and 30-band Graphic Equalizers, Mastering and the
-/// Scientific Filter.
+/// Simple Parametric EQ, the 20- and 30-band Graphic Equalizers, Mastering, the
+/// Scientific Filter and the Guitar Suite.
 pub(crate) enum MoreUnit {
     Filter(Biquad),
     Phaser(Box<Phaser>),
@@ -38,6 +39,7 @@ pub(crate) enum MoreUnit {
     Graphic30(Box<GraphicEqualizer30>),
     Mastering(Box<MasteringChain>),
     Scientific(Box<ScientificFilter>),
+    Guitar(Box<GuitarChain>),
     Stateless,
 }
 
@@ -58,6 +60,7 @@ impl MoreUnit {
             AudioEffect::AnalogDelay { .. } => Self::Analog(Box::new(AnalogDelay::new(rate))),
             AudioEffect::Dynamics(_) => Self::Dynamics(Box::default()),
             AudioEffect::ScientificFilter { .. } => Self::Scientific(Box::default()),
+            AudioEffect::GuitarSuite { .. } => Self::Guitar(Box::default()),
             AudioEffect::AutomaticClickRemover { .. } => Self::Clicks(ClickRemover::default()),
             AudioEffect::VocalEnhancer { .. } => Self::Vocal(Box::default()),
             AudioEffect::TubeCompressor { .. } => Self::Compressor(Compressor::default()),
@@ -82,6 +85,7 @@ impl MoreUnit {
             Self::Graphic30(equalizer) => equalizer.reset(),
             Self::Mastering(chain) => chain.reset(),
             Self::Scientific(filter) => filter.reset(),
+            Self::Guitar(chain) => chain.reset(),
             Self::Stateless => {}
         }
     }
@@ -267,6 +271,29 @@ impl MoreUnit {
                     gain_db: value(gain),
                 };
                 filter.process(&settings, rate, samples);
+            }
+            (
+                AudioEffect::GuitarSuite {
+                    compressor,
+                    distortion,
+                    amp,
+                    filter,
+                    frequency,
+                    resonance,
+                    mix,
+                },
+                Self::Guitar(chain),
+            ) => {
+                let settings = GuitarSettings {
+                    compression: fraction(compressor),
+                    distortion: fraction(distortion),
+                    amp: *amp,
+                    filter: *filter,
+                    frequency_hz: value(frequency),
+                    resonance: fraction(resonance),
+                    mix: fraction(mix),
+                };
+                chain.process(&settings, rate, samples);
             }
             _ => {}
         }

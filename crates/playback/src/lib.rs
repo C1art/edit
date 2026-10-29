@@ -2,6 +2,7 @@ mod adjust_effects;
 mod audio_dynamics;
 mod audio_effects;
 mod audio_effects_more;
+mod audio_guitar;
 mod audio_mastering;
 mod audio_worker;
 mod clip_audio;
