@@ -141,32 +141,84 @@ pub(crate) fn focus_card<R>(
         .inner
 }
 
-/// A row of text tabs, the current one bright and underlined in the accent.
+/// A row of text tabs, the current one bright and underlined in the accent. Tabs that
+/// don't fit go in a menu at the end of the row, never the current one.
 pub(crate) fn tab_bar<T: Copy + PartialEq>(
     ui: &mut egui::Ui,
     current: &mut T,
     tabs: impl IntoIterator<Item = T>,
     title: impl Fn(T) -> &'static str,
 ) {
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing = egui::vec2(16.0, 6.0);
-        for tab in tabs {
+    const GAP: f32 = 16.0;
+    const OVERFLOW_WIDTH: f32 = 24.0;
+    let tabs: Vec<T> = tabs.into_iter().collect();
+    let widths: Vec<f32> = tabs
+        .iter()
+        .map(|&tab| tab_galley(ui, title(tab)).size().x)
+        .collect();
+    let all = widths.iter().sum::<f32>() + GAP * widths.len().saturating_sub(1) as f32;
+    let available = ui.available_width();
+    let shown: Vec<bool> = if all <= available {
+        vec![true; tabs.len()]
+    } else {
+        let selected = tabs.iter().position(|tab| tab == current);
+        let mut room = available - OVERFLOW_WIDTH;
+        if let Some(index) = selected {
+            room -= widths[index] + GAP;
+        }
+        let mut fitting = true;
+        (0..tabs.len())
+            .map(|index| {
+                if Some(index) == selected {
+                    return true;
+                }
+                fitting &= widths[index] + GAP <= room;
+                room -= widths[index] + GAP;
+                fitting
+            })
+            .collect()
+    };
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing = egui::vec2(GAP, 6.0);
+        for (&tab, _) in tabs.iter().zip(&shown).filter(|(_, &shown)| shown) {
             if self::tab(ui, *current == tab, title(tab)).clicked() {
                 *current = tab;
             }
+        }
+        let hidden: Vec<T> = tabs
+            .iter()
+            .zip(&shown)
+            .filter(|(_, &shown)| !shown)
+            .map(|(&tab, _)| tab)
+            .collect();
+        if !hidden.is_empty() {
+            ui.menu_button("»", |ui| {
+                for tab in hidden {
+                    if ui.button(title(tab)).clicked() {
+                        *current = tab;
+                        ui.close();
+                    }
+                }
+            })
+            .response
+            .on_hover_text("More panels");
         }
     });
     ui.add_space(2.0);
 }
 
-/// A tab's title, bright and underlined in the accent while selected.
-pub(crate) fn tab(ui: &mut egui::Ui, selected: bool, title: &str) -> egui::Response {
-    let galley = egui::WidgetText::from(egui::RichText::new(title).size(13.5)).into_galley(
+fn tab_galley(ui: &egui::Ui, title: &str) -> std::sync::Arc<egui::Galley> {
+    egui::WidgetText::from(egui::RichText::new(title).size(13.5)).into_galley(
         ui,
         Some(egui::TextWrapMode::Extend),
         f32::INFINITY,
         TextStyle::Button,
-    );
+    )
+}
+
+/// A tab's title, bright and underlined in the accent while selected.
+pub(crate) fn tab(ui: &mut egui::Ui, selected: bool, title: &str) -> egui::Response {
+    let galley = tab_galley(ui, title);
     let (rect, response) = ui.allocate_exact_size(galley.size(), egui::Sense::click());
     let color = match (selected, response.hovered()) {
         (true, _) => Color32::WHITE,
