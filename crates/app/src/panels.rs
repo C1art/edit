@@ -126,12 +126,14 @@ impl Editor {
             .as_ref()
             .is_some_and(|program| program.player.is_playing());
         self.clip_art.poll(ui.ctx());
+        let carried = crate::placing::carried_media(self, ui.ctx());
         let output = self.view.ui(
             ui,
             &mut self.timeline,
             &mut self.clip_art,
             playhead,
             playing,
+            carried,
         );
         if let Some(response) = output.clip_menu {
             response.context_menu(|ui| {

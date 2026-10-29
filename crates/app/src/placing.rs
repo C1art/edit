@@ -1,10 +1,12 @@
 use timeline::{
     edit_points, AddGenerated, AddTrack, ClipId, FourPoint, Generator, PlaceClip, PlaceMode,
-    TrackKind,
+    SourceId, TrackKind,
 };
 
+use egui::DragAndDrop;
+
 use crate::editor::Editor;
-use crate::timeline_view::{MediaDrop, Take};
+use crate::timeline_view::{drop_tracks, MediaDrop, SourceDrag, Take};
 
 /// Edits the source monitor's marked range into the sequence on the targeted tracks,
 /// placed by three-point editing, then parks the playhead after it. Marks on both
@@ -61,33 +63,43 @@ pub(crate) fn place_from_source(editor: &mut Editor, mode: PlaceMode, fit: Optio
     }
 }
 
-/// Overwrites a media item dropped onto the timeline, keeping its video and audio
-/// together on the hovered track and the first track of the other kind. An item from
-/// the pool that was marked in the source monitor brings only the marked part, as in
-/// Premiere.
+/// The media being dragged. An item from the pool that was marked in the source
+/// monitor carries only the marked part, as in Premiere.
+pub fn carried_media(editor: &Editor, ctx: &egui::Context) -> Option<SourceDrag> {
+    if let Some(drag) = DragAndDrop::payload::<SourceDrag>(ctx) {
+        return Some(*drag);
+    }
+    let source = *DragAndDrop::payload::<SourceId>(ctx)?;
+    let range = editor.source_marked(source).or_else(|| {
+        let sequence = editor.timeline.sequence();
+        let range = sequence
+            .media_item(source)?
+            .default_range(sequence.timebase);
+        Some((range.start, range.end - range.start))
+    })?;
+    Some(SourceDrag {
+        source,
+        range,
+        take: Take::Both,
+    })
+}
+
+/// Overwrites media dropped onto the timeline, keeping its video and audio together on
+/// the hovered track and the first track of the other kind.
 pub fn drop_media(editor: &mut Editor, drop: MediaDrop) {
+    let MediaDrop { media, track, at } = drop;
     let sequence = editor.timeline.sequence();
-    let Some(item) = sequence.media_item(drop.source) else {
+    let Some(item) = sequence.media_item(media.source) else {
         return;
     };
-    let marked = drop.range.or_else(|| editor.source_marked(drop.source));
-    let (source_in, duration) = marked.unwrap_or_else(|| {
-        let range = item.default_range(sequence.timebase);
-        (range.start, range.end - range.start)
-    });
-    let first = |count: usize| (count > 0).then_some(0);
-    let (video_track, audio_track) = match drop.track.kind {
-        TrackKind::Video => (Some(drop.track.index), first(sequence.audio.len())),
-        TrackKind::Audio => (first(sequence.video.len()), Some(drop.track.index)),
-    };
-    let video_track = video_track.filter(|_| drop.take != Take::AudioOnly);
-    let audio_track = audio_track.filter(|_| drop.take != Take::VideoOnly);
-    editor.match_format(drop.source);
+    let (video_track, audio_track) = drop_tracks(sequence, item, track, media.take);
+    let (source_in, duration) = media.range;
+    editor.match_format(media.source);
     editor.apply(PlaceClip {
-        source: drop.source,
+        source: media.source,
         source_in,
         duration,
-        at: drop.at,
+        at,
         video_track,
         audio_track,
         mode: PlaceMode::Overwrite,
@@ -95,11 +107,9 @@ pub fn drop_media(editor: &mut Editor, drop: MediaDrop) {
     });
 }
 
-/// Adds a title or color matte to the pool and lays it at the playhead on the first
-/// free video track from the targeted one up, adding a track when all are busy, then
-/// selects it for editing.
-/// Adds `generator` to the project and places it at the playhead on the first free
-/// video track, returning the placed clip.
+/// Adds `generator` to the project and lays it at the playhead on the first free video
+/// track from the targeted one up, adding a track when all are busy, then selects the
+/// placed clip and returns it.
 pub fn new_generated(editor: &mut Editor, generator: Generator) -> Option<ClipId> {
     let sequence = editor.timeline.sequence();
     let count = sequence

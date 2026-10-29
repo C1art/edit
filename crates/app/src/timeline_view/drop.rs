@@ -1,24 +1,24 @@
 use egui::{Color32, Painter, Rect, Stroke, StrokeKind};
-use timeline::{nearest_transition_edge, ClipId, Edge, Sequence, SourceId, Ticks, TrackRef};
+use timeline::{
+    nearest_transition_edge, ClipId, Edge, MediaItem, Sequence, SourceId, Ticks, TrackKind,
+    TrackRef,
+};
 
 use super::layout::{self, Row};
 use super::scale::{self, TimeScale};
-use super::{paint, TimelineOutput, TrackHeights, SNAP_POINTS};
+use super::{paint, TimelineOutput, SNAP_POINTS};
 use crate::effects_panel::{EffectDrop, EffectItem};
 
 /// Media dropped from the pool or the source monitor onto a track.
 #[derive(Debug, Clone, Copy)]
 pub struct MediaDrop {
-    pub source: SourceId,
-    /// The part of the media as `(source_in, duration)`, when dragged from the source
-    /// monitor; else the item's marked or whole range.
-    pub range: Option<(Ticks, Ticks)>,
-    pub take: Take,
+    pub media: SourceDrag,
     pub track: TrackRef,
     pub at: Ticks,
 }
 
-/// The source monitor's marked part of its media, dragged out to the timeline.
+/// Media dragged from the pool or the source monitor, with the part of it a drop
+/// places as `(source_in, duration)` in the media's time.
 #[derive(Debug, Clone, Copy)]
 pub struct SourceDrag {
     pub source: SourceId,
@@ -34,22 +34,47 @@ pub enum Take {
     AudioOnly,
 }
 
+/// The video and audio track indexes media dropped on `track` lands on: that one and
+/// the first of the other kind, as far as the media and `take` have picture and sound.
+pub fn drop_tracks(
+    sequence: &Sequence,
+    item: &MediaItem,
+    track: TrackRef,
+    take: Take,
+) -> (Option<usize>, Option<usize>) {
+    let first = |count: usize| (count > 0).then_some(0);
+    let (video, audio) = match track.kind {
+        TrackKind::Video => (Some(track.index), first(sequence.audio.len())),
+        TrackKind::Audio => (first(sequence.video.len()), Some(track.index)),
+    };
+    (
+        video.filter(|_| item.video.is_some() && take != Take::AudioOnly),
+        audio.filter(|_| item.has_audio && take != Take::VideoOnly),
+    )
+}
+
 /// Where something dragged over the tracks would land.
 #[derive(Debug, Clone, Copy)]
 pub(super) enum DropHint {
     At(Ticks),
+    Media {
+        start: Ticks,
+        end: Ticks,
+        tracks: [Option<TrackRef>; 2],
+    },
     On(TrackRef, ClipId),
 }
 
-/// Reports a pool item or effect released over a track, and returns where a hovered one
-/// would land. Media snaps by its head when given the playhead to snap with too.
+/// Reports media or an effect released over a track, and returns where a hovered one
+/// would land. `carried` is the media being dragged, which snaps by its head and tail
+/// when given the playhead to snap with too.
 pub(super) fn handle_drop(
     response: &egui::Response,
     sequence: &Sequence,
-    heights: &TrackHeights,
+    rows: &[Row],
     scale: TimeScale,
-    top: f32,
     snapping_with: Option<Ticks>,
+    carried: Option<SourceDrag>,
     output: &mut TimelineOutput,
 ) -> Option<DropHint> {
     // `hover_pos` is unset while the drag that brings a payload holds the pointer.
@@ -58,32 +83,40 @@ pub(super) fn handle_drop(
         .pointer_hover_pos()
         .filter(|_| response.contains_pointer())?;
     let time = scale.time(pos.x).max(Ticks::ZERO);
-    let rows = layout::rows(sequence, heights, top);
-    let row = layout::row_at(&rows, pos.y);
+    let row = layout::row_at(rows, pos.y);
     let from_pool = response.dnd_hover_payload::<SourceId>().is_some();
-    if from_pool || response.dnd_hover_payload::<SourceDrag>().is_some() {
+    let hovering = from_pool || response.dnd_hover_payload::<SourceDrag>().is_some();
+    if let Some(media) = carried.filter(|_| hovering) {
+        let item = sequence.media_item(media.source)?;
+        let length = item.conform().sequence_span(media.range.1);
         let mut at = scale::nearest_frame(time, sequence.format.frame_rate, sequence.timebase);
         if let Some(playhead) = snapping_with {
             let targets = scale::snap_targets(sequence, &[], playhead);
-            at = at + scale::snap(Ticks::ZERO, &[at], &targets, scale.span(SNAP_POINTS));
+            let edges = [at, at + length];
+            at = at + scale::snap(Ticks::ZERO, &edges, &targets, scale.span(SNAP_POINTS));
         }
+        let Some(row) = row else {
+            return Some(DropHint::At(at));
+        };
         // Releasing takes the payload whatever its type, so only the hovered one may try.
         let released = if from_pool {
-            (response.dnd_release_payload::<SourceId>()).map(|source| (*source, None, Take::Both))
+            response.dnd_release_payload::<SourceId>().is_some()
         } else {
-            (response.dnd_release_payload::<SourceDrag>())
-                .map(|drag| (drag.source, Some(drag.range), drag.take))
+            response.dnd_release_payload::<SourceDrag>().is_some()
         };
-        if let (Some((source, range, take)), Some(row)) = (released, row) {
+        if released {
             output.drop = Some(MediaDrop {
-                source,
-                range,
-                take,
+                media,
                 track: row.track,
                 at,
             });
         }
-        return Some(DropHint::At(at));
+        let (video, audio) = drop_tracks(sequence, item, row.track, media.take);
+        return Some(DropHint::Media {
+            start: at,
+            end: at + length,
+            tracks: [video.map(TrackRef::video), audio.map(TrackRef::audio)],
+        });
     }
     let item = response.dnd_hover_payload::<EffectItem>()?;
     let track = row?.track;
@@ -124,6 +157,19 @@ pub(super) fn paint(
 ) {
     match hint {
         DropHint::At(at) => paint::guide(painter, scale.x(at), tracks.top(), tracks.bottom()),
+        DropHint::Media {
+            start,
+            end,
+            tracks: on,
+        } => {
+            for row in rows.iter().filter(|row| on.contains(&Some(row.track))) {
+                let rect = layout::clip_rect(row, scale, start, end);
+                painter.rect_filled(rect, 2.0, Color32::from_white_alpha(24));
+                let stroke = Stroke::new(1.5, Color32::from_white_alpha(200));
+                painter.rect_stroke(rect, 2.0, stroke, StrokeKind::Inside);
+            }
+            paint::guide(painter, scale.x(start), tracks.top(), tracks.bottom());
+        }
         DropHint::On(track, id) => {
             let row = rows.iter().find(|row| row.track == track);
             if let (Some(row), Some((_, clip))) = (row, sequence.clip(id)) {

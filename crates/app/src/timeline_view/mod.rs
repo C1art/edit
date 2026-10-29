@@ -34,7 +34,7 @@ use timeline::{
 use crate::clip_art::ClipArt;
 use crate::effects_panel::EffectDrop;
 use drop::handle_drop;
-pub use drop::{MediaDrop, SourceDrag, Take};
+pub use drop::{drop_tracks, MediaDrop, SourceDrag, Take};
 pub use edit_point::{EditPoint, TrimType};
 use gesture::{Gesture, PendingEdit};
 use header::HeaderAction;
@@ -225,6 +225,7 @@ impl TimelineView {
         art: &mut ClipArt,
         playhead: Ticks,
         playing: bool,
+        carried: Option<SourceDrag>,
     ) -> TimelineOutput {
         let mut output = TimelineOutput::default();
         let area = ui.available_rect_before_wrap();
@@ -272,15 +273,22 @@ impl TimelineView {
         }
         output.clip_menu = self.context_clip.then(|| response.clone());
         output.gap_menu = self.context_gap.then(|| response.clone());
-        let drop_hint = handle_drop(
-            &response,
-            timeline.sequence(),
-            &self.heights,
-            scale,
-            top,
-            self.snapping.then_some(playhead),
-            &mut output,
-        );
+        let drop_hint = egui::DragAndDrop::has_any_payload(ui.ctx())
+            .then(|| {
+                let rows = layout::rows(timeline.sequence(), &self.heights, top);
+                let snapping_with = self.snapping.then_some(playhead);
+                let sequence = timeline.sequence();
+                handle_drop(
+                    &response,
+                    sequence,
+                    &rows,
+                    scale,
+                    snapping_with,
+                    carried,
+                    &mut output,
+                )
+            })
+            .flatten();
 
         let sequence = self
             .drag
