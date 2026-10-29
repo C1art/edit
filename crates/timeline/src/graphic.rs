@@ -20,6 +20,19 @@ pub struct GraphicLayer {
     pub offset: [i32; 2],
     #[serde(default)]
     pub hidden: bool,
+    /// Percent of the size it's drawn at, about its center.
+    #[serde(default = "full")]
+    pub scale: u32,
+    /// Degrees clockwise about its center.
+    #[serde(default)]
+    pub rotation: i32,
+    /// Percent.
+    #[serde(default = "full")]
+    pub opacity: u32,
+}
+
+fn full() -> u32 {
+    100
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -40,6 +53,9 @@ impl GraphicLayer {
             content,
             offset: [0, 0],
             hidden: false,
+            scale: full(),
+            rotation: 0,
+            opacity: full(),
         }
     }
 }

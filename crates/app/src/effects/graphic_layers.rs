@@ -153,6 +153,23 @@ fn layer_controls(ui: &mut egui::Ui, layer: &mut GraphicLayer, height: u32) -> O
             change = Some(Change::Commit);
         }
     });
+    ui.horizontal(|ui| {
+        ui.label("Scale");
+        let scale = egui::DragValue::new(&mut layer.scale)
+            .range(1..=2000)
+            .suffix(" %");
+        change = response_state(&ui.add(scale), change);
+        ui.label("Rotation");
+        let rotation = egui::DragValue::new(&mut layer.rotation)
+            .range(-3600..=3600)
+            .suffix("°");
+        change = response_state(&ui.add(rotation), change);
+        ui.label("Opacity");
+        let opacity = egui::DragValue::new(&mut layer.opacity)
+            .range(0..=100)
+            .suffix(" %");
+        change = response_state(&ui.add(opacity), change);
+    });
     match &mut layer.content {
         GraphicContent::Text(title) => {
             // Named after its text until renamed, as Premiere names text layers.
