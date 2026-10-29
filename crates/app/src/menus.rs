@@ -178,7 +178,12 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             ui.separator();
             let select_all =
                 Button::new("Select All").shortcut_text(editor.keymap.label(Command::SelectAll));
-            if ui.add(select_all).clicked() {
+            let has_clips = editor
+                .timeline
+                .sequence()
+                .tracks()
+                .any(|(_, track)| !track.clips.is_empty());
+            if ui.add_enabled(has_clips, select_all).clicked() {
                 editor.select_all();
             }
             let deselect_all = Button::new("Deselect All")
