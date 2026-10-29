@@ -33,6 +33,7 @@ pub(crate) struct GainDialog {
     peak_db: f32,
     loudness_lufs: f32,
     measuring: Option<Measuring>,
+    opened: bool,
 }
 
 struct Measuring {
@@ -49,6 +50,7 @@ impl GainDialog {
             peak_db: -1.0,
             loudness_lufs: -23.0,
             measuring: None,
+            opened: true,
         }
     }
 }
@@ -89,6 +91,12 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                         }
                         GainMode::Loudness => (&mut dialog.loudness_lufs, -60.0..=0.0, " LUFS"),
                     };
+                    if dialog.mode == mode
+                        && !ui.is_sizing_pass()
+                        && std::mem::take(&mut dialog.opened)
+                    {
+                        crate::dialog::focus_next_value(ui);
+                    }
                     let field = ui.add_enabled(
                         dialog.mode == mode,
                         egui::DragValue::new(value)

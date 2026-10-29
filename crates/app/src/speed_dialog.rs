@@ -16,6 +16,7 @@ pub struct SpeedPrompt {
     ripple: bool,
     reverse: bool,
     maintain_pitch: bool,
+    opened: bool,
 }
 
 /// Like `150%` or `33.33%`.
@@ -42,6 +43,7 @@ impl Editor {
             ripple: false,
             reverse: clip.reverse,
             maintain_pitch: clip.maintain_pitch,
+            opened: true,
         });
     }
 }
@@ -58,6 +60,9 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
             .num_columns(2)
             .show(ui, |ui| {
                 ui.label("Speed");
+                if !ui.is_sizing_pass() && std::mem::take(&mut prompt.opened) {
+                    crate::dialog::focus_next_value(ui);
+                }
                 let percent = ui.add(
                     egui::DragValue::new(&mut prompt.percent)
                         .range(1.0..=10_000.0)

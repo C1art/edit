@@ -53,3 +53,11 @@ fn modal_id() -> Id {
 pub(crate) fn primary(text: &str) -> Button<'static> {
     Button::new(RichText::new(text).color(Color32::WHITE)).fill(theme::ACCENT_FILL)
 }
+
+/// Focuses the `DragValue` added next with its text selected, so typing replaces the
+/// value. It only selects its text when focus arrives before it's drawn, and a window's
+/// first, sizing pass takes no focus, so wait until `!ui.is_sizing_pass()`.
+pub(crate) fn focus_next_value(ui: &Ui) {
+    let id = ui.next_auto_id();
+    ui.memory_mut(|memory| memory.request_focus(id));
+}
