@@ -296,6 +296,10 @@ impl Rows {
             | VideoEffect::Circle { .. }
             | VideoEffect::FourColorGradient { .. } => self.generate(ui, effect),
             VideoEffect::LensFlare { .. } | VideoEffect::Magnify { .. } => self.optics(ui, effect),
+            VideoEffect::LinearWipe { .. }
+            | VideoEffect::RadialWipe { .. }
+            | VideoEffect::VenetianBlinds { .. }
+            | VideoEffect::BlockDissolve { .. } => self.clip_wipes(ui, effect),
             VideoEffect::LeaveColor {
                 color,
                 amount,

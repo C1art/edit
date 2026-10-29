@@ -1,3 +1,4 @@
+mod clip_wipes;
 mod color;
 mod curves;
 mod generate;
