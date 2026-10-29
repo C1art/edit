@@ -1,5 +1,6 @@
 mod bars;
 mod coverage;
+mod layers;
 mod leader;
 mod scroll;
 mod shape;
@@ -15,6 +16,7 @@ use timeline::{
 
 use bars::draw_bars;
 use coverage::Coverage;
+use layers::draw_graphic;
 use leader::draw_leader;
 pub(crate) use scroll::scrolled;
 use shape::shape_coverage;
@@ -63,6 +65,7 @@ pub fn generated_frame(
         Generator::BarsAndTone => draw_bars(&mut canvas),
         Generator::BlackVideo => canvas.fill(Rgb::new(0, 0, 0)),
         Generator::Shape(shape) => draw_shape(&mut canvas, shape),
+        Generator::Graphic(graphic) => draw_graphic(&mut canvas, graphic),
         Generator::CountingLeader(leader) => {
             draw_leader(
                 &mut canvas,

@@ -22,6 +22,7 @@ impl Edit for AddGenerated {
             Generator::BlackVideo => "New Black Video",
             Generator::TransparentVideo => "New Transparent Video",
             Generator::CountingLeader(_) => "New Universal Counting Leader",
+            Generator::Graphic(_) => "New Graphic",
         }
     }
 
@@ -76,6 +77,7 @@ impl Edit for SetGenerator {
                 "Change Synthetic Media"
             }
             Generator::CountingLeader(_) => "Change Counting Leader",
+            Generator::Graphic(_) => "Edit Graphic",
         }
     }
 

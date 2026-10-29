@@ -7,6 +7,7 @@ mod detail;
 mod edges;
 mod generate;
 mod generated;
+mod graphic_layers;
 mod hue_curves;
 mod image;
 mod key_selection;

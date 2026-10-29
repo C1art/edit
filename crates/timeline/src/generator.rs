@@ -2,7 +2,7 @@ use std::f64::consts::SQRT_2;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{CountingLeader, Rgb, ShadowStyle, Ticks, Timebase, TitleMotion};
+use crate::{CountingLeader, Graphic, Rgb, ShadowStyle, Ticks, Timebase, TitleMotion};
 
 /// Generated pictures have no length of their own; they hold for as long as they're
 /// trimmed to, up to this many seconds.
@@ -27,6 +27,7 @@ pub enum Generator {
     TransparentVideo,
     /// Lasts its own eight seconds, not as long as it's trimmed to.
     CountingLeader(CountingLeader),
+    Graphic(Graphic),
 }
 
 impl Generator {
@@ -40,6 +41,7 @@ impl Generator {
             Self::BlackVideo => "Black Video",
             Self::TransparentVideo => "Transparent Video",
             Self::CountingLeader(_) => "Universal Counting Leader",
+            Self::Graphic(_) => "Graphic",
         }
     }
 }

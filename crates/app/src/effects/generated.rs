@@ -3,6 +3,7 @@ use timeline::{
     Title, TitleFont, TitleMotion,
 };
 
+use super::graphic_layers;
 use crate::mixer::{response_state, Change};
 
 /// What a title, shape or color matte draws on a frame `height` pixels tall. Typing
@@ -28,18 +29,31 @@ pub(super) fn controls(
             Generator::ColorMatte { color } => {
                 change = color_row(ui, "Color", color);
             }
-            Generator::Title(title) => change = title_controls(ui, title),
+            Generator::Title(title) => {
+                change = title_controls(ui, title);
+                change = graphic_layers::upgrade_row(ui, generator).or(change);
+            }
             Generator::AdjustmentLayer
             | Generator::BarsAndTone
             | Generator::BlackVideo
             | Generator::TransparentVideo => {}
-            Generator::Shape(shape) => change = shape_controls(ui, shape, height),
+            Generator::Shape(shape) => {
+                change = shape_controls(ui, shape, height);
+                change = graphic_layers::upgrade_row(ui, generator).or(change);
+            }
+            Generator::Graphic(graphic) => change = graphic_layers::controls(ui, graphic, height),
             Generator::CountingLeader(leader) => change = leader_controls(ui, leader),
         });
     change
 }
 
 fn title_controls(ui: &mut egui::Ui, title: &mut Title) -> Option<Change> {
+    let change = text_controls(ui, title);
+    motion_controls(ui, &mut title.motion).or(change)
+}
+
+/// A title's look, without its motion.
+pub(super) fn text_controls(ui: &mut egui::Ui, title: &mut Title) -> Option<Change> {
     let mut change = None;
     let text = ui.add(
         egui::TextEdit::multiline(&mut title.text)
@@ -122,7 +136,7 @@ fn title_controls(ui: &mut egui::Ui, title: &mut Title) -> Option<Change> {
             change = color_button(ui, background).or(change);
         }
     });
-    motion_controls(ui, &mut title.motion).or(change)
+    change
 }
 
 /// Roll and crawl, with where the title starts and ends and its timing in frames.
@@ -192,7 +206,7 @@ fn motion_controls(ui: &mut egui::Ui, motion: &mut TitleMotion) -> Option<Change
     change
 }
 
-fn shape_controls(ui: &mut egui::Ui, shape: &mut Shape, height: u32) -> Option<Change> {
+pub(super) fn shape_controls(ui: &mut egui::Ui, shape: &mut Shape, height: u32) -> Option<Change> {
     let mut change = None;
     ui.horizontal(|ui| {
         for kind in ShapeKind::ALL {

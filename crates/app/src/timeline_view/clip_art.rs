@@ -48,7 +48,8 @@ pub fn thumbnails(
             | Generator::Shape(_)
             | Generator::BarsAndTone
             | Generator::TransparentVideo
-            | Generator::CountingLeader(_),
+            | Generator::CountingLeader(_)
+            | Generator::Graphic(_),
         ) => return,
         None if item.nest.is_some() => return,
         None => {}

@@ -15,6 +15,7 @@ mod error;
 mod file_url;
 mod find;
 mod generator;
+mod graphic;
 mod group;
 mod history;
 mod hue_curves;
@@ -112,6 +113,7 @@ pub use generator::{
     held_length, Generator, Shape, ShapeKind, TextAlign, TextStroke, Title, TitleFont,
     GENERATED_SECONDS,
 };
+pub use graphic::{Graphic, GraphicContent, GraphicLayer};
 pub use group::GroupId;
 pub use history::{preview, Edit, EditCommand, Timeline};
 pub use hue_curves::{HueCurve, HueCurves, HUE_CURVE_NEUTRAL};
