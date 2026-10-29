@@ -108,6 +108,8 @@ impl ExportDialog {
     }
 }
 
+const EMPTY_SEQUENCE: &str = "The sequence is empty";
+
 pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     poll(editor);
     let sequence = editor.timeline.sequence();
@@ -180,11 +182,16 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
             crate::dialog::footer(ui, |ui| {
                 close = ui.button("Close").clicked()
                     || (!browsing && ui.input(|input| input.key_pressed(Key::Escape)));
+                let has_content = duration != timeline::Ticks::ZERO;
                 queue = ui
-                    .button("Queue")
+                    .add_enabled(has_content, egui::Button::new("Queue"))
                     .on_hover_text("Add to the export queue and keep editing")
+                    .on_disabled_hover_text(EMPTY_SEQUENCE)
                     .clicked();
-                start = ui.add(crate::dialog::primary("Export")).clicked();
+                start = ui
+                    .add_enabled(has_content, crate::dialog::primary("Export"))
+                    .on_disabled_hover_text(EMPTY_SEQUENCE)
+                    .clicked();
             });
         }
     });
@@ -229,7 +236,7 @@ fn prepare(editor: &mut Editor) -> Option<(Arc<Sequence>, ExportSettings)> {
     let problem = if path.as_os_str().is_empty() {
         Some("Choose an output file first".to_owned())
     } else if sequence.duration() == timeline::Ticks::ZERO {
-        Some("The sequence is empty".to_owned())
+        Some(EMPTY_SEQUENCE.to_owned())
     } else if dialog.format.format.has_video()
         && !(width.is_multiple_of(2) && height.is_multiple_of(2))
     {
