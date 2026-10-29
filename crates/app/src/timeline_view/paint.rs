@@ -263,11 +263,7 @@ pub fn clips(
             TrackKind::Audio => {}
         }
         let item = sequence.media_item(clip.source);
-        let name = clip
-            .name
-            .as_deref()
-            .or(item.map(|item| item.name.as_str()))
-            .unwrap_or("Missing media");
+        let name = clip_name(sequence, clip);
         let name = if offline {
             format!("{name} [offline]")
         } else {
@@ -468,6 +464,14 @@ pub fn guide(painter: &Painter, x: f32, top: f32, bottom: f32) {
         [egui::pos2(x, top), egui::pos2(x, bottom)],
         Stroke::new(1.5, Color32::from_rgb(250, 210, 60)),
     );
+}
+
+pub fn clip_name<'a>(sequence: &'a Sequence, clip: &'a Clip) -> &'a str {
+    let item = sequence.media_item(clip.source);
+    clip.name
+        .as_deref()
+        .or(item.map(|item| item.name.as_str()))
+        .unwrap_or("Missing media")
 }
 
 /// Premiere's label colors, toned down so clip names stay readable on them.

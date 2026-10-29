@@ -1,4 +1,5 @@
 mod clip_art;
+mod clip_tip;
 mod cursor;
 mod drag_readout;
 mod drop;
@@ -275,6 +276,7 @@ impl TimelineView {
             self.handle_gestures(&response, timeline, scale, top, playhead, &mut output);
             self.show_cursor(&response, timeline.sequence(), &scale, top);
             self.show_drag_readout(&response, timeline.sequence());
+            self.show_clip_tip(&response, timeline.sequence(), &scale, top);
         }
         output.clip_menu = self.context_clip.then(|| response.clone());
         output.gap_menu = self.context_gap.then(|| response.clone());
