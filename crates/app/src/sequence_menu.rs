@@ -11,7 +11,7 @@ pub(crate) fn sequence_menu(editor: &mut Editor, ui: &mut egui::Ui) {
         editor.open_sequence_settings();
     }
     let sequence = editor.timeline.sequence();
-    let has_clips = sequence.tracks().any(|(_, track)| !track.clips.is_empty());
+    let has_clips = sequence.has_clips();
     let marked = sequence.marks.is_set();
     let reframe = Button::new("Auto Reframe Sequence…");
     if ui.add_enabled(has_clips, reframe).clicked() {

@@ -100,7 +100,9 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                 editor.prompt_path(PathPurpose::Export(Interchange::FinalCutXml));
             }
             ui.separator();
-            if ui.button("Project Manager…").clicked() {
+            let has_media = !editor.timeline.sequence().media.is_empty();
+            let manager = Button::new("Project Manager…");
+            if ui.add_enabled(has_media, manager).clicked() {
                 editor.open_project_manager();
             }
             ui.separator();
@@ -178,11 +180,7 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             ui.separator();
             let select_all =
                 Button::new("Select All").shortcut_text(editor.keymap.label(Command::SelectAll));
-            let has_clips = editor
-                .timeline
-                .sequence()
-                .tracks()
-                .any(|(_, track)| !track.clips.is_empty());
+            let has_clips = editor.timeline.sequence().has_clips();
             if ui.add_enabled(has_clips, select_all).clicked() {
                 editor.select_all();
             }

@@ -63,21 +63,8 @@ pub(crate) fn context(editor: &mut Editor, ui: &mut Ui) {
 pub(crate) fn items(editor: &mut Editor, ui: &mut Ui) {
     let selected = !editor.view.selection.is_empty();
     ui.add_enabled_ui(selected, |ui| on_selection(editor, ui));
-    ui.menu_button("Video Options", |ui| {
-        // A frame hold also takes the clips under the playhead.
-        if ui.button("Add Frame Hold").clicked() {
-            editor.add_frame_hold();
-        }
-        ui.add_enabled_ui(selected, |ui| {
-            if ui.button("Set to Frame Size").clicked() {
-                editor.set_to_frame_size(FrameFit::Fit);
-            }
-            if ui.button("Set to Fill Frame").clicked() {
-                editor.set_to_frame_size(FrameFit::Fill);
-            }
-        });
-        ui.menu_button("Time Interpolation", |ui| time_interpolation(editor, ui));
-    });
+    let has_clips = editor.timeline.sequence().has_clips();
+    ui.add_enabled_ui(has_clips, |ui| video_options(editor, ui, selected));
     crate::multicam::camera_menu(editor, ui);
     let scenes = Button::new("Scene Edit Detection");
     if ui
@@ -200,6 +187,24 @@ fn on_selection(editor: &mut Editor, ui: &mut Ui) {
 }
 
 /// Radio choices for the selected video clips, checked where they all agree.
+fn video_options(editor: &mut Editor, ui: &mut Ui, selected: bool) {
+    ui.menu_button("Video Options", |ui| {
+        // A frame hold also takes the clips under the playhead.
+        if ui.button("Add Frame Hold").clicked() {
+            editor.add_frame_hold();
+        }
+        ui.add_enabled_ui(selected, |ui| {
+            if ui.button("Set to Frame Size").clicked() {
+                editor.set_to_frame_size(FrameFit::Fit);
+            }
+            if ui.button("Set to Fill Frame").clicked() {
+                editor.set_to_frame_size(FrameFit::Fill);
+            }
+        });
+        ui.menu_button("Time Interpolation", |ui| time_interpolation(editor, ui));
+    });
+}
+
 fn time_interpolation(editor: &mut Editor, ui: &mut Ui) {
     let sequence = editor.timeline.sequence();
     let clips: Vec<ClipId> = editor

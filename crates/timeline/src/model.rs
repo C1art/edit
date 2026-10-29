@@ -413,6 +413,10 @@ impl Sequence {
             .chain(audio.map(|(index, track)| (TrackRef::audio(index), track)))
     }
 
+    pub fn has_clips(&self) -> bool {
+        self.tracks().any(|(_, track)| !track.clips.is_empty())
+    }
+
     pub(crate) fn tracks_mut(&mut self) -> impl Iterator<Item = (TrackRef, &mut Track)> {
         let video = self.video.iter_mut().enumerate();
         let audio = self.audio.iter_mut().enumerate();
