@@ -213,7 +213,7 @@ fn converted_size(output: (u32, u32), canvas: (u32, u32), look: &LayerLook) -> (
     while divisor < MAX_SHRINK && magnified * (divisor * 2) as f32 <= 1.0 {
         divisor *= 2;
     }
-    let shrink = |side: u32| side.div_ceil(divisor).max(2);
+    let shrink = |side: u32| side.div_ceil(divisor).max(1);
     (shrink(output.0), shrink(output.1))
 }
 
