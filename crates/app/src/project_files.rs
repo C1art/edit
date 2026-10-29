@@ -225,6 +225,7 @@ impl Editor {
     fn replace_sequence(&mut self, sequence: Sequence, path: Option<PathBuf>) {
         // Drop the source player first so its workers stop feeding the audio output.
         self.source = None;
+        self.left_sources.clear();
         self.timeline = Timeline::new(sequence);
         let revision = self.timeline.revision();
         self.saved_revision = revision;

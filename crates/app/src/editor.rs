@@ -63,6 +63,7 @@ pub struct Editor {
     pub(crate) mask_track_job: Option<crate::mask_tracking::MaskTrackJob>,
     pub(crate) hardware_decoding: bool,
     pub(crate) source: Option<SourceMonitor>,
+    pub(crate) left_sources: HashMap<SourceId, crate::source::LeftAt>,
     pub(crate) program: Option<Viewer>,
     /// Shown in place of the program picture while an edit is dragged; made on first use.
     pub(crate) trim_monitor: Option<TrimMonitor>,
@@ -214,6 +215,7 @@ impl Editor {
             mask_track_job: None,
             hardware_decoding: true,
             source: None,
+            left_sources: HashMap::new(),
             program,
             trim_monitor: None,
             comparison: None,

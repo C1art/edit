@@ -63,19 +63,15 @@ pub(crate) fn place_from_source(editor: &mut Editor, mode: PlaceMode, fit: Optio
 
 /// Overwrites a media item dropped onto the timeline, keeping its video and audio
 /// together on the hovered track and the first track of the other kind. An item from
-/// the pool that the source monitor shows with marks brings only the marked part, as
-/// in Premiere.
+/// the pool that was marked in the source monitor brings only the marked part, as in
+/// Premiere.
 pub fn drop_media(editor: &mut Editor, drop: MediaDrop) {
     let sequence = editor.timeline.sequence();
     let Some(item) = sequence.media_item(drop.source) else {
         return;
     };
-    let marked = editor
-        .source
-        .as_ref()
-        .filter(|source| source.source == drop.source && source.marks.is_set())
-        .map(|source| source.range());
-    let (source_in, duration) = drop.range.or(marked).unwrap_or_else(|| {
+    let marked = drop.range.or_else(|| editor.source_marked(drop.source));
+    let (source_in, duration) = marked.unwrap_or_else(|| {
         let range = item.default_range(sequence.timebase);
         (range.start, range.end - range.start)
     });

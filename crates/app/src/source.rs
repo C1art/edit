@@ -82,6 +82,19 @@ impl SourceMonitor {
         self.viewer.player.duration()
     }
 
+    pub fn left_at(&self) -> LeftAt {
+        LeftAt {
+            marks: self.marks,
+            position: self.viewer.player.position(),
+            marked: self.marks.is_set().then(|| self.range()),
+        }
+    }
+
+    fn resume(&mut self, left: LeftAt) {
+        self.marks = left.marks;
+        self.viewer.player.seek(left.position);
+    }
+
     /// Marks the media range `marked` and parks on media time `at`.
     pub fn show_media(&mut self, marked: Range<Ticks>, at: Ticks) {
         let end = self.viewer.player.duration();
@@ -95,6 +108,17 @@ impl SourceMonitor {
         };
         self.viewer.player.seek(to_monitor(at));
     }
+}
+
+/// How the source monitor left an item it moved on from, so that going back to it
+/// brings back its marks and position, as in Premiere.
+#[derive(Debug, Clone, Copy)]
+pub struct LeftAt {
+    marks: Marks,
+    position: Ticks,
+    /// The marked media as `(source_in, duration)`, which dragging the item from the
+    /// project places.
+    marked: Option<(Ticks, Ticks)>,
 }
 
 /// A sequence that shows `item` from start to end in its own format; generated media,
@@ -128,18 +152,31 @@ impl Editor {
             return;
         };
         // Drop the old player first so its workers stop feeding the audio output.
-        self.source = None;
+        if let Some(source) = self.source.take() {
+            self.left_sources.insert(source.source, source.left_at());
+        }
         match SourceMonitor::open(
             &item,
             self.timeline.project(),
             self.audio.as_ref(),
             self.render_state.as_ref(),
         ) {
-            Ok(source) => {
+            Ok(mut source) => {
+                if let Some(&left) = self.left_sources.get(&id) {
+                    source.resume(left);
+                }
                 self.source = Some(source);
                 self.focus = Focus::Source;
             }
             Err(error) => self.notice(format!("Cannot open {}: {error}", item.name)),
+        }
+    }
+
+    /// The part of `id` marked in the source monitor, now or when it was last shown.
+    pub(crate) fn source_marked(&self, id: SourceId) -> Option<(Ticks, Ticks)> {
+        match &self.source {
+            Some(source) if source.source == id => source.left_at().marked,
+            _ => self.left_sources.get(&id)?.marked,
         }
     }
 }
