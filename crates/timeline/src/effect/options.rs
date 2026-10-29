@@ -58,15 +58,18 @@ pub enum ClipNameSource {
     ProjectItem,
     /// The file the clip plays, as it is named on disk.
     File,
+    /// The clip as renamed on the timeline, or its item's name.
+    SequenceClip,
 }
 
 impl ClipNameSource {
-    pub const ALL: [Self; 2] = [Self::ProjectItem, Self::File];
+    pub const ALL: [Self; 3] = [Self::SequenceClip, Self::ProjectItem, Self::File];
 
     pub fn name(self) -> &'static str {
         match self {
             Self::ProjectItem => "Project Item Name",
             Self::File => "File Name",
+            Self::SequenceClip => "Sequence Clip Name",
         }
     }
 }

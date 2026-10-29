@@ -384,6 +384,7 @@ mod paste;
 mod range;
 mod rearrange;
 mod remap;
+mod rename;
 mod render_replace;
 mod replace;
 mod speed;

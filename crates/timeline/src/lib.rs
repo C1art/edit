@@ -77,14 +77,14 @@ pub use edit::{
     NestFromMedia, NormalizeClipGains, PasteAttributes, PasteClips, PlaceClip, PlaceMode,
     RateStretch, Razor, RazorTarget, RelinkMedia, RemoveAttributes, RemoveBin, RemoveMarker,
     RemoveMedia, RemoveSpeedKeyframe, RemoveSubmix, RemoveTimeRemap, RemoveTrack, RenameBin,
-    RenameMedia, RenameTrack, RenderAndReplace, ReplaceClip, RestoreUnrendered, RippleDelete,
-    RippleTrimToPlayhead, Roll, SetCaptions, SetChannelMap, SetClipAudioEffects, SetClipGain,
-    SetClipLabel, SetClipLook, SetClipPan, SetClipSpeed, SetClipVolume, SetClipsEnabled,
-    SetClipsSound, SetGenerator, SetGrouped, SetLinked, SetLinkedSelection, SetMarks,
-    SetMasterEffects, SetMasterGain, SetMediaLog, SetProxy, SetSegmentSpeed, SetSequenceFormat,
-    SetSubmix, SetTimeInterpolation, SetToFrameSize, SetTrackAutomation, SetTrackEffects,
-    SetTrackMix, SetTrackOutput, SetTrackSwitch, SetTransition, Slide, Slip, SwitchAngle,
-    SyncMethod, TrackSwitch, Trim, TrimMode, TrimToPlayhead, Unlinked, UpdateMarker,
+    RenameClips, RenameMedia, RenameTrack, RenderAndReplace, ReplaceClip, RestoreUnrendered,
+    RippleDelete, RippleTrimToPlayhead, Roll, SetCaptions, SetChannelMap, SetClipAudioEffects,
+    SetClipGain, SetClipLabel, SetClipLook, SetClipPan, SetClipSpeed, SetClipVolume,
+    SetClipsEnabled, SetClipsSound, SetGenerator, SetGrouped, SetLinked, SetLinkedSelection,
+    SetMarks, SetMasterEffects, SetMasterGain, SetMediaLog, SetProxy, SetSegmentSpeed,
+    SetSequenceFormat, SetSubmix, SetTimeInterpolation, SetToFrameSize, SetTrackAutomation,
+    SetTrackEffects, SetTrackMix, SetTrackOutput, SetTrackSwitch, SetTransition, Slide, Slip,
+    SwitchAngle, SyncMethod, TrackSwitch, Trim, TrimMode, TrimToPlayhead, Unlinked, UpdateMarker,
 };
 pub use edl::to_edl;
 pub use effect::{

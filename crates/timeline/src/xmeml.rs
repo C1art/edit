@@ -190,7 +190,7 @@ impl Writer<'_> {
             return;
         };
         self.open(&format!("clipitem id=\"{}\"", clip_ref(clip.id)));
-        self.leaf("name", escape(&item.name));
+        self.leaf("name", escape(clip.name.as_deref().unwrap_or(&item.name)));
         self.leaf("enabled", flag(!clip.disabled));
         self.leaf("duration", self.frames(item.duration));
         self.rate();

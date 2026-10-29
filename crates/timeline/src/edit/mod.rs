@@ -47,7 +47,7 @@ pub use generate::{AddGenerated, SetGenerator};
 pub use group::SetGrouped;
 pub use hold::AddFrameHold;
 pub use interpret::InterpretFootage;
-pub use label::SetClipLabel;
+pub use label::{RenameClips, SetClipLabel};
 pub use levels::{
     AutoDuck, NormalizeClipGains, SetClipAudioEffects, SetClipGain, SetClipPan, SetClipVolume,
     SetMasterEffects, SetMasterGain, SetTrackAutomation, SetTrackEffects, SetTrackMix,

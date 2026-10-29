@@ -108,6 +108,9 @@ pub struct Clip {
     /// Shown instead of the track's color on the timeline.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<Label>,
+    /// Shown on the timeline instead of its media's name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     /// Replaces `speed` and `reverse` on a video clip whose speed changes over time.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remap: Option<TimeRemap>,
@@ -169,6 +172,7 @@ impl Clip {
             transition_in: None,
             transition_out: None,
             label: None,
+            name: None,
             remap: None,
             angle: 0,
             markers: Vec::new(),
