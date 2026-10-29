@@ -18,7 +18,7 @@ pub(crate) const WEAK_TEXT: Color32 = Color32::from_rgb(138, 142, 151);
 pub(crate) const ACCENT: Color32 = Color32::from_rgb(64, 140, 255);
 pub(crate) const ACCENT_FILL: Color32 = Color32::from_rgb(38, 98, 190);
 
-const GAP: i8 = 3;
+pub(crate) const GAP: i8 = 3;
 const PANEL_RADIUS: u8 = 6;
 
 pub(crate) fn apply(ctx: &egui::Context) {

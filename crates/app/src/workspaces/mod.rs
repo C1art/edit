@@ -290,7 +290,20 @@ impl Editor {
             Panel::bottom(("timeline", generation)),
             layout.timeline_share * room.y,
         )
-        .show(ui, |ui| theme::card(ui, |ui| self.timeline_panel(ui)));
+        .show(ui, |ui| {
+            Panel::right(("audio_meters", generation))
+                .resizable(false)
+                .exact_size(crate::audio_meters::WIDTH)
+                .frame(Frame::new().inner_margin(Margin {
+                    left: theme::GAP,
+                    ..Margin::ZERO
+                }))
+                .show_separator_line(false)
+                .show(ui, |ui| {
+                    theme::card(ui, |ui| crate::audio_meters::ui(self, ui))
+                });
+            theme::card(ui, |ui| self.timeline_panel(ui));
+        });
         let monitors = CentralPanel::default()
             .frame(theme::dock())
             .show(ui, |ui| monitors::ui(self, ui));
