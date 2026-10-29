@@ -8,6 +8,7 @@ use timeline::{
     ULTRA_KEY_REACH,
 };
 
+use crate::adjust_effects::set_adjust_effect;
 use crate::clip_wipes::set_clip_wipe;
 
 /// The per-pixel part of an effect stack at source time `time`. The shader runs each
@@ -454,6 +455,9 @@ pub(crate) fn pixel_effects(
             | VideoEffect::VenetianBlinds { .. }
             | VideoEffect::BlockDissolve { .. } => {
                 set_clip_wipe(&mut pixel.clip_wipes, effect, time);
+            }
+            VideoEffect::Levels { .. } | VideoEffect::ProcAmp { .. } => {
+                set_adjust_effect(&mut pixel.adjust, effect, time);
             }
         }
     }
