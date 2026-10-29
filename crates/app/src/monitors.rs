@@ -3,12 +3,13 @@ use playback::Resolution;
 use timeline::PlaceMode;
 
 use crate::editor::Editor;
-use crate::keymap::Command;
+use crate::icons::Icon;
+use crate::keymap::{Command, Keymap};
 use crate::placing;
 use crate::program_zoom::MonitorZoom;
 use crate::project_files::PathPurpose;
 use crate::theme;
-use crate::transport;
+use crate::transport::{self, Buttons, Extra};
 use crate::trim_monitor::TrimMonitor;
 
 /// Space below each picture for its scrub bar, transport and buttons, until they
@@ -40,14 +41,24 @@ fn controls_id(ui: &egui::Ui) -> egui::Id {
     ui.scope_id().with("controls_height")
 }
 
-/// Shows a monitor, then measures what it showed besides its picture, so that its
+fn picture_bottom_id(ui: &egui::Ui) -> egui::Id {
+    ui.scope_id().with("picture_bottom")
+}
+
+/// Shows a monitor, then measures what it showed under its picture, so that its
 /// picture leaves room for buttons wrapped onto more rows in a narrow monitor.
 fn fitted(ui: &mut egui::Ui, monitor: impl FnOnce(&mut egui::Ui)) {
-    let top = ui.cursor().top();
-    let picture = picture_size(ui).y;
+    let bottom_id = picture_bottom_id(ui);
+    ui.data_mut(|data| data.remove::<f32>(bottom_id));
     monitor(ui);
+    let Some(picture_bottom) = ui.data(|data| data.get_temp::<f32>(bottom_id)) else {
+        return;
+    };
     let id = controls_id(ui);
-    let measured = (ui.min_rect().bottom() - top - picture).max(0.0);
+    // The card holding the monitor fills its panel, so what the monitor used is up to
+    // the cursor, not the card's whole rect.
+    let used = ui.cursor().top() - ui.spacing().item_spacing.y;
+    let measured = (used - picture_bottom).max(0.0);
     let controls = ui.data(|data| data.get_temp(id)).unwrap_or(CONTROLS_HEIGHT);
     if (measured - controls).abs() > 0.5 {
         ui.data_mut(|data| data.insert_temp(id, measured));
@@ -64,14 +75,18 @@ fn title(ui: &mut egui::Ui, text: &str, focused: bool) {
     ui.colored_label(color, text);
 }
 
+/// The room for the picture, which must be shown at the cursor.
 fn picture_size(ui: &egui::Ui) -> egui::Vec2 {
     let controls = ui
         .data(|data| data.get_temp(controls_id(ui)))
         .unwrap_or(CONTROLS_HEIGHT);
-    egui::vec2(
+    let size = egui::vec2(
         ui.available_width(),
         (ui.available_height() - controls).max(SMALLEST_PICTURE),
-    )
+    );
+    let bottom = ui.cursor().top() + size.y;
+    ui.data_mut(|data| data.insert_temp(picture_bottom_id(ui), bottom));
+    size
 }
 
 fn source(editor: &mut Editor, ui: &mut egui::Ui) {
@@ -92,56 +107,48 @@ fn source(editor: &mut Editor, ui: &mut egui::Ui) {
     title(ui, &format!("Source: {}", source.name), focused);
     source.viewer.picture(ui, picture_size(ui));
     let marks = source.marks;
-    transport::ui(ui, &mut source.viewer.player, Some(marks), &editor.keymap);
+    let keymap = &editor.keymap;
+    let before = mark_buttons(keymap);
+    let after = [
+        extra(
+            keymap,
+            Icon::Insert,
+            "Insert",
+            Command::Insert,
+            Action::Insert,
+        ),
+        extra(
+            keymap,
+            Icon::Overwrite,
+            "Overwrite",
+            Command::Overwrite,
+            Action::Overwrite,
+        ),
+        extra(
+            keymap,
+            Icon::Subclip,
+            "Make a subclip of the marked part",
+            Command::MakeSubclip,
+            Action::Subclip,
+        ),
+    ];
+    let buttons = Buttons {
+        before: &before,
+        after: &after,
+        settings: false,
+    };
+    let pressed = transport::ui(ui, &mut source.viewer.player, Some(marks), keymap, buttons);
     let mut place = None;
     let mut subclip = false;
-    ui.horizontal_wrapped(|ui| {
-        if ui
-            .button("Mark In")
-            .on_hover_text(editor.keymap.label(Command::MarkIn))
-            .clicked()
-        {
-            source.mark_in();
-        }
-        if ui
-            .button("Mark Out")
-            .on_hover_text(editor.keymap.label(Command::MarkOut))
-            .clicked()
-        {
-            source.mark_out();
-        }
-        if ui
-            .button("Clear")
-            .on_hover_text(editor.keymap.tip("Clear in and out", Command::ClearInOut))
-            .clicked()
-        {
-            source.marks = timeline::Marks::default();
-        }
-        ui.separator();
-        if ui
-            .button("Insert")
-            .on_hover_text(editor.keymap.label(Command::Insert))
-            .clicked()
-        {
-            place = Some(PlaceMode::Insert);
-        }
-        if ui
-            .button("Overwrite")
-            .on_hover_text(editor.keymap.label(Command::Overwrite))
-            .clicked()
-        {
-            place = Some(PlaceMode::Overwrite);
-        }
-        ui.separator();
-        subclip = ui
-            .button("Subclip")
-            .on_hover_text(
-                editor
-                    .keymap
-                    .tip("Make a subclip of the marked part", Command::MakeSubclip),
-            )
-            .clicked();
-    });
+    match pressed.action {
+        Some(Action::MarkIn) => source.mark_in(),
+        Some(Action::MarkOut) => source.mark_out(),
+        Some(Action::ClearMarks) => source.marks = timeline::Marks::default(),
+        Some(Action::Insert) => place = Some(PlaceMode::Insert),
+        Some(Action::Overwrite) => place = Some(PlaceMode::Overwrite),
+        Some(Action::Subclip) => subclip = true,
+        _ => {}
+    }
     if pressed_inside(ui) {
         editor.focus = Focus::Source;
     }
@@ -168,48 +175,60 @@ fn program(editor: &mut Editor, ui: &mut egui::Ui) {
         return;
     };
     let marks = editor.timeline.sequence().marks;
-    transport::ui(ui, &mut program.player, Some(marks), &editor.keymap);
-    ui.horizontal_wrapped(|ui| {
-        if ui.button("Mark In").on_hover_text(editor.keymap.label(Command::MarkIn)).clicked() {
-            editor.mark_sequence_in();
-        }
-        if ui.button("Mark Out").on_hover_text(editor.keymap.label(Command::MarkOut)).clicked() {
-            editor.mark_sequence_out();
-        }
-        if ui
-            .button("Clear")
-            .on_hover_text(editor.keymap.tip("Clear in and out", Command::ClearInOut))
-            .clicked()
-        {
-            editor.clear_sequence_marks();
-        }
-        ui.separator();
-        if ui.button("Lift").on_hover_text(editor.keymap.label(Command::LiftMarked)).clicked() {
-            editor.lift_marked();
-        }
-        if ui.button("Extract").on_hover_text(editor.keymap.label(Command::ExtractMarked)).clicked() {
-            editor.extract_marked();
-        }
-        ui.separator();
-        let export_frame = ui
-            .button("Still")
-            .on_hover_text(editor.keymap.tip("Export Frame: save the picture at the playhead as an image", Command::ExportFrame));
-        if export_frame.clicked() {
-            editor.prompt_path(PathPurpose::ExportFrame);
-        }
-        ui.menu_button("View", |ui| {
+    let keymap = &editor.keymap;
+    let before = mark_buttons(keymap);
+    let after = [
+        extra(
+            keymap,
+            Icon::Lift,
+            "Lift",
+            Command::LiftMarked,
+            Action::Lift,
+        ),
+        extra(
+            keymap,
+            Icon::Extract,
+            "Extract",
+            Command::ExtractMarked,
+            Action::Extract,
+        ),
+        extra(
+            keymap,
+            Icon::Camera,
+            "Export Frame: save the picture at the playhead as an image",
+            Command::ExportFrame,
+            Action::ExportFrame,
+        ),
+    ];
+    let buttons = Buttons {
+        before: &before,
+        after: &after,
+        settings: true,
+    };
+    let pressed = transport::ui(ui, &mut program.player, Some(marks), keymap, buttons);
+    match pressed.action {
+        Some(Action::MarkIn) => editor.mark_sequence_in(),
+        Some(Action::MarkOut) => editor.mark_sequence_out(),
+        Some(Action::ClearMarks) => editor.clear_sequence_marks(),
+        Some(Action::Lift) => editor.lift_marked(),
+        Some(Action::Extract) => editor.extract_marked(),
+        Some(Action::ExportFrame) => editor.prompt_path(PathPurpose::ExportFrame),
+        _ => {}
+    }
+    if let Some(settings) = pressed.settings {
+        egui::Popup::menu(&settings).show(|ui| {
             ui.checkbox(&mut editor.safe_margins, "Safe Margins");
             let mut multicam = editor.multicam_view;
             let toggle = ui
                 .checkbox(&mut multicam, "Multi-Camera")
-                .on_hover_text(editor.keymap.tip("Every camera of the multi-camera clips beside the program; click one or press 1–9 to switch", Command::MulticamView));
+                .on_hover_text(editor.keymap.tip(MULTICAM_TIP, Command::MulticamView));
             if toggle.clicked() {
                 editor.toggle_multicam_view();
             }
             let mut comparing = editor.comparison.is_some();
             let toggle = ui
                 .checkbox(&mut comparing, "Comparison View")
-                .on_hover_text("A reference frame of the sequence beside the program, for matching shots");
+                .on_hover_text(COMPARISON_TIP);
             if toggle.clicked() {
                 editor.toggle_comparison_view();
             }
@@ -233,10 +252,68 @@ fn program(editor: &mut Editor, ui: &mut egui::Ui) {
                 }
             });
         });
-    });
+    }
     if pressed_inside(ui) {
         editor.focus = Focus::Program;
     }
+}
+
+const MULTICAM_TIP: &str = "Every camera of the multi-camera clips beside the program; click \
+                            one or press 1–9 to switch";
+const COMPARISON_TIP: &str =
+    "A reference frame of the sequence beside the program, for matching shots";
+
+#[derive(Debug, Clone, Copy)]
+enum Action {
+    MarkIn,
+    MarkOut,
+    ClearMarks,
+    Insert,
+    Overwrite,
+    Subclip,
+    Lift,
+    Extract,
+    ExportFrame,
+}
+
+fn extra(
+    keymap: &Keymap,
+    icon: Icon,
+    tip: &str,
+    command: Command,
+    action: Action,
+) -> Extra<Action> {
+    Extra {
+        icon,
+        tip: keymap.tip(tip, command),
+        action,
+    }
+}
+
+fn mark_buttons(keymap: &Keymap) -> [Extra<Action>; 3] {
+    [
+        extra(
+            keymap,
+            Icon::MarkIn,
+            "Mark In",
+            Command::MarkIn,
+            Action::MarkIn,
+        ),
+        extra(
+            keymap,
+            Icon::MarkOut,
+            "Mark Out",
+            Command::MarkOut,
+            Action::MarkOut,
+        ),
+        extra(
+            keymap,
+            Icon::ClearMarks,
+            "Clear In and Out",
+            Command::ClearInOut,
+            Action::ClearMarks,
+        ),
+    ]
 }
 
 /// The program picture at the chosen zoom, clipped to the monitor.

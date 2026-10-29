@@ -13,8 +13,37 @@ const BUTTON: egui::Vec2 = egui::vec2(30.0, 24.0);
 /// How long Play Around plays before the playhead, and after it.
 const PREROLL_SECONDS: u32 = 2;
 
+const PLAYBACK_BUTTONS: usize = 4;
+
+/// A button a monitor adds beside the transport, and what clicking it asks for.
+pub struct Extra<A> {
+    pub icon: Icon,
+    pub tip: String,
+    pub action: A,
+}
+
+/// The monitor's buttons before and after the transport, and whether it has a settings
+/// menu.
+pub struct Buttons<'a, A> {
+    pub before: &'a [Extra<A>],
+    pub after: &'a [Extra<A>],
+    pub settings: bool,
+}
+
+pub struct Pressed<A> {
+    pub action: Option<A>,
+    /// The settings button, for the monitor to hang its menu from.
+    pub settings: Option<egui::Response>,
+}
+
 /// A scrub bar with the playhead and marked range, then buttons and timecode.
-pub fn ui(ui: &mut egui::Ui, player: &mut Player, marks: Option<Marks>, keymap: &Keymap) {
+pub fn ui<A: Copy>(
+    ui: &mut egui::Ui,
+    player: &mut Player,
+    marks: Option<Marks>,
+    keymap: &Keymap,
+    buttons: Buttons<'_, A>,
+) -> Pressed<A> {
     let marks = marks.unwrap_or_default();
     if player.is_looping() {
         // The marks can move while looping, and the loop follows them.
@@ -23,16 +52,25 @@ pub fn ui(ui: &mut egui::Ui, player: &mut Player, marks: Option<Marks>, keymap: 
     scrub_bar(ui, player, marks);
     let sequence = player.sequence();
     let (timebase, rate) = (sequence.timebase, sequence.format.frame_rate);
-    let position = player.position();
+    let timecode = RichText::new(Timecode::new(player.position(), timebase, rate).to_string())
+        .monospace()
+        .size(14.0)
+        .color(theme::ACCENT);
+    let spacing = ui.spacing().item_spacing.x;
+    let width_of =
+        |count: usize| count as f32 * BUTTON.x + count.saturating_sub(1) as f32 * spacing;
+    let extras = buttons.before.len() + buttons.after.len() + usize::from(buttons.settings);
+    // On a narrow monitor the monitor's own buttons take a row under the transport,
+    // rather than squeezing the timecode out.
+    let one_row = text_width(ui, &timecode) + spacing + width_of(PLAYBACK_BUTTONS + extras)
+        <= ui.available_width();
+    let mut pressed = Pressed {
+        action: None,
+        settings: None,
+    };
     ui.horizontal(|ui| {
         let row = ui.available_rect_before_wrap();
-        let timecode = Timecode::new(position, timebase, rate).to_string();
-        ui.label(
-            RichText::new(timecode)
-                .monospace()
-                .size(14.0)
-                .color(theme::ACCENT),
-        );
+        ui.label(timecode);
         let duration = Timecode::new(player.duration(), timebase, rate);
         let mut times = vec![(
             RichText::new(duration.to_string())
@@ -49,48 +87,23 @@ pub fn ui(ui: &mut egui::Ui, player: &mut Player, marks: Option<Marks>, keymap: 
             let text = RichText::new(format!("In-Out {marked}")).monospace().weak();
             times.push((text, "Duration of the marked range"));
         }
-        let spacing = ui.spacing().item_spacing.x;
         let times_width: f32 = times
             .iter()
             .map(|(text, _)| text_width(ui, text) + spacing)
             .sum();
+        let group = width_of(PLAYBACK_BUTTONS + if one_row { extras } else { 0 });
         // The buttons sit in the middle, unless that would put them over the times.
-        let buttons = 4.0 * BUTTON.x + 3.0 * spacing;
-        let start = (row.center().x - buttons / 2.0)
-            .min(row.right() - times_width - buttons)
+        let start = (row.center().x - group / 2.0)
+            .min(row.right() - times_width - group)
             .max(ui.cursor().left());
         ui.add_space(start - ui.cursor().left());
-        if icons::button(ui, Icon::StepBack, BUTTON)
-            .on_hover_text(keymap.tip("Previous frame", Command::StepBack))
-            .clicked()
-        {
-            player.step(-1);
+        if one_row {
+            pressed.action = monitor_buttons(ui, buttons.before);
         }
-        let play = if player.is_playing() {
-            Icon::Pause
-        } else {
-            Icon::Play
-        };
-        if icons::button(ui, play, BUTTON)
-            .on_hover_text(keymap.tip("Play/pause", Command::PlayStop))
-            .clicked()
-        {
-            player.toggle();
-        }
-        if icons::button(ui, Icon::StepForward, BUTTON)
-            .on_hover_text(keymap.tip("Next frame", Command::StepForward))
-            .clicked()
-        {
-            player.step(1);
-        }
-        if icons::sized_toggle(ui, player.is_looping(), Icon::Loop, Look::Filled, BUTTON)
-            .on_hover_text(keymap.tip(
-                "Loop playback of the marked range, or all of it",
-                Command::ToggleLoop,
-            ))
-            .clicked()
-        {
-            handle_key(player, TransportKey::ToggleLoop, marks);
+        playback_buttons(ui, player, marks, keymap);
+        if one_row {
+            pressed.action = pressed.action.or(monitor_buttons(ui, buttons.after));
+            pressed.settings = buttons.settings.then(|| settings_button(ui));
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             // A narrow monitor drops the In-Out duration first, then the whole one.
@@ -102,6 +115,72 @@ pub fn ui(ui: &mut egui::Ui, player: &mut Player, marks: Option<Marks>, keymap: 
             }
         });
     });
+    if !one_row && extras > 0 {
+        ui.horizontal(|ui| {
+            let gap = 3.0 * spacing;
+            let width = width_of(extras) + gap;
+            let start =
+                (ui.available_rect_before_wrap().center().x - width / 2.0).max(ui.cursor().left());
+            ui.add_space(start - ui.cursor().left());
+            pressed.action = monitor_buttons(ui, buttons.before);
+            ui.add_space(gap);
+            pressed.action = pressed.action.or(monitor_buttons(ui, buttons.after));
+            pressed.settings = buttons.settings.then(|| settings_button(ui));
+        });
+    }
+    pressed
+}
+
+fn playback_buttons(ui: &mut egui::Ui, player: &mut Player, marks: Marks, keymap: &Keymap) {
+    if icons::button(ui, Icon::StepBack, BUTTON)
+        .on_hover_text(keymap.tip("Previous frame", Command::StepBack))
+        .clicked()
+    {
+        player.step(-1);
+    }
+    let play = if player.is_playing() {
+        Icon::Pause
+    } else {
+        Icon::Play
+    };
+    if icons::button(ui, play, BUTTON)
+        .on_hover_text(keymap.tip("Play/pause", Command::PlayStop))
+        .clicked()
+    {
+        player.toggle();
+    }
+    if icons::button(ui, Icon::StepForward, BUTTON)
+        .on_hover_text(keymap.tip("Next frame", Command::StepForward))
+        .clicked()
+    {
+        player.step(1);
+    }
+    if icons::sized_toggle(ui, player.is_looping(), Icon::Loop, Look::Filled, BUTTON)
+        .on_hover_text(keymap.tip(
+            "Loop playback of the marked range, or all of it",
+            Command::ToggleLoop,
+        ))
+        .clicked()
+    {
+        handle_key(player, TransportKey::ToggleLoop, marks);
+    }
+}
+
+fn monitor_buttons<A: Copy>(ui: &mut egui::Ui, buttons: &[Extra<A>]) -> Option<A> {
+    let mut pressed = None;
+    for button in buttons {
+        if icons::button(ui, button.icon, BUTTON)
+            .on_hover_text(&button.tip)
+            .clicked()
+        {
+            pressed = Some(button.action);
+        }
+    }
+    pressed
+}
+
+fn settings_button(ui: &mut egui::Ui) -> egui::Response {
+    icons::button(ui, Icon::Settings, BUTTON).on_hover_text("Settings")
 }
 
 fn text_width(ui: &egui::Ui, text: &RichText) -> f32 {

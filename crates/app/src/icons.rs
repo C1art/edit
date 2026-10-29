@@ -29,6 +29,16 @@ pub(crate) enum Icon {
     Pen,
     Search,
     Close,
+    MarkIn,
+    MarkOut,
+    ClearMarks,
+    Insert,
+    Overwrite,
+    Lift,
+    Extract,
+    Subclip,
+    Camera,
+    Settings,
 }
 
 const BUTTON: egui::Vec2 = vec2(22.0, 20.0);
@@ -269,6 +279,95 @@ pub(crate) fn paint(painter: &Painter, rect: Rect, icon: Icon, color: Color32) {
         Icon::Close => {
             painter.line_segment([at(0.18, 0.18), at(0.82, 0.82)], stroke);
             painter.line_segment([at(0.82, 0.18), at(0.18, 0.82)], stroke);
+        }
+        Icon::MarkIn | Icon::MarkOut => {
+            let flip = |x: f32| if icon == Icon::MarkOut { 1.0 - x } else { x };
+            let brace = [
+                (0.72, 0.06),
+                (0.46, 0.06),
+                (0.46, 0.4),
+                (0.26, 0.5),
+                (0.46, 0.6),
+                (0.46, 0.94),
+                (0.72, 0.94),
+            ];
+            let brace = brace.iter().map(|&(x, y)| at(flip(x), y)).collect();
+            painter.add(Shape::line(brace, Stroke::new(1.6, color)));
+        }
+        Icon::ClearMarks => {
+            for flip in [false, true] {
+                let x = |x: f32| if flip { 1.0 - x } else { x };
+                let bracket = vec![
+                    at(x(0.3), 0.1),
+                    at(x(0.08), 0.1),
+                    at(x(0.08), 0.9),
+                    at(x(0.3), 0.9),
+                ];
+                painter.add(Shape::line(bracket, stroke));
+            }
+            painter.line_segment([at(0.32, 0.78), at(0.68, 0.22)], stroke);
+        }
+        Icon::Insert | Icon::Overwrite | Icon::Lift | Icon::Extract => {
+            // Clips along the bottom, parted where an edit opens or leaves a gap, and an
+            // arrow down for edits that put in, up for those that take out.
+            let gap = matches!(icon, Icon::Insert | Icon::Lift);
+            let blocks = if gap {
+                vec![(0.0, 0.34), (0.66, 1.0)]
+            } else {
+                vec![(0.0, 1.0)]
+            };
+            for (left, right) in blocks {
+                painter.rect_filled(
+                    Rect::from_min_max(at(left, 0.68), at(right, 0.98)),
+                    1.0,
+                    color,
+                );
+            }
+            let (from, to) = match icon {
+                Icon::Insert => (0.0, 0.84),
+                Icon::Overwrite => (0.0, 0.56),
+                Icon::Lift => (0.84, 0.0),
+                _ => (0.56, 0.0),
+            };
+            painter.line_segment([at(0.5, from), at(0.5, to)], stroke);
+            let head = if to > from { -0.22 } else { 0.22 };
+            let arrow = vec![at(0.28, to + head), at(0.5, to), at(0.72, to + head)];
+            painter.add(Shape::line(arrow, stroke));
+        }
+        Icon::Subclip => {
+            let clip = Rect::from_min_max(at(0.02, 0.22), at(0.98, 0.78));
+            painter.rect_stroke(clip, 1.0, stroke, egui::StrokeKind::Middle);
+            painter.rect_filled(
+                Rect::from_min_max(at(0.32, 0.22), at(0.68, 0.78)),
+                0.0,
+                color,
+            );
+        }
+        Icon::Camera => {
+            painter.rect_filled(Rect::from_min_max(at(0.3, 0.12), at(0.62, 0.3)), 1.0, color);
+            painter.rect_filled(
+                Rect::from_min_max(at(0.02, 0.26), at(0.98, 0.9)),
+                2.0,
+                color,
+            );
+            painter.circle_stroke(
+                at(0.5, 0.58),
+                rect.width() * 0.2,
+                Stroke::new(1.6, Color32::BLACK),
+            );
+        }
+        Icon::Settings => {
+            let center = rect.center();
+            for tooth in 0..8 {
+                let angle = tooth as f32 * PI / 4.0;
+                let toward = vec2(angle.cos(), angle.sin()) * rect.width();
+                painter.line_segment(
+                    [center + toward * 0.3, center + toward * 0.48],
+                    Stroke::new(2.2, color),
+                );
+            }
+            painter.circle_stroke(center, rect.width() * 0.3, Stroke::new(1.8, color));
+            painter.circle_filled(center, rect.width() * 0.1, color);
         }
     }
 }
