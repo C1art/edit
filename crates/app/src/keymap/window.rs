@@ -32,11 +32,10 @@ pub fn window(editor: &mut Editor, ctx: &egui::Context) {
         }
     }
     let mut open = true;
-    egui::Window::new("Keyboard Shortcuts")
+    crate::dialog::window(ctx, "Keyboard Shortcuts")
         .open(&mut open)
-        .collapsible(false)
         .resizable(true)
-        .default_size([560.0, 520.0])
+        .default_size(egui::vec2(560.0, 520.0).min(ctx.content_rect().size() * 0.85))
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
                 let search = TextEdit::singleline(&mut state.search)

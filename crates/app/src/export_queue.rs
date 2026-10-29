@@ -141,7 +141,7 @@ pub fn window(editor: &mut Editor, ctx: &egui::Context) {
     }
     let mut open = true;
     let mut remove = None;
-    egui::Window::new("Export Queue")
+    crate::dialog::window(ctx, "Export Queue")
         .open(&mut open)
         .default_width(520.0)
         .show(ctx, |ui| {
