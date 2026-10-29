@@ -176,27 +176,35 @@ fn caption_row(
 
 fn style_controls(ui: &mut egui::Ui, captions: &mut Captions) -> Option<Change> {
     let style = &mut captions.style;
-    ui.horizontal_wrapped(|ui| {
-        ui.label("Size");
-        let size = ui.add(
-            egui::DragValue::new(&mut style.size)
-                .range(12..=200)
-                .suffix(" px"),
-        );
-        let mut change = response_state(&size, None);
-        ui.label("Color");
-        change = color_button(ui, &mut style.color).max(change);
-        let mut boxed = style.background.is_some();
-        if ui.checkbox(&mut boxed, "Background").changed() {
-            style.background = boxed.then_some(Rgb::BLACK);
-            change = Some(Change::Commit);
-        }
-        if let Some(background) = &mut style.background {
-            change = color_button(ui, background).max(change);
-        }
-        change
-    })
-    .inner
+    egui::Grid::new("caption style")
+        .num_columns(2)
+        .show(ui, |ui| {
+            ui.label("Size");
+            let size = ui.add(
+                egui::DragValue::new(&mut style.size)
+                    .range(12..=200)
+                    .suffix(" px"),
+            );
+            let mut change = response_state(&size, None);
+            ui.end_row();
+            ui.label("Color");
+            change = color_button(ui, &mut style.color).max(change);
+            ui.end_row();
+            ui.label("Background");
+            ui.horizontal(|ui| {
+                let mut boxed = style.background.is_some();
+                if ui.checkbox(&mut boxed, "").changed() {
+                    style.background = boxed.then_some(Rgb::BLACK);
+                    change = Some(Change::Commit);
+                }
+                if let Some(background) = &mut style.background {
+                    change = color_button(ui, background).max(change);
+                }
+            });
+            ui.end_row();
+            change
+        })
+        .inner
 }
 
 fn color_button(ui: &mut egui::Ui, color: &mut Rgb) -> Option<Change> {
