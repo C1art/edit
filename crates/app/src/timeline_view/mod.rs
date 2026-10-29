@@ -445,13 +445,19 @@ impl TimelineView {
         if !ui.rect_contains_pointer(area) {
             return;
         }
-        let (scroll, zoom, pointer) = ui.input(|input| {
+        let (mut scroll, mut zoom, pointer, alt) = ui.input(|input| {
             (
                 input.smooth_scroll_delta,
                 input.zoom_delta(),
                 input.pointer.hover_pos(),
+                input.modifiers.alt,
             )
         });
+        if alt {
+            // Alt-scrolling zooms, as in Premiere, alongside egui's Ctrl-scrolling.
+            zoom *= (scroll.y / 200.0).exp();
+            scroll.y = 0.0;
+        }
         if zoom != 1.0 {
             self.zoom(zoom, pointer.map(|pos| pos.x - tracks.left()));
         }
