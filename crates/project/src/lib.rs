@@ -2,6 +2,8 @@ mod error;
 mod json;
 mod presets;
 
+use std::fs::File;
+use std::io::Write;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -48,21 +50,31 @@ impl ProjectFile {
         Ok(project)
     }
 
-    /// Writes beside `path` first, so a failed save never leaves a half-written project.
     pub fn save(&self, path: &Path) -> Result<(), ProjectError> {
-        let text = self.to_text()?;
-        let mut partial = path.as_os_str().to_owned();
-        partial.push(".saving");
-        std::fs::write(&partial, text)?;
-        std::fs::rename(&partial, path).inspect_err(|_| {
-            let _ = std::fs::remove_file(&partial);
-        })?;
-        Ok(())
+        Ok(replace_file(path, self.to_text()?.as_bytes())?)
     }
 
     pub fn load(path: &Path) -> Result<Self, ProjectError> {
         Self::from_text(&std::fs::read_to_string(path)?)
     }
+}
+
+/// Writes beside `path` first and then swaps it in, so a crash or failed write never
+/// leaves a half-written file where the last good one was.
+pub fn replace_file(path: &Path, contents: &[u8]) -> std::io::Result<()> {
+    let mut partial = path.as_os_str().to_owned();
+    partial.push(".saving");
+    let written = File::create(&partial).and_then(|mut file| {
+        file.write_all(contents)?;
+        // Without this a power cut can keep the rename yet lose the contents it names,
+        // leaving an empty file.
+        file.sync_all()
+    });
+    written
+        .and_then(|()| std::fs::rename(&partial, path))
+        .inspect_err(|_| {
+            let _ = std::fs::remove_file(&partial);
+        })
 }
 
 /// A digest of `value` as a project saves it, the same from run to run and build to

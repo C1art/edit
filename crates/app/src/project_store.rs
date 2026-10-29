@@ -279,7 +279,8 @@ fn handle(request: Request) -> StoreEvent {
             captions,
             timebase,
         } => {
-            let result = std::fs::write(&path, to_srt(&captions, timebase)).map_err(AppError::from);
+            let result = project::replace_file(&path, to_srt(&captions, timebase).as_bytes())
+                .map_err(AppError::from);
             StoreEvent::CaptionsWritten(path, result)
         }
         Request::ReadSetting(setting) => {
@@ -295,7 +296,7 @@ fn handle(request: Request) -> StoreEvent {
             let result = path
                 .parent()
                 .map_or(Ok(()), std::fs::create_dir_all)
-                .and_then(|()| std::fs::write(&path, text))
+                .and_then(|()| project::replace_file(&path, text.as_bytes()))
                 .map_err(AppError::from);
             StoreEvent::SettingWritten(setting, result)
         }
@@ -307,7 +308,7 @@ fn handle(request: Request) -> StoreEvent {
             StoreEvent::InterchangeRead(path, result)
         }
         Request::WriteInterchange(path, text) => {
-            let result = std::fs::write(&path, text).map_err(AppError::from);
+            let result = project::replace_file(&path, text.as_bytes()).map_err(AppError::from);
             StoreEvent::InterchangeWritten(path, result)
         }
         Request::FindRecoverable => StoreEvent::Recoverable(recovery::find_recoverable()),
