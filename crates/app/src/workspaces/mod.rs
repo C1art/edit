@@ -62,7 +62,7 @@ const BUILT_IN: [(&str, Layout); 6] = [
         Layout::new(
             [220.0, 380.0, 280.0],
             MediaTab::Project,
-            SideTab::EffectControls,
+            SideTab::LumetriColor,
         ),
     ),
     (

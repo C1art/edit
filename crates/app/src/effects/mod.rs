@@ -16,6 +16,7 @@ mod lane;
 mod layered;
 mod lighting;
 mod look;
+mod lumetri;
 mod mask_overlay;
 mod masks;
 mod matte_overlay;
@@ -54,6 +55,7 @@ use look::Rows;
 
 pub use color::LutSlot;
 pub(crate) use key_selection::KeyAction;
+pub use lumetri::ui as lumetri_ui;
 pub use mask_overlay::mask_overlay;
 pub use matte_overlay::matte_overlay;
 pub use motion_overlay::motion_overlay;
@@ -65,6 +67,7 @@ pub use transitions::{add_transition, apply_default_transition, apply_transition
 pub enum SideTab {
     #[default]
     EffectControls,
+    LumetriColor,
     AudioMixer,
     ClipMixer,
     EssentialSound,
@@ -127,7 +130,7 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
         // Sections nest a level or two deep, and the panel is often narrow.
         ui.spacing_mut().indent = 10.0;
         if let Some((_, clip)) = &picture {
-            picture_controls(editor, ui, clip);
+            picture_controls(editor, ui, clip, Sections::All);
             remap::controls(editor, ui, clip);
         }
         if let Some((_, clip)) = &sound {
@@ -139,7 +142,14 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
     editor.effects.keys.end_frame(ui, clip.id);
 }
 
-fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
+/// Which of a clip's picture controls a panel shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Sections {
+    All,
+    Color,
+}
+
+fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip, sections: Sections) {
     let time = keyframe_time(editor, clip);
     let mut look = shown_look(editor, clip);
     let mut drawing = editor
@@ -147,6 +157,7 @@ fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
         .sequence()
         .media_item(clip.source)
         .and_then(|item| item.generator.clone())
+        .filter(|_| sections == Sections::All)
         .map(|generator| match &editor.effects.drawing {
             Some((id, drawing)) if *id == clip.source => drawing.clone(),
             _ => generator,
@@ -160,7 +171,11 @@ fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
     }
     let video_tracks = editor.timeline.sequence().video.len();
     let keys = std::mem::take(&mut editor.effects.keys);
-    let mut rows = Rows::new(time, lane(editor, ui, clip), keys);
+    let lane = match sections {
+        Sections::All => lane(editor, ui, clip),
+        Sections::Color => None,
+    };
+    let mut rows = Rows::new(time, lane, keys);
     rows.analyzing = editor.motion_analysis_progress(clip.id);
     rows.reframing = editor.reframe_analysis_progress(clip.id);
     rows.tracking = editor.mask_tracking(clip.id);
@@ -169,7 +184,13 @@ fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
         (false, Some(_)) => ToneState::ReadyToMatch,
         (false, None) => ToneState::Ready,
     };
-    let mut output = look::controls(ui, &mut look, rows, video_tracks);
+    let mut output = match sections {
+        Sections::All => look::controls(ui, &mut look, rows, video_tracks),
+        Sections::Color => {
+            color::controls(ui, &mut rows, &mut look.color);
+            rows.output
+        }
+    };
     editor.effects.keys = std::mem::take(&mut output.keys);
     if output.change.is_some() {
         let timebase = editor.timeline.sequence().timebase;

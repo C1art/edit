@@ -38,8 +38,9 @@ impl MediaTab {
 }
 
 impl SideTab {
-    pub(crate) const ALL: [Self; 6] = [
+    pub(crate) const ALL: [Self; 7] = [
         Self::EffectControls,
+        Self::LumetriColor,
         Self::AudioMixer,
         Self::ClipMixer,
         Self::EssentialSound,
@@ -51,6 +52,7 @@ impl SideTab {
     pub(crate) fn words(self) -> (&'static str, &'static str) {
         match self {
             Self::EffectControls => ("effect_controls", "Effect Controls"),
+            Self::LumetriColor => ("lumetri_color", "Lumetri Color"),
             Self::AudioMixer => ("audio_mixer", "Audio Mixer"),
             Self::ClipMixer => ("clip_mixer", "Audio Clip Mixer"),
             Self::EssentialSound => ("essential_sound", "Essential Sound"),
@@ -101,6 +103,7 @@ impl Editor {
         }
         match self.side_tab {
             SideTab::EffectControls => effects::ui(self, ui),
+            SideTab::LumetriColor => effects::lumetri_ui(self, ui),
             SideTab::AudioMixer => mixer::ui(self, ui),
             SideTab::ClipMixer => mixer::clip_mixer::ui(self, ui),
             SideTab::EssentialSound => crate::essential_sound::ui(self, ui),
