@@ -7,6 +7,7 @@ use crate::ffi::{
     Decoder, Frame, InputContext, Packet, Picture, Received, SampleConverter, Scaler,
     OUTPUT_CHANNELS,
 };
+use crate::seek_landing::Landing;
 use crate::seek_trim::{SeekTrim, Trimmed};
 use crate::sequence::open_input;
 use crate::{AudioBuffer, DecodedFrame, MediaError, PlanarFrame, StreamKind, VideoFrame};
@@ -105,6 +106,9 @@ pub struct MediaReader {
     trim: SeekTrim<Picture>,
     /// The latest picture the decoder has put out since the last seek.
     decoded: Option<Ticks>,
+    landing: Option<Landing>,
+    /// Between pictures, for those the container leaves unstamped.
+    picture_step: Ticks,
     state: ReadState,
     info: SourceInfo,
     channel_map: Option<ChannelMap>,
@@ -172,6 +176,11 @@ impl MediaReader {
             still: input.is_image() && !sequence,
             sequence,
         };
+        let picture_step = info
+            .video
+            .as_ref()
+            .and_then(|video| video.frame_rate)
+            .map_or(Ticks::ZERO, |rate| rate.frame_start(1, timebase));
         Ok(Self {
             start: input.start_time().map_or(Ticks::ZERO, to_ticks),
             input,
@@ -182,6 +191,8 @@ impl MediaReader {
             timebase,
             trim: SeekTrim::new(timebase),
             decoded: None,
+            landing: None,
+            picture_step,
             state: ReadState::Reading,
             info,
             channel_map: None,
@@ -231,6 +242,11 @@ impl MediaReader {
     /// Positions the reader so that the next frames are the picture showing at `position`
     /// and the audio starting exactly there.
     pub fn seek(&mut self, position: Ticks) -> Result<(), MediaError> {
+        self.seek_ahead_of(position, 0)
+    }
+
+    /// Seeks for `position`, asking the demuxer for `lead` microseconds earlier.
+    fn seek_ahead_of(&mut self, position: Ticks, lead: i64) -> Result<(), MediaError> {
         // A picture's only frame shows throughout, but is stamped at its start.
         let position = if self.info.still {
             Ticks::ZERO
@@ -239,7 +255,8 @@ impl MediaReader {
         };
         let mut target = (position + self.start)
             .rescale(self.timebase, MICROSECONDS)
-            .0;
+            .0
+            - lead;
         if self.video.is_none() {
             // With video, FFmpeg seeks on its keyframes, well before the audio is needed;
             // without, it lands on the very audio packet.
@@ -254,8 +271,32 @@ impl MediaReader {
         }
         self.trim.reset(position);
         self.decoded = None;
+        self.landing = self.video.is_some().then_some(Landing {
+            position,
+            lead,
+            late: false,
+        });
         self.state = ReadState::Reading;
         Ok(())
+    }
+
+    /// Seeks again from further back when the last seek's first picture came after its
+    /// target, or none came at all; `false` once it already went back to the start.
+    fn retreat_if_landed_late(&mut self) -> Result<bool, MediaError> {
+        let Some(landing) = self.landing else {
+            return Ok(false);
+        };
+        if !landing.late && self.state != ReadState::Finished {
+            return Ok(false);
+        }
+        let from_start = landing.position.rescale(self.timebase, MICROSECONDS).0;
+        if landing.lead >= from_start {
+            self.landing = None;
+            return Ok(false);
+        }
+        let lead = (landing.lead * 2).max(1_000_000);
+        self.seek_ahead_of(landing.position, lead)?;
+        Ok(true)
     }
 
     /// Like [`Self::seek`], but when `position` lies ahead within reach, decodes on to it
@@ -309,6 +350,9 @@ impl MediaReader {
     /// before one comes out, so this bounds that work too.
     pub fn next_frame_within(&mut self, packets: &mut usize) -> Result<Progress, MediaError> {
         loop {
+            if self.retreat_if_landed_late()? {
+                continue;
+            }
             if let Some(trimmed) = self.trim.pop() {
                 return self.finish(trimmed).map(Progress::Frame);
             }
@@ -377,8 +421,9 @@ impl MediaReader {
             while let Received::Frame = video.decoder.receive_frame(&mut self.frame)? {
                 let pts = clock.pts(&self.frame, video.timebase, video.next_pts);
                 let picture = video.decoder.take_picture(&mut self.frame)?;
-                video.next_pts = pts;
+                video.next_pts = pts + self.picture_step;
                 self.decoded = Some(pts);
+                self.landing = self.landing.and_then(|landing| landing.after_picture(pts));
                 self.trim.push_video(pts, picture);
             }
         }

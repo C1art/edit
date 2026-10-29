@@ -14,6 +14,7 @@ mod quantize;
 mod reader;
 mod region_track;
 mod scenes;
+mod seek_landing;
 mod seek_trim;
 mod sequence;
 mod spare_pixels;
