@@ -1,5 +1,6 @@
 mod clip_art;
 mod clip_tip;
+mod corner;
 mod cursor;
 mod drag_readout;
 mod drop;
@@ -245,6 +246,8 @@ impl TimelineView {
         }
         let scale = self.scale(tracks.left());
 
+        let corner = Rect::from_x_y_ranges(headers, ruler.y_range());
+        self.corner_timecode(ui, corner, timeline.sequence(), playhead, &mut output);
         let ruler_response =
             ui.interact(ruler, ui.scope_id().with("ruler"), Sense::click_and_drag());
         self.ruler_markers(&ruler_response, timeline.sequence(), &scale, &mut output);

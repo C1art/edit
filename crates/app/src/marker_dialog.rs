@@ -103,13 +103,8 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                 ui.end_row();
                 ui.label("Duration");
                 let mut frames = rate.frame_at(marker.duration, timebase).max(0);
-                let duration = egui::DragValue::new(&mut frames)
-                    .range(0..=i64::MAX)
-                    .speed(0.5)
-                    .custom_formatter(|frames, _| {
-                        let ticks = rate.frame_start(frames as i64, timebase);
-                        Timecode::new(ticks, timebase, rate).to_string()
-                    });
+                let duration = crate::timecode_field::frames(&mut frames, (timebase, rate))
+                    .range(0..=i64::MAX);
                 if ui.add(duration).changed() {
                     marker.duration = rate.frame_start(frames, timebase);
                 }

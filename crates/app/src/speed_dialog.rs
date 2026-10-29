@@ -1,5 +1,5 @@
 use egui::Key;
-use timeline::{ClipId, SetClipSpeed, Speed, Ticks, Timecode};
+use timeline::{ClipId, SetClipSpeed, Speed, Ticks};
 
 use crate::editor::Editor;
 
@@ -75,13 +75,8 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                 ui.label("Duration");
                 let mut frames = rate.frame_at(prompt.duration, timebase).max(1);
                 let duration = ui.add(
-                    egui::DragValue::new(&mut frames)
-                        .range(1..=i64::MAX)
-                        .speed(0.5)
-                        .custom_formatter(|frames, _| {
-                            let ticks = rate.frame_start(frames as i64, timebase);
-                            Timecode::new(ticks, timebase, rate).to_string()
-                        }),
+                    crate::timecode_field::frames(&mut frames, (timebase, rate))
+                        .range(1..=i64::MAX),
                 );
                 if duration.changed() {
                     prompt.duration_typed = true;

@@ -76,13 +76,8 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
             ui.horizontal(|ui| {
                 ui.label("Target Duration");
                 let mut frames = rate.frame_at(dialog.target, timebase).max(1);
-                let field = egui::DragValue::new(&mut frames)
-                    .range(1..=i64::MAX)
-                    .speed(0.5)
-                    .custom_formatter(|frames, _| {
-                        let ticks = rate.frame_start(frames as i64, timebase);
-                        Timecode::new(ticks, timebase, rate).to_string()
-                    });
+                let field = crate::timecode_field::frames(&mut frames, (timebase, rate))
+                    .range(1..=i64::MAX);
                 if ui.add(field).changed() {
                     dialog.target = rate.frame_start(frames, timebase);
                 }

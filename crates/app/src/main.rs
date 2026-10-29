@@ -75,6 +75,7 @@ mod shortcuts;
 mod source;
 mod speed_dialog;
 mod theme;
+mod timecode_field;
 mod timeline_view;
 mod transport;
 mod trim_monitor;

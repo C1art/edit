@@ -70,7 +70,15 @@ pub fn ui<A: Copy>(
     };
     ui.horizontal(|ui| {
         let row = ui.available_rect_before_wrap();
-        ui.label(timecode);
+        if let Some(position) = crate::timecode_field::playhead(
+            ui,
+            ui.scope_id().with("timecode"),
+            player.position(),
+            (timebase, rate),
+            14.0,
+        ) {
+            player.seek(position);
+        }
         let duration = Timecode::new(player.duration(), timebase, rate);
         let mut times = vec![(
             RichText::new(duration.to_string())
