@@ -58,6 +58,7 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
         return;
     }
     let mut open = true;
+    let mut done = false;
     let mut action = None;
     let find = &mut editor.find;
     crate::dialog::window(ctx, "Find")
@@ -87,16 +88,19 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                 ui.end_row();
             });
             ui.checkbox(&mut find.query.match_case, "Match Case");
-            ui.horizontal(|ui| {
-                if ui.button("Find").clicked() {
-                    action = Some(Action::Next);
+            crate::dialog::footer(ui, |ui| {
+                if ui.button("Done").clicked() || ui.input(|input| input.key_pressed(Key::Escape)) {
+                    done = true;
                 }
                 if ui.button("Find All").clicked() {
                     action = Some(Action::All);
                 }
+                if ui.add(crate::dialog::primary("Find")).clicked() {
+                    action = Some(Action::Next);
+                }
             });
         });
-    editor.find.open = open;
+    editor.find.open = open && !done;
     match action {
         Some(Action::Next) => editor.find_next(),
         Some(Action::All) => editor.find_all(),

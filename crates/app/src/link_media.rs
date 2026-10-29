@@ -64,7 +64,6 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     let mut leave = Vec::new();
     crate::dialog::window(ctx, "Link Media")
         .resizable(true)
-        .resizable(true)
         .default_width(560.0)
         .show(ctx, |ui| {
             ui.label("These files can't be found. Locate one and any others in the same folder are linked with it.");
@@ -96,14 +95,15 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                         }
                     });
             });
-            ui.separator();
-            if ui
-                .button("Offline All")
-                .on_hover_text("Keep working; missing clips show as Media Offline")
-                .clicked()
-            {
-                leave.extend(&missing);
-            }
+            crate::dialog::footer(ui, |ui| {
+                if ui
+                    .button("Offline All")
+                    .on_hover_text("Keep working; missing clips show as Media Offline")
+                    .clicked()
+                {
+                    leave.extend(&missing);
+                }
+            });
         });
     if let Some(offline) = &mut editor.offline {
         offline.left_offline.extend(leave);
