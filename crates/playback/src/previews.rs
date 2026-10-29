@@ -45,6 +45,7 @@ impl PreviewPictures {
                 subclip: None,
                 interpreted_rate: None,
                 interpreted_aspect: None,
+                interpreted_color: None,
                 alpha: Default::default(),
                 log: Default::default(),
                 offline: false,

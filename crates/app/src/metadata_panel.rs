@@ -207,6 +207,7 @@ fn file_section(editor: &mut Editor, ui: &mut egui::Ui, media: &MediaItem) {
                         "Pixel Aspect",
                         format!("{:.4}", media.pixel_aspect().ratio()),
                     );
+                    row("Color Space", media.color_space().name().to_owned());
                 }
                 if let Some(assumed) = media.interpreted_rate {
                     row("Interpreted As", fps(assumed));

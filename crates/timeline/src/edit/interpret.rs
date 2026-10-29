@@ -1,18 +1,20 @@
 use crate::{
-    AlphaInterpretation, Clip, Edit, FrameRate, PixelAspect, Sequence, SourceId, Speed, Ticks,
-    TimelineError, Track,
+    AlphaInterpretation, Clip, ColorSpace, Edit, FrameRate, PixelAspect, Sequence, SourceId, Speed,
+    Ticks, TimelineError, Track,
 };
 
 /// Plays a file's pictures at `rate` instead of the rate it was recorded at, or at its
 /// own again for `None`. Its clips keep the frames they show, so they grow or shrink,
 /// stopping at the next clip on their track. The pictures are drawn with `aspect`
-/// pixels, or the file's own for `None`, and their alpha read as `alpha` says.
+/// pixels, or the file's own for `None`, their alpha read as `alpha` says and their
+/// colors in `color`, or the file's own space for `None`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InterpretFootage {
     pub source: SourceId,
     pub rate: Option<FrameRate>,
     pub aspect: Option<PixelAspect>,
     pub alpha: AlphaInterpretation,
+    pub color: Option<ColorSpace>,
 }
 
 impl Edit for InterpretFootage {
@@ -31,11 +33,18 @@ impl Edit for InterpretFootage {
         };
         let rate = self.rate.filter(|&rate| rate != native.frame_rate);
         let aspect = self.aspect.filter(|&aspect| aspect != native.pixel_aspect);
-        let interpreted = (item.interpreted_rate, item.interpreted_aspect, item.alpha);
-        if interpreted == (rate, aspect, self.alpha) {
+        let color = self.color.filter(|&color| color != native.color_space);
+        let interpreted = (
+            item.interpreted_rate,
+            item.interpreted_aspect,
+            item.alpha,
+            item.interpreted_color,
+        );
+        if interpreted == (rate, aspect, self.alpha, color) {
             return Err(TimelineError::NothingToEdit);
         }
         item.interpreted_aspect = aspect;
+        item.interpreted_color = color;
         item.alpha = self.alpha;
         if item.interpreted_rate == rate {
             return Ok(());

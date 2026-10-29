@@ -1,4 +1,4 @@
-use timeline::{AlphaInterpretation, KeyOutput};
+use timeline::{AlphaInterpretation, ColorSpace, KeyOutput, Primaries, Transfer};
 
 use crate::adjust::Adjust;
 use crate::cineon::Cineon;
@@ -55,6 +55,8 @@ pub struct PixelEffects {
     pub combine: Option<Combine>,
     /// How the source's alpha channel is read.
     pub alpha: AlphaInterpretation,
+    /// The color space the source's pictures are in.
+    pub color_space: ColorSpace,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -135,6 +137,7 @@ impl PixelEffects {
         paint: Paint::NONE,
         combine: None,
         alpha: AlphaInterpretation::Straight,
+        color_space: ColorSpace::Rec709,
     };
 
     /// The shader's view, as five vec4s.
@@ -184,7 +187,23 @@ impl PixelEffects {
                 AlphaInterpretation::Ignore => 1.0,
                 AlphaInterpretation::Invert => 2.0,
             },
-            0.0,
+            color_code(self.color_space),
         ]
     }
+}
+
+/// The source's transfer in the low two bits and its primaries above, as color.wgsl
+/// reads them; Rec. 709 is zero, which leaves the picture as it is.
+fn color_code(space: ColorSpace) -> f32 {
+    let transfer = match space.transfer() {
+        Transfer::Sdr => 0,
+        Transfer::Pq => 1,
+        Transfer::Hlg => 2,
+    };
+    let primaries = match space.primaries() {
+        Primaries::Rec709 => 0,
+        Primaries::Rec2020 => 1,
+        Primaries::P3D65 => 2,
+    };
+    (transfer | primaries << 2) as f32
 }

@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AudioEffect, AudioType, Bin, Captions, FrameRate, Gain, GroupId, Label, LinkedSelection, Look,
-    Marker, Marks, MediaItem, Param, PixelAspect, SourceId, Speed, Submix, Ticks,
-    TimeInterpolation, TimeRemap, Timebase, Transition,
+    AudioEffect, AudioType, Bin, Captions, ColorSpace, FrameRate, Gain, GroupId, Label,
+    LinkedSelection, Look, Marker, Marks, MediaItem, Param, PixelAspect, SourceId, Speed, Submix,
+    Ticks, TimeInterpolation, TimeRemap, Timebase, Transition,
 };
 
 pub use crate::track::Track;
@@ -284,6 +284,9 @@ pub struct VideoFormat {
     pub frame_rate: FrameRate,
     #[serde(default, skip_serializing_if = "PixelAspect::is_square")]
     pub pixel_aspect: PixelAspect,
+    /// The color space the file's pictures were encoded in.
+    #[serde(default, skip_serializing_if = "ColorSpace::is_rec709")]
+    pub color_space: ColorSpace,
 }
 
 impl Default for VideoFormat {
@@ -293,6 +296,7 @@ impl Default for VideoFormat {
             height: 1080,
             frame_rate: FrameRate::FPS_25,
             pixel_aspect: PixelAspect::SQUARE,
+            color_space: ColorSpace::Rec709,
         }
     }
 }

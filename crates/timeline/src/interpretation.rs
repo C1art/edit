@@ -111,6 +111,80 @@ impl AlphaInterpretation {
     }
 }
 
+/// The primaries and transfer curve a file's pictures were encoded in, as Premiere's
+/// Color Space Override names them.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ColorSpace {
+    #[default]
+    Rec709,
+    Rec2020,
+    Rec2100Pq,
+    Rec2100Hlg,
+    P3D65,
+    P3D65Pq,
+}
+
+/// The colors a color space's pure red, green and blue are.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Primaries {
+    Rec709,
+    Rec2020,
+    P3D65,
+}
+
+/// How a color space's code values map to light.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Transfer {
+    /// The display gamma of standard dynamic range.
+    Sdr,
+    /// Perceptual Quantizer: absolute light up to 10,000 nits.
+    Pq,
+    /// Hybrid Log-Gamma: scene light, gamma below and logarithmic above.
+    Hlg,
+}
+
+impl ColorSpace {
+    pub const ALL: [Self; 6] = [
+        Self::Rec709,
+        Self::Rec2020,
+        Self::Rec2100Pq,
+        Self::Rec2100Hlg,
+        Self::P3D65,
+        Self::P3D65Pq,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Rec709 => "Rec. 709",
+            Self::Rec2020 => "Rec. 2020",
+            Self::Rec2100Pq => "Rec. 2100 PQ",
+            Self::Rec2100Hlg => "Rec. 2100 HLG",
+            Self::P3D65 => "P3 D65",
+            Self::P3D65Pq => "P3 D65 PQ",
+        }
+    }
+
+    pub fn primaries(self) -> Primaries {
+        match self {
+            Self::Rec709 => Primaries::Rec709,
+            Self::Rec2020 | Self::Rec2100Pq | Self::Rec2100Hlg => Primaries::Rec2020,
+            Self::P3D65 | Self::P3D65Pq => Primaries::P3D65,
+        }
+    }
+
+    pub fn transfer(self) -> Transfer {
+        match self {
+            Self::Rec709 | Self::Rec2020 | Self::P3D65 => Transfer::Sdr,
+            Self::Rec2100Pq | Self::P3D65Pq => Transfer::Pq,
+            Self::Rec2100Hlg => Transfer::Hlg,
+        }
+    }
+
+    pub fn is_rec709(&self) -> bool {
+        *self == Self::Rec709
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

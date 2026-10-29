@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::generator::placed_length;
 use crate::{
-    AlphaInterpretation, BinId, FrameRate, Generator, Nest, PixelAspect, Speed, Ticks, Timebase,
-    VideoFormat,
+    AlphaInterpretation, BinId, ColorSpace, FrameRate, Generator, Nest, PixelAspect, Speed, Ticks,
+    Timebase, VideoFormat,
 };
 
 /// Identifies a media item in the sequence's media pool.
@@ -49,6 +49,10 @@ pub struct MediaItem {
     pub interpreted_aspect: Option<PixelAspect>,
     #[serde(default, skip_serializing_if = "AlphaInterpretation::is_straight")]
     pub alpha: AlphaInterpretation,
+    /// The color space the pictures are read in instead of the one the file declares,
+    /// as for footage that is flagged wrongly or not at all.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interpreted_color: Option<ColorSpace>,
     #[serde(default, skip_serializing_if = "MediaLog::is_empty")]
     pub log: MediaLog,
     /// Set by Make Offline: the file is left alone but no longer read, until relinked.
@@ -136,6 +140,14 @@ impl MediaItem {
         self.interpreted_rate.is_some()
             || self.interpreted_aspect.is_some()
             || !self.alpha.is_straight()
+            || self.interpreted_color.is_some()
+    }
+
+    /// The color space the pictures are read in: the interpreted one or the file's.
+    pub fn color_space(&self) -> ColorSpace {
+        self.interpreted_color
+            .or(self.video.map(|video| video.color_space))
+            .unwrap_or_default()
     }
 
     /// The pixel shape the pictures are drawn with: the interpreted one or the file's.

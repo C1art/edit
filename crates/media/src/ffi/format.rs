@@ -3,7 +3,7 @@ use std::path::Path;
 use std::ptr::{self, NonNull};
 
 use ffmpeg_sys_next as sys;
-use timeline::{Ticks, Timebase};
+use timeline::{ColorSpace, Ticks, Timebase};
 
 use super::error::check;
 use super::Packet;
@@ -111,6 +111,28 @@ impl InputContext {
         let num = u32::try_from(ratio.num).ok().filter(|&num| num > 0)?;
         let den = u32::try_from(ratio.den).ok().filter(|&den| den > 0)?;
         Some((num, den))
+    }
+
+    /// The color space the stream declares, taking undeclared parts as Rec. 709's.
+    pub(crate) fn color_space(&self, index: usize) -> ColorSpace {
+        use sys::AVColorPrimaries::*;
+        use sys::AVColorTransferCharacteristic::*;
+        let Some(stream) = self.stream(index) else {
+            return ColorSpace::Rec709;
+        };
+        // SAFETY: `stream` returns valid stream pointers owned by the open context, and
+        // every stream has non-null `codecpar`.
+        let codecpar = unsafe { &*(*stream).codecpar };
+        let p3 = codecpar.color_primaries == AVCOL_PRI_SMPTE432;
+        let wide = codecpar.color_primaries == AVCOL_PRI_BT2020;
+        match codecpar.color_trc {
+            AVCOL_TRC_SMPTE2084 if p3 => ColorSpace::P3D65Pq,
+            AVCOL_TRC_SMPTE2084 => ColorSpace::Rec2100Pq,
+            AVCOL_TRC_ARIB_STD_B67 => ColorSpace::Rec2100Hlg,
+            _ if wide => ColorSpace::Rec2020,
+            _ if p3 => ColorSpace::P3D65,
+            _ => ColorSpace::Rec709,
+        }
     }
 
     /// The coded picture size declared in the stream header.

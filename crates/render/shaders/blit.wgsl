@@ -108,7 +108,8 @@ struct Placement {
     recolor_change_to: vec4<f32>,
     recolor_change_detail: vec4<f32>,
     // Ultra Key's pedestal, contrast, choke and soften in source pixels; then its spill,
-    // its output (see key.wgsl), and 1 to ignore the source's alpha or 2 to invert it.
+    // its output (see key.wgsl), 1 to ignore the source's alpha or 2 to invert it, and
+    // the source's color space (see color.wgsl).
     key_matte: vec4<f32>,
     key_spill: vec4<f32>,
     // Color Balance (RGB)'s gains, then Replicate's count; Solarize's and Threshold's
@@ -448,6 +449,7 @@ fn source_color(uv: vec2<f32>) -> vec4<f32> {
     if placement.axis_y_opacity.w > 0.5 {
         color = vec4<f32>(color.rgb / max(color.a, 1e-6), color.a);
     }
+    color = vec4<f32>(color_managed(color.rgb), color.a);
     let drawn = patterned(generated(ramped(vec4<f32>(input_grade(color.rgb), color.a), uv), uv), uv);
     return flared(drawn, uv);
 }

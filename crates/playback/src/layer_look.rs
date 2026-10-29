@@ -14,11 +14,12 @@ const BLURRINESS_PER_SIGMA: f32 = 2.0;
 /// The Sharpen effect's default amount, as a share.
 const SHARPEN_DEFAULT: f32 = 0.5;
 
-/// `look` for a picture of `media`, drawn with the pixel shape and alpha it's
-/// interpreted with.
+/// `look` for a picture of `media`, drawn with the pixel shape, alpha and color space
+/// it's interpreted with.
 pub(crate) fn interpreted(mut look: LayerLook, media: &MediaItem) -> LayerLook {
     look.pixel_aspect = media.pixel_aspect().ratio();
     look.effects.alpha = media.alpha;
+    look.effects.color_space = media.color_space();
     look
 }
 

@@ -158,6 +158,7 @@ impl Edit for ImportMedia {
             subclip: None,
             interpreted_rate: self.interpreted_rate,
             interpreted_aspect: None,
+            interpreted_color: None,
             alpha: Default::default(),
             log: Default::default(),
             offline: false,

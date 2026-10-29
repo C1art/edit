@@ -74,6 +74,7 @@ impl Blit {
                     include_str!("../shaders/cineon.wgsl"),
                     include_str!("../shaders/paint.wgsl"),
                     include_str!("../shaders/combine.wgsl"),
+                    include_str!("../shaders/color.wgsl"),
                     include_str!("../shaders/wipe.wgsl")
                 )
                 .into(),

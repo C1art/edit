@@ -1,11 +1,11 @@
 use std::path::PathBuf;
 
 use timeline::{
-    AlphaInterpretation, AudioEffect, Bin, BinId, BinSearch, Caption, Clip, ClipId, CurvePoint,
-    Gain, Generator, Interpolation, Keyframe, Marks, Mask, MaskShape, MediaItem, MediaLog, Nest,
-    Pan, Param, PixelAspect, Rgb, Scroll, SearchField, ShadowStyle, SourceId, TextAlign,
-    TextStroke, Ticks, Timebase, Title, TitleFont, TitleMotion, Track, Transition, TransitionKind,
-    VideoEffect, VideoFormat,
+    AlphaInterpretation, AudioEffect, Bin, BinId, BinSearch, Caption, Clip, ClipId, ColorSpace,
+    CurvePoint, Gain, Generator, Interpolation, Keyframe, Marks, Mask, MaskShape, MediaItem,
+    MediaLog, Nest, Pan, Param, PixelAspect, Rgb, Scroll, SearchField, ShadowStyle, SourceId,
+    TextAlign, TextStroke, Ticks, Timebase, Title, TitleFont, TitleMotion, Track, Transition,
+    TransitionKind, VideoEffect, VideoFormat,
 };
 
 use super::*;
@@ -19,6 +19,7 @@ fn sample() -> ProjectFile {
         duration: Ticks(900_000),
         video: Some(VideoFormat {
             pixel_aspect: PixelAspect::new(10, 11).unwrap_or_default(),
+            color_space: ColorSpace::Rec2100Hlg,
             ..VideoFormat::default()
         }),
         has_audio: true,
@@ -30,6 +31,7 @@ fn sample() -> ProjectFile {
         interpreted_rate: None,
         interpreted_aspect: PixelAspect::new(40, 33),
         alpha: AlphaInterpretation::Invert,
+        interpreted_color: Some(ColorSpace::P3D65Pq),
         log: MediaLog {
             description: "Wide, \"take 3\"".to_owned(),
             scene: "12A".to_owned(),
@@ -83,6 +85,7 @@ fn sample() -> ProjectFile {
         subclip: None,
         interpreted_rate: None,
         interpreted_aspect: None,
+        interpreted_color: None,
         alpha: Default::default(),
         log: Default::default(),
         offline: false,
@@ -137,6 +140,7 @@ fn sample() -> ProjectFile {
         subclip: None,
         interpreted_rate: None,
         interpreted_aspect: None,
+        interpreted_color: None,
         alpha: Default::default(),
         log: Default::default(),
         offline: false,

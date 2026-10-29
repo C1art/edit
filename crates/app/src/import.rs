@@ -98,6 +98,7 @@ pub(crate) fn probe(
             height: video.height,
             frame_rate: video.frame_rate.unwrap_or(FALLBACK_RATE),
             pixel_aspect: video.pixel_aspect,
+            color_space: video.color_space,
         }),
         has_audio: info.has_audio,
         still: info.still,

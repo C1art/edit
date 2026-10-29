@@ -2,16 +2,23 @@ mod common;
 
 use common::{compositor, filled, layer, solid};
 use render::{PixelEffects, RenderError};
-use timeline::{AlphaInterpretation, BlendMode};
+use timeline::{AlphaInterpretation, BlendMode, ColorSpace};
 
 fn interpreted(rgba: [u8; 4], alpha: AlphaInterpretation) -> Result<[u8; 3], RenderError> {
+    drawn(
+        rgba,
+        PixelEffects {
+            alpha,
+            ..PixelEffects::NONE
+        },
+    )
+}
+
+fn drawn(rgba: [u8; 4], effects: PixelEffects) -> Result<[u8; 3], RenderError> {
     let mut compositor = compositor();
     let pixels = filled(rgba);
     let mut picture = layer(&pixels, BlendMode::Normal);
-    picture.look.effects = PixelEffects {
-        alpha,
-        ..PixelEffects::NONE
-    };
+    picture.look.effects = effects;
     compositor.composite((common::SIZE, common::SIZE), &[picture])?;
     let pixel = compositor.read_output()?;
     Ok([pixel[0], pixel[1], pixel[2]])
@@ -34,6 +41,35 @@ fn ignoring_alpha_shows_transparent_pixels_and_inverting_hides_opaque_ones() {
     assert_eq!(
         interpreted(opaque, AlphaInterpretation::Invert).unwrap(),
         [0; 3]
+    );
+}
+
+#[test]
+#[ignore = "needs a GPU"]
+fn hdr_reference_white_is_tone_mapped_just_under_sdr_white() {
+    let in_space = |code: u8, color_space| {
+        let effects = PixelEffects {
+            color_space,
+            ..PixelEffects::NONE
+        };
+        drawn([code, code, code, 255], effects).unwrap()
+    };
+    // 203 nits: PQ's code for it and HLG's 75 percent.
+    for shown in [
+        in_space(148, ColorSpace::Rec2100Pq),
+        in_space(191, ColorSpace::Rec2100Hlg),
+    ] {
+        assert!(
+            shown.iter().all(|&level| level.abs_diff(246) <= 3),
+            "got {shown:?}"
+        );
+    }
+    assert_eq!(in_space(148, ColorSpace::Rec709), [148; 3]);
+    // Wider primaries leave greys grey.
+    let grey = in_space(100, ColorSpace::Rec2020);
+    assert!(
+        grey.iter().all(|&level| level.abs_diff(100) <= 1),
+        "got {grey:?}"
     );
 }
 
