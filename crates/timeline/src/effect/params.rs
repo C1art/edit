@@ -215,6 +215,34 @@ macro_rules! effect_params {
                 .$iter()
                 .chain([magnification, size, feather, opacity])
                 .collect(),
+            VideoEffect::LinearWipe {
+                completion,
+                angle,
+                feather,
+            } => vec![completion, angle, feather],
+            VideoEffect::RadialWipe {
+                completion,
+                start_angle,
+                center,
+                feather,
+                ..
+            } => [completion, start_angle]
+                .into_iter()
+                .chain(center.$iter())
+                .chain([feather])
+                .collect(),
+            VideoEffect::VenetianBlinds {
+                completion: first,
+                direction: second,
+                width: third,
+                feather,
+            }
+            | VideoEffect::BlockDissolve {
+                completion: first,
+                block_width: second,
+                block_height: third,
+                feather,
+            } => vec![first, second, third, feather],
         }
     };
 }

@@ -1,12 +1,12 @@
 use super::{
     ClipNameSource, ColorChange, ColorMatch, EffectCategory, KeyOutput, LensType, MagnifyShape,
-    MatteChannel, RampShape, Rgb, TimecodeSource, VideoEffect,
+    MatteChannel, RadialWipeDirection, RampShape, Rgb, TimecodeSource, VideoEffect,
 };
 use crate::{Param, Stabilizer};
 
 impl VideoEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 51] {
+    pub fn catalog() -> [Self; 55] {
         [
             Self::GaussianBlur {
                 blurriness: Param::from_value(10.0),
@@ -259,6 +259,30 @@ impl VideoEffect {
                 feather: Param::default(),
                 opacity: Param::from_value(100.0),
             },
+            Self::LinearWipe {
+                completion: Param::default(),
+                angle: Param::from_value(90.0),
+                feather: Param::default(),
+            },
+            Self::RadialWipe {
+                completion: Param::default(),
+                start_angle: Param::default(),
+                center: [50.0; 2].map(Param::from_value),
+                direction: RadialWipeDirection::default(),
+                feather: Param::default(),
+            },
+            Self::VenetianBlinds {
+                completion: Param::default(),
+                direction: Param::default(),
+                width: Param::from_value(10.0),
+                feather: Param::default(),
+            },
+            Self::BlockDissolve {
+                completion: Param::default(),
+                block_width: Param::from_value(10.0),
+                block_height: Param::from_value(10.0),
+                feather: Param::default(),
+            },
         ]
     }
 
@@ -311,6 +335,10 @@ impl VideoEffect {
             Self::PosterizeTime { .. } => EffectCategory::Time,
             Self::Timecode { .. } | Self::ClipName { .. } => EffectCategory::Video,
             Self::HorizontalFlip | Self::VerticalFlip => EffectCategory::Transform,
+            Self::LinearWipe { .. }
+            | Self::RadialWipe { .. }
+            | Self::VenetianBlinds { .. }
+            | Self::BlockDissolve { .. } => EffectCategory::Transition,
         }
     }
 
@@ -367,6 +395,10 @@ impl VideoEffect {
             Self::FourColorGradient { .. } => "4-Color Gradient",
             Self::LensFlare { .. } => "Lens Flare",
             Self::Magnify { .. } => "Magnify",
+            Self::LinearWipe { .. } => "Linear Wipe",
+            Self::RadialWipe { .. } => "Radial Wipe",
+            Self::VenetianBlinds { .. } => "Venetian Blinds",
+            Self::BlockDissolve { .. } => "Block Dissolve",
         }
     }
 }

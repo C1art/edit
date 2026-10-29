@@ -9,8 +9,8 @@ mod params;
 
 pub use key::{KeyOutput, MatteChannel, ULTRA_KEY_REACH};
 pub use options::{
-    ClipNameSource, ColorChange, ColorMatch, EffectCategory, LensType, MagnifyShape, RampShape,
-    TimecodeSource,
+    ClipNameSource, ColorChange, ColorMatch, EffectCategory, LensType, MagnifyShape,
+    RadialWipeDirection, RampShape, TimecodeSource,
 };
 
 /// An sRGB color as stored in a project.
@@ -421,5 +421,35 @@ pub enum VideoEffect {
         feather: Param,
         /// Percent.
         opacity: Param,
+    },
+    /// The Transition effects hide `completion` percent of the picture, their feathers
+    /// in the picture's pixels and their angles in degrees clockwise from up.
+    LinearWipe {
+        completion: Param,
+        /// The way the wipe travels across the picture.
+        angle: Param,
+        feather: Param,
+    },
+    RadialWipe {
+        completion: Param,
+        start_angle: Param,
+        /// Percent of the picture's width and height.
+        center: [Param; 2],
+        direction: RadialWipeDirection,
+        feather: Param,
+    },
+    /// Stripes `width` pixels wide that each close across `direction`.
+    VenetianBlinds {
+        completion: Param,
+        direction: Param,
+        width: Param,
+        feather: Param,
+    },
+    /// Blocks of the picture vanishing in a fixed random order.
+    BlockDissolve {
+        completion: Param,
+        block_width: Param,
+        block_height: Param,
+        feather: Param,
     },
 }

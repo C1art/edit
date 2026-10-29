@@ -153,6 +153,28 @@ impl MagnifyShape {
     }
 }
 
+/// Which way Radial Wipe sweeps from its start angle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub enum RadialWipeDirection {
+    #[default]
+    Clockwise,
+    Counterclockwise,
+    /// Both ways at once, meeting opposite the start.
+    Both,
+}
+
+impl RadialWipeDirection {
+    pub const ALL: [Self; 3] = [Self::Clockwise, Self::Counterclockwise, Self::Both];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Clockwise => "Clockwise",
+            Self::Counterclockwise => "Counterclockwise",
+            Self::Both => "Both",
+        }
+    }
+}
+
 /// The groups the effects menu lists effects in, as Premiere's Effects panel does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EffectCategory {
@@ -166,11 +188,12 @@ pub enum EffectCategory {
     Stylize,
     Time,
     Transform,
+    Transition,
     Video,
 }
 
 impl EffectCategory {
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::BlurAndSharpen,
         Self::ColorCorrection,
         Self::Distort,
@@ -181,6 +204,7 @@ impl EffectCategory {
         Self::Stylize,
         Self::Time,
         Self::Transform,
+        Self::Transition,
         Self::Video,
     ];
 
@@ -196,6 +220,7 @@ impl EffectCategory {
             Self::Stylize => "Stylize",
             Self::Time => "Time",
             Self::Transform => "Transform",
+            Self::Transition => "Transition",
             Self::Video => "Video",
         }
     }
