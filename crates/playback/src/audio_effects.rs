@@ -7,6 +7,8 @@ use audio::{
 };
 use timeline::{AudioEffect, ClipId, Ticks};
 
+use crate::audio_effects_more::MoreUnit;
+
 /// Corner frequencies of the equalizer's shelves.
 const LOW_SHELF_HZ: f32 = 100.0;
 const HIGH_SHELF_HZ: f32 = 8_000.0;
@@ -36,6 +38,7 @@ enum Unit {
     Pitch(Box<PitchShifter>),
     DeNoise(Box<DeNoise>),
     DeHum(Box<DeHum>),
+    More(MoreUnit),
     /// For effects that keep nothing from one sample to the next.
     Stateless,
 }
@@ -77,6 +80,7 @@ impl EffectChain {
                 Unit::Pitch(shifter) => shifter.reset(),
                 Unit::DeNoise(denoise) => denoise.reset(),
                 Unit::DeHum(dehum) => dehum.reset(),
+                Unit::More(unit) => unit.reset(),
                 Unit::Stateless => {}
             }
         }
@@ -358,6 +362,7 @@ impl EffectChain {
                     rate,
                     samples,
                 ),
+                (effect, Unit::More(unit)) => unit.process(effect, time, rate, samples),
                 _ => {}
             }
         }
@@ -408,6 +413,7 @@ impl EffectChain {
             | AudioEffect::FillRightWithLeft
             | AudioEffect::SwapChannels
             | AudioEffect::Invert => Unit::Stateless,
+            more => MoreUnit::for_effect(more, self.rate).map_or(Unit::Stateless, Unit::More),
         }
     }
 }

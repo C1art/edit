@@ -47,6 +47,12 @@ impl Coefficients {
         )
     }
 
+    /// Passes a band around `frequency` at full level, narrower as `q` rises.
+    pub fn band_pass(rate: SampleRate, frequency: f32, q: f32) -> Self {
+        let (cos, alpha) = Self::angle(rate, frequency, f64::from(q));
+        Self::normalised([alpha, 0.0, -alpha], [1.0 + alpha, -2.0 * cos, 1.0 - alpha])
+    }
+
     /// Passes every frequency at full level but turns the phase through a half circle
     /// around `frequency`.
     pub fn all_pass(rate: SampleRate, frequency: f32, q: f32) -> Self {
@@ -208,6 +214,9 @@ mod tests {
         let cut = Coefficients::high_pass(RATE, 100.0, std::f32::consts::FRAC_1_SQRT_2);
         assert!((db(cut, 100.0) + 3.01).abs() < 0.05);
         assert!(db(cut, 10.0) < -39.0);
+        let band = Coefficients::band_pass(RATE, 1_000.0, 2.0);
+        assert!(db(band, 1_000.0).abs() < 0.01);
+        assert!(db(band, 100.0) < -20.0);
     }
 
     #[test]

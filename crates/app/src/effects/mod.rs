@@ -20,6 +20,7 @@ mod reframe;
 mod remap;
 mod secondary;
 mod sound;
+mod sound_more;
 mod stabilizer;
 mod transitions;
 mod video_effects;

@@ -8,7 +8,7 @@ const GAIN_DB: std::ops::RangeInclusive<f32> = -24.0..=24.0;
 const HEARING_HZ: std::ops::RangeInclusive<f32> = 20.0..=20_000.0;
 
 /// The add menu's groups, as Premiere's Effects panel files them.
-pub(crate) const CATEGORIES: [&str; 8] = [
+pub(crate) const CATEGORIES: [&str; 10] = [
     "Amplitude and Compression",
     "Filter and EQ",
     "Modulation",
@@ -17,6 +17,8 @@ pub(crate) const CATEGORIES: [&str; 8] = [
     "Time and Pitch",
     "Channels",
     "Noise Reduction/Restoration",
+    "Special",
+    "Stereo Imagery",
 ];
 
 pub(crate) fn category(effect: &AudioEffect) -> &'static str {
@@ -34,9 +36,14 @@ pub(crate) fn category(effect: &AudioEffect) -> &'static str {
         | AudioEffect::GraphicEqualizer { .. }
         | AudioEffect::HighPass { .. }
         | AudioEffect::LowPass { .. }
-        | AudioEffect::Notch { .. } => CATEGORIES[1],
-        AudioEffect::Chorus { .. } | AudioEffect::Flanger { .. } => CATEGORIES[2],
-        AudioEffect::Delay { .. } => CATEGORIES[3],
+        | AudioEffect::Notch { .. }
+        | AudioEffect::BandPass { .. } => CATEGORIES[1],
+        AudioEffect::Chorus { .. } | AudioEffect::Flanger { .. } | AudioEffect::Phaser { .. } => {
+            CATEGORIES[2]
+        }
+        AudioEffect::Delay { .. }
+        | AudioEffect::MultitapDelay { .. }
+        | AudioEffect::AnalogDelay { .. } => CATEGORIES[3],
         AudioEffect::Reverb { .. } => CATEGORIES[4],
         AudioEffect::PitchShifter { .. } => CATEGORIES[5],
         AudioEffect::Balance { .. }
@@ -45,6 +52,8 @@ pub(crate) fn category(effect: &AudioEffect) -> &'static str {
         | AudioEffect::SwapChannels
         | AudioEffect::Invert => CATEGORIES[6],
         AudioEffect::DeNoise { .. } | AudioEffect::DeHum { .. } => CATEGORIES[7],
+        AudioEffect::Distortion { .. } => CATEGORIES[8],
+        AudioEffect::StereoExpander { .. } => CATEGORIES[9],
     }
 }
 
@@ -275,5 +284,6 @@ fn effect_rows(ui: &mut egui::Ui, rows: &mut Rows, effect: &mut AudioEffect) {
             rows.param(ui, "Feedback", feedback, 0.0..=95.0, "%");
             rows.param(ui, "Mix", mix, 0.0..=100.0, "%");
         }
+        more => super::sound_more::effect_rows(ui, rows, more),
     }
 }

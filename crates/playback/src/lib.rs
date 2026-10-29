@@ -1,5 +1,6 @@
 mod adjust_effects;
 mod audio_effects;
+mod audio_effects_more;
 mod audio_worker;
 mod clip_audio;
 mod clip_decoders;

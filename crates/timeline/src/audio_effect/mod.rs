@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::Param;
 
+mod catalog;
+
 /// An effect on an audio clip's sound, applied in list order before its volume.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum AudioEffect {
@@ -144,6 +146,47 @@ pub enum AudioEffect {
         release: Param,
         makeup: Param,
     },
+    /// Passes only a band around `frequency` hertz; a higher `q` narrows it.
+    BandPass {
+        frequency: Param,
+        q: Param,
+    },
+    /// Sweeps notches through the sound: `stages` all-pass filters turning around
+    /// `frequency` hertz, swept `depth` percent of two octaves each way `rate` times a
+    /// second, fed back by `feedback` percent and mixed in at `mix` percent.
+    Phaser {
+        stages: Param,
+        frequency: Param,
+        depth: Param,
+        rate: Param,
+        feedback: Param,
+        mix: Param,
+    },
+    /// Soft-clips the sound after `drive` decibels of gain, mixed in at `mix` percent.
+    Distortion {
+        drive: Param,
+        mix: Param,
+    },
+    /// Spreads the sides to `width` percent of their difference: 0 makes mono and 100
+    /// leaves the sound as it is.
+    StereoExpander {
+        width: Param,
+    },
+    /// Four echoes, each after its `times` milliseconds at its `levels` percent.
+    MultitapDelay {
+        times: [Param; 4],
+        levels: [Param; 4],
+    },
+    /// Echoes `time` milliseconds apart, each `feedback` percent of the one before and
+    /// darker above `tone` hertz and more saturated by `saturation` percent, as tape
+    /// echoes are, mixed in at `mix` percent.
+    AnalogDelay {
+        time: Param,
+        feedback: Param,
+        saturation: Param,
+        tone: Param,
+        mix: Param,
+    },
     /// Plays the right side on both.
     FillLeftWithRight,
     /// Plays the left side on both.
@@ -220,6 +263,25 @@ impl AudioEffect {
                 release,
                 makeup,
             ],
+            Self::BandPass { frequency, q } => vec![frequency, q],
+            Self::Phaser {
+                stages,
+                frequency,
+                depth,
+                rate,
+                feedback,
+                mix,
+            } => vec![stages, frequency, depth, rate, feedback, mix],
+            Self::Distortion { drive, mix } => vec![drive, mix],
+            Self::StereoExpander { width } => vec![width],
+            Self::MultitapDelay { times, levels } => times.iter_mut().chain(levels).collect(),
+            Self::AnalogDelay {
+                time,
+                feedback,
+                saturation,
+                tone,
+                mix,
+            } => vec![time, feedback, saturation, tone, mix],
             Self::FillLeftWithRight
             | Self::FillRightWithLeft
             | Self::SwapChannels
@@ -237,148 +299,6 @@ impl AudioEffect {
                 feedback,
                 mix,
             } => vec![time, feedback, mix],
-        }
-    }
-
-    /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 26] {
-        [
-            Self::Amplify {
-                gain: Param::default(),
-            },
-            Self::Balance {
-                balance: Param::default(),
-            },
-            Self::Bass {
-                boost: Param::default(),
-            },
-            Self::Treble {
-                boost: Param::default(),
-            },
-            Self::Equalizer {
-                low: Param::default(),
-                mid: Param::default(),
-                mid_frequency: Param::from_value(1_000.0),
-                high: Param::default(),
-            },
-            Self::HighPass {
-                frequency: Param::from_value(80.0),
-            },
-            Self::LowPass {
-                frequency: Param::from_value(12_000.0),
-            },
-            Self::Notch {
-                frequency: Param::from_value(60.0),
-                q: Param::from_value(10.0),
-            },
-            Self::Compressor {
-                threshold: Param::from_value(-20.0),
-                ratio: Param::from_value(4.0),
-                attack: Param::from_value(10.0),
-                release: Param::from_value(100.0),
-                makeup: Param::default(),
-            },
-            Self::HardLimiter {
-                boost: Param::default(),
-                ceiling: Param::from_value(-0.1),
-                release: Param::from_value(80.0),
-            },
-            Self::NoiseGate {
-                threshold: Param::from_value(-50.0),
-                attack: Param::from_value(2.0),
-                release: Param::from_value(100.0),
-            },
-            Self::Delay {
-                time: Param::from_value(300.0),
-                feedback: Param::from_value(30.0),
-                mix: Param::from_value(30.0),
-            },
-            Self::Reverb {
-                size: Param::from_value(50.0),
-                damping: Param::from_value(50.0),
-                mix: Param::from_value(25.0),
-            },
-            Self::DeEsser {
-                threshold: Param::from_value(-30.0),
-                reduction: Param::from_value(12.0),
-                frequency: Param::from_value(5_000.0),
-            },
-            Self::Chorus {
-                rate: Param::from_value(1.0),
-                depth: Param::from_value(5.0),
-                mix: Param::from_value(50.0),
-            },
-            Self::Flanger {
-                rate: Param::from_value(0.3),
-                depth: Param::from_value(3.0),
-                feedback: Param::from_value(50.0),
-                mix: Param::from_value(50.0),
-            },
-            Self::PitchShifter {
-                semitones: Param::default(),
-                mix: Param::from_value(100.0),
-            },
-            Self::DeNoise {
-                amount: Param::from_value(40.0),
-            },
-            Self::DeHum {
-                frequency: Param::from_value(60.0),
-                harmonics: Param::from_value(4.0),
-                reduction: Param::from_value(30.0),
-            },
-            Self::ChannelVolume {
-                left: Param::default(),
-                right: Param::default(),
-            },
-            Self::GraphicEqualizer {
-                bands: Default::default(),
-            },
-            Self::MultibandCompressor {
-                low_crossover: Param::from_value(200.0),
-                high_crossover: Param::from_value(2_000.0),
-                low_threshold: Param::from_value(-20.0),
-                mid_threshold: Param::from_value(-20.0),
-                high_threshold: Param::from_value(-20.0),
-                ratio: Param::from_value(3.0),
-                attack: Param::from_value(10.0),
-                release: Param::from_value(150.0),
-                makeup: Param::default(),
-            },
-            Self::FillLeftWithRight,
-            Self::FillRightWithLeft,
-            Self::SwapChannels,
-            Self::Invert,
-        ]
-    }
-
-    pub fn name(&self) -> &'static str {
-        match self {
-            Self::Amplify { .. } => "Amplify",
-            Self::Balance { .. } => "Balance",
-            Self::Bass { .. } => "Bass",
-            Self::Treble { .. } => "Treble",
-            Self::Notch { .. } => "Notch Filter",
-            Self::HardLimiter { .. } => "Hard Limiter",
-            Self::NoiseGate { .. } => "Noise Gate",
-            Self::Reverb { .. } => "Studio Reverb",
-            Self::FillLeftWithRight => "Fill Left with Right",
-            Self::FillRightWithLeft => "Fill Right with Left",
-            Self::SwapChannels => "Swap Channels",
-            Self::Invert => "Invert",
-            Self::Equalizer { .. } => "Parametric Equalizer",
-            Self::HighPass { .. } => "Highpass",
-            Self::LowPass { .. } => "Lowpass",
-            Self::Compressor { .. } => "Dynamics Compressor",
-            Self::Delay { .. } => "Delay",
-            Self::DeEsser { .. } => "DeEsser",
-            Self::Chorus { .. } => "Chorus",
-            Self::Flanger { .. } => "Flanger",
-            Self::PitchShifter { .. } => "Pitch Shifter",
-            Self::DeNoise { .. } => "DeNoise",
-            Self::DeHum { .. } => "DeHum",
-            Self::ChannelVolume { .. } => "Channel Volume",
-            Self::GraphicEqualizer { .. } => "Graphic Equalizer (10 Bands)",
-            Self::MultibandCompressor { .. } => "Multiband Compressor",
         }
     }
 }
