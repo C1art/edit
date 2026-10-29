@@ -20,6 +20,7 @@ mod edge_effects;
 mod envelope;
 mod error;
 mod export;
+mod export_sink;
 mod frame_blend;
 mod frame_picker;
 mod frame_probe;

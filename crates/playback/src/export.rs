@@ -7,12 +7,12 @@ use std::thread;
 use audio::SampleRate;
 use crossbeam::channel::{Receiver, Sender};
 use media::{
-    AudioSettings, EncodeProfile, MediaWriter, RateControl, RgbaResizer, StillFormat, VideoCodec,
-    VideoSettings,
+    AudioSettings, EncodeProfile, MediaWriter, RateControl, StillFormat, VideoCodec, VideoSettings,
 };
 use render::{Background, Compositor, LayerImage};
 use timeline::{Sequence, Ticks};
 
+use crate::export_sink::{Sink, Stills, Work};
 use crate::sequence_mix::{SequenceMix, CHUNK_FRAMES};
 use crate::{compose, Layer, PlaybackError, Resolution};
 
@@ -185,13 +185,19 @@ impl Worker {
             rate.frame_start(frames.start, timebase)..rate.frame_start(frames.end, timebase);
         let chapters = timeline::chapters(&sequence.markers, exported);
         let path = self.settings.path.clone();
-        let mut writer = match stills {
+        let writer = match stills {
             Some(_) => None,
             None => Some(MediaWriter::with_chapters(
                 &path, video, audio, &chapters, timebase,
             )?),
         };
-        let mut resizer = RgbaResizer::default();
+        let writes_audio = writer.is_some() && audio.is_some();
+        let stills_to = stills.map(|(format, size)| Stills {
+            format,
+            input_size,
+            size,
+        });
+        let mut sink = Sink::start(writer, stills_to)?;
 
         let frames_total = frames.end - frames.start;
         // A silent export never mixes, so its rate doesn't matter.
@@ -222,30 +228,24 @@ impl Worker {
                 let images: Vec<LayerImage<'_>> = layers.iter().map(Layer::image).collect();
                 self.compositor.composite(input_size, &images)?;
                 let picture = self.compositor.read_output()?;
-                match (&mut writer, stills) {
-                    (Some(writer), _) => writer.write_video(&picture)?,
-                    (None, Some((still, size))) => {
-                        let picture = if size == input_size {
-                            picture
-                        } else {
-                            resizer.resize(input_size, size, &picture)?
-                        };
+                match stills {
+                    Some((still, _)) => {
                         let file = still_path(&path, frame - frames.start, frames_total, still);
-                        media::write_still(&file, still, size, &picture)?;
-                        self.stills_written.push(file);
+                        self.stills_written.push(file.clone());
+                        sink.send(Work::Still(file, picture))?;
                     }
-                    (None, None) => {}
+                    None => sink.send(Work::Picture(picture))?,
                 }
             }
 
             // Audio keeps pace with the pictures so the muxer can interleave them.
             let audio_end = to_audio(rate.frame_start(frame + 1, timebase)).min(audio_total);
-            if let (Some(writer), Some(_)) = (&mut writer, audio) {
+            if writes_audio {
                 while audio_written < audio_end {
                     mix.mix_chunk(&sequence, audio_written, &mut warnings);
                     let frames = (audio_total - audio_written).min(CHUNK_FRAMES as i64);
                     let samples = usize::try_from(frames).unwrap_or(0) * 2;
-                    writer.write_audio(&mix.mix[..samples])?;
+                    sink.send(Work::Sound(mix.mix[..samples].to_vec()))?;
                     audio_written += frames;
                 }
             }
@@ -258,9 +258,7 @@ impl Worker {
                 frames_total,
             });
         }
-        if let Some(writer) = writer {
-            writer.finish()?;
-        }
+        sink.finish()?;
         Ok(Outcome::Finished)
     }
 }
