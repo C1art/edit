@@ -4,7 +4,7 @@ use super::slots::SlotKind;
 use super::{Compositor, LayerImage, Picture, Step};
 use crate::pixel::PixelEffects;
 use crate::placement::LayerLook;
-use crate::RenderError;
+use crate::{yuv, RenderError};
 
 impl Compositor {
     pub(super) fn check_layers(&self, layers: &[LayerImage<'_>]) -> Result<(), RenderError> {
@@ -22,6 +22,22 @@ impl Compositor {
                             width: *width,
                             height: *height,
                             bytes: rgba.len(),
+                        });
+                    }
+                }
+                Picture::Planes {
+                    width,
+                    height,
+                    luma,
+                    chroma,
+                    ..
+                } => {
+                    self.check_size(*width, *height)?;
+                    let size = (*width, *height);
+                    if !yuv::holds(*luma, *width, *height) || !yuv::chroma_holds(chroma, size) {
+                        return Err(RenderError::PlaneSize {
+                            width: *width,
+                            height: *height,
                         });
                     }
                 }
@@ -64,6 +80,21 @@ impl Compositor {
                 } => {
                     let index = self.claim(next, (*width, *height), SlotKind::Picture);
                     self.upload(index, rgba, source.as_ref());
+                    index
+                }
+                Picture::Planes {
+                    width,
+                    height,
+                    luma,
+                    chroma,
+                    color,
+                    source,
+                } => {
+                    let kind = SlotKind::Planes(chroma.layout());
+                    let index = self.claim(next, (*width, *height), kind);
+                    if self.upload_planes(index, (*luma, chroma), *color, source.as_ref()) {
+                        steps.push(Step::Convert(index));
+                    }
                     index
                 }
                 Picture::Group(members) => self.group(members, canvas, next, steps),

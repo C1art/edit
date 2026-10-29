@@ -4,7 +4,7 @@ mod slots;
 use std::any::Any;
 use std::sync::Arc;
 
-use timeline::MatteChannel;
+use timeline::{MatteChannel, YuvColor};
 
 use crate::backdrop::{Backdrop, Drawn};
 use crate::blit::{self, Blit, DISPLAY_FORMAT};
@@ -14,6 +14,7 @@ use crate::layer_pipelines::LayerPass;
 use crate::layer_shader::Features;
 use crate::placement::{LayerLook, Placement};
 use crate::scope::{Scope, ScopeTrace};
+use crate::yuv::{ChromaRows, PlaneRows, YuvConverter};
 use crate::{RenderError, WORKING_FORMAT};
 use slots::Slot;
 
@@ -49,6 +50,17 @@ pub enum Picture<'a> {
         /// same source as last time keeps its texture instead of uploading it again.
         source: Option<Arc<dyn Any + Send + Sync>>,
     },
+    /// A 4:2:0 picture's planes, in the source transfer function, turned into RGB on
+    /// the GPU.
+    Planes {
+        width: u32,
+        height: u32,
+        luma: PlaneRows<'a>,
+        chroma: ChromaRows<'a>,
+        color: YuvColor,
+        /// As for [`Picture::Pixels`].
+        source: Option<Arc<dyn Any + Send + Sync>>,
+    },
     /// Layers composited bottom first onto a transparent canvas of their own, so the
     /// look applies to them as one picture, as to a nested sequence.
     Group(Vec<LayerImage<'a>>),
@@ -69,6 +81,8 @@ pub enum Picture<'a> {
 
 /// GPU work that must run before the layers that use it are drawn.
 enum Step {
+    /// Turns the planes uploaded for the slot into its texture.
+    Convert(usize),
     Blur(usize),
     /// Draws the slots in `members` into the group slot `index`.
     Group {
@@ -123,6 +137,8 @@ pub struct Compositor {
     pub(crate) queue: wgpu::Queue,
     blit: Blit,
     slots: Vec<Slot>,
+    /// Built the first time a picture comes as planes.
+    yuv: Option<YuvConverter>,
     targets: Option<Targets>,
     scope: Option<ScopeTrace>,
     background: Background,
@@ -144,6 +160,7 @@ impl Compositor {
             device: device.clone(),
             queue: queue.clone(),
             slots: Vec::new(),
+            yuv: None,
             targets: None,
             scope: None,
             background: Background::Black,
@@ -249,13 +266,22 @@ impl Compositor {
             trace.bind(&self.device, &self.queue, &targets.output, canvas);
         }
 
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("compositor"),
-            });
+        let encoder_named = |label| {
+            self.device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) })
+        };
+        // Submitted even when the frame is left pending, as the planes it converts
+        // aren't uploaded again.
+        let mut conversions = encoder_named("yuv");
+        let mut encoder = encoder_named("compositor");
         for step in &steps {
             match step {
+                Step::Convert(index) => {
+                    let slot = &self.slots[*index];
+                    if let (Some(planes), Some(yuv)) = (&slot.planes, &self.yuv) {
+                        planes.draw(&mut conversions, yuv, &slot.view);
+                    }
+                }
                 Step::Blur(index) => {
                     if let Some(blur) = &self.slots[*index].blur {
                         blur.draw(&mut encoder, &self.blit);
@@ -345,13 +371,14 @@ impl Compositor {
         }
         // The encoder is dropped unsubmitted: a frame with layers left out isn't shown.
         if self.blit.layers.take_missed() {
+            self.queue.submit([conversions.finish()]);
             self.unshown_target |= presented == Presented::NewTarget;
             return Ok(Presented::Pending);
         }
         if let Some(trace) = &self.scope {
             trace.record(&mut encoder);
         }
-        self.queue.submit([encoder.finish()]);
+        self.queue.submit([conversions.finish(), encoder.finish()]);
         if std::mem::take(&mut self.unshown_target) {
             return Ok(Presented::NewTarget);
         }

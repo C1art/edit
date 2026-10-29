@@ -35,6 +35,7 @@ mod style;
 mod tone;
 mod warp;
 mod wipe;
+mod yuv;
 
 pub use adjust::{Adjust, AlphaAdjust, Levels, LumaKey, ProcAmp};
 pub use blit::DISPLAY_FORMAT;
@@ -72,6 +73,7 @@ pub use tone::{
 };
 pub use warp::{PlaneTransform, Warp, MAX_WARPS};
 pub use wipe::LayerWipe;
+pub use yuv::{ChromaRows, PlaneRows};
 
 /// Compositing happens in linear light at half-float precision.
 pub const WORKING_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;

@@ -8,6 +8,11 @@ pub enum RenderError {
         height: u32,
         bytes: usize,
     },
+    /// The planes are too short or their rows too narrow for a picture this size.
+    PlaneSize {
+        width: u32,
+        height: u32,
+    },
     FrameTooLarge {
         width: u32,
         height: u32,
@@ -31,6 +36,9 @@ impl fmt::Display for RenderError {
                 height,
                 bytes,
             } => write!(f, "{bytes} bytes is not a {width}x{height} RGBA frame"),
+            Self::PlaneSize { width, height } => {
+                write!(f, "the planes do not hold a {width}x{height} picture")
+            }
             Self::FrameTooLarge { width, height, max } => write!(
                 f,
                 "{width}x{height} frame exceeds the GPU's {max} pixel texture limit"

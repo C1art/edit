@@ -9,6 +9,7 @@ use crate::blur::BlurTargets;
 use crate::grade::Grade;
 use crate::layer_shader::Features;
 use crate::placement::{fit_scale, Placement};
+use crate::yuv::{ChromaLayout, ChromaRows, PlaneRows, PlaneTextures, YuvConverter};
 use crate::WORKING_FORMAT;
 
 /// Decoded frames arrive gamma-encoded. BT.709 video is treated as sRGB, which matches
@@ -21,6 +22,8 @@ pub(super) enum SlotKind {
     Picture,
     /// A canvas-sized working texture that a group is drawn into.
     Group,
+    /// A working texture that uploaded planes are turned into.
+    Planes(ChromaLayout),
 }
 
 /// Texture and placement for one layer, reused while the layer's size and kind hold.
@@ -30,6 +33,8 @@ pub(super) struct Slot {
     pub(super) height: u32,
     pub(super) texture: wgpu::Texture,
     pub(super) view: wgpu::TextureView,
+    /// What a slot of planes uploads them to.
+    pub(super) planes: Option<PlaneTextures>,
     pub(super) placement: wgpu::Buffer,
     pub(super) binding: wgpu::BindGroup,
     /// Created the first time the layer is blurred.
@@ -73,20 +78,29 @@ impl Compositor {
         index
     }
 
+    /// Whether the slot must take a picture from `source`, which it then holds.
+    fn takes(&mut self, index: usize, source: Option<&Arc<dyn Any + Send + Sync>>) -> bool {
+        let slot = &mut self.slots[index];
+        let same = |held: &Arc<dyn Any + Send + Sync>| {
+            source.is_some_and(|source| std::ptr::addr_eq(Arc::as_ptr(held), Arc::as_ptr(source)))
+        };
+        if slot.uploaded.as_ref().is_some_and(same) {
+            return false;
+        }
+        slot.uploaded = source.cloned();
+        true
+    }
+
     pub(super) fn upload(
         &mut self,
         index: usize,
         rgba: &[u8],
         source: Option<&Arc<dyn Any + Send + Sync>>,
     ) {
-        let slot = &mut self.slots[index];
-        let same = |held: &Arc<dyn Any + Send + Sync>| {
-            source.is_some_and(|source| std::ptr::addr_eq(Arc::as_ptr(held), Arc::as_ptr(source)))
-        };
-        if slot.uploaded.as_ref().is_some_and(same) {
+        if !self.takes(index, source) {
             return;
         }
-        slot.uploaded = source.cloned();
+        let slot = &self.slots[index];
         self.queue.write_texture(
             wgpu::TexelCopyTextureInfo {
                 texture: &slot.texture,
@@ -102,6 +116,23 @@ impl Compositor {
             },
             extent(slot.width, slot.height),
         );
+    }
+
+    /// Uploads planes to the slot; true if they must then be converted.
+    pub(super) fn upload_planes(
+        &mut self,
+        index: usize,
+        (luma, chroma): (PlaneRows<'_>, &ChromaRows<'_>),
+        color: timeline::YuvColor,
+        source: Option<&Arc<dyn Any + Send + Sync>>,
+    ) -> bool {
+        if !self.takes(index, source) {
+            return false;
+        }
+        if let Some(planes) = &self.slots[index].planes {
+            planes.upload(&self.queue, luma, chroma, color);
+        }
+        true
     }
 
     pub(super) fn place(&mut self, index: usize, layer: &LayerImage<'_>, canvas: (u32, u32)) {
@@ -146,9 +177,10 @@ impl Compositor {
             .write_placement(&self.queue, &slot.placement, placement);
     }
 
-    fn create_slot(&self, (width, height): (u32, u32), kind: SlotKind) -> Slot {
+    fn create_slot(&mut self, (width, height): (u32, u32), kind: SlotKind) -> Slot {
         let (format, written) = match kind {
             SlotKind::Picture => (SOURCE_FORMAT, wgpu::TextureUsages::COPY_DST),
+            SlotKind::Planes(_) => (WORKING_FORMAT, wgpu::TextureUsages::RENDER_ATTACHMENT),
             // Copied to the backdrop under members with a blend mode.
             SlotKind::Group => (
                 WORKING_FORMAT,
@@ -163,6 +195,19 @@ impl Compositor {
         );
         let placement = Blit::placement_buffer(&self.device);
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let planes = match kind {
+            SlotKind::Planes(layout) => {
+                let device = &self.device;
+                let converter = self.yuv.get_or_insert_with(|| YuvConverter::new(device));
+                Some(PlaneTextures::new(
+                    device,
+                    converter,
+                    (width, height),
+                    layout,
+                ))
+            }
+            SlotKind::Picture | SlotKind::Group => None,
+        };
         Slot {
             kind,
             width,
@@ -170,6 +215,7 @@ impl Compositor {
             binding: self.blit.bind(&self.device, &view, &placement),
             view,
             texture,
+            planes,
             placement,
             blur: None,
             blurred: false,

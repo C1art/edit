@@ -62,6 +62,7 @@ mod xmeml;
 mod xmeml_import;
 mod xmeml_markers;
 mod xml;
+mod yuv;
 
 pub use audio_effect::{
     AmpModel, AudioEffect, CompressorSection, Dynamics, ExpanderSection, FilterMode, FilterType,
@@ -167,3 +168,4 @@ pub use transition::{nearest_transition_edge, Alignment, Side, Transition, Trans
 pub use wipe::{Border, Sweep, Wipe, WipePattern};
 pub use xmeml::to_xmeml;
 pub use xmeml_import::{read_xmeml, ImportXmeml};
+pub use yuv::{ChromaSiting, YuvColor, YuvMatrix, YuvRange};
