@@ -84,10 +84,15 @@ pub fn carried_media(editor: &Editor, ctx: &egui::Context) -> Option<SourceDrag>
     })
 }
 
-/// Overwrites media dropped onto the timeline, keeping its video and audio together on
-/// the hovered track and the first track of the other kind.
+/// Edits media dropped onto the timeline into it, keeping its video and audio together
+/// on the hovered track and the first track of the other kind.
 pub fn drop_media(editor: &mut Editor, drop: MediaDrop) {
-    let MediaDrop { media, track, at } = drop;
+    let MediaDrop {
+        media,
+        track,
+        at,
+        mode,
+    } = drop;
     let sequence = editor.timeline.sequence();
     let Some(item) = sequence.media_item(media.source) else {
         return;
@@ -102,7 +107,7 @@ pub fn drop_media(editor: &mut Editor, drop: MediaDrop) {
         at,
         video_track,
         audio_track,
-        mode: PlaceMode::Overwrite,
+        mode,
         fill: None,
     });
 }

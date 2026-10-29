@@ -1,7 +1,7 @@
 use egui::{Color32, Painter, Rect, Stroke, StrokeKind};
 use timeline::{
-    nearest_transition_edge, ClipId, Edge, MediaItem, Sequence, SourceId, Ticks, TrackKind,
-    TrackRef,
+    nearest_transition_edge, ClipId, Edge, MediaItem, PlaceMode, Sequence, SourceId, Ticks,
+    TrackKind, TrackRef,
 };
 
 use super::layout::{self, Row};
@@ -15,6 +15,7 @@ pub struct MediaDrop {
     pub media: SourceDrag,
     pub track: TrackRef,
     pub at: Ticks,
+    pub mode: PlaceMode,
 }
 
 /// Media dragged from the pool or the source monitor, with the part of it a drop
@@ -61,13 +62,15 @@ pub(super) enum DropHint {
         start: Ticks,
         end: Ticks,
         tracks: [Option<TrackRef>; 2],
+        mode: PlaceMode,
     },
     On(TrackRef, ClipId),
 }
 
 /// Reports media or an effect released over a track, and returns where a hovered one
 /// would land. `carried` is the media being dragged, which snaps by its head and tail
-/// when given the playhead to snap with too.
+/// when given the playhead to snap with too, and is inserted rather than laid over
+/// what's there while Ctrl is held, as in Premiere.
 pub(super) fn handle_drop(
     response: &egui::Response,
     sequence: &Sequence,
@@ -98,6 +101,11 @@ pub(super) fn handle_drop(
         let Some(row) = row else {
             return Some(DropHint::At(at));
         };
+        let mode = if response.ctx.input(|input| input.modifiers.command) {
+            PlaceMode::Insert
+        } else {
+            PlaceMode::Overwrite
+        };
         // Releasing takes the payload whatever its type, so only the hovered one may try.
         let released = if from_pool {
             response.dnd_release_payload::<SourceId>().is_some()
@@ -109,6 +117,7 @@ pub(super) fn handle_drop(
                 media,
                 track: row.track,
                 at,
+                mode,
             });
         }
         let (video, audio) = drop_tracks(sequence, item, row.track, media.take);
@@ -116,6 +125,7 @@ pub(super) fn handle_drop(
             start: at,
             end: at + length,
             tracks: [video.map(TrackRef::video), audio.map(TrackRef::audio)],
+            mode,
         });
     }
     let item = response.dnd_hover_payload::<EffectItem>()?;
@@ -161,12 +171,16 @@ pub(super) fn paint(
             start,
             end,
             tracks: on,
+            mode,
         } => {
             for row in rows.iter().filter(|row| on.contains(&Some(row.track))) {
                 let rect = layout::clip_rect(row, scale, start, end);
                 painter.rect_filled(rect, 2.0, Color32::from_white_alpha(24));
                 let stroke = Stroke::new(1.5, Color32::from_white_alpha(200));
                 painter.rect_stroke(rect, 2.0, stroke, StrokeKind::Inside);
+                if mode == PlaceMode::Insert {
+                    paint_push(painter, rect.left_center(), stroke.color);
+                }
             }
             paint::guide(painter, scale.x(start), tracks.top(), tracks.bottom());
         }
@@ -179,6 +193,18 @@ pub(super) fn paint(
             }
         }
     }
+}
+
+/// An arrow pushing to the right from `at`, for an insert that moves later clips along.
+fn paint_push(painter: &Painter, at: egui::Pos2, color: Color32) {
+    let arrow = [(6.0, -5.0), (12.0, 0.0), (6.0, 5.0)].map(|(x, y)| at + egui::vec2(x, y));
+    painter.add(egui::Shape::convex_polygon(
+        arrow.to_vec(),
+        color,
+        Stroke::NONE,
+    ));
+    let shaft = [at + egui::vec2(2.0, 0.0), at + egui::vec2(7.0, 0.0)];
+    painter.line_segment(shaft, Stroke::new(2.0, color));
 }
 
 /// What an empty sequence shows, so a first-time user knows how to start.
