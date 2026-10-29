@@ -412,7 +412,9 @@ pub fn discard_dialog(editor: &mut Editor, ctx: &egui::Context) {
             if ui.button("Don't Save").clicked() {
                 choice = Some(Choice::Discard);
             }
-            if ui.add(crate::dialog::primary("Save")).clicked() {
+            if ui.add(crate::dialog::primary("Save")).clicked()
+                || ui.input(|input| input.key_pressed(Key::Enter))
+            {
                 choice = Some(Choice::Save);
             }
         });

@@ -134,7 +134,9 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &Context) {
             {
                 recover = Some(false);
             }
-            if ui.add(crate::dialog::primary("Recover")).clicked() {
+            if ui.add(crate::dialog::primary("Recover")).clicked()
+                || ui.input(|input| input.key_pressed(Key::Enter))
+            {
                 recover = Some(true);
             }
         });
