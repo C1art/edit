@@ -4,7 +4,7 @@ use timeline::{
     Generator, Graphic, GraphicContent, GraphicLayer, Shape, ShapeKind, Title, TitleMotion,
 };
 
-use super::generated::{shape_controls, text_controls};
+use super::generated::{pairs, shape_controls, text_controls};
 use crate::mixer::{response_state, Change};
 
 /// A new text layer, a shape layer of a kind, or a picture from a file still to be
@@ -98,7 +98,7 @@ pub(super) fn controls(ui: &mut egui::Ui, graphic: &mut Graphic, height: u32) ->
         .unwrap_or(0)
         .min(last);
     let mut change = None;
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         if let Some(added) = new_layer_menu(ui).and_then(NewLayer::layer) {
             graphic.layers.insert(0, added);
             chosen = 0;
@@ -161,7 +161,7 @@ fn layer_controls(ui: &mut egui::Ui, layer: &mut GraphicLayer, height: u32) -> O
     let mut change = None;
     ui.horizontal(|ui| {
         ui.label("Name");
-        let name = ui.text_edit_singleline(&mut layer.name);
+        let name = ui.add(egui::TextEdit::singleline(&mut layer.name).desired_width(f32::INFINITY));
         if name.changed() {
             change = Some(Change::Live);
         }
@@ -169,7 +169,7 @@ fn layer_controls(ui: &mut egui::Ui, layer: &mut GraphicLayer, height: u32) -> O
             change = Some(Change::Commit);
         }
     });
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         ui.label("Position");
         for (axis, value) in ["X", "Y"].into_iter().zip(&mut layer.offset) {
             let drag = egui::DragValue::new(value)
@@ -187,22 +187,28 @@ fn layer_controls(ui: &mut egui::Ui, layer: &mut GraphicLayer, height: u32) -> O
             change = Some(Change::Commit);
         }
     });
-    ui.horizontal(|ui| {
-        ui.label("Scale");
-        let scale = egui::DragValue::new(&mut layer.scale)
-            .range(1..=2000)
-            .suffix(" %");
-        change = response_state(&ui.add(scale), change);
-        ui.label("Rotation");
-        let rotation = egui::DragValue::new(&mut layer.rotation)
-            .range(-3600..=3600)
-            .suffix("°");
-        change = response_state(&ui.add(rotation), change);
-        ui.label("Opacity");
-        let opacity = egui::DragValue::new(&mut layer.opacity)
-            .range(0..=100)
-            .suffix(" %");
-        change = response_state(&ui.add(opacity), change);
+    pairs(ui, 300.0, |ui| {
+        ui.horizontal(|ui| {
+            ui.label("Scale");
+            let scale = egui::DragValue::new(&mut layer.scale)
+                .range(1..=2000)
+                .suffix(" %");
+            change = response_state(&ui.add(scale), change);
+        });
+        ui.horizontal(|ui| {
+            ui.label("Rotation");
+            let rotation = egui::DragValue::new(&mut layer.rotation)
+                .range(-3600..=3600)
+                .suffix("°");
+            change = response_state(&ui.add(rotation), change);
+        });
+        ui.horizontal(|ui| {
+            ui.label("Opacity");
+            let opacity = egui::DragValue::new(&mut layer.opacity)
+                .range(0..=100)
+                .suffix(" %");
+            change = response_state(&ui.add(opacity), change);
+        });
     });
     match &mut layer.content {
         GraphicContent::Text(title) => {

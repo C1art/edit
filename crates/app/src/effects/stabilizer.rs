@@ -21,7 +21,8 @@ impl Rows {
             ui.add_space(20.0);
             if let Some(done) = self.analyzing {
                 let text = format!("Analyzing… {:.0}%", done * 100.0);
-                ui.add(egui::ProgressBar::new(done).desired_width(180.0).text(text));
+                let width = ui.available_width().min(180.0);
+                ui.add(egui::ProgressBar::new(done).desired_width(width).text(text));
                 return;
             }
             ui.label(if analyzed { "Analyzed" } else { "Not analyzed" });

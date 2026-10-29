@@ -219,11 +219,13 @@ pub(super) fn shape_controls(ui: &mut egui::Ui, shape: &mut Shape, height: u32) 
             }
         }
     });
-    ui.horizontal_wrapped(|ui| {
+    pairs(ui, 230.0, |ui| {
         for (label, length) in [("Width", &mut shape.width), ("Height", &mut shape.height)] {
-            ui.label(label);
-            let drag = ui.add(egui::DragValue::new(length).range(1..=8000).suffix(" px"));
-            change = response_state(&drag, change);
+            ui.horizontal(|ui| {
+                ui.label(label);
+                let drag = ui.add(egui::DragValue::new(length).range(1..=8000).suffix(" px"));
+                change = response_state(&drag, change);
+            });
         }
     });
     if shape.kind == ShapeKind::Rectangle {
@@ -324,7 +326,7 @@ fn shadow_rows(
 
 /// Lays out groups of controls side by side, or one under another when the panel is
 /// narrower than `wide`; a wrapping row would part a label from its value.
-fn pairs(ui: &mut egui::Ui, wide: f32, add: impl FnOnce(&mut egui::Ui)) {
+pub(super) fn pairs(ui: &mut egui::Ui, wide: f32, add: impl FnOnce(&mut egui::Ui)) {
     if ui.available_width() >= wide {
         ui.horizontal(add);
     } else {
