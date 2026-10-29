@@ -88,6 +88,7 @@ impl VideoEffect {
             Self::Ellipse(_) => "Ellipse",
             Self::CellPattern(_) => "Cell Pattern",
             Self::Lightning(_) => "Lightning",
+            Self::LightingEffects(_) => "Lighting Effects",
         }
     }
 }

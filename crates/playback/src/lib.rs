@@ -23,6 +23,7 @@ mod generate_effects;
 mod generated;
 mod grades;
 mod layer_look;
+mod lighting_effects;
 mod lightning;
 mod loudness;
 mod mixdown;

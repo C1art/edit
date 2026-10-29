@@ -303,6 +303,7 @@ impl Rows {
             | VideoEffect::Ellipse(_)
             | VideoEffect::CellPattern(_)
             | VideoEffect::Lightning(_) => self.generate(ui, effect),
+            VideoEffect::LightingEffects(lighting) => self.lighting_effects(ui, lighting),
             VideoEffect::LensFlare { .. } | VideoEffect::Magnify { .. } => self.optics(ui, effect),
             VideoEffect::LinearWipe { .. }
             | VideoEffect::RadialWipe { .. }

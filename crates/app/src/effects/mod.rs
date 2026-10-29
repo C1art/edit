@@ -10,6 +10,7 @@ mod hue_curves;
 mod key_selection;
 mod keying;
 mod lane;
+mod lighting;
 mod look;
 mod mask_overlay;
 mod masks;

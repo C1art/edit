@@ -203,6 +203,10 @@ struct Placement {
     pattern_cells: vec4<f32>,
     pattern_cells_more: vec4<f32>,
     pattern_cells_flags: vec4<f32>,
+    lighting_lamps: array<vec4<f32>, 15>,
+    lighting_ambience: vec4<f32>,
+    lighting_surface: vec4<f32>,
+    lighting_flags: vec4<f32>,
 };
 
 const OUTLINE_VEC4S: u32 = 32u;
@@ -435,7 +439,7 @@ fn layer_color(in: VertexOutput) -> vec4<f32> {
     let sharp = unsharp(sharpen(median_filtered(convolved(despill(color.rgb, matte), uv), uv), uv), uv);
     var rgb = noise_hls(adjusted(restyle(stylize(secondary(creative_grade(correct(color_balance(change_color(change_to_color(mix_channels(leave_color(toned(sharp, uv))))))))), pinned), uv)), pinned);
     let rough = roughened(pinned);
-    rgb = roughen_colored(edge_lit(rgb, pinned, uv), rough.y);
+    rgb = roughen_colored(edge_lit(lighting_effects(rgb, uv), pinned, uv), rough.y);
     rgb = page_side(key_view(limited(rgb), matte), page);
     rgb = mix(rgb, vec3<f32>(1.0), placement.balance.w);
     let viewed = alpha_view(rgb, adjusted_alpha(color.a) * keyed * luma_matte(color.rgb) * f32(in_crop(pinned)) * rough.x);

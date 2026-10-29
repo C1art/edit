@@ -9,6 +9,7 @@ mod edges;
 mod garbage;
 mod generate;
 mod key;
+mod lighting;
 mod names;
 mod options;
 mod params;
@@ -23,6 +24,7 @@ pub use edges::{AlphaGlow, Bevel, RoughenEdgeType, RoughenEdges};
 pub use garbage::GarbageMatte;
 pub use generate::{Checkerboard, Circle, FourColorGradient, Grid};
 pub use key::{KeyOutput, MatteChannel, ULTRA_KEY_REACH};
+pub use lighting::{Light, LightKind, LightingEffects, MAX_LIGHTS};
 pub use options::{
     ClipNameSource, ColorChange, ColorMatch, EffectCategory, LensType, MagnifyShape,
     RadialWipeDirection, RampShape, Rgb, TimecodeSource,
@@ -476,4 +478,5 @@ pub enum VideoEffect {
     Ellipse(Ellipse),
     CellPattern(CellPattern),
     Lightning(Lightning),
+    LightingEffects(LightingEffects),
 }

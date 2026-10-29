@@ -5,6 +5,7 @@ use crate::clip_wipes::ClipWipes;
 use crate::detail::Detail;
 use crate::edges::Edges;
 use crate::generate::Generate;
+use crate::lighting::Lighting;
 use crate::optics::Optics;
 use crate::pattern::Pattern;
 use crate::recolor::Recolor;
@@ -40,6 +41,7 @@ pub struct PixelEffects {
     pub tone: Tone,
     pub shift: ColorShift,
     pub pattern: Pattern,
+    pub lighting: Option<Lighting>,
     /// How the source's alpha channel is read.
     pub alpha: AlphaInterpretation,
 }
@@ -115,6 +117,7 @@ impl PixelEffects {
         tone: Tone::NONE,
         shift: ColorShift::NONE,
         pattern: Pattern::NONE,
+        lighting: Lighting::NONE,
         alpha: AlphaInterpretation::Straight,
     };
 

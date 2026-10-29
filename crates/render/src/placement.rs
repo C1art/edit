@@ -1,6 +1,7 @@
 use timeline::BlendMode;
 
 use crate::creative::Creative;
+use crate::lighting::Lighting;
 use crate::mask::{self, LayerMask, MAX_MASKS};
 #[cfg(test)]
 use crate::mask::{Outline, MAX_OUTLINE_POINTS};
@@ -252,6 +253,11 @@ impl Placement {
             .chain(self.effects.tone.uniform().into_iter().flatten())
             .chain(self.effects.shift.uniform().into_iter().flatten())
             .chain(self.effects.pattern.uniform().into_iter().flatten())
+            .chain(
+                Lighting::uniform(self.effects.lighting.as_ref())
+                    .into_iter()
+                    .flatten(),
+            )
             .flat_map(f32::to_le_bytes)
             .collect()
     }
@@ -303,8 +309,8 @@ mod tests {
         // the key's two, the adjustments' six, Lumetri Creative's three,
         // the Generate effects' thirteen, Lens Flare and Magnify's three and the
         // Transition effects' five, the detail effects' three, the edge effects' eleven
-        // the tone effects' thirteen, Change Color and Color Balance's six and Ellipse
-        // and Cell Pattern's seven.
+        // the tone effects' thirteen, Change Color and Color Balance's six, Ellipse
+        // and Cell Pattern's seven and Lighting Effects' eighteen.
         let outlines = MAX_MASKS * MAX_OUTLINE_POINTS / 2;
         assert_eq!(
             bytes.len(),
@@ -324,7 +330,8 @@ mod tests {
                 + 11
                 + 13
                 + 6
-                + 7)
+                + 7
+                + 18)
                 * 16
         );
         assert!(bytes.len() as u64 <= crate::blit::UNIFORM_BYTES);

@@ -1,8 +1,8 @@
 use super::{
     AlphaGlow, AscCdl, Bevel, CellPattern, ChangeColor, ChannelBlur, Checkerboard, Circle,
     ColorBalance, ColorReplace, ConvolutionKernel, Echo, EdgeFeather, Ellipse, Extract,
-    FourColorGradient, Grid, Lightning, Median, NoiseHls, RoughenEdges, ShadowHighlight,
-    SimpleText, UnsharpMask, VideoEffect, VideoLimiter,
+    FourColorGradient, Grid, Light, LightingEffects, Lightning, Median, NoiseHls, RoughenEdges,
+    ShadowHighlight, SimpleText, UnsharpMask, VideoEffect, VideoLimiter,
 };
 use crate::{AutoReframe, Param};
 
@@ -233,6 +233,36 @@ macro_rules! effect_params {
                 .into_iter()
                 .chain(offset.$iter())
                 .chain([evolution, blend_with_original])
+                .collect(),
+            VideoEffect::LightingEffects(LightingEffects {
+                lights,
+                ambience_intensity,
+                surface_gloss,
+                surface_material,
+                exposure,
+                bump_height,
+                ..
+            }) => lights
+                .$iter()
+                .flat_map(|light| {
+                    let Light {
+                        center: [x, y],
+                        major_radius,
+                        minor_radius,
+                        angle,
+                        intensity,
+                        focus,
+                        ..
+                    } = light;
+                    [x, y, major_radius, minor_radius, angle, intensity, focus]
+                })
+                .chain([
+                    ambience_intensity,
+                    surface_gloss,
+                    surface_material,
+                    exposure,
+                    bump_height,
+                ])
                 .collect(),
             VideoEffect::Lightning(Lightning {
                 start_point,
