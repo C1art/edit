@@ -8,6 +8,8 @@ use timeline::{
     ULTRA_KEY_REACH,
 };
 
+use crate::clip_wipes::set_clip_wipe;
+
 /// The per-pixel part of an effect stack at source time `time`. The shader runs each
 /// kind of effect once, so repeats of a kind combine, the last one's colors winning.
 pub(crate) fn pixel_effects(
@@ -446,6 +448,12 @@ pub(crate) fn pixel_effects(
                     opacity: unit(opacity),
                     square: *shape == MagnifyShape::Square,
                 });
+            }
+            VideoEffect::LinearWipe { .. }
+            | VideoEffect::RadialWipe { .. }
+            | VideoEffect::VenetianBlinds { .. }
+            | VideoEffect::BlockDissolve { .. } => {
+                set_clip_wipe(&mut pixel.clip_wipes, effect, time);
             }
         }
     }

@@ -2,6 +2,7 @@ mod audio_effects;
 mod audio_worker;
 mod clip_audio;
 mod clip_decoders;
+mod clip_wipes;
 mod clock;
 mod command;
 mod compose;
