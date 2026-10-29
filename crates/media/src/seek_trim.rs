@@ -2,21 +2,26 @@ use std::collections::VecDeque;
 
 use timeline::{Ticks, Timebase};
 
-use crate::{AudioBuffer, DecodedFrame, VideoFrame};
+use crate::AudioBuffer;
+
+/// What a seek keeps: pictures, still as the decoder left them, and sound.
+pub(crate) enum Trimmed<P> {
+    Video(Ticks, P),
+    Audio(AudioBuffer),
+}
 
 /// Makes seeks frame-accurate. Demuxers land on the keyframe before the target, so the
 /// frames decoded between that keyframe and the target are dropped here, except for the
 /// picture that is on screen at the target and the audio from the target onwards.
-#[derive(Debug)]
-pub(crate) struct SeekTrim {
+pub(crate) struct SeekTrim<P> {
     timebase: Timebase,
     video_target: Option<Ticks>,
     audio_target: Option<Ticks>,
-    held_video: Option<VideoFrame>,
-    ready: VecDeque<DecodedFrame>,
+    held_video: Option<(Ticks, P)>,
+    ready: VecDeque<Trimmed<P>>,
 }
 
-impl SeekTrim {
+impl<P> SeekTrim<P> {
     pub(crate) fn new(timebase: Timebase) -> Self {
         Self {
             timebase,
@@ -34,23 +39,23 @@ impl SeekTrim {
         self.ready.clear();
     }
 
-    pub(crate) fn push_video(&mut self, frame: VideoFrame) {
+    pub(crate) fn push_video(&mut self, pts: Ticks, picture: P) {
         let Some(target) = self.video_target else {
-            self.ready.push_back(DecodedFrame::Video(frame));
+            self.ready.push_back(Trimmed::Video(pts, picture));
             return;
         };
-        if frame.pts < target {
-            self.held_video = Some(frame);
+        if pts < target {
+            self.held_video = Some((pts, picture));
             return;
         }
-        if frame.pts > target {
-            if let Some(held) = self.held_video.take() {
-                self.ready.push_back(DecodedFrame::Video(held));
+        if pts > target {
+            if let Some((held_pts, held)) = self.held_video.take() {
+                self.ready.push_back(Trimmed::Video(held_pts, held));
             }
         }
         self.video_target = None;
         self.held_video = None;
-        self.ready.push_back(DecodedFrame::Video(frame));
+        self.ready.push_back(Trimmed::Video(pts, picture));
     }
 
     pub(crate) fn push_audio(&mut self, mut buffer: AudioBuffer) {
@@ -63,19 +68,19 @@ impl SeekTrim {
             }
             self.audio_target = None;
         }
-        self.ready.push_back(DecodedFrame::Audio(buffer));
+        self.ready.push_back(Trimmed::Audio(buffer));
     }
 
     /// Releases the last picture when the seek target lies past the final frame.
     pub(crate) fn finish(&mut self) {
-        if let Some(held) = self.held_video.take() {
-            self.ready.push_back(DecodedFrame::Video(held));
+        if let Some((pts, held)) = self.held_video.take() {
+            self.ready.push_back(Trimmed::Video(pts, held));
         }
         self.video_target = None;
         self.audio_target = None;
     }
 
-    pub(crate) fn pop(&mut self) -> Option<DecodedFrame> {
+    pub(crate) fn pop(&mut self) -> Option<Trimmed<P>> {
         self.ready.pop_front()
     }
 }
@@ -88,15 +93,6 @@ mod tests {
         Timebase::new(1, 1000).unwrap()
     }
 
-    fn video(pts: i64) -> VideoFrame {
-        VideoFrame {
-            pts: Ticks(pts),
-            width: 0,
-            height: 0,
-            pixels: Vec::new(),
-        }
-    }
-
     fn audio(pts: i64, frames: usize) -> AudioBuffer {
         AudioBuffer {
             pts: Ticks(pts),
@@ -106,46 +102,46 @@ mod tests {
         }
     }
 
-    fn drain(trim: &mut SeekTrim) -> Vec<DecodedFrame> {
+    fn drain(trim: &mut SeekTrim<()>) -> Vec<Trimmed<()>> {
         std::iter::from_fn(|| trim.pop()).collect()
     }
 
-    fn video_pts(frames: &[DecodedFrame]) -> Vec<i64> {
+    fn video_pts(frames: &[Trimmed<()>]) -> Vec<i64> {
         frames
             .iter()
             .filter_map(|frame| match frame {
-                DecodedFrame::Video(video) => Some(video.pts.0),
-                DecodedFrame::Audio(_) => None,
+                Trimmed::Video(pts, ()) => Some(pts.0),
+                Trimmed::Audio(_) => None,
             })
             .collect()
     }
 
     #[test]
     fn keeps_the_frame_on_screen_at_a_target_between_frames() {
-        let mut trim = SeekTrim::new(tb());
+        let mut trim = SeekTrim::<()>::new(tb());
         trim.reset(Ticks(50));
         for pts in [0, 40, 80, 120] {
-            trim.push_video(video(pts));
+            trim.push_video(Ticks(pts), ());
         }
         assert_eq!(video_pts(&drain(&mut trim)), [40, 80, 120]);
     }
 
     #[test]
     fn drops_the_previous_frame_when_a_frame_starts_exactly_at_target() {
-        let mut trim = SeekTrim::new(tb());
+        let mut trim = SeekTrim::<()>::new(tb());
         trim.reset(Ticks(80));
         for pts in [0, 40, 80, 120] {
-            trim.push_video(video(pts));
+            trim.push_video(Ticks(pts), ());
         }
         assert_eq!(video_pts(&drain(&mut trim)), [80, 120]);
     }
 
     #[test]
     fn seek_past_the_last_frame_shows_the_last_frame_on_finish() {
-        let mut trim = SeekTrim::new(tb());
+        let mut trim = SeekTrim::<()>::new(tb());
         trim.reset(Ticks(500));
-        trim.push_video(video(0));
-        trim.push_video(video(40));
+        trim.push_video(Ticks(0), ());
+        trim.push_video(Ticks(40), ());
         assert!(trim.pop().is_none());
         trim.finish();
         assert_eq!(video_pts(&drain(&mut trim)), [40]);
@@ -153,14 +149,14 @@ mod tests {
 
     #[test]
     fn trims_audio_to_start_exactly_at_target() {
-        let mut trim = SeekTrim::new(tb());
+        let mut trim = SeekTrim::<()>::new(tb());
         trim.reset(Ticks(105));
         trim.push_audio(audio(0, 100));
         trim.push_audio(audio(100, 100));
         trim.push_audio(audio(200, 100));
         let out = drain(&mut trim);
-        let [DecodedFrame::Audio(first), DecodedFrame::Audio(second)] = out.as_slice() else {
-            panic!("expected two audio buffers, got {out:?}");
+        let [Trimmed::Audio(first), Trimmed::Audio(second)] = out.as_slice() else {
+            panic!("expected two audio buffers");
         };
         assert_eq!(first.pts, Ticks(105));
         assert_eq!(first.frames(), 95);

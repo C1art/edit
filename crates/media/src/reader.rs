@@ -4,9 +4,10 @@ use timeline::{ChannelMap, ColorSpace, FieldOrder, FrameRate, PixelAspect, Ticks
 
 use crate::channel_map::mapped;
 use crate::ffi::{
-    Decoder, Frame, InputContext, Packet, Received, SampleConverter, Scaler, OUTPUT_CHANNELS,
+    Decoder, Frame, InputContext, Packet, Picture, Received, SampleConverter, Scaler,
+    OUTPUT_CHANNELS,
 };
-use crate::seek_trim::SeekTrim;
+use crate::seek_trim::{SeekTrim, Trimmed};
 use crate::sequence::open_input;
 use crate::{AudioBuffer, DecodedFrame, MediaError, StreamKind, VideoFrame};
 
@@ -90,7 +91,7 @@ pub struct MediaReader {
     timebase: Timebase,
     /// Container start time in `timebase`, subtracted so that media time starts at zero.
     start: Ticks,
-    trim: SeekTrim,
+    trim: SeekTrim<Picture>,
     state: ReadState,
     info: SourceInfo,
     channel_map: Option<ChannelMap>,
@@ -220,8 +221,8 @@ impl MediaReader {
     /// Returns frames in decode order, interleaving video and audio; `None` at end of media.
     pub fn next_frame(&mut self) -> Result<Option<DecodedFrame>, MediaError> {
         loop {
-            if let Some(frame) = self.trim.pop() {
-                return Ok(Some(frame));
+            if let Some(trimmed) = self.trim.pop() {
+                return self.finish(trimmed).map(Some);
             }
             match self.state {
                 ReadState::Finished => return Ok(None),
@@ -238,6 +239,22 @@ impl MediaReader {
                         self.state = ReadState::Draining;
                     }
                 }
+            }
+        }
+    }
+
+    fn finish(&mut self, trimmed: Trimmed<Picture>) -> Result<DecodedFrame, MediaError> {
+        match trimmed {
+            Trimmed::Audio(buffer) => Ok(DecodedFrame::Audio(buffer)),
+            Trimmed::Video(pts, picture) => {
+                let video = self.video.as_mut().ok_or(MediaError::InvalidFrame)?;
+                let (width, height, pixels) = video.converter.convert(&picture)?;
+                Ok(DecodedFrame::Video(VideoFrame {
+                    pts,
+                    width,
+                    height,
+                    pixels,
+                }))
             }
         }
     }
@@ -259,16 +276,9 @@ impl MediaReader {
             video.decoder.send_packet(packet)?;
             while let Received::Frame = video.decoder.receive_frame(&mut self.frame)? {
                 let pts = clock.pts(&self.frame, video.timebase, video.next_pts);
-                let (width, height, pixels) =
-                    video.converter.convert(&video.decoder, &self.frame)?;
-                self.frame.unref();
+                let picture = Picture::take(&mut self.frame, video.decoder.picture_format())?;
                 video.next_pts = pts;
-                self.trim.push_video(VideoFrame {
-                    pts,
-                    width,
-                    height,
-                    pixels,
-                });
+                self.trim.push_video(pts, picture);
             }
         }
         if let Some(audio) = self

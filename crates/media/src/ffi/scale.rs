@@ -6,7 +6,7 @@ use super::sws_flags::{SWS_ACCURATE_RND, SWS_BILINEAR, SWS_FULL_CHR_H_INT};
 use timeline::FieldOrder;
 
 use super::error::check;
-use super::{Decoder, Frame, RgbaResizer};
+use super::{Frame, Picture, RgbaResizer};
 use crate::deinterlace::deinterlace;
 use crate::MediaError;
 
@@ -57,18 +57,15 @@ impl Scaler {
         self.fields = fields;
     }
 
-    pub(crate) fn convert(
-        &mut self,
-        decoder: &Decoder,
-        frame: &Frame,
-    ) -> Result<(u32, u32, Vec<u8>), MediaError> {
+    pub(crate) fn convert(&mut self, picture: &Picture) -> Result<(u32, u32, Vec<u8>), MediaError> {
+        let (frame, format) = (picture.frame(), picture.format());
         let raw = frame.raw();
         let decoded = (raw.width, raw.height);
         let wanted = self.output_size.unwrap_or(decoded);
         if self.fields.is_progressive() {
-            return self.convert_to(decoder, frame, wanted);
+            return self.convert_to(format, frame, wanted);
         }
-        let (width, height, mut pixels) = self.convert_to(decoder, frame, decoded)?;
+        let (width, height, mut pixels) = self.convert_to(format, frame, decoded)?;
         deinterlace(&mut pixels, width as usize, height as usize, self.fields);
         if wanted == decoded {
             return Ok((width, height, pixels));
@@ -83,7 +80,7 @@ impl Scaler {
 
     fn convert_to(
         &mut self,
-        decoder: &Decoder,
+        format: sys::AVPixelFormat,
         frame: &Frame,
         (output_width, output_height): (i32, i32),
     ) -> Result<(u32, u32, Vec<u8>), MediaError> {
@@ -91,7 +88,7 @@ impl Scaler {
         let key = ScalerKey {
             width: raw.width,
             height: raw.height,
-            format: decoder.picture_format(),
+            format,
             colorspace: raw.colorspace,
             range: raw.color_range,
             output_width,

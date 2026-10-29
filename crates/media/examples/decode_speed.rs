@@ -1,10 +1,11 @@
-//! Times decoding a file's video to RGBA through `MediaReader`, the path playback uses:
+//! Times decoding a file's video to RGBA through `MediaReader`, the path playback uses,
+//! and seeking to the middle and near the end:
 //! `cargo run --release -p media --example decode_speed -- <file>`.
 use std::path::PathBuf;
 use std::time::Instant;
 
 use media::{DecodedFrame, MediaReader, Streams};
-use timeline::Timebase;
+use timeline::{Ticks, Timebase};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let path: PathBuf = std::env::args_os()
@@ -25,5 +26,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "{frames} frames in {elapsed:.2?}: {:.2} ms per frame",
         elapsed.as_secs_f64() * 1000.0 / f64::from(frames.max(1))
     );
+    if let Some(duration) = reader.info().duration {
+        for position in [duration.0 / 2, duration.0 * 9 / 10] {
+            let started = Instant::now();
+            reader.seek(Ticks(position))?;
+            while !matches!(reader.next_frame()?, Some(DecodedFrame::Video(_)) | None) {}
+            println!("seek to {position}: {:.2?}", started.elapsed());
+        }
+    }
     Ok(())
 }
