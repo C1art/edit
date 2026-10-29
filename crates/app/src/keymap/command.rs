@@ -9,6 +9,7 @@ pub enum Command {
     ExportMedia,
     ExportFrame,
     NewTitle,
+    Quit,
     Undo,
     Redo,
     Cut,
@@ -127,7 +128,7 @@ pub enum Command {
 pub const WORKSPACE_SLOTS: u8 = 9;
 
 impl Command {
-    pub const ALL: [Self; 127] = [
+    pub const ALL: [Self; 128] = [
         Self::NewProject,
         Self::OpenProject,
         Self::Save,
@@ -136,6 +137,7 @@ impl Command {
         Self::ExportMedia,
         Self::ExportFrame,
         Self::NewTitle,
+        Self::Quit,
         Self::Undo,
         Self::Redo,
         Self::Cut,
@@ -273,7 +275,7 @@ impl Command {
         use Command::*;
         match self {
             NewProject | OpenProject | Save | SaveAs | Import | ExportMedia | ExportFrame
-            | NewTitle => "File",
+            | NewTitle | Quit => "File",
             Undo | Redo | Cut | Copy | Paste | PasteInsert | PasteAttributes | Clear
             | RippleDelete | CancelDrag | SelectAll | DeselectAll | Find | KeyboardShortcuts => {
                 "Edit"

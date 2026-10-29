@@ -95,7 +95,8 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                 editor.open_project_manager();
             }
             ui.separator();
-            if ui.button("Quit").clicked() {
+            let quit = Button::new("Quit").shortcut_text(editor.keymap.label(Command::Quit));
+            if ui.add(quit).clicked() {
                 ui.ctx().send_viewport_cmd(ViewportCommand::Close);
             }
         });

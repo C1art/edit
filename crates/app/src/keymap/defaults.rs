@@ -21,6 +21,7 @@ impl Command {
             Self::ExportMedia => vec![ctrl(Key::M)],
             Self::ExportFrame => vec![ctrl_shift(Key::E)],
             Self::NewTitle => vec![ctrl(Key::T)],
+            Self::Quit => vec![ctrl(Key::Q)],
             Self::Undo => vec![ctrl(Key::Z)],
             Self::Redo => vec![ctrl_shift(Key::Z), ctrl(Key::Y)],
             Self::Cut => vec![ctrl(Key::X)],

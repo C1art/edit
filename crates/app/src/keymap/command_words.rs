@@ -25,6 +25,7 @@ impl Command {
             Self::ExportMedia => ("export_media", "Export Media"),
             Self::ExportFrame => ("export_frame", "Export Frame"),
             Self::NewTitle => ("new_title", "New Title"),
+            Self::Quit => ("quit", "Quit"),
             Self::Undo => ("undo", "Undo"),
             Self::Redo => ("redo", "Redo"),
             Self::Cut => ("cut", "Cut"),

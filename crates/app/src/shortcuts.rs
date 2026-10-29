@@ -68,6 +68,8 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         Command::OpenProject => editor.prompt_path(PathPurpose::OpenProject),
         Command::Save => editor.save_project(),
         Command::SaveAs => editor.prompt_path(PathPurpose::SaveProject),
+        // Closing asks about unsaved changes, as the window's close button does.
+        Command::Quit => editor.ctx.send_viewport_cmd(egui::ViewportCommand::Close),
         Command::Import => editor.prompt_path(PathPurpose::Import),
         Command::ExportMedia => crate::export::open(editor),
         Command::ExportFrame => editor.prompt_path(PathPurpose::ExportFrame),
