@@ -80,6 +80,16 @@ fn toasts(notifications: &mut Notifications, ctx: &Context, now: f64) {
                 let fade_from = entry.shown_until - FADE;
                 next_change = next_change.min(if now < fade_from { fade_from } else { now });
             }
+            if skip > 0 {
+                let more = if skip == 1 {
+                    "1 more message".to_owned()
+                } else {
+                    format!("{skip} more messages")
+                };
+                if ui.link(more).clicked() {
+                    notifications.history_open = true;
+                }
+            }
         });
     if next_change.is_finite() {
         ctx.request_repaint_after_secs((next_change - now).max(0.0) as f32);
