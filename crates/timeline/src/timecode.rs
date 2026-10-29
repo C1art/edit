@@ -96,6 +96,64 @@ impl Timecode {
     }
 }
 
+/// A timecode as typed: a position, or with a leading `+` or `-`, a move from the current
+/// one. Both count frames.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TypedTimecode {
+    At(i64),
+    By(i64),
+}
+
+impl TypedTimecode {
+    /// Reads timecode as Premiere's fields take it: `HH:MM:SS:FF` with the leading
+    /// fields optional, or bare digits read in pairs from the right, so `500` at any
+    /// rate is five seconds.
+    pub fn parse(text: &str, rate: FrameRate) -> Option<Self> {
+        let text = text.trim();
+        let (sign, body) = match text.strip_prefix('+') {
+            Some(body) => (Some(1), body),
+            None => match text.strip_prefix('-') {
+                Some(body) => (Some(-1), body),
+                None => (None, text),
+            },
+        };
+        let body = body.trim();
+        let all_digits = |field: &str| field.bytes().all(|byte| byte.is_ascii_digit());
+        let fields: Vec<&str> = if body.contains([':', ';', '.']) {
+            body.split([':', ';', '.']).collect()
+        } else if !body.is_empty() {
+            let pairs = body.as_bytes().rchunks(2).rev();
+            pairs
+                .map(std::str::from_utf8)
+                .collect::<Result<_, _>>()
+                .ok()?
+        } else {
+            return None;
+        };
+        if fields.len() > 4 || !fields.iter().all(|field| all_digits(field)) {
+            return None;
+        }
+        let nominal = rate.nominal();
+        let units = [1, nominal, nominal * 60, nominal * 3600];
+        let frames = fields
+            .iter()
+            .rev()
+            .zip(units)
+            .try_fold(0_i64, |sum, (field, unit)| {
+                let value: i64 = if field.is_empty() {
+                    0
+                } else {
+                    field.parse().ok()?
+                };
+                sum.checked_add(value.checked_mul(unit)?)
+            })?;
+        Some(match sign {
+            Some(sign) => Self::By(sign * frames),
+            None => Self::At(frames),
+        })
+    }
+}
+
 impl fmt::Display for Timecode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let sign = if self.negative { "-" } else { "" };
@@ -139,6 +197,48 @@ mod tests {
         let one_hour_of_frames = 30 * 3600;
         let position = NTSC.frame_start(one_hour_of_frames + 29, tb);
         assert_eq!(Timecode::new(position, tb, NTSC).to_string(), "01:00:00:29");
+    }
+
+    #[test]
+    fn typed_timecode_fills_fields_from_the_right() {
+        let pal = FrameRate::FPS_25;
+        assert_eq!(
+            TypedTimecode::parse("00:00:05:00", pal),
+            Some(TypedTimecode::At(125))
+        );
+        assert_eq!(
+            TypedTimecode::parse("1:00", pal),
+            Some(TypedTimecode::At(25))
+        );
+        assert_eq!(
+            TypedTimecode::parse("500", pal),
+            Some(TypedTimecode::At(125))
+        );
+        assert_eq!(
+            TypedTimecode::parse("1000000", NTSC),
+            Some(TypedTimecode::At(30 * 3600))
+        );
+    }
+
+    #[test]
+    fn typed_timecode_with_a_sign_is_a_move() {
+        let pal = FrameRate::FPS_25;
+        assert_eq!(
+            TypedTimecode::parse("+10", pal),
+            Some(TypedTimecode::By(10))
+        );
+        assert_eq!(
+            TypedTimecode::parse("-1.00", pal),
+            Some(TypedTimecode::By(-25))
+        );
+    }
+
+    #[test]
+    fn typed_timecode_rejects_what_is_not_timecode() {
+        let pal = FrameRate::FPS_25;
+        for text in ["", "abc", "1:2:3:4:5", "1:-2", "+", "99999999999999999999"] {
+            assert_eq!(TypedTimecode::parse(text, pal), None, "{text:?}");
+        }
     }
 
     #[test]

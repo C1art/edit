@@ -162,7 +162,7 @@ pub use stabilize::{CameraPath, Framing, Pose, Similarity, StabilizeMethod, Stab
 pub use submix::{SendTap, Submix, SubmixId, TrackSend};
 pub use three_point::{edit_points, EditPoints, FourPoint};
 pub use time::{Ticks, Timebase};
-pub use timecode::{FrameRate, Timecode};
+pub use timecode::{FrameRate, Timecode, TypedTimecode};
 pub use title_motion::{Scroll, TitleMotion};
 pub use transition::{nearest_transition_edge, Alignment, Side, Transition, TransitionKind};
 pub use wipe::{Border, Sweep, Wipe, WipePattern};
