@@ -359,6 +359,15 @@ pub fn timeline_toolbar(editor: &mut Editor, ui: &mut egui::Ui) {
             if link.clicked() {
                 editor.toggle_linked_selection();
             }
+            let settings = icons::sized_toggle(ui, false, Icon::Settings, Look::Filled, TOOL)
+                .on_hover_text("Timeline display settings");
+            egui::Popup::menu(&settings).show(|ui| {
+                ui.checkbox(
+                    &mut editor.clip_art.show_thumbnails,
+                    "Show Video Thumbnails",
+                );
+                ui.checkbox(&mut editor.clip_art.show_waveforms, "Show Audio Waveforms");
+            });
         });
         theme::segmented(ui, |ui| {
             let keymap = &editor.keymap;

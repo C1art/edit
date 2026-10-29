@@ -156,11 +156,6 @@ pub(crate) fn sequence_menu(editor: &mut Editor, ui: &mut egui::Ui) {
         "Selection Follows Playhead",
     )
     .on_hover_text("Select the clips under the playhead on the targeted tracks as it moves");
-    ui.checkbox(
-        &mut editor.clip_art.show_thumbnails,
-        "Show Video Thumbnails",
-    );
-    ui.checkbox(&mut editor.clip_art.show_waveforms, "Show Audio Waveforms");
 }
 
 /// Setting, finding and clearing In and Out on the focused monitor, as their shortcuts
