@@ -9,6 +9,24 @@ pub struct SetGrouped {
     pub grouped: bool,
 }
 
+impl SetGrouped {
+    /// Whether applying this would form a group or break one up.
+    pub fn changes(&self, sequence: &Sequence) -> bool {
+        let clips = sequence.with_groups(&self.clips);
+        let mut groups = clips
+            .iter()
+            .filter_map(|&id| sequence.clip(id))
+            .map(|(_, clip)| clip.group);
+        if self.grouped {
+            let first = groups.next().flatten();
+            let one_already = first.is_some() && groups.all(|group| group == first);
+            clips.len() >= 2 && !one_already
+        } else {
+            groups.any(|group| group.is_some())
+        }
+    }
+}
+
 impl Edit for SetGrouped {
     fn name(&self) -> &'static str {
         if self.grouped {
@@ -19,31 +37,11 @@ impl Edit for SetGrouped {
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
-        let clips = sequence.with_groups(&self.clips);
-        let groups = clips
-            .iter()
-            .map(|&id| {
-                Ok(sequence
-                    .clip(id)
-                    .ok_or(TimelineError::ClipNotFound(id))?
-                    .1
-                    .group)
-            })
-            .collect::<Result<Vec<_>, TimelineError>>()?;
-        let group = if self.grouped {
-            let first = groups.first().copied().flatten();
-            let one_already = first.is_some() && groups.iter().all(|&group| group == first);
-            if clips.len() < 2 || one_already {
-                return Err(TimelineError::NothingToEdit);
-            }
-            Some(GroupId(sequence.ids.next()))
-        } else {
-            if groups.iter().all(Option::is_none) {
-                return Err(TimelineError::NothingToEdit);
-            }
-            None
-        };
-        for id in clips {
+        if !self.changes(sequence) {
+            return Err(TimelineError::NothingToEdit);
+        }
+        let group = self.grouped.then(|| GroupId(sequence.ids.next()));
+        for id in sequence.with_groups(&self.clips) {
             ops::clip_mut(sequence, id)?.group = group;
         }
         Ok(())

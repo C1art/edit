@@ -1,7 +1,7 @@
 use egui::{Atom, Button, Checkbox, RichText, Ui};
 use timeline::{
-    ClipId, Edit, FrameFit, IntoSync, Label, SetClipLabel, SetTimeInterpolation, SyncMethod,
-    TimeInterpolation, TrackKind,
+    ClipId, Edit, FrameFit, IntoSync, JoinThroughEdits, Label, SetClipLabel, SetGrouped,
+    SetTimeInterpolation, SyncMethod, TimeInterpolation, TrackKind,
 };
 
 use crate::editor::Editor;
@@ -157,29 +157,39 @@ fn on_selection(editor: &mut Editor, ui: &mut Ui) {
         editor.toggle_link();
     }
     for (command, grouped) in [(Command::Group, true), (Command::Ungroup, false)] {
+        let clips = editor.view.selection.clone();
+        let changes = SetGrouped { clips, grouped }.changes(editor.timeline.sequence());
         let button = Button::new(command.name()).shortcut_text(editor.keymap.label(command));
-        if ui.add(button).clicked() {
+        if ui.add_enabled(changes, button).clicked() {
             editor.set_grouped(grouped);
         }
     }
+    let clips = editor.view.selection.clone();
+    let joins = JoinThroughEdits { clips }.joins_any(editor.timeline.sequence());
     let join = Button::new(Command::JoinThroughEdits.name())
         .shortcut_text(editor.keymap.label(Command::JoinThroughEdits));
-    if ui.add(join).clicked() {
+    if ui.add_enabled(joins, join).clicked() {
         editor.join_through_edits();
     }
     let gain = Button::new("Audio Gain…").shortcut_text(editor.keymap.label(Command::AudioGain));
     if ui.add(gain).clicked() {
         editor.prompt_clip_gain();
     }
+    let sequence = editor.timeline.sequence();
+    let has_audio = sequence
+        .with_links(&editor.view.selection)
+        .into_iter()
+        .filter_map(|id| sequence.clip(id))
+        .any(|(track, _)| track.kind == TrackKind::Audio);
     if ui
-        .button("Auto Duck…")
+        .add_enabled(has_audio, Button::new("Auto Duck…"))
         .on_hover_text("Lower the selected music wherever other tracks are heard")
         .clicked()
     {
         editor.open_auto_duck();
     }
     if ui
-        .button("Remix…")
+        .add_enabled(has_audio, Button::new("Remix…"))
         .on_hover_text("Cut or loop the selected music to a new length")
         .clicked()
     {
