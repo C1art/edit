@@ -124,9 +124,10 @@ fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
             Some((id, drawing)) if *id == clip.source => drawing.clone(),
             _ => generator,
         });
+    let height = editor.timeline.sequence().format.height;
     let drawing_change = drawing
         .as_mut()
-        .and_then(|generator| generated::controls(ui, generator));
+        .and_then(|generator| generated::controls(ui, generator, height));
     let video_tracks = editor.timeline.sequence().video.len();
     let keys = std::mem::take(&mut editor.effects.keys);
     let mut rows = Rows::new(time, lane(editor, ui, clip), keys);

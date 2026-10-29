@@ -1,12 +1,17 @@
 use timeline::{
-    Generator, Rgb, Scroll, Shape, ShapeKind, TextAlign, TextStroke, Title, TitleFont, TitleMotion,
+    Generator, Rgb, Scroll, ShadowStyle, Shape, ShapeKind, TextAlign, TextStroke, Title, TitleFont,
+    TitleMotion,
 };
 
 use crate::mixer::{response_state, Change};
 
-/// What a title, shape or color matte draws. Typing previews live and commits when the text
-/// field loses focus.
-pub(super) fn controls(ui: &mut egui::Ui, generator: &mut Generator) -> Option<Change> {
+/// What a title, shape or color matte draws on a frame `height` pixels tall. Typing
+/// previews live and commits when the text field loses focus.
+pub(super) fn controls(
+    ui: &mut egui::Ui,
+    generator: &mut Generator,
+    height: u32,
+) -> Option<Change> {
     if *generator == Generator::AdjustmentLayer {
         return None;
     }
@@ -19,7 +24,7 @@ pub(super) fn controls(ui: &mut egui::Ui, generator: &mut Generator) -> Option<C
             }
             Generator::Title(title) => change = title_controls(ui, title),
             Generator::AdjustmentLayer => {}
-            Generator::Shape(shape) => change = shape_controls(ui, shape),
+            Generator::Shape(shape) => change = shape_controls(ui, shape, height),
         });
     change
 }
@@ -95,9 +100,8 @@ fn title_controls(ui: &mut egui::Ui, title: &mut Title) -> Option<Change> {
     });
     change = color_row(ui, "Fill", &mut title.color).or(change);
     change = stroke_row(ui, &mut title.stroke).or(change);
-    if ui.checkbox(&mut title.shadow, "Drop shadow").changed() {
-        change = Some(Change::Commit);
-    }
+    let usual = title.usual_shadow();
+    change = shadow_rows(ui, &mut title.shadow, &mut title.shadow_style, usual).or(change);
     ui.horizontal(|ui| {
         let mut boxed = title.background.is_some();
         if ui.checkbox(&mut boxed, "Background").changed() {
@@ -178,7 +182,7 @@ fn motion_controls(ui: &mut egui::Ui, motion: &mut TitleMotion) -> Option<Change
     change
 }
 
-fn shape_controls(ui: &mut egui::Ui, shape: &mut Shape) -> Option<Change> {
+fn shape_controls(ui: &mut egui::Ui, shape: &mut Shape, height: u32) -> Option<Change> {
     let mut change = None;
     ui.horizontal(|ui| {
         for kind in ShapeKind::ALL {
@@ -220,9 +224,8 @@ fn shape_controls(ui: &mut egui::Ui, shape: &mut Shape) -> Option<Change> {
         }
     });
     change = stroke_row(ui, &mut shape.stroke).or(change);
-    if ui.checkbox(&mut shape.shadow, "Drop shadow").changed() {
-        change = Some(Change::Commit);
-    }
+    let usual = Shape::usual_shadow(height);
+    change = shadow_rows(ui, &mut shape.shadow, &mut shape.shadow_style, usual).or(change);
     change
 }
 
@@ -244,6 +247,51 @@ fn stroke_row(ui: &mut egui::Ui, stroke: &mut Option<TextStroke>) -> Option<Chan
             change = response_state(&width, change);
         }
     });
+    change
+}
+
+/// Essential Graphics' shadow: until one of its controls is changed, the `usual` look
+/// that scales with what casts it.
+fn shadow_rows(
+    ui: &mut egui::Ui,
+    shadow: &mut bool,
+    style: &mut Option<ShadowStyle>,
+    usual: ShadowStyle,
+) -> Option<Change> {
+    let mut change = None;
+    let mut edited = style.unwrap_or(usual);
+    ui.horizontal(|ui| {
+        if ui.checkbox(shadow, "Drop shadow").changed() {
+            change = Some(Change::Commit);
+        }
+        if *shadow {
+            change = color_button(ui, &mut edited.color).or(change);
+            let opacity = egui::DragValue::new(&mut edited.opacity)
+                .range(0..=100)
+                .suffix("%");
+            change = response_state(&ui.add(opacity).on_hover_text("Opacity"), change);
+            let angle = egui::DragValue::new(&mut edited.angle)
+                .range(-360..=360)
+                .suffix("°");
+            change = response_state(&ui.add(angle).on_hover_text("Angle"), change);
+        }
+    });
+    if *shadow {
+        ui.horizontal(|ui| {
+            for (value, name) in [
+                (&mut edited.distance, "Distance"),
+                (&mut edited.size, "Size"),
+                (&mut edited.blur, "Blur"),
+            ] {
+                ui.label(name);
+                let drag = egui::DragValue::new(value).range(0..=200).suffix(" px");
+                change = response_state(&ui.add(drag), change);
+            }
+        });
+    }
+    if edited != style.unwrap_or(usual) {
+        *style = Some(edited);
+    }
     change
 }
 
