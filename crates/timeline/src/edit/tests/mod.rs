@@ -110,6 +110,38 @@ fn insert_pushes_later_clips_on_every_unlocked_track() {
 }
 
 #[test]
+fn placing_several_pieces_inserts_them_end_to_end_as_one_undo_step() {
+    let (mut timeline, source) = timeline();
+    timeline
+        .apply(place(source, 0, 0, 300, PlaceMode::Overwrite))
+        .unwrap();
+    timeline
+        .apply(PlaceClips {
+            pieces: vec![
+                (source, Ticks(500), Ticks(50)),
+                (source, Ticks(700), Ticks(20)),
+            ],
+            at: Ticks(100),
+            video_track: Some(0),
+            audio_track: Some(0),
+            mode: PlaceMode::Insert,
+        })
+        .unwrap();
+
+    assert_eq!(
+        spans(&timeline, A1),
+        [
+            (0, 100, 0),
+            (100, 150, 500),
+            (150, 170, 700),
+            (170, 370, 100)
+        ]
+    );
+    timeline.undo();
+    assert_eq!(spans(&timeline, V1), [(0, 300, 0)]);
+}
+
+#[test]
 fn razor_on_a_clip_cuts_its_linked_partner_too() {
     let (mut timeline, source) = timeline();
     timeline

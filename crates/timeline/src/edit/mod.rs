@@ -65,7 +65,7 @@ pub use merge::MergeClips;
 pub use multicam::{CreateMulticam, FlattenMulticam, SwitchAngle};
 pub use nest::{AddNest, InNest, NestClips, NestFromMedia};
 pub use paste::{Clipboard, PasteClips};
-pub use place::{AddEdits, PlaceClip, PlaceMode, Razor, RazorTarget};
+pub use place::{AddEdits, PlaceClip, PlaceClips, PlaceMode, Razor, RazorTarget};
 pub use range::{ExtractMarked, LiftMarked, RippleTrimToPlayhead, SetMarks, TrimToPlayhead};
 pub use reframe::ReframeSequence;
 pub use remap::{AddSpeedKeyframe, RemoveSpeedKeyframe, RemoveTimeRemap, SetSegmentSpeed};

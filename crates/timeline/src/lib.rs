@@ -84,7 +84,7 @@ pub use edit::{
     ExtractMarked, FlattenMulticam, FrameFit, ImportMedia, InNest, InterpretFootage, IntoSync,
     JoinThroughEdits, Lift, LiftMarked, MakeOffline, MakeSubclip, MakeSubsequence, MarkerOwner,
     MergeClips, MoveClips, MoveMode, MoveToBin, NestClips, NestFromMedia, NormalizeClipGains,
-    PasteAttributes, PasteClips, PlaceClip, PlaceMode, RateStretch, Razor, RazorTarget,
+    PasteAttributes, PasteClips, PlaceClip, PlaceClips, PlaceMode, RateStretch, Razor, RazorTarget,
     ReframeSequence, RelinkMedia, RemixClip, RemoveAttributes, RemoveBin, RemoveMarker,
     RemoveMedia, RemoveSpeedKeyframe, RemoveSubmix, RemoveTimeRemap, RemoveTrack, RenameBin,
     RenameClips, RenameMedia, RenameTrack, RenderAndReplace, ReplaceClip, RestoreUnrendered,
