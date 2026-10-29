@@ -1,8 +1,10 @@
+use std::collections::HashSet;
+
 use timeline::{
-    AddFrameHold, AddTrack, Clipboard, CloseGap, CloseGaps, FrameFit, JoinThroughEdits, Lift,
-    LinkedSelection, MakeSubsequence, PasteClips, PlaceMode, Razor, RazorTarget, RippleDelete,
-    SetClipsEnabled, SetGrouped, SetLinked, SetLinkedSelection, SetToFrameSize, Timecode,
-    TrackKind, TrackRef,
+    AddFrameHold, AddTrack, ClipId, Clipboard, CloseGap, CloseGaps, FrameFit, JoinThroughEdits,
+    Lift, LinkedSelection, MakeSubsequence, PasteClips, PlaceMode, Razor, RazorTarget,
+    RippleDelete, Sequence, SetClipsEnabled, SetGrouped, SetLinked, SetLinkedSelection,
+    SetToFrameSize, Timecode, TrackKind, TrackRef,
 };
 
 use crate::editor::Editor;
@@ -168,7 +170,11 @@ impl Editor {
             at,
             mode,
         };
+        let before: HashSet<ClipId> = clip_ids(self.timeline.sequence()).collect();
         if self.apply(paste) {
+            self.view.selection = clip_ids(self.timeline.sequence())
+                .filter(|id| !before.contains(id))
+                .collect();
             self.seek_program(end);
         }
     }
@@ -309,4 +315,10 @@ impl Editor {
             self.notice("The selected video clips already match the frame");
         }
     }
+}
+
+fn clip_ids(sequence: &Sequence) -> impl Iterator<Item = ClipId> + '_ {
+    sequence
+        .tracks()
+        .flat_map(|(_, track)| track.clips.iter().map(|clip| clip.id))
 }
