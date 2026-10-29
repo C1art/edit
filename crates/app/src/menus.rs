@@ -13,7 +13,7 @@ use crate::timeline_view::Tool;
 
 pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
     MenuBar::new().ui(ui, |ui| {
-        ui.menu_button("File", |ui| {
+        crate::theme::menu(ui, "File", |ui| {
             let new =
                 Button::new("New Project").shortcut_text(editor.keymap.label(Command::NewProject));
             if ui.add(new).clicked() {
@@ -101,7 +101,7 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                 ui.ctx().send_viewport_cmd(ViewportCommand::Close);
             }
         });
-        ui.menu_button("Edit", |ui| {
+        crate::theme::menu(ui, "Edit", |ui| {
             let undo = editor
                 .timeline
                 .undo_name()
@@ -189,7 +189,7 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                 editor.keymap_window = Some(crate::keymap::KeymapWindow::default());
             }
         });
-        ui.menu_button("Clip", |ui| {
+        crate::theme::menu(ui, "Clip", |ui| {
             if ui
                 .add(Button::new("Insert").shortcut_text(editor.keymap.label(Command::Insert)))
                 .clicked()
@@ -212,7 +212,7 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             ui.separator();
             crate::clip_menu::items(editor, ui);
         });
-        ui.menu_button("Markers", |ui| {
+        crate::theme::menu(ui, "Markers", |ui| {
             crate::marker_dialog::menu(editor, ui);
             ui.separator();
             let go_to_in =
@@ -226,7 +226,7 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                 editor.go_to_mark(Edge::Tail);
             }
         });
-        ui.menu_button("Sequence", |ui| {
+        crate::theme::menu(ui, "Sequence", |ui| {
             crate::sequence_menu::sequence_menu(editor, ui)
         });
         crate::workspaces::window_menu(editor, ui);

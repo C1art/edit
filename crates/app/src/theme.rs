@@ -223,6 +223,24 @@ fn tab_galley(ui: &egui::Ui, title: &str) -> std::sync::Arc<egui::Galley> {
 }
 
 /// A tab's title, bright and underlined in the accent while selected.
+/// A menu-bar menu whose items scroll when the window is too short to show them all.
+pub(crate) fn menu(ui: &mut egui::Ui, title: &str, content: impl FnOnce(&mut egui::Ui)) {
+    ui.menu_button(title, |ui| {
+        // Leaves room for the popup's own frame and shadow below the last item.
+        let room = ui.ctx().content_rect().bottom() - ui.max_rect().top() - 12.0;
+        let room = room.max(80.0);
+        // The popup is only as tall as last frame's items, so the area asks for the
+        // room itself rather than taking what's available.
+        egui::ScrollArea::vertical()
+            .max_height(room)
+            .min_scrolled_height(room)
+            .show(ui, |ui| {
+                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+                content(ui);
+            });
+    });
+}
+
 pub(crate) fn tab(ui: &mut egui::Ui, selected: bool, title: &str) -> egui::Response {
     let galley = tab_galley(ui, title);
     let (rect, response) = ui.allocate_exact_size(galley.size(), egui::Sense::click());

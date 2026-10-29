@@ -14,7 +14,7 @@ pub(crate) struct NamingWorkspace {
 }
 
 pub(crate) fn window_menu(editor: &mut Editor, ui: &mut egui::Ui) {
-    ui.menu_button("Window", |ui| {
+    crate::theme::menu(ui, "Window", |ui| {
         ui.menu_button("Workspaces", |ui| workspaces_menu(editor, ui));
         ui.separator();
         for tab in MediaTab::ALL {
