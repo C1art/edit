@@ -12,6 +12,7 @@ mod key;
 mod names;
 mod options;
 mod params;
+mod pattern;
 mod shift;
 mod text;
 mod tone;
@@ -26,6 +27,7 @@ pub use options::{
     ClipNameSource, ColorChange, ColorMatch, EffectCategory, LensType, MagnifyShape,
     RadialWipeDirection, RampShape, Rgb, TimecodeSource,
 };
+pub use pattern::{CellKind, CellPattern, Ellipse, Lightning};
 pub use shift::{ChangeColor, ChangeColorView, ColorBalance, MatchColors};
 pub use text::SimpleText;
 pub use tone::{
@@ -471,4 +473,7 @@ pub enum VideoEffect {
     ChangeColor(ChangeColor),
     ColorBalance(ColorBalance),
     SimpleText(SimpleText),
+    Ellipse(Ellipse),
+    CellPattern(CellPattern),
+    Lightning(Lightning),
 }

@@ -1,7 +1,8 @@
 use super::{
-    AlphaGlow, AscCdl, Bevel, ChangeColor, ChannelBlur, Checkerboard, Circle, ColorBalance,
-    ColorReplace, ConvolutionKernel, Echo, EdgeFeather, Extract, FourColorGradient, Grid, Median,
-    NoiseHls, RoughenEdges, ShadowHighlight, SimpleText, UnsharpMask, VideoEffect, VideoLimiter,
+    AlphaGlow, AscCdl, Bevel, CellPattern, ChangeColor, ChannelBlur, Checkerboard, Circle,
+    ColorBalance, ColorReplace, ConvolutionKernel, Echo, EdgeFeather, Ellipse, Extract,
+    FourColorGradient, Grid, Lightning, Median, NoiseHls, RoughenEdges, ShadowHighlight,
+    SimpleText, UnsharpMask, VideoEffect, VideoLimiter,
 };
 use crate::{AutoReframe, Param};
 
@@ -209,6 +210,45 @@ macro_rules! effect_params {
                 opacity,
                 ..
             }) => points.$iter().flatten().chain([blend, opacity]).collect(),
+            VideoEffect::Ellipse(Ellipse {
+                center,
+                width,
+                height,
+                thickness,
+                softness,
+                ..
+            }) => center
+                .$iter()
+                .chain([width, height, thickness, softness])
+                .collect(),
+            VideoEffect::CellPattern(CellPattern {
+                contrast,
+                disperse,
+                size,
+                offset,
+                evolution,
+                blend_with_original,
+                ..
+            }) => [contrast, disperse, size]
+                .into_iter()
+                .chain(offset.$iter())
+                .chain([evolution, blend_with_original])
+                .collect(),
+            VideoEffect::Lightning(Lightning {
+                start_point,
+                end_point,
+                segments,
+                amplitude,
+                branching,
+                width,
+                core_width,
+                speed,
+                ..
+            }) => start_point
+                .$iter()
+                .chain(end_point.$iter())
+                .chain([segments, amplitude, branching, width, core_width, speed])
+                .collect(),
             VideoEffect::LensFlare {
                 center,
                 brightness,

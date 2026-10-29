@@ -2,11 +2,12 @@ use std::sync::Arc;
 
 use media::VideoFrame;
 use timeline::{
-    Clip, ClipNameSource, FrameRate, MediaItem, Param, Sequence, SimpleText, Ticks, Timebase,
-    Timecode, TimecodeSource, VideoEffect,
+    Clip, ClipNameSource, FrameRate, Lightning, MediaItem, Param, Rgb, Sequence, SimpleText,
+    TextAlign, Ticks, Timebase, Timecode, TimecodeSource, VideoEffect,
 };
 
 use crate::generated::{text_box, timecode_box};
+use crate::lightning::{bolt, draw_strokes, BoltShape};
 
 /// The source time a clip's picture is taken from, held on the frame grid of its last
 /// Posterize Time, if it has one.
@@ -23,7 +24,7 @@ pub(crate) fn posterized(effects: &[VideoEffect], time: Ticks, timebase: Timebas
     Ticks(time.0.div_euclid(step) * step)
 }
 
-/// `frame` with the text of the clip's Timecode, Clip Name and Simple Text effects burnt
+/// `frame` with the clip's Timecode, Clip Name, Simple Text and Lightning effects drawn
 /// in, in list order.
 pub(crate) fn with_burn_ins(
     frame: Arc<VideoFrame>,
@@ -32,7 +33,7 @@ pub(crate) fn with_burn_ins(
     media: &MediaItem,
     time: Ticks,
 ) -> Arc<VideoFrame> {
-    let burn_ins: Vec<_> = clip
+    let burn_ins: Vec<Stamp> = clip
         .look
         .effects
         .iter()
@@ -56,7 +57,7 @@ pub(crate) fn with_burn_ins(
                         sequence.format.frame_rate,
                     ),
                 };
-                Some((text, position, size, opacity, None))
+                Some(Stamp::Text(text, position, size, opacity, None))
             }
             VideoEffect::ClipName {
                 position,
@@ -75,7 +76,7 @@ pub(crate) fn with_burn_ins(
                         .map(|name| name.to_string_lossy().into_owned())
                         .unwrap_or_default(),
                 };
-                Some((text, position, size, opacity, None))
+                Some(Stamp::Text(text, position, size, opacity, None))
             }
             VideoEffect::SimpleText(SimpleText {
                 text,
@@ -83,7 +84,14 @@ pub(crate) fn with_burn_ins(
                 alignment,
                 size,
                 opacity,
-            }) => Some((text.clone(), position, size, opacity, Some(*alignment))),
+            }) => Some(Stamp::Text(
+                text.clone(),
+                position,
+                size,
+                opacity,
+                Some(*alignment),
+            )),
+            VideoEffect::Lightning(lightning) => Some(Stamp::Bolt(lightning)),
             _ => None,
         })
         .collect();
@@ -91,8 +99,17 @@ pub(crate) fn with_burn_ins(
         return frame;
     }
     let mut stamped = (*frame).clone();
-    for (text, position, size, opacity, align) in burn_ins {
-        let percent = |param: &Param| param.value_at(time) / 100.0;
+    let percent = |param: &Param| param.value_at(time) / 100.0;
+    for stamp in burn_ins {
+        let (text, position, size, opacity, align) = match stamp {
+            Stamp::Text(text, position, size, opacity, align) => {
+                (text, position, size, opacity, align)
+            }
+            Stamp::Bolt(lightning) => {
+                draw_lightning(&mut stamped, lightning, time, sequence.timebase);
+                continue;
+            }
+        };
         let height = (percent(size) * frame.height as f32).round().max(4.0) as u32;
         let opacity = percent(opacity).clamp(0.0, 1.0);
         // Timecode and names keep the monospace box; typed text sets in the sans.
@@ -109,6 +126,50 @@ pub(crate) fn with_burn_ins(
         blend_over(&mut stamped, &label, left, top);
     }
     Arc::new(stamped)
+}
+
+/// What one effect draws into the frame.
+enum Stamp<'a> {
+    /// Text centered at a position, with its size and box opacity, set in the sans with
+    /// an alignment or else in the monospace.
+    Text(
+        String,
+        &'a [Param; 2],
+        &'a Param,
+        &'a Param,
+        Option<TextAlign>,
+    ),
+    Bolt(&'a Lightning),
+}
+
+fn draw_lightning(frame: &mut VideoFrame, lightning: &Lightning, time: Ticks, timebase: Timebase) {
+    let value = |param: &Param| param.value_at(time);
+    let size = [frame.width as f32, frame.height as f32];
+    let point = |point: &[Param; 2]| [0, 1].map(|axis| value(&point[axis]) / 100.0 * size[axis]);
+    let seconds = time.0 as f64 * f64::from(timebase.num()) / f64::from(timebase.den());
+    let redraws = (seconds * f64::from(value(&lightning.speed).max(0.0))).floor() as u64;
+    let shape = BoltShape {
+        segments: value(&lightning.segments).round().clamp(1.0, 100.0) as usize,
+        amplitude: value(&lightning.amplitude) / 100.0,
+        branching: (value(&lightning.branching) / 100.0).clamp(0.0, 1.0),
+        width: value(&lightning.width).max(0.0),
+    };
+    let seed = u64::from(lightning.random_seed) << 32 ^ redraws;
+    let strokes = bolt(
+        point(&lightning.start_point),
+        point(&lightning.end_point),
+        shape,
+        seed,
+    );
+    let core = value(&lightning.core_width) / 100.0;
+    let color = |color: Rgb| [color.r, color.g, color.b];
+    draw_strokes(
+        frame,
+        &strokes,
+        core,
+        color(lightning.inside_color),
+        color(lightning.outside_color),
+    );
 }
 
 fn timecode_text(time: Ticks, timebase: Timebase, rate: FrameRate) -> String {

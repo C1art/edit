@@ -299,7 +299,10 @@ impl Rows {
             VideoEffect::Checkerboard(_)
             | VideoEffect::Grid(_)
             | VideoEffect::Circle(_)
-            | VideoEffect::FourColorGradient(_) => self.generate(ui, effect),
+            | VideoEffect::FourColorGradient(_)
+            | VideoEffect::Ellipse(_)
+            | VideoEffect::CellPattern(_)
+            | VideoEffect::Lightning(_) => self.generate(ui, effect),
             VideoEffect::LensFlare { .. } | VideoEffect::Magnify { .. } => self.optics(ui, effect),
             VideoEffect::LinearWipe { .. }
             | VideoEffect::RadialWipe { .. }

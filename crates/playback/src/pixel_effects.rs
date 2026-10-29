@@ -1,6 +1,6 @@
 use render::{
-    ChangeToColor, ChannelMixer, Checkerboard, ChromaKey, Circle, ColorKey, FourColorGradient,
-    Grid, LeaveColor, LumaKey, Mirror, PixelEffects, PlaneTransform, Ramp, Warp,
+    ChangeToColor, ChannelMixer, ChromaKey, ColorKey, LeaveColor, LumaKey, Mirror, PixelEffects,
+    PlaneTransform, Ramp, Warp,
 };
 use timeline::{
     ColorChange, ColorMatch, RampShape, Rgb, Ticks, Timebase, VideoEffect, ULTRA_KEY_REACH,
@@ -10,6 +10,7 @@ use crate::adjust_effects::set_adjust_effect;
 use crate::clip_wipes::set_clip_wipe;
 use crate::detail_effects::set_detail_effect;
 use crate::edge_effects::set_edge_effect;
+use crate::generate_effects::set_generate_effect;
 use crate::optics_effects::set_optics_effect;
 use crate::shift_effects::set_shift_effect;
 use crate::tone_effects::set_tone_effect;
@@ -282,7 +283,8 @@ pub(crate) fn pixel_effects(
             VideoEffect::PosterizeTime { .. }
             | VideoEffect::Timecode { .. }
             | VideoEffect::ClipName { .. }
-            | VideoEffect::SimpleText(_) => {}
+            | VideoEffect::SimpleText(_)
+            | VideoEffect::Lightning(_) => {}
             VideoEffect::HorizontalFlip => pixel.flip[0] = !pixel.flip[0],
             VideoEffect::VerticalFlip => pixel.flip[1] = !pixel.flip[1],
             VideoEffect::BlackAndWhite => {
@@ -368,66 +370,12 @@ pub(crate) fn pixel_effects(
                     *balance *= unit(gain).max(0.0);
                 }
             }
-            VideoEffect::Checkerboard(timeline::Checkerboard {
-                anchor,
-                size,
-                color,
-                opacity,
-            }) => {
-                pixel.generate.checkerboard = Some(Checkerboard {
-                    anchor: anchor.each_ref().map(unit),
-                    size: size.each_ref().map(|side| side.value_at(time)),
-                    color: encoded(*color),
-                    opacity: unit(opacity).clamp(0.0, 1.0),
-                });
-            }
-            VideoEffect::Grid(timeline::Grid {
-                anchor,
-                size,
-                border,
-                color,
-                opacity,
-                invert,
-            }) => {
-                pixel.generate.grid = Some(Grid {
-                    anchor: anchor.each_ref().map(unit),
-                    size: size.each_ref().map(|side| side.value_at(time)),
-                    border: border.value_at(time),
-                    color: encoded(*color),
-                    opacity: unit(opacity).clamp(0.0, 1.0),
-                    invert: *invert,
-                });
-            }
-            VideoEffect::Circle(timeline::Circle {
-                center,
-                radius,
-                feather,
-                color,
-                opacity,
-                invert,
-            }) => {
-                pixel.generate.circle = Some(Circle {
-                    center: center.each_ref().map(unit),
-                    radius: radius.value_at(time),
-                    feather: feather.value_at(time),
-                    color: encoded(*color),
-                    opacity: unit(opacity).clamp(0.0, 1.0),
-                    invert: *invert,
-                });
-            }
-            VideoEffect::FourColorGradient(timeline::FourColorGradient {
-                points,
-                colors,
-                blend,
-                opacity,
-            }) => {
-                pixel.generate.four_color = Some(FourColorGradient {
-                    points: points.each_ref().map(|point| point.each_ref().map(unit)),
-                    colors: colors.map(encoded),
-                    blend: unit(blend),
-                    opacity: unit(opacity).clamp(0.0, 1.0),
-                });
-            }
+            VideoEffect::Checkerboard(_)
+            | VideoEffect::Grid(_)
+            | VideoEffect::Circle(_)
+            | VideoEffect::FourColorGradient(_)
+            | VideoEffect::Ellipse(_)
+            | VideoEffect::CellPattern(_) => set_generate_effect(&mut pixel, effect, time),
             VideoEffect::LensFlare { .. } | VideoEffect::Magnify { .. } => {
                 set_optics_effect(&mut pixel.optics, effect, time);
             }

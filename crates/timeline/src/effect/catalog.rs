@@ -9,7 +9,7 @@ use crate::{AutoReframe, Param, Stabilizer};
 
 impl VideoEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 84] {
+    pub fn catalog() -> [Self; 87] {
         [
             Self::GaussianBlur {
                 blurriness: Param::from_value(10.0),
@@ -339,6 +339,9 @@ impl VideoEffect {
             Self::ChangeColor(Default::default()),
             Self::ColorBalance(Default::default()),
             Self::SimpleText(Default::default()),
+            Self::Ellipse(Default::default()),
+            Self::CellPattern(Default::default()),
+            Self::Lightning(Default::default()),
         ]
     }
 
@@ -373,6 +376,9 @@ impl VideoEffect {
             | Self::Checkerboard(_)
             | Self::Grid(_)
             | Self::Circle(_)
+            | Self::Ellipse(_)
+            | Self::CellPattern(_)
+            | Self::Lightning(_)
             | Self::FourColorGradient(_)
             | Self::LensFlare { .. } => EffectCategory::Generate,
             Self::DropShadow { .. }

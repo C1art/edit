@@ -251,6 +251,7 @@ impl Placement {
             .chain(self.effects.edges.uniform().into_iter().flatten())
             .chain(self.effects.tone.uniform().into_iter().flatten())
             .chain(self.effects.shift.uniform().into_iter().flatten())
+            .chain(self.effects.pattern.uniform().into_iter().flatten())
             .flat_map(f32::to_le_bytes)
             .collect()
     }
@@ -302,7 +303,8 @@ mod tests {
         // the key's two, the adjustments' six, Lumetri Creative's three,
         // the Generate effects' thirteen, Lens Flare and Magnify's three and the
         // Transition effects' five, the detail effects' three, the edge effects' eleven
-        // the tone effects' thirteen and Change Color and Color Balance's six.
+        // the tone effects' thirteen, Change Color and Color Balance's six and Ellipse
+        // and Cell Pattern's seven.
         let outlines = MAX_MASKS * MAX_OUTLINE_POINTS / 2;
         assert_eq!(
             bytes.len(),
@@ -321,7 +323,8 @@ mod tests {
                 + 3
                 + 11
                 + 13
-                + 6)
+                + 6
+                + 7)
                 * 16
         );
         assert!(bytes.len() as u64 <= crate::blit::UNIFORM_BYTES);

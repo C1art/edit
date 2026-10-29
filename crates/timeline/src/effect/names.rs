@@ -85,6 +85,9 @@ impl VideoEffect {
             Self::ChangeColor(_) => "Change Color",
             Self::ColorBalance(_) => "Color Balance",
             Self::SimpleText(_) => "Simple Text",
+            Self::Ellipse(_) => "Ellipse",
+            Self::CellPattern(_) => "Cell Pattern",
+            Self::Lightning(_) => "Lightning",
         }
     }
 }

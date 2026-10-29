@@ -196,6 +196,13 @@ struct Placement {
     shift_balance_shadows: vec4<f32>,
     shift_balance_midtones: vec4<f32>,
     shift_balance_highlights: vec4<f32>,
+    pattern_ellipse: vec4<f32>,
+    pattern_ellipse_detail: vec4<f32>,
+    pattern_ellipse_inside: vec4<f32>,
+    pattern_ellipse_outside: vec4<f32>,
+    pattern_cells: vec4<f32>,
+    pattern_cells_more: vec4<f32>,
+    pattern_cells_flags: vec4<f32>,
 };
 
 const OUTLINE_VEC4S: u32 = 32u;
@@ -404,7 +411,7 @@ fn source_color(uv: vec2<f32>) -> vec4<f32> {
     if placement.axis_y_opacity.w > 0.5 {
         color = vec4<f32>(color.rgb / max(color.a, 1e-6), color.a);
     }
-    let drawn = generated(ramped(vec4<f32>(input_grade(color.rgb), color.a), uv), uv);
+    let drawn = patterned(generated(ramped(vec4<f32>(input_grade(color.rgb), color.a), uv), uv), uv);
     return flared(drawn, uv);
 }
 
