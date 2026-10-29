@@ -74,46 +74,43 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     let format = editor.timeline.sequence().format;
     let mut done = false;
     let mut cancelled = false;
-    egui::Window::new("Auto Reframe Sequence")
-        .collapsible(false)
-        .resizable(false)
-        .show(ctx, |ui| {
-            egui::Grid::new("auto reframe")
-                .num_columns(2)
-                .spacing([12.0, 8.0])
-                .show(ui, |ui| {
-                    ui.label("Target aspect ratio");
-                    egui::ComboBox::from_id_salt("reframe aspect")
-                        .selected_text(ASPECTS[settings.aspect].0)
-                        .show_ui(ui, |ui| {
-                            for (index, (name, ..)) in ASPECTS.iter().enumerate() {
-                                ui.selectable_value(&mut settings.aspect, index, *name);
-                            }
-                        });
-                    ui.end_row();
-                    ui.label("Motion tracking");
-                    egui::ComboBox::from_id_salt("reframe motion")
-                        .selected_text(settings.motion.name())
-                        .show_ui(ui, |ui| {
-                            for motion in ReframeMotion::ALL {
-                                ui.selectable_value(&mut settings.motion, motion, motion.name());
-                            }
-                        });
-                    ui.end_row();
-                });
-            let (_, width, height) = ASPECTS[settings.aspect];
-            let (width, height) = reshaped((format.width, format.height), (width, height));
-            ui.weak(format!(
-                "The sequence becomes {width} × {height}, and each clip of footage follows \
-                 its subject."
-            ));
-            ui.horizontal(|ui| {
-                done = ui.button("Create").clicked()
-                    || ui.input(|input| input.key_pressed(Key::Enter));
-                cancelled = ui.button("Cancel").clicked()
-                    || ui.input(|input| input.key_pressed(Key::Escape));
+    crate::dialog::window(ctx, "Auto Reframe Sequence").show(ctx, |ui| {
+        egui::Grid::new("auto reframe")
+            .num_columns(2)
+            .spacing([12.0, 8.0])
+            .show(ui, |ui| {
+                ui.label("Target aspect ratio");
+                egui::ComboBox::from_id_salt("reframe aspect")
+                    .selected_text(ASPECTS[settings.aspect].0)
+                    .show_ui(ui, |ui| {
+                        for (index, (name, ..)) in ASPECTS.iter().enumerate() {
+                            ui.selectable_value(&mut settings.aspect, index, *name);
+                        }
+                    });
+                ui.end_row();
+                ui.label("Motion tracking");
+                egui::ComboBox::from_id_salt("reframe motion")
+                    .selected_text(settings.motion.name())
+                    .show_ui(ui, |ui| {
+                        for motion in ReframeMotion::ALL {
+                            ui.selectable_value(&mut settings.motion, motion, motion.name());
+                        }
+                    });
+                ui.end_row();
             });
+        let (_, width, height) = ASPECTS[settings.aspect];
+        let (width, height) = reshaped((format.width, format.height), (width, height));
+        ui.weak(format!(
+            "The sequence becomes {width} × {height}, and each clip of footage follows \
+                 its subject."
+        ));
+        crate::dialog::footer(ui, |ui| {
+            cancelled =
+                ui.button("Cancel").clicked() || ui.input(|input| input.key_pressed(Key::Escape));
+            done = ui.add(crate::dialog::primary("Create")).clicked()
+                || ui.input(|input| input.key_pressed(Key::Enter));
         });
+    });
     if !(done || cancelled) {
         return;
     }

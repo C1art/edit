@@ -277,21 +277,17 @@ pub(crate) fn window(editor: &mut Editor, ctx: &egui::Context) {
     });
     let fraction = (done as f32 + segment) / job.total.max(1) as f32;
     let mut cancel = false;
-    egui::Window::new("Rendering")
-        .collapsible(false)
-        .resizable(false)
-        .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-        .show(ctx, |ui| {
-            let current = (done + 1).min(job.total);
-            ui.label(format!("Rendering segment {current} of {}", job.total));
-            ui.add(
-                ProgressBar::new(fraction)
-                    .show_percentage()
-                    .desired_width(260.0),
-            );
-            ui.label(RichText::new("Previews play in place of the segments they cover.").weak());
-            cancel = ui.button("Cancel").clicked();
-        });
+    crate::dialog::window(ctx, "Rendering").show(ctx, |ui| {
+        let current = (done + 1).min(job.total);
+        ui.label(format!("Rendering segment {current} of {}", job.total));
+        ui.add(
+            ProgressBar::new(fraction)
+                .show_percentage()
+                .desired_width(260.0),
+        );
+        ui.label(RichText::new("Previews play in place of the segments they cover.").weak());
+        cancel = ui.button("Cancel").clicked();
+    });
     if cancel {
         // Dropping the export cancels it and removes its partial file.
         job.running = None;

@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use egui::{ComboBox, DragValue, Key, ProgressBar, Slider};
@@ -8,6 +8,8 @@ use timeline::Sequence;
 
 use crate::editor::Editor;
 use crate::export_format::{ExportFormat, Format, PRESETS};
+use crate::path_dialog::FolderUse;
+use crate::project_files::PathPurpose;
 
 /// Frame heights offered besides the sequence's own.
 const HEIGHTS: [u32; 6] = [2160, 1440, 1080, 720, 540, 360];
@@ -47,11 +49,14 @@ pub fn open(editor: &mut Editor) {
     } else {
         Span::Sequence
     };
-    let folder = sequence
-        .media
-        .first()
-        .and_then(|item| item.path.parent())
-        .map(PathBuf::from)
+    let folder = editor
+        .browse_folders
+        .get(&FolderUse::Output)
+        .cloned()
+        .or_else(|| {
+            let first = sequence.media.first()?;
+            first.path.parent().map(PathBuf::from)
+        })
         .unwrap_or_default();
     let format = ExportFormat::default();
     let file = format!("Sequence.{}", format.format.extension());
@@ -63,72 +68,91 @@ pub fn open(editor: &mut Editor) {
     });
 }
 
+impl ExportDialog {
+    pub fn output(&self) -> PathBuf {
+        PathBuf::from(self.path.trim())
+    }
+
+    /// Writes to `path`, in the file type the chosen format makes.
+    pub fn set_output(&mut self, path: &Path) {
+        self.path = path
+            .with_extension(self.format.format.extension())
+            .display()
+            .to_string();
+    }
+}
+
 pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     poll(editor);
     let sequence = editor.timeline.sequence();
     let marked = sequence.marks.is_set();
     let sequence_size = (sequence.format.width, sequence.format.height);
+    // Escape in the file browser closes only that.
+    let browsing = editor.path_prompt.is_some();
     let Some(dialog) = &mut editor.export else {
         return;
     };
     let mut start = false;
     let mut queue = false;
     let mut close = false;
-    egui::Window::new("Export Media")
-        .collapsible(false)
-        .resizable(false)
-        .show(ctx, |ui| match &dialog.running {
-            Some(running) => {
-                ui.label(format!("Exporting to {}", running.path.display()));
-                let fraction = if running.frames_total > 0 {
-                    running.frames_done as f32 / running.frames_total as f32
-                } else {
-                    0.0
-                };
-                ui.add(
-                    ProgressBar::new(fraction)
-                        .desired_width(420.0)
-                        .text(format!(
-                            "frame {} of {}",
-                            running.frames_done, running.frames_total
-                        )),
-                );
+    let mut browse = false;
+    crate::dialog::window(ctx, "Export Media").show(ctx, |ui| match &dialog.running {
+        Some(running) => {
+            ui.label(format!("Exporting to {}", running.path.display()));
+            let fraction = if running.frames_total > 0 {
+                running.frames_done as f32 / running.frames_total as f32
+            } else {
+                0.0
+            };
+            ui.add(
+                ProgressBar::new(fraction)
+                    .desired_width(420.0)
+                    .text(format!(
+                        "frame {} of {}",
+                        running.frames_done, running.frames_total
+                    )),
+            );
+            crate::dialog::footer(ui, |ui| {
                 if ui.button("Cancel").clicked() {
                     running.job.cancel();
                 }
-                ctx.request_repaint();
+            });
+            ctx.request_repaint();
+        }
+        None => {
+            let kind = dialog.format.format;
+            settings(ui, &mut dialog.format, sequence_size);
+            if dialog.format.format != kind {
+                dialog.set_output(&dialog.output());
             }
-            None => {
-                let kind = dialog.format.format;
-                settings(ui, &mut dialog.format, sequence_size);
-                if dialog.format.format != kind {
-                    let mut path = PathBuf::from(dialog.path.trim());
-                    path.set_extension(dialog.format.format.extension());
-                    dialog.path = path.display().to_string();
-                }
-                ui.label("Output file:");
-                ui.add(egui::TextEdit::singleline(&mut dialog.path).desired_width(420.0));
-                ui.horizontal(|ui| {
-                    ui.label("Source range:");
-                    ui.radio_value(&mut dialog.span, Span::Sequence, "Entire sequence");
-                    ui.add_enabled_ui(marked, |ui| {
-                        ui.radio_value(&mut dialog.span, Span::InToOut, "Sequence in/out")
-                            .on_disabled_hover_text("Mark in or out on the program first");
-                    });
+            ui.label("Output file:");
+            ui.horizontal(|ui| {
+                ui.add(egui::TextEdit::singleline(&mut dialog.path).desired_width(340.0));
+                browse = ui.button("Browse…").clicked();
+            });
+            ui.horizontal(|ui| {
+                ui.label("Source range:");
+                ui.radio_value(&mut dialog.span, Span::Sequence, "Entire sequence");
+                ui.add_enabled_ui(marked, |ui| {
+                    ui.radio_value(&mut dialog.span, Span::InToOut, "Sequence in/out")
+                        .on_disabled_hover_text("Mark in or out on the program first");
                 });
-                ui.label(summary(&dialog.format, sequence_size));
-                ui.horizontal(|ui| {
-                    start = ui.button("Export").clicked();
-                    queue = ui
-                        .button("Queue")
-                        .on_hover_text("Add to the export queue and keep editing")
-                        .clicked();
-                    close = ui.button("Close").clicked()
-                        || ui.input(|input| input.key_pressed(Key::Escape));
-                });
-            }
-        });
-    if close {
+            });
+            ui.label(summary(&dialog.format, sequence_size));
+            crate::dialog::footer(ui, |ui| {
+                close = ui.button("Close").clicked()
+                    || (!browsing && ui.input(|input| input.key_pressed(Key::Escape)));
+                queue = ui
+                    .button("Queue")
+                    .on_hover_text("Add to the export queue and keep editing")
+                    .clicked();
+                start = ui.add(crate::dialog::primary("Export")).clicked();
+            });
+        }
+    });
+    if browse {
+        editor.prompt_path(PathPurpose::ExportMedia);
+    } else if close {
         editor.export = None;
     } else if start {
         start_job(editor);

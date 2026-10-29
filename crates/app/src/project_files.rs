@@ -7,6 +7,7 @@ use timeline::{
 
 use crate::editor::Editor;
 use crate::effects::LutSlot;
+use crate::export::ExportDialog;
 use crate::file_browser::FileBrowser;
 use crate::project_store::{Setting, StoreEvent};
 
@@ -23,6 +24,8 @@ pub enum PathPurpose {
     Export(Interchange),
     /// An image of the program at the playhead.
     ExportFrame,
+    /// Where Export Media writes the sequence.
+    ExportMedia,
     /// A `.cube` file for one of a clip's LUTs.
     Lut(ClipId, LutSlot),
     /// The picture for the Image Matte Key at an index in a clip's effects.
@@ -105,6 +108,7 @@ impl Editor {
             PathPurpose::ExportCaptions => project_with(SUBRIP),
             PathPurpose::Export(kind) => project_with(kind.extension()),
             PathPurpose::ExportFrame => Some(self.default_frame_path()),
+            PathPurpose::ExportMedia => self.export.as_ref().map(ExportDialog::output),
             _ => None,
         };
         let browser = crate::path_dialog::browser_for(self, purpose, start.as_deref());
@@ -368,24 +372,20 @@ pub fn discard_dialog(editor: &mut Editor, ctx: &egui::Context) {
         .and_then(|path| path.file_name())
         .map_or_else(|| "Untitled".into(), |name| name.to_string_lossy());
     let mut choice = None;
-    egui::Window::new("Unsaved Changes")
-        .collapsible(false)
-        .resizable(false)
-        .show(ctx, |ui| {
-            ui.label(format!("Save changes to {name}?"));
-            ui.horizontal(|ui| {
-                if ui.button("Save").clicked() {
-                    choice = Some(Choice::Save);
-                }
-                if ui.button("Don't Save").clicked() {
-                    choice = Some(Choice::Discard);
-                }
-                if ui.button("Cancel").clicked() || ui.input(|input| input.key_pressed(Key::Escape))
-                {
-                    choice = Some(Choice::Cancel);
-                }
-            });
+    crate::dialog::window(ctx, "Unsaved Changes").show(ctx, |ui| {
+        ui.label(format!("Save changes to {name}?"));
+        crate::dialog::footer(ui, |ui| {
+            if ui.button("Cancel").clicked() || ui.input(|input| input.key_pressed(Key::Escape)) {
+                choice = Some(Choice::Cancel);
+            }
+            if ui.button("Don't Save").clicked() {
+                choice = Some(Choice::Discard);
+            }
+            if ui.add(crate::dialog::primary("Save")).clicked() {
+                choice = Some(Choice::Save);
+            }
         });
+    });
     let Some(choice) = choice else {
         return;
     };

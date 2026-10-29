@@ -111,28 +111,25 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
         Naming::Rename(_) => "Rename Preset",
     };
     let mut done = None;
-    egui::Window::new(title)
-        .collapsible(false)
-        .resizable(false)
-        .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-        .show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.label("Name");
-                let field = ui.text_edit_singleline(&mut dialog.name);
-                if std::mem::take(&mut dialog.opened) {
-                    field.request_focus();
-                }
-            });
-            ui.horizontal(|ui| {
-                if ui.button("OK").clicked() || ui.input(|input| input.key_pressed(Key::Enter)) {
-                    done = Some(true);
-                }
-                if ui.button("Cancel").clicked() || ui.input(|input| input.key_pressed(Key::Escape))
-                {
-                    done = Some(false);
-                }
-            });
+    crate::dialog::window(ctx, title).show(ctx, |ui| {
+        ui.horizontal(|ui| {
+            ui.label("Name");
+            let field = ui.text_edit_singleline(&mut dialog.name);
+            if std::mem::take(&mut dialog.opened) {
+                field.request_focus();
+            }
         });
+        crate::dialog::footer(ui, |ui| {
+            if ui.button("Cancel").clicked() || ui.input(|input| input.key_pressed(Key::Escape)) {
+                done = Some(false);
+            }
+            if ui.add(crate::dialog::primary("OK")).clicked()
+                || ui.input(|input| input.key_pressed(Key::Enter))
+            {
+                done = Some(true);
+            }
+        });
+    });
     let Some(keep) = done else {
         return;
     };

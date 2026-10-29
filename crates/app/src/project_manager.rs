@@ -67,33 +67,32 @@ pub(crate) fn window(editor: &mut Editor, ctx: &egui::Context) {
     };
     let mut start = false;
     let mut close = false;
-    egui::Window::new("Project Manager")
-        .collapsible(false)
-        .resizable(false)
-        .show(ctx, |ui| match &manager.job {
-            Some(job) => {
-                ui.label(format!("Copying {} of {} files…", job.copied, job.total));
-                let fraction = job.copied as f32 / job.total.max(1) as f32;
-                ui.add(ProgressBar::new(fraction).show_percentage());
-                close = ui.button("Cancel").clicked();
-            }
-            None => {
-                ui.label("Copy the project's media, proxies and LUTs to:");
-                ui.text_edit_singleline(&mut manager.folder);
-                ui.radio_value(&mut manager.keep, Collect::UsedOnly, "Exclude unused clips");
-                ui.radio_value(&mut manager.keep, Collect::All, "Keep every item");
-                ui.weak(format!(
-                    "Saves {name}.{} there, reading the copies.",
-                    project::EXTENSION
-                ));
-                ui.horizontal(|ui| {
-                    start = ui.button("Collect Files and Copy").clicked()
-                        || ui.input(|input| input.key_pressed(Key::Enter));
-                    close = ui.button("Cancel").clicked()
-                        || ui.input(|input| input.key_pressed(Key::Escape));
-                });
-            }
-        });
+    crate::dialog::window(ctx, "Project Manager").show(ctx, |ui| match &manager.job {
+        Some(job) => {
+            ui.label(format!("Copying {} of {} files…", job.copied, job.total));
+            let fraction = job.copied as f32 / job.total.max(1) as f32;
+            ui.add(ProgressBar::new(fraction).show_percentage());
+            close = ui.button("Cancel").clicked();
+        }
+        None => {
+            ui.label("Copy the project's media, proxies and LUTs to:");
+            ui.text_edit_singleline(&mut manager.folder);
+            ui.radio_value(&mut manager.keep, Collect::UsedOnly, "Exclude unused clips");
+            ui.radio_value(&mut manager.keep, Collect::All, "Keep every item");
+            ui.weak(format!(
+                "Saves {name}.{} there, reading the copies.",
+                project::EXTENSION
+            ));
+            crate::dialog::footer(ui, |ui| {
+                close = ui.button("Cancel").clicked()
+                    || ui.input(|input| input.key_pressed(Key::Escape));
+                start = ui
+                    .add(crate::dialog::primary("Collect Files and Copy"))
+                    .clicked()
+                    || ui.input(|input| input.key_pressed(Key::Enter));
+            });
+        }
+    });
     if close {
         if let Some(job) = manager.job.take() {
             job.cancel.store(true, Ordering::Relaxed);

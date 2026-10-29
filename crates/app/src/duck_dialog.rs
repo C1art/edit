@@ -103,61 +103,60 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     }
     let mut generate = false;
     let mut cancelled = false;
-    egui::Window::new("Auto Duck")
-        .collapsible(false)
-        .resizable(false)
-        .show(ctx, |ui| {
-            let measuring = dialog.measuring.as_ref();
-            ui.add_enabled_ui(measuring.is_none(), |ui| {
-                ui.label(format!(
-                    "Lower {} selected audio clip(s) while these tracks are heard:",
-                    dialog.clips.len()
-                ));
-                ui.horizontal_wrapped(|ui| {
-                    for (index, against) in dialog.against.iter_mut().enumerate() {
-                        ui.checkbox(against, format!("A{}", index + 1));
-                    }
+    crate::dialog::window(ctx, "Auto Duck").show(ctx, |ui| {
+        let measuring = dialog.measuring.as_ref();
+        ui.add_enabled_ui(measuring.is_none(), |ui| {
+            ui.label(format!(
+                "Lower {} selected audio clip(s) while these tracks are heard:",
+                dialog.clips.len()
+            ));
+            ui.horizontal_wrapped(|ui| {
+                for (index, against) in dialog.against.iter_mut().enumerate() {
+                    ui.checkbox(against, format!("A{}", index + 1));
+                }
+            });
+            egui::Grid::new("duck settings")
+                .num_columns(2)
+                .show(ui, |ui| {
+                    ui.label("Duck Amount");
+                    ui.add(
+                        egui::DragValue::new(&mut dialog.amount_db)
+                            .range(0.0..=-Gain::SILENT.db())
+                            .speed(0.1)
+                            .suffix(" dB"),
+                    );
+                    ui.end_row();
+                    ui.label("Sensitivity");
+                    ui.add(egui::Slider::new(&mut dialog.sensitivity, 0.0..=10.0))
+                        .on_hover_text("Higher ducks under quieter sound");
+                    ui.end_row();
+                    ui.label("Fade Duration");
+                    ui.add(
+                        egui::DragValue::new(&mut dialog.fade_ms)
+                            .range(0..=5_000)
+                            .suffix(" ms"),
+                    );
+                    ui.end_row();
                 });
-                egui::Grid::new("duck settings")
-                    .num_columns(2)
-                    .show(ui, |ui| {
-                        ui.label("Duck Amount");
-                        ui.add(
-                            egui::DragValue::new(&mut dialog.amount_db)
-                                .range(0.0..=-Gain::SILENT.db())
-                                .speed(0.1)
-                                .suffix(" dB"),
-                        );
-                        ui.end_row();
-                        ui.label("Sensitivity");
-                        ui.add(egui::Slider::new(&mut dialog.sensitivity, 0.0..=10.0))
-                            .on_hover_text("Higher ducks under quieter sound");
-                        ui.end_row();
-                        ui.label("Fade Duration");
-                        ui.add(
-                            egui::DragValue::new(&mut dialog.fade_ms)
-                                .range(0..=5_000)
-                                .suffix(" ms"),
-                        );
-                        ui.end_row();
-                    });
-                ui.weak("Replaces the clips' volume keyframes.");
-            });
-            if let Some(measuring) = measuring {
-                ui.add(
-                    ProgressBar::new(measuring.progress)
-                        .show_percentage()
-                        .text("Listening…"),
-                );
-            }
-            ui.horizontal(|ui| {
-                generate = measuring.is_none()
-                    && (ui.button("Generate Keyframes").clicked()
-                        || ui.input(|input| input.key_pressed(Key::Enter)));
-                cancelled = ui.button("Cancel").clicked()
-                    || ui.input(|input| input.key_pressed(Key::Escape));
-            });
+            ui.weak("Replaces the clips' volume keyframes.");
         });
+        if let Some(measuring) = measuring {
+            ui.add(
+                ProgressBar::new(measuring.progress)
+                    .show_percentage()
+                    .text("Listening…"),
+            );
+        }
+        crate::dialog::footer(ui, |ui| {
+            cancelled =
+                ui.button("Cancel").clicked() || ui.input(|input| input.key_pressed(Key::Escape));
+            generate = measuring.is_none()
+                && (ui
+                    .add(crate::dialog::primary("Generate Keyframes"))
+                    .clicked()
+                    || ui.input(|input| input.key_pressed(Key::Enter)));
+        });
+    });
     for warning in warnings {
         editor.notice(format!("Heard as silence: {warning}"));
     }

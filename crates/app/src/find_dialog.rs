@@ -60,10 +60,8 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     let mut open = true;
     let mut action = None;
     let find = &mut editor.find;
-    egui::Window::new("Find")
+    crate::dialog::window(ctx, "Find")
         .open(&mut open)
-        .collapsible(false)
-        .resizable(false)
         .show(ctx, |ui| {
             egui::Grid::new("find").num_columns(2).show(ui, |ui| {
                 ui.label("Find");

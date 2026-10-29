@@ -53,61 +53,59 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
         return;
     };
     let mut choice = None;
-    egui::Window::new("Clip Speed / Duration")
-        .collapsible(false)
-        .resizable(false)
-        .show(ctx, |ui| {
-            egui::Grid::new("speed_fields")
-                .num_columns(2)
-                .show(ui, |ui| {
-                    ui.label("Speed");
-                    let percent = ui.add(
-                        egui::DragValue::new(&mut prompt.percent)
-                            .range(1.0..=10_000.0)
-                            .speed(1.0)
-                            .max_decimals(2)
-                            .suffix("%"),
-                    );
-                    if percent.changed() {
-                        prompt.duration_typed = false;
-                        if let Some(speed) = typed_speed(prompt.percent) {
-                            prompt.duration = speed.sequence_span(prompt.source).max(Ticks(1));
-                        }
+    crate::dialog::window(ctx, "Clip Speed / Duration").show(ctx, |ui| {
+        egui::Grid::new("speed_fields")
+            .num_columns(2)
+            .show(ui, |ui| {
+                ui.label("Speed");
+                let percent = ui.add(
+                    egui::DragValue::new(&mut prompt.percent)
+                        .range(1.0..=10_000.0)
+                        .speed(1.0)
+                        .max_decimals(2)
+                        .suffix("%"),
+                );
+                if percent.changed() {
+                    prompt.duration_typed = false;
+                    if let Some(speed) = typed_speed(prompt.percent) {
+                        prompt.duration = speed.sequence_span(prompt.source).max(Ticks(1));
                     }
-                    ui.end_row();
-                    ui.label("Duration");
-                    let mut frames = rate.frame_at(prompt.duration, timebase).max(1);
-                    let duration = ui.add(
-                        egui::DragValue::new(&mut frames)
-                            .range(1..=i64::MAX)
-                            .speed(0.5)
-                            .custom_formatter(|frames, _| {
-                                let ticks = rate.frame_start(frames as i64, timebase);
-                                Timecode::new(ticks, timebase, rate).to_string()
-                            }),
-                    );
-                    if duration.changed() {
-                        prompt.duration_typed = true;
-                        prompt.duration = rate.frame_start(frames, timebase);
-                        if let Some(speed) = Speed::stretch(prompt.source, prompt.duration) {
-                            prompt.percent = speed.percent();
-                        }
+                }
+                ui.end_row();
+                ui.label("Duration");
+                let mut frames = rate.frame_at(prompt.duration, timebase).max(1);
+                let duration = ui.add(
+                    egui::DragValue::new(&mut frames)
+                        .range(1..=i64::MAX)
+                        .speed(0.5)
+                        .custom_formatter(|frames, _| {
+                            let ticks = rate.frame_start(frames as i64, timebase);
+                            Timecode::new(ticks, timebase, rate).to_string()
+                        }),
+                );
+                if duration.changed() {
+                    prompt.duration_typed = true;
+                    prompt.duration = rate.frame_start(frames, timebase);
+                    if let Some(speed) = Speed::stretch(prompt.source, prompt.duration) {
+                        prompt.percent = speed.percent();
                     }
-                    ui.end_row();
-                });
-            ui.checkbox(&mut prompt.reverse, "Reverse Speed");
-            ui.checkbox(&mut prompt.maintain_pitch, "Maintain Audio Pitch");
-            ui.checkbox(&mut prompt.ripple, "Ripple Edit, Shifting Trailing Clips");
-            ui.horizontal(|ui| {
-                if ui.button("OK").clicked() || ui.input(|input| input.key_pressed(Key::Enter)) {
-                    choice = Some(true);
                 }
-                if ui.button("Cancel").clicked() || ui.input(|input| input.key_pressed(Key::Escape))
-                {
-                    choice = Some(false);
-                }
+                ui.end_row();
             });
+        ui.checkbox(&mut prompt.reverse, "Reverse Speed");
+        ui.checkbox(&mut prompt.maintain_pitch, "Maintain Audio Pitch");
+        ui.checkbox(&mut prompt.ripple, "Ripple Edit, Shifting Trailing Clips");
+        crate::dialog::footer(ui, |ui| {
+            if ui.button("Cancel").clicked() || ui.input(|input| input.key_pressed(Key::Escape)) {
+                choice = Some(false);
+            }
+            if ui.add(crate::dialog::primary("OK")).clicked()
+                || ui.input(|input| input.key_pressed(Key::Enter))
+            {
+                choice = Some(true);
+            }
         });
+    });
     let Some(apply) = choice else {
         return;
     };

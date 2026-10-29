@@ -85,66 +85,62 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
         return;
     };
     let mut choice = None;
-    egui::Window::new("Marker")
-        .collapsible(false)
-        .resizable(false)
-        .show(ctx, |ui| {
-            egui::Grid::new("marker_fields")
-                .num_columns(2)
-                .show(ui, |ui| {
-                    ui.label("Name");
-                    let name = ui.text_edit_singleline(&mut marker.name);
-                    if ui.memory(|memory| memory.focused().is_none()) {
-                        name.request_focus();
-                    }
-                    ui.end_row();
-                    ui.label(match owner {
-                        MarkerOwner::Sequence => "Time",
-                        MarkerOwner::Clip(_) => "Source Time",
-                    });
-                    ui.monospace(Timecode::new(marker.at, timebase, rate).to_string());
-                    ui.end_row();
-                    ui.label("Duration");
-                    let mut frames = rate.frame_at(marker.duration, timebase).max(0);
-                    let duration = egui::DragValue::new(&mut frames)
-                        .range(0..=i64::MAX)
-                        .speed(0.5)
-                        .custom_formatter(|frames, _| {
-                            let ticks = rate.frame_start(frames as i64, timebase);
-                            Timecode::new(ticks, timebase, rate).to_string()
-                        });
-                    if ui.add(duration).changed() {
-                        marker.duration = rate.frame_start(frames, timebase);
-                    }
-                    ui.end_row();
-                    ui.label("Type");
-                    kind_picker(ui, &mut marker.kind);
-                    ui.end_row();
-                    if let MarkerKind::WebLink { url } = &mut marker.kind {
-                        ui.label("URL");
-                        ui.text_edit_singleline(url);
-                        ui.end_row();
-                    }
-                    ui.label("Color");
-                    color_picker(ui, &mut marker.color);
-                    ui.end_row();
-                    ui.label("Comments");
-                    ui.add(egui::TextEdit::multiline(&mut marker.comment).desired_rows(3));
-                    ui.end_row();
+    crate::dialog::window(ctx, "Marker").show(ctx, |ui| {
+        egui::Grid::new("marker_fields")
+            .num_columns(2)
+            .show(ui, |ui| {
+                ui.label("Name");
+                let name = ui.text_edit_singleline(&mut marker.name);
+                if ui.memory(|memory| memory.focused().is_none()) {
+                    name.request_focus();
+                }
+                ui.end_row();
+                ui.label(match owner {
+                    MarkerOwner::Sequence => "Time",
+                    MarkerOwner::Clip(_) => "Source Time",
                 });
-            ui.horizontal(|ui| {
-                if ui.button("OK").clicked() {
-                    choice = Some(Choice::Apply);
+                ui.monospace(Timecode::new(marker.at, timebase, rate).to_string());
+                ui.end_row();
+                ui.label("Duration");
+                let mut frames = rate.frame_at(marker.duration, timebase).max(0);
+                let duration = egui::DragValue::new(&mut frames)
+                    .range(0..=i64::MAX)
+                    .speed(0.5)
+                    .custom_formatter(|frames, _| {
+                        let ticks = rate.frame_start(frames as i64, timebase);
+                        Timecode::new(ticks, timebase, rate).to_string()
+                    });
+                if ui.add(duration).changed() {
+                    marker.duration = rate.frame_start(frames, timebase);
                 }
-                if ui.button("Delete").clicked() {
-                    choice = Some(Choice::Delete);
+                ui.end_row();
+                ui.label("Type");
+                kind_picker(ui, &mut marker.kind);
+                ui.end_row();
+                if let MarkerKind::WebLink { url } = &mut marker.kind {
+                    ui.label("URL");
+                    ui.text_edit_singleline(url);
+                    ui.end_row();
                 }
-                if ui.button("Cancel").clicked() || ui.input(|input| input.key_pressed(Key::Escape))
-                {
-                    choice = Some(Choice::Cancel);
-                }
+                ui.label("Color");
+                color_picker(ui, &mut marker.color);
+                ui.end_row();
+                ui.label("Comments");
+                ui.add(egui::TextEdit::multiline(&mut marker.comment).desired_rows(3));
+                ui.end_row();
             });
+        crate::dialog::footer(ui, |ui| {
+            if ui.button("Cancel").clicked() || ui.input(|input| input.key_pressed(Key::Escape)) {
+                choice = Some(Choice::Cancel);
+            }
+            if ui.button("Delete").clicked() {
+                choice = Some(Choice::Delete);
+            }
+            if ui.add(crate::dialog::primary("OK")).clicked() {
+                choice = Some(Choice::Apply);
+            }
         });
+    });
     let Some(choice) = choice else {
         return;
     };

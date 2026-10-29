@@ -8,6 +8,7 @@ mod clip_moves;
 mod color_match;
 mod commands;
 mod comparison;
+mod dialog;
 mod duck_dialog;
 mod editor;
 mod effect_presets;

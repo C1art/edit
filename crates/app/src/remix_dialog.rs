@@ -68,45 +68,40 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     }
     let mut apply = false;
     let mut cancelled = false;
-    egui::Window::new("Remix")
-        .collapsible(false)
-        .resizable(false)
-        .show(ctx, |ui| {
-            let listening = dialog.listening.as_ref();
-            ui.add_enabled_ui(listening.is_none(), |ui| {
-                ui.horizontal(|ui| {
-                    ui.label("Target Duration");
-                    let mut frames = rate.frame_at(dialog.target, timebase).max(1);
-                    let field = egui::DragValue::new(&mut frames)
-                        .range(1..=i64::MAX)
-                        .speed(0.5)
-                        .custom_formatter(|frames, _| {
-                            let ticks = rate.frame_start(frames as i64, timebase);
-                            Timecode::new(ticks, timebase, rate).to_string()
-                        });
-                    if ui.add(field).changed() {
-                        dialog.target = rate.frame_start(frames, timebase);
-                    }
-                });
-            });
-            ui.label(
-                "The music is cut or looped where it sounds alike, keeping its start and end.",
-            );
-            if let Some(listening) = listening {
-                ui.add(
-                    ProgressBar::new(listening.progress)
-                        .show_percentage()
-                        .text("Analyzing…"),
-                );
-            }
+    crate::dialog::window(ctx, "Remix").show(ctx, |ui| {
+        let listening = dialog.listening.as_ref();
+        ui.add_enabled_ui(listening.is_none(), |ui| {
             ui.horizontal(|ui| {
-                apply = listening.is_none()
-                    && (ui.button("OK").clicked()
-                        || ui.input(|input| input.key_pressed(Key::Enter)));
-                cancelled = ui.button("Cancel").clicked()
-                    || ui.input(|input| input.key_pressed(Key::Escape));
+                ui.label("Target Duration");
+                let mut frames = rate.frame_at(dialog.target, timebase).max(1);
+                let field = egui::DragValue::new(&mut frames)
+                    .range(1..=i64::MAX)
+                    .speed(0.5)
+                    .custom_formatter(|frames, _| {
+                        let ticks = rate.frame_start(frames as i64, timebase);
+                        Timecode::new(ticks, timebase, rate).to_string()
+                    });
+                if ui.add(field).changed() {
+                    dialog.target = rate.frame_start(frames, timebase);
+                }
             });
         });
+        ui.label("The music is cut or looped where it sounds alike, keeping its start and end.");
+        if let Some(listening) = listening {
+            ui.add(
+                ProgressBar::new(listening.progress)
+                    .show_percentage()
+                    .text("Analyzing…"),
+            );
+        }
+        crate::dialog::footer(ui, |ui| {
+            cancelled =
+                ui.button("Cancel").clicked() || ui.input(|input| input.key_pressed(Key::Escape));
+            apply = listening.is_none()
+                && (ui.add(crate::dialog::primary("OK")).clicked()
+                    || ui.input(|input| input.key_pressed(Key::Enter)));
+        });
+    });
     for warning in warnings {
         editor.notice(format!("Heard as silence: {warning}"));
     }

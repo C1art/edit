@@ -83,10 +83,8 @@ pub(crate) fn window(editor: &mut Editor, ctx: &egui::Context) {
     let mut open = true;
     let mut again = false;
     let mut master = None;
-    egui::Window::new("Loudness")
+    crate::dialog::window(ctx, "Loudness")
         .open(&mut open)
-        .collapsible(false)
-        .resizable(false)
         .show(ctx, |ui| {
             ui.label(if shown.marked {
                 "Sequence In to Out"

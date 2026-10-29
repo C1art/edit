@@ -355,20 +355,16 @@ pub(crate) fn window(editor: &mut Editor, ctx: &egui::Context) {
     };
     let fraction = (done as f32 + part) / work.total.max(1) as f32;
     let mut cancel = false;
-    egui::Window::new("Render and Replace")
-        .collapsible(false)
-        .resizable(false)
-        .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-        .show(ctx, |ui| {
-            ui.label(format!("Rendering {name}"));
-            ui.add(
-                ProgressBar::new(fraction)
-                    .show_percentage()
-                    .desired_width(260.0),
-            );
-            ui.label(RichText::new("Clips show the rendered file once it is done.").weak());
-            cancel = ui.button("Cancel").clicked();
-        });
+    crate::dialog::window(ctx, "Render and Replace").show(ctx, |ui| {
+        ui.label(format!("Rendering {name}"));
+        ui.add(
+            ProgressBar::new(fraction)
+                .show_percentage()
+                .desired_width(260.0),
+        );
+        ui.label(RichText::new("Clips show the rendered file once it is done.").weak());
+        cancel = ui.button("Cancel").clicked();
+    });
     if cancel {
         // Dropping the export cancels it and removes its partial file.
         editor.render_replace = None;

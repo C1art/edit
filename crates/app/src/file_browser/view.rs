@@ -74,7 +74,7 @@ impl FileBrowser {
             extra(ui);
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 cancelled |= ui.button("Cancel").clicked();
-                submitted |= ui.button(action).clicked();
+                submitted |= ui.add(crate::dialog::primary(action)).clicked();
             });
         });
         let nothing_focused = ui.memory(|memory| memory.focused().is_none());

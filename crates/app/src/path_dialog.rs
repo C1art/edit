@@ -44,6 +44,7 @@ pub fn path_dialog(editor: &mut Editor, ctx: &egui::Context) {
             "Writes the sequence as Final Cut Pro XML, for Premiere, Resolve or Final Cut.",
             "Export",
         ),
+        PathPurpose::ExportMedia => ("Export Media To", "", "Choose"),
         PathPurpose::ExportFrame => (
             "Export Frame",
             "Saves the program's frame at the playhead, at the sequence's size, as PNG or TIFF.",
@@ -71,24 +72,18 @@ pub fn path_dialog(editor: &mut Editor, ctx: &egui::Context) {
         ),
     };
     let mut outcome = None;
-    egui::Window::new(title)
-        .collapsible(false)
-        .resizable(false)
-        .pivot(egui::Align2::CENTER_CENTER)
-        .default_pos(ctx.content_rect().center())
-        .show(ctx, |ui| {
-            if !hint.is_empty() {
-                ui.label(hint);
+    crate::dialog::window(ctx, title).show(ctx, |ui| {
+        if !hint.is_empty() {
+            ui.label(hint);
+        }
+        let (purpose, image_sequence) = (prompt.purpose, &mut prompt.image_sequence);
+        outcome = prompt.browser.show(ui, action, |ui| {
+            if purpose == PathPurpose::Import {
+                ui.checkbox(image_sequence, "Image Sequence")
+                    .on_hover_text("Import the numbered picture and those after it as one clip");
             }
-            let (purpose, image_sequence) = (prompt.purpose, &mut prompt.image_sequence);
-            outcome = prompt.browser.show(ui, action, |ui| {
-                if purpose == PathPurpose::Import {
-                    ui.checkbox(image_sequence, "Image Sequence").on_hover_text(
-                        "Import the numbered picture and those after it as one clip",
-                    );
-                }
-            });
         });
+    });
     let (purpose, image_sequence) = (prompt.purpose, prompt.image_sequence);
     let Some(outcome) = outcome else {
         return;
@@ -129,6 +124,11 @@ pub fn path_dialog(editor: &mut Editor, ctx: &egui::Context) {
         PathPurpose::ExportCaptions => editor.export_captions(path),
         PathPurpose::Export(kind) => editor.export_interchange(path, kind),
         PathPurpose::ExportFrame => editor.export_frame(path),
+        PathPurpose::ExportMedia => {
+            if let Some(export) = &mut editor.export {
+                export.set_output(&path);
+            }
+        }
         PathPurpose::Lut(clip, slot) => crate::effects::set_lut(editor, clip, slot, path),
         PathPurpose::ImageMatte(clip, effect) => {
             crate::effects::set_image_matte(editor, clip, effect, path);
@@ -185,7 +185,8 @@ impl FolderUse {
             PathPurpose::ImportCaptions
             | PathPurpose::ExportCaptions
             | PathPurpose::Export(_)
-            | PathPurpose::ExportFrame => Self::Output,
+            | PathPurpose::ExportFrame
+            | PathPurpose::ExportMedia => Self::Output,
             PathPurpose::Lut(..) => Self::Look,
         }
     }
@@ -217,6 +218,7 @@ pub fn browser_for(editor: &Editor, purpose: PathPurpose, start: Option<&Path>) 
         PathPurpose::Export(Interchange::Edl) => (Mode::Save, vec![EDL]),
         PathPurpose::Export(Interchange::FinalCutXml) => (Mode::Save, vec![FINAL_CUT_XML]),
         PathPurpose::ExportFrame => (Mode::Save, vec![FRAME_IMAGES]),
+        PathPurpose::ExportMedia => (Mode::Save, vec![ALL_MEDIA]),
         PathPurpose::Lut(..) => (Mode::Open { many: false }, vec![CUBE_LUT, ALL_FILES]),
         PathPurpose::ImageMatte(..) | PathPurpose::GraphicPicture(_) => {
             (Mode::Open { many: false }, vec![STILL_IMAGES, ALL_FILES])

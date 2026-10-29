@@ -16,7 +16,7 @@ const LINE: Color32 = Color32::from_rgb(46, 48, 53);
 pub(crate) const TEXT: Color32 = Color32::from_rgb(214, 216, 221);
 pub(crate) const WEAK_TEXT: Color32 = Color32::from_rgb(138, 142, 151);
 pub(crate) const ACCENT: Color32 = Color32::from_rgb(64, 140, 255);
-const ACCENT_FILL: Color32 = Color32::from_rgb(38, 98, 190);
+pub(crate) const ACCENT_FILL: Color32 = Color32::from_rgb(38, 98, 190);
 
 const GAP: i8 = 3;
 const PANEL_RADIUS: u8 = 6;

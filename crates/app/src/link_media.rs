@@ -62,8 +62,8 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     }
     let mut locate = None;
     let mut leave = Vec::new();
-    egui::Window::new("Link Media")
-        .collapsible(false)
+    crate::dialog::window(ctx, "Link Media")
+        .resizable(true)
         .resizable(true)
         .default_width(560.0)
         .show(ctx, |ui| {

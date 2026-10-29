@@ -43,37 +43,33 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     let rate_locked = editor.timeline.sequence().duration() > Ticks::ZERO;
     let mut done = false;
     let mut cancelled = false;
-    egui::Window::new("Sequence Settings")
-        .collapsible(false)
-        .resizable(false)
-        .show(ctx, |ui| {
-            let format = &mut settings.format;
-            egui::Grid::new("sequence settings")
-                .num_columns(2)
-                .spacing([12.0, 8.0])
-                .show(ui, |ui| {
-                    ui.label("Frame size");
-                    ui.horizontal(|ui| frame_size(ui, format));
-                    ui.end_row();
-                    ui.label("Timebase");
-                    ui.add_enabled_ui(!rate_locked, |ui| {
-                        ui.horizontal(|ui| {
-                            crate::interpret_dialog::rate_picker(ui, &mut format.frame_rate);
-                        });
-                    })
-                    .response
-                    .on_disabled_hover_text(
-                        "The timebase can't change once the sequence has clips",
-                    );
-                    ui.end_row();
-                });
-            ui.weak("Pictures of another shape fit inside the frame, with bars.");
-            ui.horizontal(|ui| {
-                done = ui.button("OK").clicked() || ui.input(|input| input.key_pressed(Key::Enter));
-                cancelled = ui.button("Cancel").clicked()
-                    || ui.input(|input| input.key_pressed(Key::Escape));
+    crate::dialog::window(ctx, "Sequence Settings").show(ctx, |ui| {
+        let format = &mut settings.format;
+        egui::Grid::new("sequence settings")
+            .num_columns(2)
+            .spacing([12.0, 8.0])
+            .show(ui, |ui| {
+                ui.label("Frame size");
+                ui.horizontal(|ui| frame_size(ui, format));
+                ui.end_row();
+                ui.label("Timebase");
+                ui.add_enabled_ui(!rate_locked, |ui| {
+                    ui.horizontal(|ui| {
+                        crate::interpret_dialog::rate_picker(ui, &mut format.frame_rate);
+                    });
+                })
+                .response
+                .on_disabled_hover_text("The timebase can't change once the sequence has clips");
+                ui.end_row();
             });
+        ui.weak("Pictures of another shape fit inside the frame, with bars.");
+        crate::dialog::footer(ui, |ui| {
+            cancelled =
+                ui.button("Cancel").clicked() || ui.input(|input| input.key_pressed(Key::Escape));
+            done = ui.add(crate::dialog::primary("OK")).clicked()
+                || ui.input(|input| input.key_pressed(Key::Enter));
         });
+    });
     if !(done || cancelled) {
         return;
     }

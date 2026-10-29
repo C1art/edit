@@ -32,26 +32,24 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
         return;
     };
     let mut choice = None;
-    egui::Window::new("Rename Clip")
-        .collapsible(false)
-        .resizable(false)
-        .show(ctx, |ui| {
-            ui.label("Clip Name");
-            let field = ui.text_edit_singleline(&mut rename.name);
-            if !field.has_focus() && !field.lost_focus() {
-                field.request_focus();
+    crate::dialog::window(ctx, "Rename Clip").show(ctx, |ui| {
+        ui.label("Clip Name");
+        let field = ui.text_edit_singleline(&mut rename.name);
+        if !field.has_focus() && !field.lost_focus() {
+            field.request_focus();
+        }
+        ui.weak("Leave empty to show the media's name");
+        crate::dialog::footer(ui, |ui| {
+            if ui.button("Cancel").clicked() || ui.input(|input| input.key_pressed(Key::Escape)) {
+                choice = Some(false);
             }
-            ui.weak("Leave empty to show the media's name");
-            ui.horizontal(|ui| {
-                if ui.button("OK").clicked() || ui.input(|input| input.key_pressed(Key::Enter)) {
-                    choice = Some(true);
-                }
-                if ui.button("Cancel").clicked() || ui.input(|input| input.key_pressed(Key::Escape))
-                {
-                    choice = Some(false);
-                }
-            });
+            if ui.add(crate::dialog::primary("OK")).clicked()
+                || ui.input(|input| input.key_pressed(Key::Enter))
+            {
+                choice = Some(true);
+            }
         });
+    });
     let Some(apply) = choice else {
         return;
     };

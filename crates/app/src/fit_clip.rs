@@ -30,20 +30,16 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     };
     let mut chosen = None;
     let mut cancelled = ctx.input(|input| input.key_pressed(Key::Escape));
-    egui::Window::new("Fit Clip")
-        .collapsible(false)
-        .resizable(false)
-        .show(ctx, |ui| {
-            ui.label("The source and sequence ranges are different lengths.");
-            ui.add_space(4.0);
-            for (choice, label, hint) in CHOICES {
-                if ui.button(label).on_hover_text(hint).clicked() {
-                    chosen = Some(choice);
-                }
+    crate::dialog::window(ctx, "Fit Clip").show(ctx, |ui| {
+        ui.label("The source and sequence ranges are different lengths.");
+        ui.add_space(4.0);
+        for (choice, label, hint) in CHOICES {
+            if ui.button(label).on_hover_text(hint).clicked() {
+                chosen = Some(choice);
             }
-            ui.add_space(4.0);
-            cancelled |= ui.button("Cancel").clicked();
-        });
+        }
+        crate::dialog::footer(ui, |ui| cancelled |= ui.button("Cancel").clicked());
+    });
     if chosen.is_some() || cancelled {
         editor.fit_clip = None;
     }
