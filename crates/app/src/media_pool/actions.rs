@@ -10,7 +10,7 @@ use super::{PoolAction, PoolEntry};
 use crate::editor::Editor;
 use crate::import::Probed;
 use crate::multicam_sync::Synced;
-use crate::project_files::PathPurpose;
+use crate::project_files::{quoted_name, PathPurpose};
 
 impl Editor {
     pub(crate) fn pool_action(&mut self, action: PoolAction) {
@@ -93,7 +93,7 @@ impl Editor {
                 let rate = self.timeline.sequence().format.frame_rate;
                 importer.request(path, replacing, rate);
             }
-            None => self.notice(format!("Cannot import {}", path.display())),
+            None => self.notice(format!("Cannot import {}", quoted_name(&path))),
         }
     }
 

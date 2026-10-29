@@ -71,6 +71,13 @@ const SUBRIP: &str = "srt";
 const EDL: &str = "edl";
 const XML: &str = "xml";
 
+/// How a file the user just chose is named in a message: they know where it is, and its
+/// full path would bury what's being said about it.
+pub(crate) fn quoted_name(path: &Path) -> String {
+    let name = path.file_name().unwrap_or(path.as_os_str());
+    format!("“{}”", name.to_string_lossy())
+}
+
 pub fn is_project(path: &Path) -> bool {
     has_extension(path, project::EXTENSION)
 }
@@ -264,17 +271,17 @@ impl Editor {
                 }
                 StoreEvent::Saved(path, _, Err(error)) => {
                     self.after_save = None;
-                    self.notice(format!("Cannot save {}: {error}", path.display()));
+                    self.notice(format!("Cannot save {}: {error}", quoted_name(&path)));
                 }
                 StoreEvent::Opened(path, Ok(sequence)) => {
                     self.remember_project(&path);
                     self.replace_sequence(*sequence, Some(path));
                 }
                 StoreEvent::Opened(path, Err(error)) => {
-                    self.notice(format!("Cannot open {}: {error}", path.display()));
+                    self.notice(format!("Cannot open {}: {error}", quoted_name(&path)));
                 }
                 StoreEvent::CaptionsRead(path, Ok(items)) if items.is_empty() => {
-                    self.notice(format!("No captions found in {}", path.display()));
+                    self.notice(format!("No captions found in {}", quoted_name(&path)));
                 }
                 StoreEvent::CaptionsRead(_, Ok(items)) => {
                     let captions = Captions {
@@ -284,29 +291,29 @@ impl Editor {
                     self.apply(SetCaptions { captions });
                 }
                 StoreEvent::CaptionsRead(path, Err(error)) => {
-                    self.notice(format!("Cannot import {}: {error}", path.display()));
+                    self.notice(format!("Cannot import {}: {error}", quoted_name(&path)));
                 }
                 StoreEvent::CaptionsWritten(_, Ok(())) => {}
                 StoreEvent::CaptionsWritten(path, Err(error)) => {
-                    self.notice(format!("Cannot export {}: {error}", path.display()));
+                    self.notice(format!("Cannot export {}: {error}", quoted_name(&path)));
                 }
                 StoreEvent::InterchangeRead(path, Ok(import)) => {
                     let name = import.name.clone();
                     if self.apply(*import) {
                         self.notice(format!(
-                            "Imported the sequence {name} from {}; open it from the project",
-                            path.display()
+                            "Imported the sequence “{name}” from {}; open it from the Project panel",
+                            quoted_name(&path)
                         ));
                     }
                 }
                 StoreEvent::InterchangeRead(path, Err(error)) => {
-                    self.notice(format!("Cannot import {}: {error}", path.display()));
+                    self.notice(format!("Cannot import {}: {error}", quoted_name(&path)));
                 }
                 StoreEvent::InterchangeWritten(path, Ok(())) => {
                     self.notice(format!("Exported the sequence to {}", path.display()));
                 }
                 StoreEvent::InterchangeWritten(path, Err(error)) => {
-                    self.notice(format!("Cannot export {}: {error}", path.display()));
+                    self.notice(format!("Cannot export {}: {error}", quoted_name(&path)));
                 }
                 StoreEvent::SettingRead(Setting::Keymap, Ok(Some(text))) => {
                     self.keymap = crate::keymap::Keymap::from_text(&text);

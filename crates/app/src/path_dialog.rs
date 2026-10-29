@@ -144,7 +144,10 @@ fn import(editor: &mut Editor, paths: Vec<PathBuf>, image_sequence: bool) {
         if image_sequence {
             match media::sequence_pattern(&path) {
                 Some(pattern) => editor.import(pattern, None),
-                None => editor.notice(format!("{} has no frame number", path.display())),
+                None => editor.notice(format!(
+                    "{} has no frame number",
+                    crate::project_files::quoted_name(&path)
+                )),
             }
         } else if is_xml(&path) {
             editor.import_interchange(path);
