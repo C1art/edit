@@ -10,8 +10,9 @@ use crate::editor::Editor;
 use crate::export_format::{ExportFormat, Format, PRESETS};
 use crate::export_progress::{self, ExportProgress};
 use crate::export_summary::{length_text, span_length, summary};
+use crate::export_target::{Holder, Target, TargetCheck};
 use crate::path_dialog::FolderUse;
-use crate::project_files::PathPurpose;
+use crate::project_files::{quoted_name, PathPurpose};
 
 /// Frame heights offered besides the sequence's own.
 const HEIGHTS: [u32; 6] = [2160, 1440, 1080, 720, 540, 360];
@@ -37,9 +38,13 @@ pub struct ExportDialog {
     format: ExportFormat,
     span: Span,
     running: Option<Running>,
+    /// The file suggested on opening, swapped for a free name while it's left as it is.
+    suggested: Option<PathBuf>,
+    target: Option<TargetCheck>,
 }
 
-/// Opens the dialog, suggesting a file next to the first imported media.
+/// Opens the dialog, suggesting a file named after the sequence next to the first
+/// imported media.
 pub fn open(editor: &mut Editor) {
     if editor.export.is_some() {
         return;
@@ -60,18 +65,38 @@ pub fn open(editor: &mut Editor) {
         })
         .unwrap_or_default();
     let format = ExportFormat::default();
-    let file = format!("Sequence.{}", format.format.extension());
+    let file = format!("{}.{}", editor.output_stem(), format.format.extension());
+    let path = folder.join(file);
     editor.export = Some(ExportDialog {
-        path: folder.join(file).display().to_string(),
+        path: path.display().to_string(),
         format,
         span,
         running: None,
+        suggested: Some(path),
+        target: TargetCheck::new(editor.ctx.clone()).ok(),
     });
 }
 
 impl ExportDialog {
     pub fn output(&self) -> PathBuf {
-        PathBuf::from(self.path.trim())
+        PathBuf::from(self.path.trim().trim_matches('"'))
+    }
+
+    /// What exporting would replace, after swapping a suggested file that's taken for a
+    /// free one.
+    fn target(&mut self, queued: impl FnOnce() -> Vec<PathBuf>) -> Option<Target> {
+        let output = self.output();
+        let target = self.target.as_mut()?.target(&output, queued)?.clone();
+        match target {
+            Target::Taken {
+                free: Some(free), ..
+            } if self.suggested.as_ref() == Some(&output) => {
+                self.path = free.display().to_string();
+                self.suggested = Some(free);
+                None
+            }
+            target => Some(target),
+        }
     }
 
     /// Writes to `path`, in the file type the chosen format makes.
@@ -92,6 +117,7 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     let sequence_size = (sequence.format.width, sequence.format.height);
     // Escape in the file browser closes only that.
     let browsing = editor.path_prompt.is_some();
+    let export_queue = &editor.export_queue;
     let Some(dialog) = &mut editor.export else {
         return;
     };
@@ -111,6 +137,7 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
             ctx.request_repaint_after(export_progress::REFRESH);
         }
         None => {
+            let target = dialog.target(|| export_queue.pending_paths());
             let kind = dialog.format.format;
             let format = &mut dialog.format;
             settings(ui, format, sequence_size, |ui, format| {
@@ -120,6 +147,11 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                     browse = ui.button("Browse…").clicked();
                 });
                 ui.end_row();
+                if let Some(Target::Taken { by, free }) = &target {
+                    ui.label("");
+                    replace_warning(ui, &mut dialog.path, *by, free.as_deref());
+                    ui.end_row();
+                }
                 ui.label("Source range:");
                 ui.horizontal(|ui| {
                     ui.radio_value(&mut dialog.span, Span::Sequence, "Entire sequence");
@@ -138,7 +170,11 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                 ui.end_row();
             });
             if dialog.format.format != kind {
+                let suggested = dialog.suggested.as_ref() == Some(&dialog.output());
                 dialog.set_output(&dialog.output());
+                if suggested {
+                    dialog.suggested = Some(dialog.output());
+                }
             }
             ui.label(summary(&dialog.format, sequence_size));
             crate::dialog::footer(ui, |ui| {
@@ -163,11 +199,28 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     }
 }
 
+/// Says what exporting to the chosen file would replace, offering a free name instead.
+fn replace_warning(ui: &mut egui::Ui, path: &mut String, by: Holder, free: Option<&Path>) {
+    let name = quoted_name(Path::new(path.trim().trim_matches('"')));
+    let warning = match by {
+        Holder::File => format!("{name} already exists and will be replaced."),
+        Holder::Queue => format!("A queued export already writes {name}."),
+    };
+    ui.horizontal(|ui| {
+        ui.colored_label(ui.visuals().warn_fg_color, warning);
+        if let Some(free) = free {
+            if ui.button(format!("Use {}", quoted_name(free))).clicked() {
+                *path = free.display().to_string();
+            }
+        }
+    });
+}
+
 /// The sequence and settings the dialog would export, after telling the user what's
 /// wrong if it can't.
 fn prepare(editor: &mut Editor) -> Option<(Arc<Sequence>, ExportSettings)> {
     let dialog = editor.export.as_ref()?;
-    let path = PathBuf::from(dialog.path.trim().trim_matches('"'));
+    let path = dialog.output();
     let sequence = editor.timeline.sequence();
     let sequence_size = (sequence.format.width, sequence.format.height);
     let (width, height) = dialog.format.size(sequence_size);

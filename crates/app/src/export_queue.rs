@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use egui::{Key, RichText};
@@ -50,6 +51,15 @@ impl ExportQueue {
             summary,
             status: Status::Waiting,
         });
+    }
+
+    /// Files that exports still to run will write.
+    pub(crate) fn pending_paths(&self) -> Vec<PathBuf> {
+        self.items
+            .iter()
+            .filter(|item| matches!(item.status, Status::Waiting | Status::Exporting(_)))
+            .map(|item| item.settings.path.clone())
+            .collect()
     }
 
     fn item_mut(&mut self, id: u64) -> Option<&mut Queued> {
