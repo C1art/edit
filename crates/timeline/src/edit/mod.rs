@@ -15,6 +15,7 @@ mod link;
 mod look;
 mod marker;
 mod media;
+mod merge;
 mod multicam;
 mod nest;
 mod ops;
@@ -57,6 +58,7 @@ pub use marker::{AddMarker, MarkerOwner, RemoveMarker, UpdateMarker};
 pub use media::{
     DuplicateMedia, MakeOffline, MakeSubclip, RelinkMedia, RenameMedia, SetChannelMap, SetMediaLog,
 };
+pub use merge::MergeClips;
 pub use multicam::{CreateMulticam, FlattenMulticam, SwitchAngle};
 pub use nest::{AddNest, InNest, NestClips, NestFromMedia};
 pub use paste::{Clipboard, PasteClips};

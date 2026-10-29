@@ -73,7 +73,7 @@ pub use edit::{
     AddSpeedKeyframe, AddSubmix, AddTrack, ApplyEffect, Attribute, AutoDuck, ClipEffect, ClipSound,
     Clipboard, CloseGap, CreateMulticam, DuplicateMedia, Edge, ExtractMarked, FlattenMulticam,
     FrameFit, ImportMedia, InNest, InterpretFootage, IntoSync, JoinThroughEdits, Lift, LiftMarked,
-    MakeOffline, MakeSubclip, MarkerOwner, MoveClips, MoveMode, MoveToBin, NestClips,
+    MakeOffline, MakeSubclip, MarkerOwner, MergeClips, MoveClips, MoveMode, MoveToBin, NestClips,
     NestFromMedia, NormalizeClipGains, PasteAttributes, PasteClips, PlaceClip, PlaceMode,
     RateStretch, Razor, RazorTarget, RelinkMedia, RemoveAttributes, RemoveBin, RemoveMarker,
     RemoveMedia, RemoveSpeedKeyframe, RemoveSubmix, RemoveTimeRemap, RemoveTrack, RenameBin,

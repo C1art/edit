@@ -512,6 +512,7 @@ mod interpret;
 mod link;
 mod marker;
 mod media;
+mod merge;
 mod multicam;
 mod nest;
 mod paste;
