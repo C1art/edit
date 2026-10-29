@@ -18,6 +18,8 @@ const AUDIO_CLIP: Color32 = Color32::from_rgb(58, 128, 92);
 const CLIP_RADIUS: f32 = 4.0;
 const NAME_STRIP: f32 = 17.0;
 const DETAIL_WIDTH: f32 = 8.0;
+/// Clips narrower than this, zoomed far out, are drawn as one band per run of them.
+const BAND_WIDTH: f32 = 2.0;
 const OFFLINE_CLIP: Color32 = Color32::from_rgb(170, 40, 40);
 const MIN_LABEL_SPACING: f32 = 90.0;
 
@@ -163,6 +165,7 @@ pub fn clips(
         TrackKind::Audio => !sequence.is_heard(track),
     };
     let visible = painter.clip_rect().x_range();
+    let mut band: Option<(Rect, Color32)> = None;
     for clip in &track.clips {
         let dimmed = silenced || clip.disabled;
         let rect = clip_rect(row, scale, clip.start, clip.end());
@@ -184,6 +187,21 @@ pub fn clips(
         if dimmed {
             fill = fill.gamma_multiply(0.4);
         }
+        // The hair of space between neighbours below would leave nothing of a clip
+        // this thin, and thousands of them each drawn would slow every frame.
+        if rect.width() < BAND_WIDTH {
+            band = match band.take() {
+                Some((run, color)) if color == fill && rect.left() - run.right() < 1.0 => {
+                    Some((run.union(rect), color))
+                }
+                ended => {
+                    paint_band(painter, ended);
+                    Some((rect, fill))
+                }
+            };
+            continue;
+        }
+        paint_band(painter, band.take());
         // A hair of space between neighbours keeps back-to-back clips apart.
         let body = rect.shrink2(egui::vec2(0.5, 0.0));
         painter.rect_filled(body, CLIP_RADIUS, fill);
@@ -307,7 +325,15 @@ pub fn clips(
             Color32::WHITE,
         );
     }
+    paint_band(painter, band);
     through_edit_marks(painter, row, scale, track);
+}
+
+fn paint_band(painter: &Painter, band: Option<(Rect, Color32)>) {
+    if let Some((rect, color)) = band {
+        let right = rect.right().max(rect.left() + 1.0);
+        painter.rect_filled(rect.with_max_x(right), 0.0, color);
+    }
 }
 
 pub fn playhead(painter: &Painter, ruler: Rect, bottom: f32, scale: &TimeScale, position: Ticks) {
