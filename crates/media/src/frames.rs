@@ -57,8 +57,10 @@ impl AudioBuffer {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug)]
 pub enum DecodedFrame {
     Video(VideoFrame),
+    /// Only from a reader asked to keep pictures planar.
+    Planar(crate::PlanarFrame),
     Audio(AudioBuffer),
 }

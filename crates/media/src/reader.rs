@@ -9,7 +9,7 @@ use crate::ffi::{
 };
 use crate::seek_trim::{SeekTrim, Trimmed};
 use crate::sequence::open_input;
-use crate::{AudioBuffer, DecodedFrame, MediaError, StreamKind, VideoFrame};
+use crate::{AudioBuffer, DecodedFrame, MediaError, PlanarFrame, StreamKind, VideoFrame};
 
 /// FFmpeg's `AV_TIME_BASE`, used for container-level start time, duration and seeking.
 const MICROSECONDS: Timebase = match Timebase::new(1, 1_000_000) {
@@ -187,6 +187,14 @@ impl MediaReader {
         }
     }
 
+    /// Leaves 8-bit 4:2:0 pictures in their planes, as [`DecodedFrame::Planar`], from
+    /// the next decoded frame on, while they need no resizing or deinterlacing.
+    pub fn set_planar(&mut self, planar: bool) {
+        if let Some(video) = &mut self.video {
+            video.converter.set_planar(planar);
+        }
+    }
+
     /// Plays the source channels `map` names on each side from the next decoded sound
     /// on; `None` mixes them all to stereo again.
     pub fn set_channel_map(&mut self, map: Option<ChannelMap>) {
@@ -248,6 +256,14 @@ impl MediaReader {
             Trimmed::Audio(buffer) => Ok(DecodedFrame::Audio(buffer)),
             Trimmed::Video(pts, picture) => {
                 let video = self.video.as_mut().ok_or(MediaError::InvalidFrame)?;
+                let picture = if video.converter.keeps_planes() {
+                    match PlanarFrame::new(pts, picture) {
+                        Ok(planar) => return Ok(DecodedFrame::Planar(planar)),
+                        Err(picture) => picture,
+                    }
+                } else {
+                    picture
+                };
                 let (width, height, pixels) = video.converter.convert(&picture)?;
                 Ok(DecodedFrame::Video(VideoFrame {
                     pts,

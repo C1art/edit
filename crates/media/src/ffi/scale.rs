@@ -32,6 +32,8 @@ pub(crate) struct Scaler {
     /// before any resizing mixes the fields' rows.
     fields: FieldOrder,
     resize: RgbaResizer,
+    /// Whether pictures that need no resizing or deinterlacing are left planar.
+    planar: bool,
 }
 
 // SAFETY: the swscale context is exclusively owned and only used through `&mut self`.
@@ -55,6 +57,15 @@ impl Scaler {
 
     pub(crate) fn set_field_order(&mut self, fields: FieldOrder) {
         self.fields = fields;
+    }
+
+    pub(crate) fn set_planar(&mut self, planar: bool) {
+        self.planar = planar;
+    }
+
+    /// Whether pictures are to be left planar where their format allows.
+    pub(crate) fn keeps_planes(&self) -> bool {
+        self.planar && self.output_size.is_none() && self.fields.is_progressive()
     }
 
     pub(crate) fn convert(&mut self, picture: &Picture) -> Result<(u32, u32, Vec<u8>), MediaError> {

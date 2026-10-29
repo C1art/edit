@@ -131,7 +131,7 @@ impl TrackAudio {
                     }
                     self.buffered.extend(self.scratch.drain(..));
                 }
-                Some(DecodedFrame::Video(_)) => {}
+                Some(DecodedFrame::Video(_) | DecodedFrame::Planar(_)) => {}
                 None => {
                     self.ended = true;
                     if let Some((_, resampler)) = &mut self.resampler {

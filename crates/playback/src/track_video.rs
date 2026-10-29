@@ -169,6 +169,7 @@ impl TrackVideo {
             if self.next.is_none() && !self.ended {
                 match reader.next_frame()? {
                     Some(DecodedFrame::Video(frame)) => self.next = Some(frame),
+                    Some(DecodedFrame::Planar(frame)) => self.next = Some(frame.to_rgba()?),
                     Some(DecodedFrame::Audio(_)) => continue,
                     None => self.ended = true,
                 }

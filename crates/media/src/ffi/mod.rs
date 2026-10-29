@@ -8,6 +8,7 @@ mod hardware;
 mod output;
 mod packet;
 mod picture;
+mod planar;
 mod resize;
 mod sample_format;
 mod scale;
@@ -26,6 +27,7 @@ pub(crate) use hardware::{
 pub(crate) use output::OutputContext;
 pub(crate) use packet::Packet;
 pub(crate) use picture::Picture;
+pub use planar::{Chroma, ChromaSiting, PlanarFrame, Plane, Planes, YuvColor, YuvMatrix, YuvRange};
 pub use resize::RgbaResizer;
 pub(crate) use sample_format::{SampleConverter, OUTPUT_CHANNELS};
 pub(crate) use scale::Scaler;

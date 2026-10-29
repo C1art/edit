@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use media::{DecodedFrame, MediaReader};
+use media::{Chroma, DecodedFrame, MediaReader, Streams};
 use timeline::{Ticks, Timebase};
 
 const TB: Timebase = Timebase::HZ_90K;
@@ -23,6 +23,7 @@ fn decode_all(reader: &mut MediaReader) -> (Vec<Ticks>, usize) {
                 video_pts.push(video.pts);
             }
             DecodedFrame::Audio(audio) => audio_frames += audio.frames(),
+            DecodedFrame::Planar(_) => panic!("planar pictures were not asked for"),
         }
     }
     (video_pts, audio_frames)
@@ -59,8 +60,32 @@ fn seek_between_frames_starts_on_the_covering_frame() {
             DecodedFrame::Audio(audio) => {
                 first_audio.get_or_insert(audio.pts);
             }
+            DecodedFrame::Planar(_) => panic!("planar pictures were not asked for"),
         }
     }
     assert_eq!(first_video, Some(Ticks(30 * FRAME)));
     assert_eq!(first_audio, Some(target));
+}
+
+#[test]
+#[ignore = "decodes a real file with FFmpeg"]
+fn a_planar_picture_converts_to_the_one_the_reader_gives_as_rgba() {
+    let first_picture = |planar: bool| {
+        let mut reader = MediaReader::open_streams(&fixture(), TB, Streams::Video).unwrap();
+        reader.set_planar(planar);
+        reader.seek(Ticks(10 * FRAME)).unwrap();
+        reader.next_frame().unwrap().unwrap()
+    };
+    let DecodedFrame::Planar(planar) = first_picture(true) else {
+        panic!("expected a planar picture");
+    };
+    let DecodedFrame::Video(rgba) = first_picture(false) else {
+        panic!("expected an RGBA picture");
+    };
+    let planes = planar.planes();
+    assert_eq!((planes.luma.width, planes.luma.height), (320, 240));
+    assert!(matches!(planes.chroma, Chroma::Separate(u, _) if (u.width, u.height) == (160, 120)));
+    let converted = planar.to_rgba().unwrap();
+    assert_eq!(converted.pts, rgba.pts);
+    assert_eq!(converted.pixels, rgba.pixels);
 }
