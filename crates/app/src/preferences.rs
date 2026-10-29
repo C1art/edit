@@ -2,13 +2,15 @@ use crate::editor::Editor;
 use crate::project_store::Setting;
 
 /// The choices kept from one session to the next, written as `name<TAB>value` lines.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Preferences {
     hardware_decoding: bool,
     autosave: bool,
     autosave_minutes: u32,
     scrub_audio: bool,
     dropped_frame_indicator: bool,
+    /// `None` follows the system default.
+    audio_device: Option<String>,
 }
 
 impl Preferences {
@@ -19,18 +21,20 @@ impl Preferences {
             autosave_minutes: editor.autosave.minutes,
             scrub_audio: editor.scrub_audio,
             dropped_frame_indicator: editor.dropped_frame_indicator,
+            audio_device: editor.audio_switch.chosen.clone(),
         }
     }
 
-    pub(crate) fn to_text(self) -> String {
+    pub(crate) fn to_text(&self) -> String {
         format!(
             "hardware_decoding\t{}\nautosave\t{}\nautosave_minutes\t{}\nscrub_audio\t{}\n\
-             dropped_frame_indicator\t{}\n",
+             dropped_frame_indicator\t{}\naudio_device\t{}\n",
             self.hardware_decoding,
             self.autosave,
             self.autosave_minutes,
             self.scrub_audio,
             self.dropped_frame_indicator,
+            self.audio_device.as_deref().unwrap_or_default(),
         )
     }
 
@@ -45,6 +49,9 @@ impl Preferences {
                 "autosave_minutes" => set(&mut self.autosave_minutes, value.parse().ok()),
                 "scrub_audio" => set(&mut self.scrub_audio, flag),
                 "dropped_frame_indicator" => set(&mut self.dropped_frame_indicator, flag),
+                "audio_device" => {
+                    self.audio_device = Some(value.to_owned()).filter(|name| !name.is_empty());
+                }
                 _ => {}
             }
         }
@@ -67,13 +74,14 @@ impl Editor {
         self.autosave.minutes = preferences.autosave_minutes.clamp(1, 60);
         self.scrub_audio = preferences.scrub_audio;
         self.dropped_frame_indicator = preferences.dropped_frame_indicator;
+        self.audio_switch.chosen = preferences.audio_device;
         self.saved_preferences = Some(Preferences::of(self));
     }
 
     /// Writes the preferences out whenever one changes, wherever it was changed from.
     pub(crate) fn keep_preferences(&mut self) {
         let preferences = Preferences::of(self);
-        let saved = self.saved_preferences.replace(preferences);
+        let saved = self.saved_preferences.replace(preferences.clone());
         if saved.is_none_or(|saved| saved == preferences) {
             return;
         }
@@ -93,6 +101,7 @@ mod tests {
         autosave_minutes: 5,
         scrub_audio: true,
         dropped_frame_indicator: false,
+        audio_device: None,
     };
 
     #[test]
@@ -103,6 +112,7 @@ mod tests {
             autosave_minutes: 12,
             scrub_audio: false,
             dropped_frame_indicator: true,
+            audio_device: Some("Speakers (USB Audio)".to_owned()),
         };
         assert_eq!(DEFAULTS.read(&chosen.to_text()), chosen);
     }

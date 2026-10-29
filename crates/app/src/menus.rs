@@ -204,6 +204,9 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                             .suffix(" min"),
                     );
                 });
+                ui.menu_button("Audio Output", |ui| {
+                    crate::audio_switch::menu(editor, ui);
+                });
             });
             let shortcuts = Button::new("Keyboard Shortcuts…")
                 .shortcut_text(editor.keymap.label(Command::KeyboardShortcuts));

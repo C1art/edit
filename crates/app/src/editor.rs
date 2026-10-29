@@ -38,6 +38,7 @@ const MAX_NOTICES: usize = 8;
 pub struct Editor {
     pub(crate) timeline: Timeline,
     pub(crate) audio: Option<AudioOutput>,
+    pub(crate) audio_switch: crate::audio_switch::AudioSwitch,
     pub(crate) render_state: Option<RenderState>,
     pub(crate) importer: Option<Importer>,
     pub(crate) proxies: Option<ProxyMaker>,
@@ -149,9 +150,6 @@ impl Editor {
     ) -> Self {
         crate::theme::apply(&creation_context.egui_ctx);
         let mut notices = Vec::new();
-        let audio = AudioOutput::open_default()
-            .map_err(|error| notices.push(format!("Audio disabled: {error}")))
-            .ok();
         let render_state = creation_context.wgpu_render_state.clone();
         if render_state.is_none() {
             notices.push("Video disabled: the window has no wgpu renderer".to_owned());
@@ -190,7 +188,7 @@ impl Editor {
         }
         let program = Viewer::new(
             Arc::new(timeline.sequence().clone()),
-            audio.as_ref(),
+            None,
             render_state.as_ref(),
         )
         .map_err(|error| notices.push(format!("Playback disabled: {error}")))
@@ -199,7 +197,8 @@ impl Editor {
             shown_revision: timeline.revision(),
             saved_revision: timeline.revision(),
             timeline,
-            audio,
+            audio: None,
+            audio_switch: Default::default(),
             render_state,
             importer,
             proxies,
@@ -433,6 +432,7 @@ impl eframe::App for Editor {
         self.poll_store();
         self.autosave_tick();
         self.keep_preferences();
+        self.tend_audio_output(&ctx);
         self.poll_imports();
         self.poll_offline();
         self.poll_render_previews(&ctx);
