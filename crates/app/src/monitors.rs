@@ -28,11 +28,12 @@ pub enum Focus {
 pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
     let focus = editor.focus;
     ui.columns(2, |columns| {
+        // Each monitor measures its own controls; the columns alone don't tell them apart.
         theme::focus_card(&mut columns[0], focus == Focus::Source, |ui| {
-            fitted(ui, |ui| source(editor, ui));
+            ui.push_id("source", |ui| fitted(ui, |ui| source(editor, ui)));
         });
         theme::focus_card(&mut columns[1], focus == Focus::Program, |ui| {
-            fitted(ui, |ui| program(editor, ui));
+            ui.push_id("program", |ui| fitted(ui, |ui| program(editor, ui)));
         });
     });
 }
