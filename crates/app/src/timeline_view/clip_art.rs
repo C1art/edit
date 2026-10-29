@@ -139,7 +139,7 @@ pub fn waveform(
 }
 
 /// Maps an amplitude to 0 at `FLOOR_DB` and below, rising to 1 at full scale.
-fn decibel_scale(amplitude: f32) -> f32 {
+pub(crate) fn decibel_scale(amplitude: f32) -> f32 {
     if amplitude <= 0.0 {
         return 0.0;
     }

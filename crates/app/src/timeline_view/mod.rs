@@ -35,6 +35,7 @@ use timeline::{
 
 use crate::clip_art::ClipArt;
 use crate::effects_panel::EffectDrop;
+pub(crate) use clip_art::decibel_scale;
 use drop::handle_drop;
 pub use drop::{drop_tracks, MediaDrop, SourceDrag, Take};
 pub use edit_point::{EditPoint, TrimType};

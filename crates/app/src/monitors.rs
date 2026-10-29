@@ -10,6 +10,7 @@ use crate::placing;
 use crate::program_zoom::MonitorZoom;
 use crate::project_files::PathPurpose;
 use crate::source_drag;
+use crate::source_waveform;
 use crate::theme;
 use crate::transport::{self, Buttons, Extra};
 use crate::trim_monitor::TrimMonitor;
@@ -117,11 +118,9 @@ fn source(editor: &mut Editor, ui: &mut egui::Ui) {
         );
         return;
     };
-    let has_both = editor
-        .timeline
-        .sequence()
-        .media_item(source.source)
-        .is_some_and(|item| item.video.is_some() && item.has_audio);
+    let item = editor.timeline.sequence().media_item(source.source);
+    let has_both = item.is_some_and(|item| item.video.is_some() && item.has_audio);
+    let sound_only = item.filter(|item| item.video.is_none() && item.has_audio);
     ui.horizontal(|ui| {
         title(ui, &format!("Source: {}", source.name), focused);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -129,7 +128,19 @@ fn source(editor: &mut Editor, ui: &mut egui::Ui) {
         });
     });
     let picture = source.viewer.picture(ui, picture_size(ui));
-    source_drag::picture(ui, source, &picture);
+    if let Some(item) = sound_only {
+        source_waveform::paint(
+            ui.painter(),
+            picture.rect,
+            source,
+            item,
+            &mut editor.clip_art,
+        );
+    }
+    let picture = source_drag::picture(ui, source, &picture);
+    if sound_only.is_some() {
+        source_waveform::seek_on_click(&picture, source);
+    }
     let marks = source.marks;
     let keymap = &editor.keymap;
     let before = mark_buttons(keymap);

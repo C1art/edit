@@ -84,6 +84,7 @@ mod sequence_tabs;
 mod shortcuts;
 mod source;
 mod source_drag;
+mod source_waveform;
 mod speed_dialog;
 mod theme;
 mod timecode_field;
