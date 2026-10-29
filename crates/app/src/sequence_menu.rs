@@ -10,10 +10,13 @@ pub(crate) fn sequence_menu(editor: &mut Editor, ui: &mut egui::Ui) {
     if ui.button("Sequence Settings…").clicked() {
         editor.open_sequence_settings();
     }
-    if ui.button("Auto Reframe Sequence…").clicked() {
+    let sequence = editor.timeline.sequence();
+    let has_clips = sequence.tracks().any(|(_, track)| !track.clips.is_empty());
+    let marked = sequence.marks.is_set();
+    let reframe = Button::new("Auto Reframe Sequence…");
+    if ui.add_enabled(has_clips, reframe).clicked() {
         editor.open_reframe_dialog();
     }
-    let marked = editor.timeline.sequence().marks.is_set();
     let selected = !editor.view.selection.is_empty();
     if ui
         .add_enabled(selected || marked, Button::new("Make Subsequence"))
@@ -24,7 +27,7 @@ pub(crate) fn sequence_menu(editor: &mut Editor, ui: &mut egui::Ui) {
         editor.make_subsequence();
     }
     if ui
-        .button("Close Gap")
+        .add_enabled(has_clips, Button::new("Close Gap"))
         .on_hover_text("Remove every stretch of time no track uses")
         .clicked()
     {
@@ -32,17 +35,17 @@ pub(crate) fn sequence_menu(editor: &mut Editor, ui: &mut egui::Ui) {
     }
     ui.separator();
     let add_edit = Button::new("Add Edit").shortcut_text(editor.keymap.label(Command::AddEdit));
-    if ui.add(add_edit).clicked() {
+    if ui.add_enabled(has_clips, add_edit).clicked() {
         editor.add_edit();
     }
     let add_edit_all = Button::new("Add Edit to All Tracks")
         .shortcut_text(editor.keymap.label(Command::AddEditToAllTracks));
-    if ui.add(add_edit_all).clicked() {
+    if ui.add_enabled(has_clips, add_edit_all).clicked() {
         editor.add_edit_to_all_tracks();
     }
     let render =
         Button::new("Render In to Out").shortcut_text(editor.keymap.label(Command::RenderInToOut));
-    if ui.add(render).clicked() {
+    if ui.add_enabled(has_clips, render).clicked() {
         editor.render_in_to_out();
     }
     if ui.button("Delete Render Files").clicked() {
@@ -51,12 +54,12 @@ pub(crate) fn sequence_menu(editor: &mut Editor, ui: &mut egui::Ui) {
     ui.separator();
     let transition = Button::new("Apply Video Transition")
         .shortcut_text(editor.keymap.label(Command::VideoTransition));
-    if ui.add(transition).clicked() {
+    if ui.add_enabled(has_clips, transition).clicked() {
         crate::effects::apply_default_transition(editor, TrackKind::Video);
     }
     let crossfade = Button::new("Apply Audio Transition")
         .shortcut_text(editor.keymap.label(Command::AudioTransition));
-    if ui.add(crossfade).clicked() {
+    if ui.add_enabled(has_clips, crossfade).clicked() {
         crate::effects::apply_default_transition(editor, TrackKind::Audio);
     }
     let removable = !editor.view.selection.is_empty() || editor.view.gap.is_some();
@@ -71,8 +74,11 @@ pub(crate) fn sequence_menu(editor: &mut Editor, ui: &mut egui::Ui) {
     }
     ui.separator();
     // Both measure the program first; normalizing is then one click in the window.
-    let measuring = ui.button("Measure Loudness…").clicked();
-    if ui.button("Normalize Master Track…").clicked() || measuring {
+    let measuring = ui
+        .add_enabled(has_clips, Button::new("Measure Loudness…"))
+        .clicked();
+    let normalize = Button::new("Normalize Master Track…");
+    if ui.add_enabled(has_clips, normalize).clicked() || measuring {
         crate::loudness_window::measure(editor);
     }
     ui.separator();
@@ -99,12 +105,12 @@ pub(crate) fn sequence_menu(editor: &mut Editor, ui: &mut egui::Ui) {
     }
     let previous = Button::new("Ripple Trim Previous Edit to Playhead")
         .shortcut_text(editor.keymap.label(Command::RippleTrimPrevious));
-    if ui.add(previous).clicked() {
+    if ui.add_enabled(has_clips, previous).clicked() {
         editor.ripple_trim_to_playhead(Edge::Head);
     }
     let next = Button::new("Ripple Trim Next Edit to Playhead")
         .shortcut_text(editor.keymap.label(Command::RippleTrimNext));
-    if ui.add(next).clicked() {
+    if ui.add_enabled(has_clips, next).clicked() {
         editor.ripple_trim_to_playhead(Edge::Tail);
     }
     for (edge, name, command) in [
@@ -116,23 +122,18 @@ pub(crate) fn sequence_menu(editor: &mut Editor, ui: &mut egui::Ui) {
         (Edge::Tail, "Trim Next Edit to Playhead", Command::TrimNext),
     ] {
         let trim = Button::new(name).shortcut_text(editor.keymap.label(command));
-        if ui.add(trim).clicked() {
+        if ui.add_enabled(has_clips, trim).clicked() {
             editor.trim_to_playhead(edge);
         }
     }
-    if ui
-        .add(Button::new("Match Frame").shortcut_text(editor.keymap.label(Command::MatchFrame)))
-        .clicked()
-    {
+    let match_frame =
+        Button::new("Match Frame").shortcut_text(editor.keymap.label(Command::MatchFrame));
+    if ui.add_enabled(has_clips, match_frame).clicked() {
         editor.match_frame();
     }
-    if ui
-        .add(
-            Button::new("Reverse Match Frame")
-                .shortcut_text(editor.keymap.label(Command::ReverseMatchFrame)),
-        )
-        .clicked()
-    {
+    let reverse_match = Button::new("Reverse Match Frame")
+        .shortcut_text(editor.keymap.label(Command::ReverseMatchFrame));
+    if ui.add_enabled(has_clips, reverse_match).clicked() {
         editor.reverse_match_frame();
     }
     ui.separator();

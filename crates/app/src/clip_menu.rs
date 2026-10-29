@@ -131,12 +131,13 @@ fn on_selection(editor: &mut Editor, ui: &mut Ui) {
         editor.rename_clips();
     }
     let sequence = editor.timeline.sequence();
-    let mut enabled = editor
-        .view
-        .selection
-        .iter()
-        .filter_map(|&id| sequence.clip(id))
-        .all(|(_, clip)| !clip.disabled);
+    let mut enabled = !editor.view.selection.is_empty()
+        && editor
+            .view
+            .selection
+            .iter()
+            .filter_map(|&id| sequence.clip(id))
+            .all(|(_, clip)| !clip.disabled);
     let shortcut = RichText::new(editor.keymap.label(Command::ToggleEnabled)).weak();
     if ui
         .add(Checkbox::new(
