@@ -121,6 +121,7 @@ pub struct Editor {
     /// Where the project was last saved or opened from.
     pub(crate) project_path: Option<PathBuf>,
     /// The timeline revision on disk; any other means unsaved changes.
+    pub(crate) recovery: crate::recovery::Recovery,
     pub(crate) saved_revision: u64,
     pub(crate) confirm_discard: Option<AfterDiscard>,
     /// Runs once the save in progress succeeds.
@@ -190,6 +191,7 @@ impl Editor {
             Setting::READ_AT_START
                 .into_iter()
                 .for_each(|setting| store.read_setting(setting));
+            store.find_recoverable();
         }
         let program = Viewer::new(
             Arc::new(timeline.sequence().clone()),
@@ -200,6 +202,7 @@ impl Editor {
         .ok();
         let mut editor = Self {
             shown_revision: timeline.revision(),
+            recovery: Default::default(),
             saved_revision: timeline.revision(),
             timeline,
             audio: None,
@@ -459,6 +462,7 @@ impl eframe::App for Editor {
 
         crate::path_dialog::path_dialog(self, &ctx);
         crate::project_files::discard_dialog(self, &ctx);
+        crate::recovery::dialog(self, &ctx);
         crate::marker_dialog::dialog(self, &ctx);
         crate::gain_dialog::dialog(self, &ctx);
         crate::duck_dialog::dialog(self, &ctx);

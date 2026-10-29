@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use crate::editor::Editor;
 
 /// How many autosaves of a project are kept before the oldest is overwritten.
-const SLOTS: usize = 5;
+pub(crate) const SLOTS: usize = 5;
 
 /// Periodic copies of unsaved work, written beside the project in an `Auto-Save`
 /// folder, or to the user's application data while the project is untitled.
@@ -67,7 +67,7 @@ impl Editor {
     }
 }
 
-fn autosave_path(project: Option<&Path>, slot: usize) -> PathBuf {
+pub(crate) fn autosave_path(project: Option<&Path>, slot: usize) -> PathBuf {
     let folder = match project.and_then(Path::parent) {
         Some(folder) => folder.join("Auto-Save"),
         None => crate::project_store::app_folder().join("Auto-Save"),

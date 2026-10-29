@@ -273,10 +273,18 @@ impl Editor {
                     self.after_save = None;
                     self.notice(format!("Cannot save {}: {error}", quoted_name(&path)));
                 }
-                StoreEvent::Opened(path, Ok(sequence)) => {
-                    self.remember_project(&path);
-                    self.replace_sequence(*sequence, Some(path));
-                }
+                StoreEvent::Opened(path, Ok(sequence)) => match self.take_recovered(&path) {
+                    Some(project) => {
+                        self.replace_sequence(*sequence, project);
+                        // Not on disk as the project yet, and no revision of the new
+                        // timeline will ever reach this one.
+                        self.saved_revision = u64::MAX;
+                    }
+                    None => {
+                        self.remember_project(&path);
+                        self.replace_sequence(*sequence, Some(path));
+                    }
+                },
                 StoreEvent::Opened(path, Err(error)) => {
                     self.notice(format!("Cannot open {}: {error}", quoted_name(&path)));
                 }
@@ -315,6 +323,8 @@ impl Editor {
                 StoreEvent::InterchangeWritten(path, Err(error)) => {
                     self.notice(format!("Cannot export {}: {error}", quoted_name(&path)));
                 }
+                StoreEvent::Recoverable(Some(recoverable)) => self.offer_recovery(recoverable),
+                StoreEvent::Recoverable(None) | StoreEvent::SessionMarked => {}
                 StoreEvent::SettingRead(Setting::Keymap, Ok(Some(text))) => {
                     self.keymap = crate::keymap::Keymap::from_text(&text);
                 }
@@ -368,6 +378,7 @@ impl Editor {
             self.confirm_discard = Some(AfterDiscard::Quit);
         }
         self.track_window(&ctx, closes);
+        self.tend_session_marker(closes);
         let name = self
             .project_path
             .as_ref()

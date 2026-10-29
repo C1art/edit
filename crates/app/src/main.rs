@@ -65,6 +65,7 @@ mod project_manager;
 mod project_store;
 mod proxies;
 mod recent_projects;
+mod recovery;
 mod reframe_analysis;
 mod reframe_dialog;
 mod remix_dialog;

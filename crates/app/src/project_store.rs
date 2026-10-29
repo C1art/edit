@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::thread;
 
+use crate::recovery::{self, Recoverable};
 use crossbeam::channel::{self, Receiver, Sender};
 use project::ProjectFile;
 use timeline::{
@@ -30,6 +31,9 @@ enum Request {
     ReadInterchange(PathBuf),
     /// A sequence written for another editor, such as an EDL.
     WriteInterchange(PathBuf, String),
+    FindRecoverable,
+    MarkSession(Option<PathBuf>),
+    EndSession,
 }
 
 pub enum StoreEvent {
@@ -44,6 +48,8 @@ pub enum StoreEvent {
     SettingWritten(Setting, Result<(), String>),
     InterchangeRead(PathBuf, Result<Box<ImportXmeml>, String>),
     InterchangeWritten(PathBuf, Result<(), String>),
+    Recoverable(Option<Recoverable>),
+    SessionMarked,
 }
 
 /// A file of the user's own settings, kept across projects.
@@ -188,6 +194,19 @@ impl ProjectStore {
         self.send(Request::WriteSetting(setting, text));
     }
 
+    /// Looks for work lost when the last session crashed; ask before marking this one.
+    pub fn find_recoverable(&mut self) {
+        self.send(Request::FindRecoverable);
+    }
+
+    pub fn mark_session(&mut self, project: Option<PathBuf>) {
+        self.send(Request::MarkSession(project));
+    }
+
+    pub fn end_session(&mut self) {
+        self.send(Request::EndSession);
+    }
+
     fn send(&mut self, request: Request) {
         if self.requests.send(request).is_ok() {
             self.pending += 1;
@@ -290,6 +309,17 @@ fn handle(request: Request) -> StoreEvent {
         Request::WriteInterchange(path, text) => {
             let result = std::fs::write(&path, text).map_err(|error| error.to_string());
             StoreEvent::InterchangeWritten(path, result)
+        }
+        Request::FindRecoverable => StoreEvent::Recoverable(recovery::find_recoverable()),
+        // The marker only matters after a crash, so failing to keep it isn't worth
+        // interrupting anyone over.
+        Request::MarkSession(project) => {
+            let _ = recovery::mark_session(project.as_deref());
+            StoreEvent::SessionMarked
+        }
+        Request::EndSession => {
+            let _ = recovery::end_session();
+            StoreEvent::SessionMarked
         }
     }
 }
