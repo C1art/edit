@@ -23,6 +23,8 @@ pub enum TimelineError {
     MarkersOutOfOrder,
     SpeedOutOfRange(ClipId),
     BeforeSequenceStart,
+    /// A time too far from the start to add to or scale without overflowing.
+    TooLate,
     /// The clip would need source material before the start or after the end of its media.
     OutsideMedia(ClipId),
     /// The marks ask for more of the source than it has.
@@ -67,6 +69,7 @@ impl fmt::Display for TimelineError {
             Self::SpeedOutOfRange(_) => f.write_str("clip speed must be between 1% and 10,000%"),
             Self::NonPositiveDuration => f.write_str("clip duration must be positive"),
             Self::BeforeSequenceStart => f.write_str("nothing can start before the sequence"),
+            Self::TooLate => f.write_str("a time is too far past the start of the sequence"),
             Self::OutsideMedia(_) => f.write_str("not enough source media for this edit"),
             Self::NotEnoughSource => {
                 f.write_str("the source has too little media for the sequence marks")

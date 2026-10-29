@@ -286,3 +286,5 @@ fn ultra_keys_saved_before_spill_suppression_keep_their_edge_desaturation() {
     };
     assert_eq!((spill.value(), pedestal.value()), (50.0, 0.0));
 }
+
+mod damaged;
