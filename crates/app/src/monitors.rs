@@ -186,7 +186,8 @@ fn source(editor: &mut Editor, ui: &mut egui::Ui) {
 
 fn program(editor: &mut Editor, ui: &mut egui::Ui) {
     let focused = editor.focus == Focus::Program;
-    title(ui, "Program", focused);
+    let name = format!("Program: {}", editor.shown_sequence_name());
+    title(ui, &name, focused);
     if editor.program.is_none() {
         return;
     }

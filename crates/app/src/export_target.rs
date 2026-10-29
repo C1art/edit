@@ -144,16 +144,15 @@ impl Editor {
     /// A file name for what the open sequence makes: the sequence's own name, else the
     /// project's.
     pub(crate) fn output_stem(&self) -> String {
-        let name = self
-            .timeline
-            .open_nest()
-            .and_then(|id| self.timeline.project().media_item(id))
-            .map(|item| item.name.clone())
-            .or_else(|| {
-                let stem = self.project_path.as_deref()?.file_stem()?;
-                Some(stem.to_string_lossy().into_owned())
-            })
-            .unwrap_or_else(|| "Sequence".to_owned());
+        let project_stem = self
+            .project_path
+            .as_deref()
+            .and_then(Path::file_stem)
+            .filter(|_| self.timeline.open_nest().is_none());
+        let name = project_stem.map_or_else(
+            || self.shown_sequence_name().to_owned(),
+            |stem| stem.to_string_lossy().into_owned(),
+        );
         // Characters Windows doesn't allow in file names.
         name.replace(['\\', '/', ':', '*', '?', '"', '<', '>', '|'], "-")
     }

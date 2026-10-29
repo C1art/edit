@@ -107,13 +107,7 @@ impl Editor {
     /// A new sequence of the selected clips, or of the marked span with none selected,
     /// added to the project beside this one.
     pub(crate) fn make_subsequence(&mut self) {
-        let project = self.timeline.project();
-        let parent = self
-            .timeline
-            .open_nest()
-            .and_then(|id| project.media_item(id))
-            .map_or("Sequence", |item| item.name.as_str());
-        let name = format!("{parent} Sub");
+        let name = format!("{} Sub", self.shown_sequence_name());
         let clips = self.view.selection.clone();
         if !self.apply(MakeSubsequence { clips, name }) {
             self.notice("Select clips or mark In and Out to make a subsequence");
