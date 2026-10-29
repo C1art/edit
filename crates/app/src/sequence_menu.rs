@@ -3,6 +3,7 @@ use timeline::{Edge, TrackKind};
 
 use crate::editor::Editor;
 use crate::keymap::Command;
+use crate::monitors::Focus;
 use crate::project_files::PathPurpose;
 
 pub(crate) fn sequence_menu(editor: &mut Editor, ui: &mut egui::Ui) {
@@ -163,48 +164,32 @@ pub(crate) fn sequence_menu(editor: &mut Editor, ui: &mut egui::Ui) {
     ui.checkbox(&mut editor.clip_art.show_waveforms, "Show Audio Waveforms");
 }
 
-/// Setting, finding and clearing In and Out, which Premiere keeps in its Markers menu.
+/// Setting, finding and clearing In and Out on the focused monitor, as their shortcuts
+/// do; Premiere keeps them in its Markers menu.
 pub(crate) fn in_out_items(editor: &mut Editor, ui: &mut egui::Ui) {
-    if ui
-        .add(Button::new("Mark In").shortcut_text(editor.keymap.label(Command::MarkIn)))
-        .clicked()
-    {
-        editor.mark_sequence_in();
-    }
-    if ui
-        .add(Button::new("Mark Out").shortcut_text(editor.keymap.label(Command::MarkOut)))
-        .clicked()
-    {
-        editor.mark_sequence_out();
-    }
-    for (command, run) in [
-        (Command::MarkClip, Editor::mark_clip as fn(&mut Editor)),
-        (Command::MarkSelection, Editor::mark_selection),
-    ] {
+    let marks = match (editor.focus, &editor.source) {
+        (Focus::Source, Some(source)) => Some(source.marks),
+        (Focus::Source, None) => None,
+        (Focus::Program, _) => Some(editor.timeline.sequence().marks),
+    };
+    let has_in = marks.is_some_and(|marks| marks.mark_in.is_some());
+    let has_out = marks.is_some_and(|marks| marks.mark_out.is_some());
+    let selected = !editor.view.selection.is_empty();
+    let items = [
+        (Command::MarkIn, marks.is_some()),
+        (Command::MarkOut, marks.is_some()),
+        (Command::MarkClip, marks.is_some()),
+        (Command::MarkSelection, selected),
+        (Command::ClearInOut, has_in || has_out),
+        (Command::ClearIn, has_in),
+        (Command::ClearOut, has_out),
+        (Command::GoToIn, has_in),
+        (Command::GoToOut, has_out),
+    ];
+    for (command, enabled) in items {
         let button = Button::new(command.name()).shortcut_text(editor.keymap.label(command));
-        if ui.add(button).clicked() {
-            run(editor);
+        if ui.add_enabled(enabled, button).clicked() {
+            crate::shortcuts::run(editor, command);
         }
-    }
-    for (command, clear) in [
-        (
-            Command::ClearInOut,
-            Editor::clear_sequence_marks as fn(&mut Editor),
-        ),
-        (Command::ClearIn, Editor::clear_sequence_in),
-        (Command::ClearOut, Editor::clear_sequence_out),
-    ] {
-        let button = Button::new(command.name()).shortcut_text(editor.keymap.label(command));
-        if ui.add(button).clicked() {
-            clear(editor);
-        }
-    }
-    let go_to_in = Button::new("Go to In").shortcut_text(editor.keymap.label(Command::GoToIn));
-    if ui.add(go_to_in).clicked() {
-        editor.go_to_mark(Edge::Head);
-    }
-    let go_to_out = Button::new("Go to Out").shortcut_text(editor.keymap.label(Command::GoToOut));
-    if ui.add(go_to_out).clicked() {
-        editor.go_to_mark(Edge::Tail);
     }
 }

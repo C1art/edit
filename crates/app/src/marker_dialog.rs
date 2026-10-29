@@ -212,14 +212,18 @@ pub fn menu(editor: &mut Editor, ui: &mut egui::Ui) {
     if ui.add(add).clicked() {
         editor.add_marker();
     }
+    let sequence = editor.timeline.sequence();
+    let playhead = editor.playhead();
+    let has_next = sequence.marker_after(playhead).is_some();
+    let has_previous = sequence.marker_before(playhead).is_some();
     let next = egui::Button::new("Go to Next Marker")
         .shortcut_text(editor.keymap.label(Command::NextMarker));
-    if ui.add(next).clicked() {
+    if ui.add_enabled(has_next, next).clicked() {
         editor.jump_to_marker(true);
     }
     let previous = egui::Button::new("Go to Previous Marker")
         .shortcut_text(editor.keymap.label(Command::PreviousMarker));
-    if ui.add(previous).clicked() {
+    if ui.add_enabled(has_previous, previous).clicked() {
         editor.jump_to_marker(false);
     }
     let here = editor.marker_at_playhead();
