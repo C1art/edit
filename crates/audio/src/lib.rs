@@ -15,7 +15,7 @@ pub use dsp::{
     MAX_PHASER_STAGES, RETIME_HOP,
 };
 pub use error::AudioError;
-pub use output::{AudioOutput, AudioWriter, OutputFormat};
+pub use output::{output_devices, AudioOutput, AudioWriter, OutputFormat};
 pub use remix::remix_stereo;
 pub use resampler::Resampler;
 

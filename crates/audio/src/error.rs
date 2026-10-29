@@ -3,6 +3,8 @@ use std::fmt;
 #[derive(Debug)]
 pub enum AudioError {
     NoOutputDevice,
+    /// The output device chosen by name isn't connected.
+    MissingDevice(String),
     Device(cpal::Error),
     /// The device's default stream format isn't `f32`, the only format the mixer produces.
     UnsupportedSampleFormat,
@@ -15,6 +17,7 @@ impl fmt::Display for AudioError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::NoOutputDevice => f.write_str("no audio output device available"),
+            Self::MissingDevice(name) => write!(f, "the audio device “{name}” is not connected"),
             Self::Device(error) => write!(f, "audio device error: {error}"),
             Self::UnsupportedSampleFormat => {
                 f.write_str("audio device does not accept 32-bit float samples")
@@ -32,7 +35,10 @@ impl std::error::Error for AudioError {
             Self::Device(error) => Some(error),
             Self::ResamplerSetup(error) => Some(error),
             Self::Resample(error) => Some(error),
-            Self::NoOutputDevice | Self::UnsupportedSampleFormat | Self::InvalidFormat => None,
+            Self::NoOutputDevice
+            | Self::MissingDevice(_)
+            | Self::UnsupportedSampleFormat
+            | Self::InvalidFormat => None,
         }
     }
 }

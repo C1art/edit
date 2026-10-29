@@ -20,6 +20,8 @@ struct Shared {
     queue: ArrayQueue<f32>,
     frames_played: AtomicU64,
     paused: AtomicBool,
+    /// Set once the device goes away or the stream can no longer play.
+    lost: AtomicBool,
     /// Identifies the writer allowed to push. Only producers take this lock, never the
     /// callback, so a writer that is shutting down cannot leak stale audio into a new one.
     session: Mutex<u64>,
@@ -32,13 +34,34 @@ struct Shared {
 pub struct AudioOutput {
     _stream: cpal::Stream,
     shared: Arc<Shared>,
+    device_name: String,
+}
+
+/// The names of the output devices connected now. Asking the system can take a while, so
+/// call this off the UI thread.
+pub fn output_devices() -> Result<Vec<String>, AudioError> {
+    let devices = cpal::default_host()
+        .output_devices()
+        .map_err(AudioError::Device)?;
+    Ok(devices.map(|device| device.to_string()).collect())
 }
 
 impl AudioOutput {
-    pub fn open_default() -> Result<Self, AudioError> {
-        let device = cpal::default_host()
-            .default_output_device()
-            .ok_or(AudioError::NoOutputDevice)?;
+    /// Opens the named device, or the system default, which playback then follows where the
+    /// system allows. Opening can take a while, so call this off the UI thread.
+    pub fn open(device_name: Option<&str>) -> Result<Self, AudioError> {
+        let host = cpal::default_host();
+        let device = match device_name {
+            None => host.default_output_device(),
+            Some(name) => host
+                .output_devices()
+                .map_err(AudioError::Device)?
+                .find(|device| device.to_string() == name),
+        };
+        let device = device.ok_or_else(|| match device_name {
+            Some(name) => AudioError::MissingDevice(name.to_owned()),
+            None => AudioError::NoOutputDevice,
+        })?;
         let config = device.default_output_config().map_err(AudioError::Device)?;
         if config.sample_format() != cpal::SampleFormat::F32 {
             return Err(AudioError::UnsupportedSampleFormat);
@@ -54,20 +77,31 @@ impl AudioOutput {
             ),
             frames_played: AtomicU64::new(0),
             paused: AtomicBool::new(true),
+            lost: AtomicBool::new(false),
             session: Mutex::new(0),
             next_session: AtomicU64::new(1),
             format,
         });
         let callback_shared = Arc::clone(&shared);
+        let error_shared = Arc::clone(&shared);
         let stream = device
             .build_output_stream(
                 config.into(),
                 move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
                     fill(&callback_shared, data, channels);
                 },
-                // Logging is off-limits in the callback; device loss surfaces as a stalled
-                // clock instead, which the player reports.
-                |_error| {},
+                // This can run on the audio thread, so it only raises a flag for the owner
+                // to poll.
+                move |error: cpal::Error| {
+                    if matches!(
+                        error.kind(),
+                        cpal::ErrorKind::DeviceNotAvailable
+                            | cpal::ErrorKind::StreamInvalidated
+                            | cpal::ErrorKind::HostUnavailable
+                    ) {
+                        error_shared.lost.store(true, Ordering::Release);
+                    }
+                },
                 None,
             )
             .map_err(AudioError::Device)?;
@@ -75,7 +109,17 @@ impl AudioOutput {
         Ok(Self {
             _stream: stream,
             shared,
+            device_name: device.to_string(),
         })
+    }
+
+    pub fn device_name(&self) -> &str {
+        &self.device_name
+    }
+
+    /// Whether the device went away or stopped playing, so the output must be opened anew.
+    pub fn is_lost(&self) -> bool {
+        self.shared.lost.load(Ordering::Acquire)
     }
 
     pub fn format(&self) -> OutputFormat {
