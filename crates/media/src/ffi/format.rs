@@ -49,11 +49,13 @@ impl InputContext {
         // FFmpeg frees the context and leaves `raw` null.
         check(unsafe {
             sys::avformat_open_input(&mut raw, c_path.as_ptr(), demuxer, &mut options.0)
-        })?;
+        })
+        .map_err(unreadable)?;
         let input = Self(NonNull::new(raw).ok_or_else(unsupported)?);
 
         // SAFETY: the context was opened above and is exclusively owned by `input`.
-        check(unsafe { sys::avformat_find_stream_info(input.0.as_ptr(), ptr::null_mut()) })?;
+        check(unsafe { sys::avformat_find_stream_info(input.0.as_ptr(), ptr::null_mut()) })
+            .map_err(unreadable)?;
         Ok(input)
     }
 
@@ -291,6 +293,17 @@ impl Drop for InputContext {
         let mut raw = self.0.as_ptr();
         // SAFETY: the context came from avformat_open_input and is closed exactly once here.
         unsafe { sys::avformat_close_input(&mut raw) };
+    }
+}
+
+/// FFmpeg reports a file in no format it knows and one cut short the same way, as
+/// "invalid data", which means nothing to someone importing it.
+fn unreadable(error: MediaError) -> MediaError {
+    match error {
+        MediaError::Ffmpeg { code, .. } if code == sys::AVERROR_INVALIDDATA => {
+            MediaError::UnreadableFile
+        }
+        error => error,
     }
 }
 

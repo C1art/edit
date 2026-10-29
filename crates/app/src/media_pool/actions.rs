@@ -121,7 +121,11 @@ impl Editor {
                     }
                 }
                 (Err((path, error)), _) => {
-                    self.notice(format!("Cannot use {}: {error}", path.display()));
+                    let name = path.file_name().unwrap_or(path.as_os_str());
+                    self.notice(format!(
+                        "Cannot import “{}”: {error}",
+                        name.to_string_lossy()
+                    ));
                 }
             }
         }
