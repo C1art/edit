@@ -36,6 +36,8 @@ pub enum PoolAction {
     Interpret(SourceId),
     /// Asks which of the file's channels play on each side.
     AudioChannels(SourceId),
+    /// Asks for files to import.
+    Import,
     /// Adds a bin inside the given one, or at the top, and starts naming it.
     NewBin(Option<BinId>),
     /// Adds a search bin at the top of the project and starts naming it.
@@ -105,10 +107,15 @@ pub fn ui(
         });
     });
     pool.search_row(ui);
+    if importing {
+        ui.horizontal(|ui| {
+            ui.spinner();
+            ui.label("Importing…");
+        });
+    }
     let wanted = pool.view.search.to_lowercase();
     egui::ScrollArea::vertical()
         .auto_shrink([false, true])
-        .max_height(ui.available_height() * 0.6)
         .show(ui, |ui| {
             if wanted.is_empty() {
                 pool.contents(ui, None);
@@ -121,12 +128,6 @@ pub fn ui(
                 pool.items(ui, found);
             }
         });
-    if importing {
-        ui.horizontal(|ui| {
-            ui.spinner();
-            ui.label("Importing…");
-        });
-    }
     pool.action
 }
 
@@ -336,10 +337,14 @@ impl Pool<'_> {
         true
     }
 
-    /// The space below the list, where a drop moves things out of every bin.
+    /// The space below the list, where a drop moves things out of every bin and a click
+    /// selects nothing.
     fn top_drop_zone(&mut self, ui: &mut egui::Ui) {
-        let size = egui::vec2(ui.available_width(), 32.0);
+        let size = egui::vec2(ui.available_width(), ui.available_height().max(32.0));
         let (rect, zone) = ui.allocate_exact_size(size, Sense::click());
+        if zone.clicked() {
+            self.view.selected.clear();
+        }
         if self.dragging_from_bin(ui.ctx()) {
             ui.painter().text(
                 rect.center(),
@@ -353,6 +358,9 @@ impl Pool<'_> {
         zone.context_menu(|ui| {
             if ui.button("New Bin").clicked() {
                 self.action = Some(PoolAction::NewBin(None));
+            }
+            if ui.button("Import…").clicked() {
+                self.action = Some(PoolAction::Import);
             }
         });
     }
