@@ -141,6 +141,15 @@ struct Placement {
     optics_flare: vec4<f32>,
     optics_magnify: vec4<f32>,
     optics_detail: vec4<f32>,
+    // Linear Wipe's completion, angle in radians and feather; Radial Wipe's center,
+    // completion and start angle, then its feather and which way it sweeps; Venetian
+    // Blinds' completion, direction, width and feather; then Block Dissolve's
+    // completion, block size and feather (see clip_wipes.wgsl).
+    clip_linear: vec4<f32>,
+    clip_radial: vec4<f32>,
+    clip_radial_detail: vec4<f32>,
+    clip_blinds: vec4<f32>,
+    clip_blocks: vec4<f32>,
 };
 
 const OUTLINE_VEC4S: u32 = 32u;
@@ -380,7 +389,7 @@ fn layer_color(in: VertexOutput) -> vec4<f32> {
     let shadow = shadow_alpha(pinned);
     let covered = picture + shadow * (1.0 - picture);
     rgb = mix(placement.style_shadow_color.rgb, rgb, picture / max(covered, 1e-6));
-    let opacity = placement.axis_y_opacity.z * mask_coverage(page.uv);
+    let opacity = placement.axis_y_opacity.z * mask_coverage(page.uv) * clip_wipes_shown(page.uv);
     let shown = covered * wiped.picture;
     let border = 1.0 - wiped.picture;
     rgb = (rgb * shown + wiped.border * border) / max(shown + border, 1e-6);

@@ -2,6 +2,7 @@ mod adjust;
 mod backdrop;
 mod blit;
 mod blur;
+mod clip_wipes;
 mod compositor;
 mod creative;
 mod error;
@@ -23,6 +24,9 @@ mod wipe;
 
 pub use adjust::{Adjust, AlphaAdjust, LumaKey};
 pub use blit::DISPLAY_FORMAT;
+pub use clip_wipes::{
+    BlockDissolve, ClipWipes, LinearWipe, RadialSweep, RadialWipe, VenetianBlinds,
+};
 pub use compositor::{Background, Compositor, LayerImage, Picture, Presented};
 pub use creative::{Creative, CreativeVignette};
 pub use error::RenderError;
