@@ -1,7 +1,7 @@
 //! Building blocks shared by the edits. They don't check invariants themselves; the
 //! edited sequence is validated as a whole afterwards.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
 use crate::{Clip, ClipId, LinkId, Sequence, Ticks, TimelineError, TrackRef};
@@ -38,6 +38,18 @@ pub(crate) fn track_mut(
     sequence
         .track_mut(track)
         .ok_or(TimelineError::TrackNotFound(track))
+}
+
+/// The clips with `ids` and their tracks, found in one pass rather than a search per id.
+pub(crate) fn clips_mut<'a>(
+    sequence: &'a mut Sequence,
+    ids: &[ClipId],
+) -> impl Iterator<Item = (TrackRef, &'a mut Clip)> {
+    let ids: HashSet<ClipId> = ids.iter().copied().collect();
+    sequence
+        .tracks_mut()
+        .flat_map(|(track_ref, track)| track.clips.iter_mut().map(move |clip| (track_ref, clip)))
+        .filter(move |(_, clip)| ids.contains(&clip.id))
 }
 
 pub(crate) fn clip_mut(sequence: &mut Sequence, id: ClipId) -> Result<&mut Clip, TimelineError> {
@@ -117,6 +129,7 @@ pub(crate) fn shift(
     delta: Ticks,
     skip: &[ClipId],
 ) {
+    let skip: HashSet<ClipId> = skip.iter().copied().collect();
     for &track_ref in tracks {
         let Some(track) = sequence.track_mut(track_ref) else {
             continue;
@@ -143,6 +156,7 @@ pub(crate) fn insert(
 
 /// Takes the clips out of the sequence, returning each with the track it was on.
 pub(crate) fn remove(sequence: &mut Sequence, ids: &[ClipId]) -> Vec<(TrackRef, Clip)> {
+    let ids: HashSet<ClipId> = ids.iter().copied().collect();
     let mut removed = Vec::new();
     for (track_ref, track) in sequence.tracks_mut() {
         let (taken, kept) = std::mem::take(&mut track.clips)

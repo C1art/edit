@@ -1,8 +1,8 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Clip, ClipId, LinkId, Sequence, SourceId, Ticks};
+use crate::{Clip, ClipId, LinkId, Sequence, SourceId, Ticks, TrackRef};
 
 /// Whether picking a clip picks the clips linked to it as well, as Premiere's Linked
 /// Selection. Apart, each is moved, trimmed and deleted alone, and may slip out of sync.
@@ -17,27 +17,40 @@ impl Sequence {
     /// `ids` plus, while linked selection is on, every clip linked to one of them,
     /// without duplicates.
     pub fn with_links(&self, ids: &[ClipId]) -> Vec<ClipId> {
-        match self.linked_selection {
-            LinkedSelection::Together => self.links_of(ids),
-            LinkedSelection::Apart => self.clips_among(ids, &[]),
-        }
+        sorted_ids(self.clips_with_links(ids))
+    }
+
+    /// The clips [`Sequence::with_links`] names, with the tracks they're on, in track order.
+    pub fn clips_with_links(&self, ids: &[ClipId]) -> Vec<(TrackRef, &Clip)> {
+        self.clips_among(ids, self.linked_selection == LinkedSelection::Together)
     }
 
     /// `ids` plus every clip linked to one of them, whether or not linked selection is on.
     pub fn links_of(&self, ids: &[ClipId]) -> Vec<ClipId> {
-        let links: Vec<LinkId> = ids.iter().filter_map(|&id| self.clip(id)?.1.link).collect();
-        self.clips_among(ids, &links)
+        sorted_ids(self.clips_among(ids, true))
     }
 
-    fn clips_among(&self, ids: &[ClipId], links: &[LinkId]) -> Vec<ClipId> {
-        let mut all: Vec<ClipId> = self
-            .tracks()
-            .flat_map(|(_, track)| &track.clips)
-            .filter(|clip| ids.contains(&clip.id) || clip.link.is_some_and(|l| links.contains(&l)))
-            .map(|clip| clip.id)
-            .collect();
-        all.sort_unstable();
-        all
+    // Sets rather than slices: a drag of hundreds of clips asks this every frame.
+    fn clips_among(&self, ids: &[ClipId], follow_links: bool) -> Vec<(TrackRef, &Clip)> {
+        let ids: HashSet<ClipId> = ids.iter().copied().collect();
+        let clips = || {
+            self.tracks().flat_map(|(track_ref, track)| {
+                track.clips.iter().map(move |clip| (track_ref, clip))
+            })
+        };
+        let links: HashSet<LinkId> = if follow_links {
+            clips()
+                .filter(|(_, clip)| ids.contains(&clip.id))
+                .filter_map(|(_, clip)| clip.link)
+                .collect()
+        } else {
+            HashSet::new()
+        };
+        clips()
+            .filter(|(_, clip)| {
+                ids.contains(&clip.id) || clip.link.is_some_and(|link| links.contains(&link))
+            })
+            .collect()
     }
 
     /// How much later `clip` plays its media than a clip linked to it plays the same
@@ -80,4 +93,10 @@ impl Sequence {
             .map(|other| (other, clip.start - other.position_of(clip.source_in)))
             .find(|&(_, offset)| offset != Ticks::ZERO)
     }
+}
+
+fn sorted_ids(clips: Vec<(TrackRef, &Clip)>) -> Vec<ClipId> {
+    let mut ids: Vec<ClipId> = clips.into_iter().map(|(_, clip)| clip.id).collect();
+    ids.sort_unstable();
+    ids
 }

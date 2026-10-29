@@ -1,5 +1,7 @@
+use std::collections::HashSet;
+
 use crate::edit::ops;
-use crate::{ClipId, Edit, Sequence, Ticks, TimelineError, TrackRef};
+use crate::{Clip, ClipId, Edit, Sequence, Ticks, TimelineError, TrackRef};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Edge {
@@ -40,11 +42,9 @@ impl Edit for Trim {
         }
         let d = self.delta;
         // Each trimmed clip's track and the end it had, where a ripple starts on that track.
-        let mut edit_points: Vec<(TrackRef, Ticks)> = Vec::with_capacity(ids.len());
-        for &id in &ids {
-            let (track, clip) = sequence.clip(id).ok_or(TimelineError::ClipNotFound(id))?;
-            edit_points.push((track, clip.end()));
-            let clip = ops::clip_mut(sequence, id)?;
+        let mut edit_points: Vec<(ClipId, TrackRef, Ticks)> = Vec::with_capacity(ids.len());
+        for (track, clip) in ops::clips_mut(sequence, &ids) {
+            edit_points.push((clip.id, track, clip.end()));
             match (self.edge, self.mode) {
                 (Edge::Head, TrimMode::Normal) => {
                     clip.start = clip.start + d;
@@ -54,6 +54,12 @@ impl Edit for Trim {
                 (Edge::Tail, _) => clip.trim_tail(d),
             }
         }
+        // The first in id order is the primary edit point, wherever its track is.
+        edit_points.sort_unstable_by_key(|&(id, ..)| id);
+        let edit_points: Vec<(TrackRef, Ticks)> = edit_points
+            .into_iter()
+            .map(|(_, track, end)| (track, end))
+            .collect();
         if self.mode == TrimMode::Ripple {
             let shift = match self.edge {
                 Edge::Head => Ticks::ZERO - d,
@@ -142,8 +148,7 @@ impl Edit for Slip {
         if ids.is_empty() || self.delta == Ticks::ZERO {
             return Err(TimelineError::NothingToEdit);
         }
-        for id in ids {
-            let clip = ops::clip_mut(sequence, id)?;
+        for (_, clip) in ops::clips_mut(sequence, &ids) {
             clip.source_in = clip.source_in + self.delta;
             if let Some(remap) = &mut clip.remap {
                 remap.shift(Ticks::ZERO, self.delta);
@@ -167,24 +172,28 @@ impl Edit for Slide {
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
-        let ids = sequence.with_links(&self.clips);
+        let ids: HashSet<ClipId> = sequence.with_links(&self.clips).into_iter().collect();
         if ids.is_empty() || self.delta == Ticks::ZERO {
             return Err(TimelineError::NothingToEdit);
         }
         let d = self.delta;
-        for &id in &ids {
-            let (track_ref, clip) = sequence.clip(id).ok_or(TimelineError::ClipNotFound(id))?;
-            let (start, end) = (clip.start, clip.end());
-            for neighbor in &mut ops::track_mut(sequence, track_ref)?.clips {
-                if neighbor.id == id {
-                    neighbor.start = neighbor.start + d;
-                } else if ids.contains(&neighbor.id) {
+        for (_, track) in sequence.tracks_mut() {
+            let slid = track.clips.iter().filter(|clip| ids.contains(&clip.id));
+            let starts: HashSet<Ticks> = slid.clone().map(|clip| clip.start).collect();
+            let ends: HashSet<Ticks> = slid.map(Clip::end).collect();
+            for clip in &mut track.clips {
+                if ids.contains(&clip.id) {
+                    clip.start = clip.start + d;
                     continue;
-                } else if neighbor.end() == start {
-                    neighbor.trim_tail(d);
-                } else if neighbor.start == end {
-                    neighbor.start = neighbor.start + d;
-                    neighbor.trim_head(d);
+                }
+                // A clip between two slid ones gives at both ends.
+                let (start, end) = (clip.start, clip.end());
+                if starts.contains(&end) {
+                    clip.trim_tail(d);
+                }
+                if ends.contains(&start) {
+                    clip.start = clip.start + d;
+                    clip.trim_head(d);
                 }
             }
         }

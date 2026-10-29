@@ -94,18 +94,62 @@ pub fn clamp_delta<E: Edit>(
     desired: Ticks,
     make: impl Fn(Ticks) -> E,
 ) -> Ticks {
-    let legal = |delta: i64| preview(sequence, &make(Ticks(delta))).is_ok();
-    if desired == Ticks::ZERO || legal(desired.0) {
-        return desired;
-    }
-    let (mut good, mut bad) = (0_i64, desired.0);
-    while (bad - good).abs() > 1 {
-        let middle = good + (bad - good) / 2;
-        if legal(middle) {
-            good = middle;
+    DeltaBounds::default().clamp(sequence, desired, make)
+}
+
+/// What clamping one edit has found out about which of its deltas are legal, so a drag
+/// that clamps every frame tries the edit only when the pointer goes somewhere new.
+/// It holds only while the sequence and everything about the edit but its delta stay
+/// the same.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct DeltaBounds {
+    later: Side,
+    earlier: Side,
+}
+
+/// Distances from zero one way: the furthest found legal and the nearest found not.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct Side {
+    legal: i64,
+    illegal: Option<i64>,
+}
+
+impl DeltaBounds {
+    /// [`clamp_delta`], trying the edit only where earlier calls haven't settled it.
+    pub fn clamp<E: Edit>(
+        &mut self,
+        sequence: &Sequence,
+        desired: Ticks,
+        make: impl Fn(Ticks) -> E,
+    ) -> Ticks {
+        let sign = desired.0.signum();
+        let side = if sign < 0 {
+            &mut self.earlier
         } else {
-            bad = middle;
+            &mut self.later
+        };
+        let legal = |distance: i64| preview(sequence, &make(Ticks(sign * distance))).is_ok();
+        let wanted = desired.0.abs();
+        if wanted <= side.legal {
+            return desired;
         }
+        if side.illegal.is_none_or(|illegal| wanted < illegal) {
+            if legal(wanted) {
+                side.legal = wanted;
+                return desired;
+            }
+            side.illegal = Some(wanted);
+        }
+        let mut bad = side.illegal.unwrap_or(wanted);
+        while bad - side.legal > 1 {
+            let middle = side.legal + (bad - side.legal) / 2;
+            if legal(middle) {
+                side.legal = middle;
+            } else {
+                bad = middle;
+            }
+        }
+        side.illegal = Some(bad);
+        Ticks(sign * side.legal)
     }
-    Ticks(good)
 }

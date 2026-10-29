@@ -88,8 +88,7 @@ impl Edit for RateStretch {
         if ids.is_empty() || self.delta == Ticks::ZERO {
             return Err(TimelineError::NothingToEdit);
         }
-        for id in ids {
-            let clip = ops::clip_mut(sequence, id)?;
+        for (_, clip) in ops::clips_mut(sequence, &ids) {
             let source = clip.source_out() - clip.source_in;
             let duration = match self.edge {
                 Edge::Head => clip.duration - self.delta,
