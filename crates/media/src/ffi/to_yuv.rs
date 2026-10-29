@@ -2,6 +2,8 @@ use std::ptr::{self, NonNull};
 
 use ffmpeg_sys_next as sys;
 
+use super::sws_flags::{SWS_ACCURATE_RND, SWS_BICUBIC, SWS_FULL_CHR_H_INP};
+
 use super::Frame;
 use crate::MediaError;
 
@@ -37,7 +39,7 @@ impl RgbaToYuv {
                 out_width,
                 out_height,
                 format,
-                sys::SWS_BICUBIC | sys::SWS_ACCURATE_RND | sys::SWS_FULL_CHR_H_INP,
+                SWS_BICUBIC | SWS_ACCURATE_RND | SWS_FULL_CHR_H_INP,
                 ptr::null_mut(),
                 ptr::null_mut(),
                 ptr::null(),

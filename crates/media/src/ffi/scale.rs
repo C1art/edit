@@ -1,6 +1,8 @@
 use std::ptr::{self, NonNull};
 
 use ffmpeg_sys_next as sys;
+
+use super::sws_flags::{SWS_ACCURATE_RND, SWS_BILINEAR, SWS_FULL_CHR_H_INT};
 use timeline::FieldOrder;
 
 use super::{Decoder, Frame, RgbaResizer};
@@ -145,7 +147,7 @@ impl Scaler {
                 key.output_width,
                 key.output_height,
                 sys::AVPixelFormat::AV_PIX_FMT_RGBA,
-                sys::SWS_BILINEAR | sys::SWS_ACCURATE_RND | sys::SWS_FULL_CHR_H_INT,
+                SWS_BILINEAR | SWS_ACCURATE_RND | SWS_FULL_CHR_H_INT,
                 ptr::null_mut(),
                 ptr::null_mut(),
                 ptr::null(),

@@ -11,6 +11,7 @@ mod resize;
 mod sample_format;
 mod scale;
 mod still;
+mod sws_flags;
 mod to_palette;
 mod to_yuv;
 

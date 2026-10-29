@@ -2,6 +2,8 @@ use std::ptr::{self, NonNull};
 
 use ffmpeg_sys_next as sys;
 
+use super::sws_flags::{SWS_ACCURATE_RND, SWS_BILINEAR};
+
 use crate::MediaError;
 
 /// Resizes tightly packed RGBA8 pictures, keeping its swscale context while the sizes
@@ -82,7 +84,7 @@ impl RgbaResizer {
                 output_width,
                 output_height,
                 sys::AVPixelFormat::AV_PIX_FMT_RGBA,
-                sys::SWS_BILINEAR | sys::SWS_ACCURATE_RND,
+                SWS_BILINEAR | SWS_ACCURATE_RND,
                 ptr::null_mut(),
                 ptr::null_mut(),
                 ptr::null(),
