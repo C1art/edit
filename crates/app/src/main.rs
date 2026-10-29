@@ -10,6 +10,7 @@ mod color_match;
 mod commands;
 mod comparison;
 mod dialog;
+mod dropped_frames;
 mod duck_dialog;
 mod editor;
 mod effect_presets;

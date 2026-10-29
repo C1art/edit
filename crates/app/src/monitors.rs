@@ -242,6 +242,10 @@ fn program(editor: &mut Editor, ui: &mut egui::Ui) {
     if let Some(settings) = pressed.settings {
         egui::Popup::menu(&settings).show(|ui| {
             ui.checkbox(&mut editor.safe_margins, "Safe Margins");
+            ui.checkbox(
+                &mut editor.dropped_frame_indicator,
+                "Show Dropped Frame Indicator",
+            );
             let mut multicam = editor.multicam_view;
             let toggle = ui
                 .checkbox(&mut multicam, "Multi-Camera")
@@ -361,6 +365,13 @@ fn zoomed_program(editor: &mut Editor, ui: &mut egui::Ui) {
     let mut clipped = ui.new_child(UiBuilder::new().id_salt("program_overlays").max_rect(area));
     clipped.set_clip_rect(area.intersect(ui.clip_rect()));
     program_overlays(editor, &mut clipped, &response, picture);
+    if let Some(program) = editor
+        .program
+        .as_ref()
+        .filter(|_| editor.dropped_frame_indicator)
+    {
+        crate::dropped_frames::indicator(&mut clipped, area, &program.player);
+    }
 }
 
 /// What the program picture shows on top: the camera grid, or safe margins and the

@@ -51,6 +51,7 @@ pub struct Editor {
     pub(crate) scrub_audio: bool,
     /// Outlines the action and title safe areas over the program picture.
     pub(crate) safe_margins: bool,
+    pub(crate) dropped_frame_indicator: bool,
     pub(crate) program_zoom: crate::program_zoom::ProgramZoom,
     /// Whether the program monitor shows every camera of the multi-camera clips beside
     /// the program, and where it puts them while it does.
@@ -207,6 +208,7 @@ impl Editor {
             use_proxies: false,
             scrub_audio: true,
             safe_margins: false,
+            dropped_frame_indicator: false,
             program_zoom: Default::default(),
             multicam_view: false,
             multicam_layout: None,
