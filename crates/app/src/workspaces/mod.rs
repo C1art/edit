@@ -1,7 +1,7 @@
 mod file;
 mod menu;
 
-use egui::{CentralPanel, Frame, Margin, Panel};
+use egui::{CentralPanel, Frame, Margin, Panel, Vec2};
 
 use crate::editor::Editor;
 use crate::effects::SideTab;
@@ -12,23 +12,28 @@ use crate::theme;
 
 pub(crate) use menu::{dialog, window_menu, workspace_bar, NamingWorkspace};
 
-/// Where the panels sit and which tabs they show.
+/// The room under the menu bar of the window the built-in layouts were drawn for.
+const REFERENCE: Vec2 = Vec2::new(1600.0, 870.0);
+
+/// Where the panels sit, as shares of the room under the menu bar so that they keep
+/// their proportions on any screen, and which tabs they show.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct Layout {
-    media_width: f32,
-    side_width: f32,
-    timeline_height: f32,
+    media_share: f32,
+    side_share: f32,
+    timeline_share: f32,
     media_tab: MediaTab,
     side_tab: SideTab,
 }
 
 impl Layout {
+    /// Sizes in points at the reference window size.
     const fn new(sizes: [f32; 3], media_tab: MediaTab, side_tab: SideTab) -> Self {
         let [media_width, side_width, timeline_height] = sizes;
         Self {
-            media_width,
-            side_width,
-            timeline_height,
+            media_share: media_width / REFERENCE.x,
+            side_share: side_width / REFERENCE.x,
+            timeline_share: timeline_height / REFERENCE.y,
             media_tab,
             side_tab,
         }
@@ -103,6 +108,8 @@ pub(crate) struct Workspaces {
     generation: u64,
     /// The current layout changed since the file was written.
     unsaved: bool,
+    /// The room the panels had last frame; when it changes they are fitted to it again.
+    room: Vec2,
 }
 
 impl Default for Workspaces {
@@ -117,6 +124,7 @@ impl Default for Workspaces {
             active: EDITING,
             generation: 0,
             unsaved: false,
+            room: Vec2::ZERO,
         }
     }
 }
@@ -233,32 +241,47 @@ impl Editor {
             .show(ui, |ui| crate::menus::menu_bar(self, ui));
         let layout = self.workspaces.current();
         let generation = self.workspaces.generation;
-        let media = Panel::left(("media_pool", generation))
-            .resizable(true)
-            .default_size(layout.media_width)
-            .frame(theme::dock())
-            .show_separator_line(false)
-            .show(ui, |ui| theme::card(ui, |ui| self.media_panel(ui)));
-        let side = Panel::right(("side_panel", generation))
-            .resizable(true)
-            .default_size(layout.side_width)
-            .frame(theme::dock())
-            .show_separator_line(false)
-            .show(ui, |ui| theme::card(ui, |ui| self.side_panel(ui)));
-        let timeline = Panel::bottom(("timeline", generation))
-            .resizable(true)
-            .default_size(layout.timeline_height)
-            .frame(theme::dock())
-            .show_separator_line(false)
-            .show(ui, |ui| theme::card(ui, |ui| self.timeline_panel(ui)));
+        let room = ui.available_rect_before_wrap().size();
+        // egui keeps a panel's size as the window changes, which would squeeze the
+        // monitors on a smaller screen, so the panels are set to their shares again.
+        let refit = room != self.workspaces.room;
+        self.workspaces.room = room;
+        let sized = |panel: Panel, size: f32| {
+            let panel = panel
+                .resizable(true)
+                .frame(theme::dock())
+                .show_separator_line(false);
+            if refit {
+                panel.exact_size(size)
+            } else {
+                panel.default_size(size)
+            }
+        };
+        let media = sized(
+            Panel::left(("media_pool", generation)),
+            layout.media_share * room.x,
+        )
+        .show(ui, |ui| theme::card(ui, |ui| self.media_panel(ui)));
+        let side = sized(
+            Panel::right(("side_panel", generation)),
+            layout.side_share * room.x,
+        )
+        .show(ui, |ui| theme::card(ui, |ui| self.side_panel(ui)));
+        let timeline = sized(
+            Panel::bottom(("timeline", generation)),
+            layout.timeline_share * room.y,
+        )
+        .show(ui, |ui| theme::card(ui, |ui| self.timeline_panel(ui)));
         CentralPanel::default()
             .frame(theme::dock())
             .show(ui, |ui| monitors::ui(self, ui));
 
+        // Rounded so that a size that hasn't moved doesn't count as a change.
+        let share = |size: f32, of: f32| (size / of.max(1.0) * 1e4).round() / 1e4;
         let measured = Layout {
-            media_width: media.response.rect.width().round(),
-            side_width: side.response.rect.width().round(),
-            timeline_height: timeline.response.rect.height().round(),
+            media_share: share(media.response.rect.width(), room.x),
+            side_share: share(side.response.rect.width(), room.x),
+            timeline_share: share(timeline.response.rect.height(), room.y),
             media_tab: self.media_tab,
             side_tab: self.side_tab,
         };

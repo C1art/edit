@@ -237,7 +237,16 @@ pub(crate) fn tab(ui: &mut egui::Ui, selected: bool, title: &str) -> egui::Respo
 /// Lays `content` out as one segmented control: its selectable labels sit side by side
 /// in a shared well.
 pub(crate) fn segmented<R>(ui: &mut egui::Ui, content: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    Frame::new()
+    // A wrapping row only breaks between widgets, so a group that won't fit what is
+    // left of the row, going by its width last frame, starts the next row itself.
+    let width_id = ui.next_auto_id().with("segmented width");
+    let width: Option<f32> = ui.data(|data| data.get_temp(width_id));
+    let row_started = ui.cursor().left() > ui.max_rect().left();
+    let room = ui.available_size_before_wrap().x;
+    if ui.layout().main_wrap && row_started && width.is_some_and(|width| width > room) {
+        ui.end_row();
+    }
+    let shown = Frame::new()
         .fill(WELL)
         .corner_radius(CornerRadius::same(6))
         .inner_margin(Margin::same(2))
@@ -246,6 +255,8 @@ pub(crate) fn segmented<R>(ui: &mut egui::Ui, content: impl FnOnce(&mut egui::Ui
             ui.spacing_mut().button_padding.x = 6.0;
             ui.visuals_mut().widgets.inactive.weak_bg_fill = Color32::TRANSPARENT;
             ui.horizontal(content).inner
-        })
-        .inner
+        });
+    let width = shown.response.rect.width();
+    ui.data_mut(|data| data.insert_temp(width_id, width));
+    shown.inner
 }

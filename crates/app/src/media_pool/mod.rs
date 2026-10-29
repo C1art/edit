@@ -87,7 +87,7 @@ pub fn ui(
         view,
         action: None,
     };
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         let new_bin = ui
             .button("New Bin")
             .on_hover_text("Add a bin at the top of the project");
