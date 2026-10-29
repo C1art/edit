@@ -44,7 +44,7 @@ impl Stamp {
 /// Peaks kept on disk between sessions, as Premiere's media cache keeps them, so a
 /// project reopens without decoding all of its audio again. Every call touches the disk,
 /// so use it from a worker thread.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(super) struct PeakCache {
     folder: PathBuf,
 }
