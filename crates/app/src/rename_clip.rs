@@ -7,6 +7,7 @@ use crate::editor::Editor;
 pub(crate) struct ClipRename {
     clips: Vec<ClipId>,
     name: String,
+    opened: bool,
 }
 
 impl Editor {
@@ -23,7 +24,11 @@ impl Editor {
             .clone()
             .or_else(|| item.map(|item| item.name.clone()))
             .unwrap_or_default();
-        self.clip_rename = Some(ClipRename { clips, name });
+        self.clip_rename = Some(ClipRename {
+            clips,
+            name,
+            opened: true,
+        });
     }
 }
 
@@ -35,8 +40,8 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     crate::dialog::window(ctx, "Rename Clip").show(ctx, |ui| {
         ui.label("Clip Name");
         let field = ui.text_edit_singleline(&mut rename.name);
-        if !field.has_focus() && !field.lost_focus() {
-            field.request_focus();
+        if crate::dialog::opening(ui, &mut rename.opened) {
+            crate::dialog::focus_text(ui, &field, &rename.name);
         }
         ui.weak("Leave empty to show the media's name");
         crate::dialog::footer(ui, |ui| {
@@ -53,7 +58,7 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     let Some(apply) = choice else {
         return;
     };
-    if let Some(ClipRename { clips, name }) = editor.clip_rename.take().filter(|_| apply) {
+    if let Some(ClipRename { clips, name, .. }) = editor.clip_rename.take().filter(|_| apply) {
         editor.apply(RenameClips { clips, name });
     }
 }

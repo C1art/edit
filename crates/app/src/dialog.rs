@@ -1,6 +1,10 @@
 //! What every dialog shares, so they all open in the same place and end the same way.
 
-use egui::{Align, Align2, Button, Color32, Context, Id, Layout, RichText, Ui, WidgetText, Window};
+use egui::text::CCursorRange;
+use egui::{
+    Align, Align2, Button, Color32, Context, Id, Layout, Response, RichText, TextEdit, Ui,
+    WidgetText, Window,
+};
 
 use crate::theme;
 
@@ -54,10 +58,25 @@ pub(crate) fn primary(text: &str) -> Button<'static> {
     Button::new(RichText::new(text).color(Color32::WHITE)).fill(theme::ACCENT_FILL)
 }
 
+/// Whether a dialog is showing for the first time, clearing `opened`. A window's first
+/// pass only measures it and takes no focus, so this waits for the pass after.
+pub(crate) fn opening(ui: &Ui, opened: &mut bool) -> bool {
+    !ui.is_sizing_pass() && std::mem::take(opened)
+}
+
 /// Focuses the `DragValue` added next with its text selected, so typing replaces the
-/// value. It only selects its text when focus arrives before it's drawn, and a window's
-/// first, sizing pass takes no focus, so wait until `!ui.is_sizing_pass()`.
+/// value. It only selects its text when focus arrives before it's drawn.
 pub(crate) fn focus_next_value(ui: &Ui) {
     let id = ui.next_auto_id();
     ui.memory_mut(|memory| memory.request_focus(id));
+}
+
+/// Focuses a text field with all of `text` selected, so typing replaces it.
+pub(crate) fn focus_text(ui: &Ui, field: &Response, text: &str) {
+    field.request_focus();
+    let mut state = TextEdit::load_state(ui.ctx(), field.id).unwrap_or_default();
+    state
+        .cursor
+        .set_char_range(Some(CCursorRange::select_all_str(text)));
+    state.store(ui.ctx(), field.id);
 }

@@ -91,10 +91,7 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                         }
                         GainMode::Loudness => (&mut dialog.loudness_lufs, -60.0..=0.0, " LUFS"),
                     };
-                    if dialog.mode == mode
-                        && !ui.is_sizing_pass()
-                        && std::mem::take(&mut dialog.opened)
-                    {
+                    if dialog.mode == mode && crate::dialog::opening(ui, &mut dialog.opened) {
                         crate::dialog::focus_next_value(ui);
                     }
                     let field = ui.add_enabled(

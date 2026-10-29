@@ -60,7 +60,7 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
             .num_columns(2)
             .show(ui, |ui| {
                 ui.label("Speed");
-                if !ui.is_sizing_pass() && std::mem::take(&mut prompt.opened) {
+                if crate::dialog::opening(ui, &mut prompt.opened) {
                     crate::dialog::focus_next_value(ui);
                 }
                 let percent = ui.add(

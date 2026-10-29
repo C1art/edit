@@ -115,8 +115,8 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
         ui.horizontal(|ui| {
             ui.label("Name");
             let field = ui.text_edit_singleline(&mut naming.name);
-            if std::mem::take(&mut naming.opened) {
-                field.request_focus();
+            if crate::dialog::opening(ui, &mut naming.opened) {
+                crate::dialog::focus_text(ui, &field, &naming.name);
             }
         });
         crate::dialog::footer(ui, |ui| {

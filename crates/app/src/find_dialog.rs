@@ -69,8 +69,8 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                 let field = ui
                     .text_edit_singleline(&mut find.query.text)
                     .on_hover_text("Matches clip names and sequence marker names and comments");
-                if std::mem::take(&mut find.focus_text) {
-                    field.request_focus();
+                if crate::dialog::opening(ui, &mut find.focus_text) {
+                    crate::dialog::focus_text(ui, &field, &find.query.text);
                 }
                 if field.lost_focus() && ui.input(|input| input.key_pressed(Key::Enter)) {
                     action = Some(Action::Next);
