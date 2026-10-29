@@ -71,8 +71,9 @@ impl Editor {
         format!("{kind} {:02}", count + 1)
     }
 
-    /// Opens what a clip shows: a nest in the timeline, with the playhead on the frame
-    /// the clip shows under it, or other media in the source monitor.
+    /// Opens what a clip shows on the frame it shows under the playhead: a nest in the
+    /// timeline, or other media in the source monitor marked with the clip's part of it,
+    /// as in Premiere.
     pub(crate) fn open_clip(&mut self, id: ClipId) {
         let sequence = self.timeline.sequence();
         let Some((_, clip)) = sequence.clip(id) else {
@@ -81,17 +82,21 @@ impl Editor {
         let Some(item) = sequence.media_item(clip.source) else {
             return;
         };
-        if item.nest.is_none() {
-            self.open_source(item.id);
-            return;
-        }
         let playhead = self.playhead();
         let inside = if clip.covers(playhead) {
             clip.source_time(playhead)
         } else {
             clip.source_in
         };
-        self.enter_nest(item.id, inside);
+        if item.nest.is_some() {
+            self.enter_nest(item.id, inside);
+            return;
+        }
+        let (source, used) = (item.id, clip.source_in..clip.source_out());
+        self.open_source(source);
+        if let Some(monitor) = self.source.as_mut().filter(|shown| shown.source == source) {
+            monitor.show_media(used, inside);
+        }
     }
 
     pub(crate) fn enter_nest(&mut self, nest: SourceId, playhead: Ticks) {
