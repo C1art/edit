@@ -1,9 +1,10 @@
 use audio::{
     distort, widen, AnalogDelay, AnalogDelaySettings, Biquad, ClickRemover, Coefficients,
-    Compressor, CompressorSettings, DeReverb, GraphicEqualizer20, GraphicEqualizer30,
-    LevelerSettings, MultitapDelay, Phaser, PhaserSettings, SampleRate, SpeechLeveler, Tap,
+    Compressor, CompressorSettings, DeReverb, FilterBand, FilterDesign, GraphicEqualizer20,
+    GraphicEqualizer30, LevelerSettings, MultitapDelay, Phaser, PhaserSettings, SampleRate,
+    ScientificFilter, ScientificSettings, SpeechLeveler, Tap,
 };
-use timeline::{AudioEffect, Param, Ticks};
+use timeline::{AudioEffect, FilterMode, FilterType, Param, Ticks};
 
 use crate::audio_dynamics::{DynamicsChain, VocalChain};
 use crate::audio_mastering::{MasteringChain, MasteringSettings};
@@ -20,7 +21,8 @@ const CLICK_SENSITIVITY_PER_PERCENT: f32 = 0.25;
 /// The running state of the effects added after the first set: bandpass, phaser,
 /// distortion, stereo expander, the multitap and analog delays, Dynamics, Automatic Click
 /// Remover, Vocal Enhancer, the Tube-modeled Compressor, DeReverb, Speech Volume Leveler
-/// Simple Parametric EQ, the 20- and 30-band Graphic Equalizers and Mastering.
+/// Simple Parametric EQ, the 20- and 30-band Graphic Equalizers, Mastering and the
+/// Scientific Filter.
 pub(crate) enum MoreUnit {
     Filter(Biquad),
     Phaser(Box<Phaser>),
@@ -35,6 +37,7 @@ pub(crate) enum MoreUnit {
     Graphic20(Box<GraphicEqualizer20>),
     Graphic30(Box<GraphicEqualizer30>),
     Mastering(Box<MasteringChain>),
+    Scientific(Box<ScientificFilter>),
     Stateless,
 }
 
@@ -54,6 +57,7 @@ impl MoreUnit {
             AudioEffect::MultitapDelay { .. } => Self::Multitap(Box::new(MultitapDelay::new(rate))),
             AudioEffect::AnalogDelay { .. } => Self::Analog(Box::new(AnalogDelay::new(rate))),
             AudioEffect::Dynamics(_) => Self::Dynamics(Box::default()),
+            AudioEffect::ScientificFilter { .. } => Self::Scientific(Box::default()),
             AudioEffect::AutomaticClickRemover { .. } => Self::Clicks(ClickRemover::default()),
             AudioEffect::VocalEnhancer { .. } => Self::Vocal(Box::default()),
             AudioEffect::TubeCompressor { .. } => Self::Compressor(Compressor::default()),
@@ -77,6 +81,7 @@ impl MoreUnit {
             Self::Graphic20(equalizer) => equalizer.reset(),
             Self::Graphic30(equalizer) => equalizer.reset(),
             Self::Mastering(chain) => chain.reset(),
+            Self::Scientific(filter) => filter.reset(),
             Self::Stateless => {}
         }
     }
@@ -240,7 +245,47 @@ impl MoreUnit {
                 ));
                 filter.process(samples);
             }
+            (
+                AudioEffect::ScientificFilter {
+                    filter_type,
+                    mode,
+                    order,
+                    cutoff,
+                    high_cutoff,
+                    ripple,
+                    gain,
+                },
+                Self::Scientific(filter),
+            ) => {
+                let settings = ScientificSettings {
+                    design: design(*filter_type),
+                    band: band(*mode),
+                    order: *order as usize,
+                    cutoff: value(cutoff),
+                    high_cutoff: value(high_cutoff),
+                    ripple_db: value(ripple),
+                    gain_db: value(gain),
+                };
+                filter.process(&settings, rate, samples);
+            }
             _ => {}
         }
+    }
+}
+
+fn design(filter_type: FilterType) -> FilterDesign {
+    match filter_type {
+        FilterType::Bessel => FilterDesign::Bessel,
+        FilterType::Butterworth => FilterDesign::Butterworth,
+        FilterType::Chebyshev => FilterDesign::Chebyshev,
+    }
+}
+
+fn band(mode: FilterMode) -> FilterBand {
+    match mode {
+        FilterMode::LowPass => FilterBand::LowPass,
+        FilterMode::HighPass => FilterBand::HighPass,
+        FilterMode::BandPass => FilterBand::BandPass,
+        FilterMode::BandStop => FilterBand::BandStop,
     }
 }

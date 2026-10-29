@@ -64,8 +64,8 @@ mod xmeml_markers;
 mod xml;
 
 pub use audio_effect::{
-    AudioEffect, CompressorSection, Dynamics, ExpanderSection, GateSection, LimiterSection,
-    VocalMode,
+    AudioEffect, CompressorSection, Dynamics, ExpanderSection, FilterMode, FilterType, GateSection,
+    LimiterSection, VocalMode,
 };
 pub use audio_plan::{audio_fade, audio_span, clip_balance, clip_level, track_automation};
 pub use audio_type::AudioType;

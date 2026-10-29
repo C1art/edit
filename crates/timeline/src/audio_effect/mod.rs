@@ -4,9 +4,11 @@ use crate::Param;
 
 mod catalog;
 mod dynamics;
+mod scientific;
 mod vocal;
 
 pub use dynamics::{CompressorSection, Dynamics, ExpanderSection, GateSection, LimiterSection};
+pub use scientific::{FilterMode, FilterType};
 pub use vocal::VocalMode;
 
 /// An effect on an audio clip's sound, applied in list order before its volume.
@@ -239,6 +241,18 @@ pub enum AudioEffect {
         gain: Param,
         q: Param,
     },
+    /// A filter of a chosen design and steepness: `order` is 1 to 8, `cutoff` the corner
+    /// in hertz or a band's lower edge, `high_cutoff` a band's upper edge, `ripple` the
+    /// decibels a Chebyshev passband ripples by and `gain` decibels after.
+    ScientificFilter {
+        filter_type: FilterType,
+        mode: FilterMode,
+        order: u32,
+        cutoff: Param,
+        high_cutoff: Param,
+        ripple: Param,
+        gain: Param,
+    },
     /// Finishes a mix in one go: low, mid and high bands in decibels, then reverb,
     /// exciter, width (100 leaves it as it is) and loudness maximizer in percent, then
     /// `output` decibels.
@@ -376,6 +390,13 @@ impl AudioEffect {
                 noise_threshold,
             } => vec![target, amount, noise_threshold],
             Self::SimpleParametricEq { frequency, gain, q } => vec![frequency, gain, q],
+            Self::ScientificFilter {
+                cutoff,
+                high_cutoff,
+                ripple,
+                gain,
+                ..
+            } => vec![cutoff, high_cutoff, ripple, gain],
             Self::VocalEnhancer { .. }
             | Self::FillLeftWithRight
             | Self::FillRightWithLeft

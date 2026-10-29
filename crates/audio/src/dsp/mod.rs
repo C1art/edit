@@ -17,6 +17,7 @@ mod multiband;
 mod phaser;
 mod pitch;
 mod reverb;
+mod scientific;
 mod shape;
 mod stft;
 mod taps;
@@ -42,6 +43,7 @@ pub use multiband::{MultibandCompressor, MultibandSettings};
 pub use phaser::{Phaser, PhaserSettings, MAX_PHASER_STAGES};
 pub use pitch::PitchShifter;
 pub use reverb::Reverb;
+pub use scientific::{FilterBand, FilterDesign, ScientificFilter, ScientificSettings};
 pub use shape::{distort, widen};
 pub use taps::{AnalogDelay, AnalogDelaySettings, MultitapDelay, Tap};
 

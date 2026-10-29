@@ -43,7 +43,8 @@ pub(crate) fn category(effect: &AudioEffect) -> &'static str {
         | AudioEffect::LowPass { .. }
         | AudioEffect::Notch { .. }
         | AudioEffect::BandPass { .. }
-        | AudioEffect::SimpleParametricEq { .. } => CATEGORIES[1],
+        | AudioEffect::SimpleParametricEq { .. }
+        | AudioEffect::ScientificFilter { .. } => CATEGORIES[1],
         AudioEffect::Chorus { .. } | AudioEffect::Flanger { .. } | AudioEffect::Phaser { .. } => {
             CATEGORIES[2]
         }

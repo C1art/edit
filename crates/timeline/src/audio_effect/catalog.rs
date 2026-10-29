@@ -1,9 +1,9 @@
-use super::{AudioEffect, Dynamics, VocalMode};
+use super::{AudioEffect, Dynamics, FilterMode, FilterType, VocalMode};
 use crate::Param;
 
 impl AudioEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 42] {
+    pub fn catalog() -> [Self; 43] {
         [
             Self::Amplify {
                 gain: Param::default(),
@@ -181,6 +181,15 @@ impl AudioEffect {
                 gain: Param::default(),
                 q: Param::from_value(1.0),
             },
+            Self::ScientificFilter {
+                filter_type: FilterType::default(),
+                mode: FilterMode::default(),
+                order: 4,
+                cutoff: Param::from_value(1000.0),
+                high_cutoff: Param::from_value(4000.0),
+                ripple: Param::from_value(1.0),
+                gain: Param::default(),
+            },
             Self::FillLeftWithRight,
             Self::FillRightWithLeft,
             Self::SwapChannels,
@@ -232,6 +241,7 @@ impl AudioEffect {
             Self::Mastering { .. } => "Mastering",
             Self::SpeechVolumeLeveler { .. } => "Speech Volume Leveler",
             Self::SimpleParametricEq { .. } => "Simple Parametric EQ",
+            Self::ScientificFilter { .. } => "Scientific Filter",
         }
     }
 }

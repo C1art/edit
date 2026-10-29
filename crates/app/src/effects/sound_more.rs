@@ -1,4 +1,4 @@
-use timeline::{AudioEffect, VocalMode};
+use timeline::{AudioEffect, FilterMode, FilterType, VocalMode};
 
 use super::look::Rows;
 
@@ -141,6 +141,32 @@ pub(super) fn effect_rows(ui: &mut egui::Ui, rows: &mut Rows, effect: &mut Audio
             rows.param(ui, "Center", frequency, HEARING_HZ, " Hz");
             rows.param(ui, "Gain", gain, -24.0..=24.0, " dB");
             rows.param(ui, "Q", q, 0.1..=20.0, "");
+        }
+        AudioEffect::ScientificFilter {
+            filter_type,
+            mode,
+            order,
+            cutoff,
+            high_cutoff,
+            ripple,
+            gain,
+        } => {
+            let (all, name) = (FilterType::ALL, FilterType::name);
+            rows.options(ui, "Type", "scientific_type", filter_type, all, name);
+            let (all, name) = (FilterMode::ALL, FilterMode::name);
+            rows.options(ui, "Mode", "scientific_mode", mode, all, name);
+            rows.whole(ui, "Order", order, 1..=8, "");
+            match mode.is_band() {
+                true => {
+                    rows.param(ui, "Low Cutoff", cutoff, HEARING_HZ, " Hz");
+                    rows.param(ui, "High Cutoff", high_cutoff, HEARING_HZ, " Hz");
+                }
+                false => rows.param(ui, "Cutoff", cutoff, HEARING_HZ, " Hz"),
+            }
+            if *filter_type == FilterType::Chebyshev {
+                rows.param(ui, "Passband Ripple", ripple, 0.01..=6.0, " dB");
+            }
+            rows.param(ui, "Gain", gain, -24.0..=24.0, " dB");
         }
         _ => {}
     }
