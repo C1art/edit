@@ -9,8 +9,8 @@ use crate::shuttle::Shuttle;
 /// Moving the playhead other than by playing on: shuttling, ranges, loops, steps and
 /// scrubs.
 impl Player {
-    /// Plays at `rate` times normal speed, backwards when negative. Off normal speed only
-    /// pictures play, as when shuttling a deck.
+    /// Plays at `rate` times normal speed, backwards when negative. Off normal speed the
+    /// sound comes in scrub snippets from where the pictures have reached.
     pub fn shuttle(&mut self, rate: i32) {
         match rate {
             0 => self.pause(),
@@ -41,6 +41,10 @@ impl Player {
             return;
         }
         self.stop = None;
+        self.sound_at(position);
+    }
+
+    fn sound_at(&mut self, position: Ticks) {
         if let Some(writer) = self.writer.as_ref().filter(|writer| !writer.is_active()) {
             writer.claim();
         }
@@ -98,7 +102,11 @@ impl Player {
         let frame = |time| self.frame_rate().frame_at(time, self.sequence.timebase);
         if frame(target) != frame(at) {
             shuttle.sought(now);
-            self.go_to(target, false);
+            if self.scrub_audio {
+                self.sound_at(target);
+            } else {
+                self.go_to(target, false);
+            }
             self.shuttle = Some(shuttle);
         } else if target == Ticks::ZERO || target == self.duration() {
             self.shuttle = None;
