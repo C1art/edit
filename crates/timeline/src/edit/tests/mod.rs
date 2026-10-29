@@ -429,6 +429,7 @@ mod merge;
 mod multicam;
 mod nest;
 mod paste;
+mod random;
 mod range;
 mod rearrange;
 mod reframe;
