@@ -15,9 +15,11 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
         .find(|(track, _)| track.kind == TrackKind::Video)
         .map(|(_, clip)| (clip.clone(), clip_name(sequence, clip).to_owned()));
     let Some((clip, name)) = picture else {
-        ui.label(
-            "Select a video clip to grade it, or turn on Sequence > Selection Follows Playhead.",
-        );
+        ui.label(if editor.selection_follows_playhead {
+            "Move the playhead over a video clip, or select one, to grade it."
+        } else {
+            "Select a video clip to grade it, or turn on Sequence > Selection Follows Playhead."
+        });
         return;
     };
     ui.add(egui::Label::new(RichText::new(name).strong()).truncate());
