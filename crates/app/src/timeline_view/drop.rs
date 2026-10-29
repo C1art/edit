@@ -99,3 +99,15 @@ pub(super) fn paint(
         }
     }
 }
+
+/// What an empty sequence shows, so a first-time user knows how to start.
+pub(super) fn paint_empty(painter: &Painter, tracks: Rect) {
+    let galley = painter.layout_no_wrap(
+        "Drag clips here from the Project panel or the Source monitor".into(),
+        egui::FontId::proportional(14.0),
+        crate::theme::WEAK_TEXT,
+    );
+    let text = Rect::from_center_size(tracks.center(), galley.size());
+    painter.rect_filled(text.expand2(egui::vec2(14.0, 7.0)), 8.0, crate::theme::WELL);
+    painter.galley(text.min, galley, crate::theme::WEAK_TEXT);
+}

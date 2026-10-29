@@ -315,8 +315,10 @@ impl TimelineView {
                 rubber_band::paint(&painter, rect, &scale, &envelope);
             }
         }
-        if let Some(hint) = drop_hint {
-            drop::paint(&painter, hint, &rows, &scale, sequence, tracks);
+        match drop_hint {
+            Some(hint) => drop::paint(&painter, hint, &rows, &scale, sequence, tracks),
+            None if sequence.duration() == Ticks::ZERO => drop::paint_empty(&painter, tracks),
+            None => {}
         }
         paint::ruler(&ui.painter_at(ruler), ruler, &scale, sequence);
         paint::render_bar(&ui.painter_at(ruler), ruler, &scale, &self.render_bar);
