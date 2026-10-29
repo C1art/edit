@@ -111,10 +111,14 @@ struct Placement {
     // Color Balance (RGB)'s gains, then Replicate's count; Solarize's and Threshold's
     // levels and Luma Key's threshold and cutoff, each negative when off; then Alpha
     // Adjust's opacity and 1 to ignore, to invert and to show only the alpha (see
-    // adjust.wgsl).
+    // adjust.wgsl). Levels' input black and white and output black and white, ProcAmp's
+    // brightness, contrast, hue in radians and saturation, then Levels' gamma.
     adjust_balance: vec4<f32>,
     adjust_levels: vec4<f32>,
     adjust_alpha: vec4<f32>,
+    adjust_range: vec4<f32>,
+    adjust_proc_amp: vec4<f32>,
+    adjust_gamma: vec4<f32>,
     // Lumetri's shadow tint toward blue and red, Faded Film and the tint balance; the
     // highlight tint; then the vignette's amount, midpoint, roundness and feather (see
     // lumetri.wgsl).

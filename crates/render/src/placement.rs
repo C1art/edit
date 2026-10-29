@@ -290,13 +290,13 @@ mod tests {
         // Twenty-two vec4s, five of them added by the wipes, lead the shader's struct. The
         // masks follow: the header, three vec4s each, then their outlines at two points
         // a vec4; then the picture style's thirteen, the reshape's six, the recolor's twelve,
-        // the key's two, the adjustments' three, Lumetri Creative's three,
+        // the key's two, the adjustments' six, Lumetri Creative's three,
         // the Generate effects' thirteen, Lens Flare and Magnify's three and the
         // Transition effects' five.
         let outlines = MAX_MASKS * MAX_OUTLINE_POINTS / 2;
         assert_eq!(
             bytes.len(),
-            (25 + 1 + 3 * MAX_MASKS + outlines + 13 + 6 + 12 + 2 + 3 + 3 + 13 + 3 + 5) * 16
+            (25 + 1 + 3 * MAX_MASKS + outlines + 13 + 6 + 12 + 2 + 6 + 3 + 13 + 3 + 5) * 16
         );
         assert!(bytes.len() as u64 <= crate::blit::UNIFORM_BYTES);
     }

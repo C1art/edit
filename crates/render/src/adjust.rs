@@ -12,6 +12,27 @@ pub struct Adjust {
     pub threshold: Option<f32>,
     pub luma_key: Option<LumaKey>,
     pub alpha: AlphaAdjust,
+    pub levels: Levels,
+    pub proc_amp: ProcAmp,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Levels {
+    /// The encoded black and white levels that map onto `output`'s.
+    pub input: [f32; 2],
+    pub output: [f32; 2],
+    pub gamma: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ProcAmp {
+    /// Added to the encoded luma.
+    pub brightness: f32,
+    /// A gain on the encoded luma about mid grey.
+    pub contrast: f32,
+    /// Radians the colors turn about the grey axis.
+    pub hue: f32,
+    pub saturation: f32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -44,16 +65,33 @@ impl Adjust {
             invert: false,
             mask_only: false,
         },
+        levels: Levels {
+            input: [0.0, 1.0],
+            output: [0.0, 1.0],
+            gamma: 1.0,
+        },
+        proc_amp: ProcAmp {
+            brightness: 0.0,
+            contrast: 1.0,
+            hue: 0.0,
+            saturation: 1.0,
+        },
     };
 
-    /// The shader's view, as three vec4s; a negative level turns its effect off.
-    pub(crate) fn uniform(&self) -> [f32; 12] {
+    /// The shader's view, as six vec4s; a negative level turns its effect off.
+    pub(crate) fn uniform(&self) -> [f32; 24] {
         let flag = |on: bool| if on { 1.0 } else { 0.0 };
         let [r, g, b] = self.balance;
         let (luma_threshold, luma_cutoff) = self
             .luma_key
             .map_or((-1.0, 0.0), |key| (key.threshold, key.cutoff));
         let alpha = self.alpha;
+        let Levels {
+            input: [in_black, in_white],
+            output: [out_black, out_white],
+            gamma,
+        } = self.levels;
+        let proc_amp = self.proc_amp;
         [
             r,
             g,
@@ -67,6 +105,19 @@ impl Adjust {
             flag(alpha.ignore),
             flag(alpha.invert),
             flag(alpha.mask_only),
+            in_black,
+            // Equal levels would divide by zero.
+            in_white.max(in_black + 1e-3),
+            out_black,
+            out_white,
+            proc_amp.brightness,
+            proc_amp.contrast.max(0.0),
+            proc_amp.hue,
+            proc_amp.saturation.max(0.0),
+            gamma.max(0.01),
+            0.0,
+            0.0,
+            0.0,
         ]
     }
 }

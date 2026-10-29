@@ -1,5 +1,5 @@
-// Color Balance (RGB), Solarize, Threshold, Replicate, Luma Key and Alpha Adjust, which
-// work on encoded levels as Premiere's effects do.
+// Color Balance (RGB), Levels, ProcAmp, Solarize, Threshold, Replicate, Luma Key and
+// Alpha Adjust, which work on encoded levels as Premiere's effects do.
 
 fn replicated(uv: vec2<f32>) -> vec2<f32> {
     let count = placement.adjust_balance.w;
@@ -12,6 +12,7 @@ fn replicated(uv: vec2<f32>) -> vec2<f32> {
 fn adjusted(rgb: vec3<f32>) -> vec3<f32> {
     let levels = placement.adjust_levels;
     var encoded = to_gamma(max(rgb, vec3<f32>(0.0))) * placement.adjust_balance.rgb;
+    encoded = proc_amp(leveled(encoded));
     if levels.x >= 0.0 {
         encoded = select(encoded, 1.0 - encoded, encoded > vec3<f32>(levels.x));
     }
@@ -19,6 +20,25 @@ fn adjusted(rgb: vec3<f32>) -> vec3<f32> {
         encoded = vec3<f32>(step(levels.y, dot(encoded, LUMA)));
     }
     return to_linear(encoded);
+}
+
+fn leveled(encoded: vec3<f32>) -> vec3<f32> {
+    let range = placement.adjust_range;
+    let through = max((encoded - range.x) / (range.y - range.x), vec3<f32>(0.0));
+    let bent = pow(through, vec3<f32>(1.0 / placement.adjust_gamma.x));
+    return mix(vec3<f32>(range.z), vec3<f32>(range.w), bent);
+}
+
+// Turns the colors about the grey axis, then scales their saturation and the luma's
+// contrast about mid grey before lifting it.
+fn proc_amp(encoded: vec3<f32>) -> vec3<f32> {
+    let amp = placement.adjust_proc_amp;
+    let axis = vec3<f32>(0.57735027);
+    let turned = encoded * cos(amp.z) + cross(axis, encoded) * sin(amp.z)
+        + axis * dot(axis, encoded) * (1.0 - cos(amp.z));
+    let luma = dot(turned, LUMA);
+    let toned = (luma - 0.5) * amp.y + 0.5 + amp.x;
+    return max(vec3<f32>(toned) + (turned - luma) * amp.w, vec3<f32>(0.0));
 }
 
 // Opaque at the threshold's luma and beyond it, away from the cutoff.

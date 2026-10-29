@@ -22,7 +22,7 @@ mod style;
 mod warp;
 mod wipe;
 
-pub use adjust::{Adjust, AlphaAdjust, LumaKey};
+pub use adjust::{Adjust, AlphaAdjust, Levels, LumaKey, ProcAmp};
 pub use blit::DISPLAY_FORMAT;
 pub use clip_wipes::{
     BlockDissolve, ClipWipes, LinearWipe, RadialSweep, RadialWipe, VenetianBlinds,

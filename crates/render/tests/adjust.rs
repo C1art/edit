@@ -1,7 +1,7 @@
 mod common;
 
 use common::{compositor, layer, solid};
-use render::{Adjust, LumaKey, PixelEffects, RenderError};
+use render::{Adjust, Levels, LumaKey, PixelEffects, ProcAmp, RenderError};
 use timeline::BlendMode;
 
 fn adjusted(rgb: [u8; 3], adjust: Adjust) -> Result<[u8; 3], RenderError> {
@@ -49,4 +49,41 @@ fn solarize_inverts_only_channels_above_its_level() {
             .all(|(got, want)| got.abs_diff(want) <= 2),
         "got {solarized:?}"
     );
+}
+
+fn near(got: [u8; 3], want: [u8; 3]) -> bool {
+    got.iter()
+        .zip(want)
+        .all(|(got, want)| got.abs_diff(want) <= 2)
+}
+
+#[test]
+#[ignore = "needs a GPU"]
+fn levels_stretch_the_input_range_over_the_output_range() -> Result<(), RenderError> {
+    let levels = Adjust {
+        levels: Levels {
+            input: [0.2, 0.8],
+            output: [0.0, 1.0],
+            gamma: 1.0,
+        },
+        ..Adjust::NONE
+    };
+    let leveled = adjusted([51, 204, 128], levels)?;
+    assert!(near(leveled, [0, 255, 128]), "got {leveled:?}");
+    Ok(())
+}
+
+#[test]
+#[ignore = "needs a GPU"]
+fn proc_amp_turns_red_to_green_a_third_of_the_way_round() -> Result<(), RenderError> {
+    let turned = Adjust {
+        proc_amp: ProcAmp {
+            hue: 120f32.to_radians(),
+            ..Adjust::NONE.proc_amp
+        },
+        ..Adjust::NONE
+    };
+    let green = adjusted([255, 0, 0], turned)?;
+    assert!(near(green, [0, 255, 0]), "got {green:?}");
+    Ok(())
 }
