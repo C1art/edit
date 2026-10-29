@@ -61,6 +61,7 @@ pub use pattern::{CellShape, Cells, EllipseRing, Pattern};
 pub use pixel::{ChromaKey, PixelEffects, Vignette};
 pub use placement::{ColorAdjust, LayerLook};
 pub use point_shadow::PointShadow;
+pub use readback::Readback;
 pub use recolor::{ChangeToColor, ChannelMixer, ColorChange, ColorKey, LeaveColor, Ramp, Recolor};
 pub use reframe::Reframe;
 pub use reshape::{Mirror, PageFold, Reshape};

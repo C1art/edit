@@ -9,7 +9,7 @@ use crossbeam::channel::{Receiver, Sender};
 use media::{
     AudioSettings, EncodeProfile, MediaWriter, RateControl, StillFormat, VideoCodec, VideoSettings,
 };
-use render::{Background, Compositor, LayerImage};
+use render::{Background, Compositor, LayerImage, Readback};
 use timeline::{Sequence, Ticks};
 
 use crate::export_sink::{Sink, Stills, Work};
@@ -211,52 +211,63 @@ impl Worker {
         let mut warned = Vec::new();
         let mut warnings = Vec::new();
 
-        for frame in frames.clone() {
+        let pictures = video.is_some() || stills.is_some();
+        let mut pending: Option<Readback> = None;
+        // One step past the last frame hands over the last picture.
+        for frame in frames.start..=frames.end {
             if self.cancel.load(Ordering::Relaxed) {
                 return Ok(Outcome::Cancelled);
             }
-            if video.is_some() || stills.is_some() {
-                let pts = rate.frame_start(frame, timebase);
-                let layers = compose::layers_at(
+            // Decoding this frame overlaps the GPU finishing the one before.
+            let layers = (pictures && frame < frames.end).then(|| {
+                compose::layers_at(
                     &sequence,
-                    pts,
+                    rate.frame_start(frame, timebase),
                     &mut tracks,
                     &mut warned,
                     &mut warnings,
                     Resolution::Full,
-                );
+                )
+            });
+            if frame > frames.start {
+                let done = frame - 1;
+                if let Some(readback) = pending.take() {
+                    let picture = readback.finish()?;
+                    match stills {
+                        Some((still, _)) => {
+                            let file = still_path(&path, done - frames.start, frames_total, still);
+                            self.stills_written.push(file.clone());
+                            sink.send(Work::Still(file, picture))?;
+                        }
+                        None => sink.send(Work::Picture(picture))?,
+                    }
+                }
+
+                // Audio keeps pace with the pictures so the muxer can interleave them.
+                let audio_end = to_audio(rate.frame_start(frame, timebase)).min(audio_total);
+                if writes_audio {
+                    while audio_written < audio_end {
+                        mix.mix_chunk(&sequence, audio_written, &mut warnings);
+                        let frames = (audio_total - audio_written).min(CHUNK_FRAMES as i64);
+                        let samples = usize::try_from(frames).unwrap_or(0) * 2;
+                        sink.send(Work::Sound(mix.mix[..samples].to_vec()))?;
+                        audio_written += frames;
+                    }
+                }
+
+                for warning in warnings.drain(..) {
+                    let _ = self.events.send(ExportEvent::Warning(warning));
+                }
+                let _ = self.events.send(ExportEvent::Progress {
+                    frames_done: frame - frames.start,
+                    frames_total,
+                });
+            }
+            if let Some(layers) = layers {
                 let images: Vec<LayerImage<'_>> = layers.iter().map(Layer::image).collect();
                 self.compositor.composite(input_size, &images)?;
-                let picture = self.compositor.read_output()?;
-                match stills {
-                    Some((still, _)) => {
-                        let file = still_path(&path, frame - frames.start, frames_total, still);
-                        self.stills_written.push(file.clone());
-                        sink.send(Work::Still(file, picture))?;
-                    }
-                    None => sink.send(Work::Picture(picture))?,
-                }
+                pending = Some(self.compositor.start_readback()?);
             }
-
-            // Audio keeps pace with the pictures so the muxer can interleave them.
-            let audio_end = to_audio(rate.frame_start(frame + 1, timebase)).min(audio_total);
-            if writes_audio {
-                while audio_written < audio_end {
-                    mix.mix_chunk(&sequence, audio_written, &mut warnings);
-                    let frames = (audio_total - audio_written).min(CHUNK_FRAMES as i64);
-                    let samples = usize::try_from(frames).unwrap_or(0) * 2;
-                    sink.send(Work::Sound(mix.mix[..samples].to_vec()))?;
-                    audio_written += frames;
-                }
-            }
-
-            for warning in warnings.drain(..) {
-                let _ = self.events.send(ExportEvent::Warning(warning));
-            }
-            let _ = self.events.send(ExportEvent::Progress {
-                frames_done: frame + 1 - frames.start,
-                frames_total,
-            });
         }
         sink.finish()?;
         Ok(Outcome::Finished)
