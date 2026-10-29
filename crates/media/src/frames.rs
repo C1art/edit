@@ -10,6 +10,12 @@ pub struct VideoFrame {
     pub pixels: Vec<u8>,
 }
 
+impl Drop for VideoFrame {
+    fn drop(&mut self) {
+        crate::spare_pixels::give(std::mem::take(&mut self.pixels));
+    }
+}
+
 /// Interleaved `f32` samples at the source sample rate.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AudioBuffer {

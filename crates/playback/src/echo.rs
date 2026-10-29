@@ -187,7 +187,7 @@ mod tests {
     fn operators_combine_the_scaled_pictures() {
         let (dark, light) = (frame([60, 0, 200, 255]), frame([120, 252, 100, 254]));
         let pictures = [(&dark, 1.0), (&light, 0.5)];
-        let combined = |operator| combine(&pictures, operator).unwrap().pixels;
+        let combined = |operator| combine(&pictures, operator).unwrap().pixels.clone();
         assert_eq!(combined(EchoOperator::Add), [120, 126, 250, 255]);
         assert_eq!(combined(EchoOperator::Maximum), [60, 126, 200, 255]);
         assert_eq!(combined(EchoOperator::Minimum), [60, 0, 50, 127]);

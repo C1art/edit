@@ -66,11 +66,9 @@ fn read(path: &Path, canvas: [u32; 2]) -> Result<VideoFrame, MediaError> {
     let size = fitted([size.width, size.height], canvas);
     reader.set_video_size(Some(size))?;
     while let Some(decoded) = reader.next_frame()? {
-        if let DecodedFrame::Video(frame) = decoded {
-            return Ok(VideoFrame {
-                pts: Ticks::ZERO,
-                ..frame
-            });
+        if let DecodedFrame::Video(mut frame) = decoded {
+            frame.pts = Ticks::ZERO;
+            return Ok(frame);
         }
     }
     Err(MediaError::NoPlayableStream)

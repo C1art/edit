@@ -101,7 +101,7 @@ impl Scaler {
         let stride = output_width
             .checked_mul(4)
             .ok_or(MediaError::InvalidFrame)?;
-        let mut pixels = vec![0u8; width as usize * height as usize * 4];
+        let mut pixels = crate::spare_pixels::take(width as usize * height as usize * 4);
         let mut target = Frame::new()?;
         // SAFETY: `target` borrows `pixels` through a buffer whose release does nothing,
         // and is dropped before `pixels` is returned; swscale drops its own reference

@@ -16,6 +16,7 @@ mod region_track;
 mod scenes;
 mod seek_trim;
 mod sequence;
+mod spare_pixels;
 mod still;
 mod subject;
 #[cfg(test)]

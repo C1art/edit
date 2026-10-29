@@ -38,7 +38,7 @@ impl RgbaResizer {
             return Err(MediaError::InvalidFrame);
         }
         let context = self.context_for([width, height, output_width, output_height])?;
-        let mut resized = vec![0u8; to.0 as usize * to.1 as usize * 4];
+        let mut resized = crate::spare_pixels::take(to.0 as usize * to.1 as usize * 4);
         let source = [rgba.as_ptr(), ptr::null(), ptr::null(), ptr::null()];
         let destination = [
             resized.as_mut_ptr(),
