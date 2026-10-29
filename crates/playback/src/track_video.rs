@@ -19,6 +19,9 @@ const MAX_DECODE_AHEAD_SECONDS: i64 = 2;
 /// decode from a keyframe for every frame.
 const BACKWARD_BYTES: usize = 192 << 20;
 const MAX_BACKWARD_FRAMES: usize = 60;
+/// Pictures always kept, as many as the player composes ahead while paused and a few
+/// more, so stepping into what was just composed finds them instead of seeking back.
+const RECENT_FRAMES: usize = 12;
 const RETRY_OPEN: Duration = Duration::from_secs(3);
 
 enum Source {
@@ -140,10 +143,8 @@ impl TrackVideo {
             if let Some(frame) = frame_before(&self.behind, time) {
                 return Ok(Some(frame));
             }
-        } else if self.history == 0 {
-            self.behind.clear();
         }
-        let history = self.history.min(backward_frames(media));
+        let history = self.history.max(RECENT_FRAMES).min(backward_frames(media));
         let keep = if backward { backward_frames(media) } else { 0 }.max(history);
         self.decode_to(media, time, keep, usize::MAX)?;
         Ok(self.current.clone())
@@ -209,10 +210,7 @@ impl TrackVideo {
             reader.set_field_order(media.field_order());
             self.resolution = resolution;
             // Pictures decoded at the old size would otherwise keep showing.
-            self.current = None;
-            self.next = None;
-            self.behind.clear();
-            self.flow = None;
+            self.reset();
         }
         Ok(Ready::Reader)
     }
@@ -277,7 +275,7 @@ impl TrackVideo {
             }
             self.current = self.next.take();
             if let Some(current) = self.current.as_ref().filter(|_| keep > 0) {
-                if self.behind.len() == keep {
+                while self.behind.len() >= keep {
                     self.behind.pop_front();
                 }
                 self.behind.push_back(current.clone());
@@ -285,8 +283,6 @@ impl TrackVideo {
         }
     }
 
-    /// Like `frame_at`, but faded toward the following frame by how far `time` lies
-    /// past the showing one.
     /// The picture at `time`, made from the frames either side of it as `interpolation`
     /// says when it falls between them.
     pub(crate) fn interpolated_frame_at(
@@ -384,6 +380,8 @@ fn backward_frames(media: &MediaItem) -> usize {
 
 #[cfg(test)]
 mod tests {
+    use timeline::VideoFormat;
+
     use super::*;
 
     fn fixture() -> MediaItem {
@@ -394,7 +392,11 @@ mod tests {
             name: "testsrc".into(),
             path,
             duration: Ticks(180_000),
-            video: None,
+            video: Some(VideoFormat {
+                width: 320,
+                height: 240,
+                ..VideoFormat::default()
+            }),
             has_audio: true,
             proxy: None,
             bin: None,
@@ -426,5 +428,21 @@ mod tests {
         assert!(steps > 10, "{steps}");
         let frame = video.frame_at(&media, time, [320, 240], Resolution::Full);
         assert_eq!(frame.unwrap().unwrap().pts(), time);
+    }
+
+    #[test]
+    fn stepping_back_into_what_was_just_decoded_does_not_seek() {
+        let timebase = Timebase::new(1, 90_000).unwrap();
+        let mut video = TrackVideo::new(timebase);
+        let media = fixture();
+        let mut frame_at = |time| {
+            let frame = video.frame_at(&media, Ticks(time), [320, 240], Resolution::Full);
+            frame.unwrap().unwrap().pts()
+        };
+        frame_at(108_000);
+        // Composed ahead while paused, then a step lands short of it.
+        frame_at(136_800);
+        assert_eq!(frame_at(118_800), Ticks(118_800));
+        assert_eq!(video.sought, Some(Ticks(108_000)));
     }
 }
