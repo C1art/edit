@@ -4,7 +4,7 @@ use timeline::{
 };
 
 use crate::editor::Editor;
-use crate::keymap::Command;
+use crate::keymap::{Command, Keymap};
 use crate::placing;
 use crate::project_files::{AfterDiscard, Interchange, PathPurpose};
 use crate::theme;
@@ -235,7 +235,7 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
 
 /// One button for a group of tools, showing the one last picked from it, with an arrow
 /// that lists the whole group.
-fn tool_group(ui: &mut egui::Ui, current: &mut Tool, group: &'static [Tool]) {
+fn tool_group(ui: &mut egui::Ui, current: &mut Tool, group: &'static [Tool], keymap: &Keymap) {
     let Some(&first) = group.first() else {
         return;
     };
@@ -248,7 +248,7 @@ fn tool_group(ui: &mut egui::Ui, current: &mut Tool, group: &'static [Tool]) {
     };
     if ui
         .selectable_label(*current == shown, shown.label())
-        .on_hover_text(shown.hint())
+        .on_hover_text(tool_tip(keymap, shown))
         .clicked()
     {
         *current = shown;
@@ -277,7 +277,7 @@ fn tool_group(ui: &mut egui::Ui, current: &mut Tool, group: &'static [Tool]) {
         for &tool in group {
             if ui
                 .selectable_label(*current == tool, tool.label())
-                .on_hover_text(tool.hint())
+                .on_hover_text(tool_tip(keymap, tool))
                 .clicked()
             {
                 *current = tool;
@@ -287,18 +287,28 @@ fn tool_group(ui: &mut egui::Ui, current: &mut Tool, group: &'static [Tool]) {
     });
 }
 
+fn tool_tip(keymap: &Keymap, tool: Tool) -> String {
+    match Command::for_tool(tool) {
+        Some(command) => keymap.tip(tool.hint(), command),
+        None => tool.hint().to_owned(),
+    }
+}
+
 pub fn timeline_toolbar(editor: &mut Editor, ui: &mut egui::Ui) {
     crate::sequence_tabs::tabs(editor, ui);
     crate::nesting::breadcrumbs(editor, ui);
     ui.horizontal_wrapped(|ui| {
         theme::segmented(ui, |ui| {
             for group in Tool::GROUPS {
-                tool_group(ui, &mut editor.view.tool, group);
+                tool_group(ui, &mut editor.view.tool, group, &editor.keymap);
             }
         });
         theme::segmented(ui, |ui| {
             ui.toggle_value(&mut editor.view.snapping, "Snap")
-                .on_hover_text("Snap to clip edges and the playhead (S)");
+                .on_hover_text(editor.keymap.tip(
+                    "Snap to clip edges and the playhead",
+                    Command::ToggleSnapping,
+                ));
             let linked = editor.timeline.sequence().linked_selection == LinkedSelection::Together;
             if ui
                 .selectable_label(linked, "Linked")

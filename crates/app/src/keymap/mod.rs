@@ -93,8 +93,13 @@ impl Chord {
 
     /// As shown in menus, with symbols for punctuation, where the file spells it out.
     pub fn label(self) -> String {
+        // egui's arrow symbols are missing from the bundled fonts; these are there.
         let key = match self.key {
             Key::Quote => "'",
+            Key::ArrowLeft => "←",
+            Key::ArrowRight => "→",
+            Key::ArrowUp => "↑",
+            Key::ArrowDown => "↓",
             key => key.symbol_or_name(),
         };
         format!("{}{key}", self.modifier_prefix())
@@ -178,6 +183,14 @@ impl Keymap {
         self.chords(command)
             .first()
             .map_or_else(String::new, |chord| chord.label())
+    }
+
+    /// `text` for a tooltip, with the key for `command` after it when it has one.
+    pub fn tip(&self, text: &str, command: Command) -> String {
+        match self.label(command) {
+            key if key.is_empty() => text.to_owned(),
+            key => format!("{text} ({key})"),
+        }
     }
 
     /// The command `chord` runs. Punctuation typed with Shift, such as `+`, also reaches

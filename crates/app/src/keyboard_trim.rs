@@ -1,6 +1,7 @@
 use timeline::{clamp_delta, ClipId, Edge, Roll, Sequence, TrackRef, Trim, TrimMode};
 
 use crate::editor::Editor;
+use crate::keymap::Command;
 use crate::timeline_view::{EditPoint, TrimType};
 
 /// Premiere's keyboard trimming: select a cut, then move it a frame or five at a time.
@@ -54,7 +55,11 @@ impl Editor {
             .clone()
             .filter(|point| point.is_on(sequence))
         else {
-            self.notice("Select an edit point to trim first (T)");
+            let hint = self.keymap.tip(
+                "Select an edit point to trim first",
+                Command::SelectNearestEditPoint,
+            );
+            self.notice(hint);
             return;
         };
         let (rate, timebase) = (sequence.format.frame_rate, sequence.timebase);

@@ -3,6 +3,7 @@ use playback::Player;
 use timeline::{Marks, Ticks, Timebase, Timecode};
 
 use crate::icons::{self, Icon, Look};
+use crate::keymap::{Command, Keymap};
 use crate::theme;
 
 /// Height of the scrub bar under each monitor.
@@ -13,7 +14,7 @@ const BUTTON: egui::Vec2 = egui::vec2(30.0, 24.0);
 const PREROLL_SECONDS: u32 = 2;
 
 /// A scrub bar with the playhead and marked range, then buttons and timecode.
-pub fn ui(ui: &mut egui::Ui, player: &mut Player, marks: Option<Marks>) {
+pub fn ui(ui: &mut egui::Ui, player: &mut Player, marks: Option<Marks>, keymap: &Keymap) {
     let marks = marks.unwrap_or_default();
     if player.is_looping() {
         // The marks can move while looping, and the loop follows them.
@@ -60,7 +61,7 @@ pub fn ui(ui: &mut egui::Ui, player: &mut Player, marks: Option<Marks>) {
             .max(ui.cursor().left());
         ui.add_space(start - ui.cursor().left());
         if icons::button(ui, Icon::StepBack, BUTTON)
-            .on_hover_text("Previous frame (←)")
+            .on_hover_text(keymap.tip("Previous frame", Command::StepBack))
             .clicked()
         {
             player.step(-1);
@@ -71,19 +72,22 @@ pub fn ui(ui: &mut egui::Ui, player: &mut Player, marks: Option<Marks>) {
             Icon::Play
         };
         if icons::button(ui, play, BUTTON)
-            .on_hover_text("Play/pause (Space)")
+            .on_hover_text(keymap.tip("Play/pause", Command::PlayStop))
             .clicked()
         {
             player.toggle();
         }
         if icons::button(ui, Icon::StepForward, BUTTON)
-            .on_hover_text("Next frame (→)")
+            .on_hover_text(keymap.tip("Next frame", Command::StepForward))
             .clicked()
         {
             player.step(1);
         }
         if icons::sized_toggle(ui, player.is_looping(), Icon::Loop, Look::Filled, BUTTON)
-            .on_hover_text("Loop playback of the marked range, or all of it (Ctrl+Shift+L)")
+            .on_hover_text(keymap.tip(
+                "Loop playback of the marked range, or all of it",
+                Command::ToggleLoop,
+            ))
             .clicked()
         {
             handle_key(player, TransportKey::ToggleLoop, marks);

@@ -3,6 +3,7 @@ use playback::Resolution;
 use timeline::PlaceMode;
 
 use crate::editor::Editor;
+use crate::keymap::Command;
 use crate::placing;
 use crate::program_zoom::MonitorZoom;
 use crate::project_files::PathPurpose;
@@ -91,34 +92,54 @@ fn source(editor: &mut Editor, ui: &mut egui::Ui) {
     title(ui, &format!("Source: {}", source.name), focused);
     source.viewer.picture(ui, picture_size(ui));
     let marks = source.marks;
-    transport::ui(ui, &mut source.viewer.player, Some(marks));
+    transport::ui(ui, &mut source.viewer.player, Some(marks), &editor.keymap);
     let mut place = None;
     let mut subclip = false;
     ui.horizontal_wrapped(|ui| {
-        if ui.button("Mark In").on_hover_text("I").clicked() {
+        if ui
+            .button("Mark In")
+            .on_hover_text(editor.keymap.label(Command::MarkIn))
+            .clicked()
+        {
             source.mark_in();
         }
-        if ui.button("Mark Out").on_hover_text("O").clicked() {
+        if ui
+            .button("Mark Out")
+            .on_hover_text(editor.keymap.label(Command::MarkOut))
+            .clicked()
+        {
             source.mark_out();
         }
         if ui
             .button("Clear")
-            .on_hover_text("Clear in and out")
+            .on_hover_text(editor.keymap.tip("Clear in and out", Command::ClearInOut))
             .clicked()
         {
             source.marks = timeline::Marks::default();
         }
         ui.separator();
-        if ui.button("Insert").on_hover_text(",").clicked() {
+        if ui
+            .button("Insert")
+            .on_hover_text(editor.keymap.label(Command::Insert))
+            .clicked()
+        {
             place = Some(PlaceMode::Insert);
         }
-        if ui.button("Overwrite").on_hover_text(".").clicked() {
+        if ui
+            .button("Overwrite")
+            .on_hover_text(editor.keymap.label(Command::Overwrite))
+            .clicked()
+        {
             place = Some(PlaceMode::Overwrite);
         }
         ui.separator();
         subclip = ui
             .button("Subclip")
-            .on_hover_text("Make a subclip of the marked part (Ctrl+U)")
+            .on_hover_text(
+                editor
+                    .keymap
+                    .tip("Make a subclip of the marked part", Command::MakeSubclip),
+            )
             .clicked();
     });
     if pressed_inside(ui) {
@@ -147,32 +168,32 @@ fn program(editor: &mut Editor, ui: &mut egui::Ui) {
         return;
     };
     let marks = editor.timeline.sequence().marks;
-    transport::ui(ui, &mut program.player, Some(marks));
+    transport::ui(ui, &mut program.player, Some(marks), &editor.keymap);
     ui.horizontal_wrapped(|ui| {
-        if ui.button("Mark In").on_hover_text("I").clicked() {
+        if ui.button("Mark In").on_hover_text(editor.keymap.label(Command::MarkIn)).clicked() {
             editor.mark_sequence_in();
         }
-        if ui.button("Mark Out").on_hover_text("O").clicked() {
+        if ui.button("Mark Out").on_hover_text(editor.keymap.label(Command::MarkOut)).clicked() {
             editor.mark_sequence_out();
         }
         if ui
             .button("Clear")
-            .on_hover_text("Clear in and out (Ctrl+Shift+X)")
+            .on_hover_text(editor.keymap.tip("Clear in and out", Command::ClearInOut))
             .clicked()
         {
             editor.clear_sequence_marks();
         }
         ui.separator();
-        if ui.button("Lift").on_hover_text(";").clicked() {
+        if ui.button("Lift").on_hover_text(editor.keymap.label(Command::LiftMarked)).clicked() {
             editor.lift_marked();
         }
-        if ui.button("Extract").on_hover_text("'").clicked() {
+        if ui.button("Extract").on_hover_text(editor.keymap.label(Command::ExtractMarked)).clicked() {
             editor.extract_marked();
         }
         ui.separator();
         let export_frame = ui
             .button("Still")
-            .on_hover_text("Export Frame: save the picture at the playhead as an image (Ctrl+Shift+E)");
+            .on_hover_text(editor.keymap.tip("Export Frame: save the picture at the playhead as an image", Command::ExportFrame));
         if export_frame.clicked() {
             editor.prompt_path(PathPurpose::ExportFrame);
         }
@@ -181,7 +202,7 @@ fn program(editor: &mut Editor, ui: &mut egui::Ui) {
             let mut multicam = editor.multicam_view;
             let toggle = ui
                 .checkbox(&mut multicam, "Multi-Camera")
-                .on_hover_text("Every camera of the multi-camera clips beside the program; click one or press 1–9 to switch (Shift+0)");
+                .on_hover_text(editor.keymap.tip("Every camera of the multi-camera clips beside the program; click one or press 1–9 to switch", Command::MulticamView));
             if toggle.clicked() {
                 editor.toggle_multicam_view();
             }

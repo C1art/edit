@@ -25,6 +25,12 @@ impl Command {
         })
     }
 
+    pub fn for_tool(tool: Tool) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|command| command.tool() == Some(tool))
+    }
+
     /// What the command asks of the focused monitor, for playback commands.
     pub fn transport(self) -> Option<TransportKey> {
         Some(match self {
