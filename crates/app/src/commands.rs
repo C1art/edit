@@ -1,7 +1,8 @@
 use timeline::{
-    AddFrameHold, AddTrack, Clipboard, CloseGap, FrameFit, JoinThroughEdits, Lift, LinkedSelection,
-    PasteClips, PlaceMode, Razor, RazorTarget, RippleDelete, SetClipsEnabled, SetGrouped,
-    SetLinked, SetLinkedSelection, SetToFrameSize, Timecode, TrackKind, TrackRef,
+    AddFrameHold, AddTrack, Clipboard, CloseGap, CloseGaps, FrameFit, JoinThroughEdits, Lift,
+    LinkedSelection, MakeSubsequence, PasteClips, PlaceMode, Razor, RazorTarget, RippleDelete,
+    SetClipsEnabled, SetGrouped, SetLinked, SetLinkedSelection, SetToFrameSize, Timecode,
+    TrackKind, TrackRef,
 };
 
 use crate::editor::Editor;
@@ -99,6 +100,26 @@ impl Editor {
         } else {
             self.apply(RippleDelete { clips });
         }
+    }
+
+    /// A new sequence of the selected clips, or of the marked span with none selected,
+    /// added to the project beside this one.
+    pub(crate) fn make_subsequence(&mut self) {
+        let project = self.timeline.project();
+        let parent = self
+            .timeline
+            .open_nest()
+            .and_then(|id| project.media_item(id))
+            .map_or("Sequence", |item| item.name.as_str());
+        let name = format!("{parent} Sub");
+        let clips = self.view.selection.clone();
+        if !self.apply(MakeSubsequence { clips, name }) {
+            self.notice("Select clips or mark In and Out to make a subsequence");
+        }
+    }
+
+    pub(crate) fn close_all_gaps(&mut self) {
+        self.apply(CloseGaps);
     }
 
     fn close_gap(&mut self) {

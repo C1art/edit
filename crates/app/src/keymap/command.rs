@@ -21,6 +21,7 @@ pub enum Command {
     CancelDrag,
     SelectAll,
     DeselectAll,
+    Find,
     KeyboardShortcuts,
     SpeedDuration,
     AudioGain,
@@ -136,7 +137,7 @@ const WORKSPACE_WORDS: [(&str, &str); WORKSPACE_SLOTS as usize] = [
 ];
 
 impl Command {
-    pub const ALL: [Self; 124] = [
+    pub const ALL: [Self; 125] = [
         Self::NewProject,
         Self::OpenProject,
         Self::Save,
@@ -157,6 +158,7 @@ impl Command {
         Self::CancelDrag,
         Self::SelectAll,
         Self::DeselectAll,
+        Self::Find,
         Self::KeyboardShortcuts,
         Self::SpeedDuration,
         Self::AudioGain,
@@ -287,6 +289,7 @@ impl Command {
             Self::CancelDrag => ("cancel_drag", "Cancel Drag"),
             Self::SelectAll => ("select_all", "Select All"),
             Self::DeselectAll => ("deselect_all", "Deselect All"),
+            Self::Find => ("find", "Find"),
             Self::KeyboardShortcuts => ("keyboard_shortcuts", "Keyboard Shortcuts"),
             Self::SpeedDuration => ("speed_duration", "Speed/Duration"),
             Self::AudioGain => ("audio_gain", "Audio Gain"),
@@ -424,7 +427,9 @@ impl Command {
             NewProject | OpenProject | Save | SaveAs | Import | ExportMedia | ExportFrame
             | NewTitle => "File",
             Undo | Redo | Cut | Copy | Paste | PasteInsert | PasteAttributes | Clear
-            | RippleDelete | CancelDrag | SelectAll | DeselectAll | KeyboardShortcuts => "Edit",
+            | RippleDelete | CancelDrag | SelectAll | DeselectAll | Find | KeyboardShortcuts => {
+                "Edit"
+            }
             SpeedDuration | AudioGain | ToggleEnabled | ToggleLink | Group | Ungroup
             | JoinThroughEdits | MakeSubclip | Insert | Overwrite | NudgeLeft | NudgeRight
             | NudgeLeftFive | NudgeRightFive | NudgeUp | NudgeDown => "Clip",

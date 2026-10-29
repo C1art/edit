@@ -1,10 +1,12 @@
 mod biquad;
+mod click;
 mod compressor;
 mod deesser;
 mod dehum;
 mod delay;
 mod denoise;
 mod dynamics;
+mod expander;
 mod fft;
 mod graphic_eq;
 mod loudness;
@@ -17,12 +19,14 @@ mod shape;
 mod taps;
 
 pub use biquad::{Biquad, Coefficients};
+pub use click::ClickRemover;
 pub use compressor::{Compressor, CompressorSettings};
 pub use deesser::DeEsser;
 pub use dehum::{DeHum, MAX_HARMONICS};
 pub use delay::Delay;
 pub use denoise::DeNoise;
 pub use dynamics::{Gate, Limiter};
+pub use expander::Expander;
 pub use graphic_eq::{GraphicEqualizer, GRAPHIC_BANDS_HZ};
 pub use loudness::LoudnessMeter;
 pub use modulation::{ModulatedDelay, Sweep};

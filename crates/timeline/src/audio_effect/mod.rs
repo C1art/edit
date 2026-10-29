@@ -3,6 +3,11 @@ use serde::{Deserialize, Serialize};
 use crate::Param;
 
 mod catalog;
+mod dynamics;
+mod vocal;
+
+pub use dynamics::{CompressorSection, Dynamics, ExpanderSection, GateSection, LimiterSection};
+pub use vocal::VocalMode;
 
 /// An effect on an audio clip's sound, applied in list order before its volume.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -187,6 +192,26 @@ pub enum AudioEffect {
         tone: Param,
         mix: Param,
     },
+    Dynamics(Dynamics),
+    /// Repairs single-sample clicks and pops; a lower `threshold`, in percent, catches
+    /// fainter ones.
+    AutomaticClickRemover {
+        threshold: Param,
+    },
+    /// Shapes a voice for clarity in one go.
+    VocalEnhancer {
+        mode: VocalMode,
+    },
+    /// The Dynamics Compressor followed by tube-like saturation mixed in at `warmth`
+    /// percent.
+    TubeCompressor {
+        threshold: Param,
+        ratio: Param,
+        attack: Param,
+        release: Param,
+        makeup: Param,
+        warmth: Param,
+    },
     /// Plays the right side on both.
     FillLeftWithRight,
     /// Plays the left side on both.
@@ -282,7 +307,18 @@ impl AudioEffect {
                 tone,
                 mix,
             } => vec![time, feedback, saturation, tone, mix],
-            Self::FillLeftWithRight
+            Self::Dynamics(dynamics) => dynamics.params_mut(),
+            Self::AutomaticClickRemover { threshold } => vec![threshold],
+            Self::TubeCompressor {
+                threshold,
+                ratio,
+                attack,
+                release,
+                makeup,
+                warmth,
+            } => vec![threshold, ratio, attack, release, makeup, warmth],
+            Self::VocalEnhancer { .. }
+            | Self::FillLeftWithRight
             | Self::FillRightWithLeft
             | Self::SwapChannels
             | Self::Invert => Vec::new(),

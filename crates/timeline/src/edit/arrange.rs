@@ -177,7 +177,7 @@ impl Edit for CloseGap {
 
 /// `gaps` must be sorted and disjoint; they are closed from the last so earlier ones
 /// keep their positions.
-fn close_gaps(sequence: &mut Sequence, gaps: &[Range<Ticks>], edited: &[TrackRef]) {
+pub(super) fn close_gaps(sequence: &mut Sequence, gaps: &[Range<Ticks>], edited: &[TrackRef]) {
     let tracks = ops::rippled_tracks(sequence, edited);
     for gap in gaps.iter().rev() {
         ops::shift(sequence, &tracks, gap.end, gap.start - gap.end, &[]);

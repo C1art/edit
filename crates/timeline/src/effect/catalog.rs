@@ -1,13 +1,15 @@
 use super::{
-    ChannelBlur, ClipNameSource, ColorChange, ColorMatch, Echo, EdgeFeather, EffectCategory,
-    GarbageMatte, KeyOutput, LensType, MagnifyShape, MatteChannel, Median, NoiseHls,
-    RadialWipeDirection, RampShape, Rgb, TimecodeSource, UnsharpMask, VideoEffect,
+    AlphaGlow, AscCdl, Bevel, ChannelBlur, Checkerboard, Circle, ClipNameSource, ColorChange,
+    ColorMatch, ColorReplace, ConvolutionKernel, Echo, EdgeFeather, EffectCategory, Extract,
+    FourColorGradient, GarbageMatte, Grid, KeyOutput, LensType, MagnifyShape, MatteChannel, Median,
+    NoiseHls, RadialWipeDirection, RampShape, Rgb, RoughenEdges, ShadowHighlight, TimecodeSource,
+    UnsharpMask, VideoEffect, VideoLimiter,
 };
 use crate::{AutoReframe, Param, Stabilizer};
 
 impl VideoEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 69] {
+    pub fn catalog() -> [Self; 80] {
         [
             Self::GaussianBlur {
                 blurriness: Param::from_value(10.0),
@@ -212,29 +214,29 @@ impl VideoEffect {
             Self::ColorBalanceRgb {
                 gains: [100.0; 3].map(Param::from_value),
             },
-            Self::Checkerboard {
+            Self::Checkerboard(Checkerboard {
                 anchor: [50.0; 2].map(Param::from_value),
                 size: [64.0; 2].map(Param::from_value),
                 color: Rgb::WHITE,
                 opacity: Param::from_value(100.0),
-            },
-            Self::Grid {
+            }),
+            Self::Grid(Grid {
                 anchor: [50.0; 2].map(Param::from_value),
                 size: [64.0; 2].map(Param::from_value),
                 border: Param::from_value(5.0),
                 color: Rgb::WHITE,
                 opacity: Param::from_value(100.0),
                 invert: false,
-            },
-            Self::Circle {
+            }),
+            Self::Circle(Circle {
                 center: [50.0; 2].map(Param::from_value),
                 radius: Param::from_value(75.0),
                 feather: Param::default(),
                 color: Rgb::WHITE,
                 opacity: Param::from_value(100.0),
                 invert: false,
-            },
-            Self::FourColorGradient {
+            }),
+            Self::FourColorGradient(FourColorGradient {
                 points: [[10.0, 10.0], [90.0, 10.0], [10.0, 90.0], [90.0, 90.0]]
                     .map(|point| point.map(Param::from_value)),
                 colors: [
@@ -245,7 +247,7 @@ impl VideoEffect {
                 ],
                 blend: Param::from_value(100.0),
                 opacity: Param::from_value(100.0),
-            },
+            }),
             Self::LensFlare {
                 center: [25.0, 25.0].map(Param::from_value),
                 brightness: Param::from_value(100.0),
@@ -313,6 +315,22 @@ impl VideoEffect {
             Self::GarbageMatte(GarbageMatte::new(8)),
             Self::GarbageMatte(GarbageMatte::new(16)),
             Self::AutoReframe(AutoReframe::default()),
+            Self::RoughenEdges(RoughenEdges::default()),
+            Self::BevelEdges(Bevel::edges()),
+            Self::BevelAlpha(Bevel::alpha()),
+            Self::AlphaGlow(AlphaGlow::default()),
+            Self::ColorEmboss {
+                direction: Param::from_value(45.0),
+                relief: Param::from_value(1.0),
+                contrast: Param::from_value(100.0),
+                blend: Param::default(),
+            },
+            Self::ConvolutionKernel(ConvolutionKernel::default()),
+            Self::Extract(Extract::default()),
+            Self::ShadowHighlight(ShadowHighlight::default()),
+            Self::VideoLimiter(VideoLimiter::default()),
+            Self::AscCdl(AscCdl::default()),
+            Self::ColorReplace(ColorReplace::default()),
         ]
     }
 
@@ -344,12 +362,15 @@ impl VideoEffect {
                 EffectCategory::ColorCorrection
             }
             Self::GradientRamp { .. }
-            | Self::Checkerboard { .. }
-            | Self::Grid { .. }
-            | Self::Circle { .. }
-            | Self::FourColorGradient { .. }
+            | Self::Checkerboard(_)
+            | Self::Grid(_)
+            | Self::Circle(_)
+            | Self::FourColorGradient(_)
             | Self::LensFlare { .. } => EffectCategory::Generate,
-            Self::DropShadow { .. } | Self::Basic3D { .. } => EffectCategory::Perspective,
+            Self::DropShadow { .. }
+            | Self::Basic3D { .. }
+            | Self::BevelEdges(_)
+            | Self::BevelAlpha(_) => EffectCategory::Perspective,
             Self::BlackAndWhite | Self::GammaCorrection { .. } | Self::ColorBalanceRgb { .. } => {
                 EffectCategory::ImageControl
             }
@@ -368,90 +389,27 @@ impl VideoEffect {
             | Self::Emboss { .. }
             | Self::Solarize { .. }
             | Self::Threshold { .. }
-            | Self::Replicate { .. } => EffectCategory::Stylize,
+            | Self::Replicate { .. }
+            | Self::RoughenEdges(_)
+            | Self::AlphaGlow(_)
+            | Self::ColorEmboss { .. } => EffectCategory::Stylize,
             Self::PosterizeTime { .. } | Self::Echo(_) => EffectCategory::Time,
             Self::Timecode { .. } | Self::ClipName { .. } => EffectCategory::Video,
             Self::HorizontalFlip
             | Self::VerticalFlip
             | Self::EdgeFeather(_)
             | Self::AutoReframe(_) => EffectCategory::Transform,
-            Self::Levels { .. } | Self::ProcAmp { .. } => EffectCategory::Adjust,
+            Self::Levels { .. }
+            | Self::ProcAmp { .. }
+            | Self::ConvolutionKernel(_)
+            | Self::Extract(_)
+            | Self::ShadowHighlight(_) => EffectCategory::Adjust,
+            Self::VideoLimiter(_) | Self::AscCdl(_) => EffectCategory::ColorCorrection,
+            Self::ColorReplace(_) => EffectCategory::ImageControl,
             Self::LinearWipe { .. }
             | Self::RadialWipe { .. }
             | Self::VenetianBlinds { .. }
             | Self::BlockDissolve { .. } => EffectCategory::Transition,
-        }
-    }
-
-    pub fn name(&self) -> &'static str {
-        match self {
-            Self::GaussianBlur { .. } => "Gaussian Blur",
-            Self::HorizontalFlip => "Horizontal Flip",
-            Self::VerticalFlip => "Vertical Flip",
-            Self::BlackAndWhite => "Black & White",
-            Self::Tint { .. } => "Tint",
-            Self::Invert { .. } => "Invert",
-            Self::Sharpen { .. } => "Sharpen",
-            Self::Vignette { .. } => "Vignette",
-            Self::UltraKey { .. } => "Ultra Key",
-            Self::TrackMatteKey { .. } => "Track Matte Key",
-            Self::BrightnessContrast { .. } => "Brightness & Contrast",
-            Self::GammaCorrection { .. } => "Gamma Correction",
-            Self::Posterize { .. } => "Posterize",
-            Self::Noise { .. } => "Noise",
-            Self::FindEdges { .. } => "Find Edges",
-            Self::Mosaic { .. } => "Mosaic",
-            Self::Offset { .. } => "Offset",
-            Self::Twirl { .. } => "Twirl",
-            Self::LensDistortion { .. } => "Lens Distortion",
-            Self::DirectionalBlur { .. } => "Directional Blur",
-            Self::DropShadow { .. } => "Drop Shadow",
-            Self::WaveWarp { .. } => "Wave Warp",
-            Self::WarpStabilizer(_) => "Warp Stabilizer",
-            Self::ColorKey { .. } => "Color Key",
-            Self::LeaveColor { .. } => "Leave Color",
-            Self::GradientRamp { .. } => "Gradient Ramp",
-            Self::Mirror { .. } => "Mirror",
-            Self::CornerPin { .. } => "Corner Pin",
-            Self::PosterizeTime { .. } => "Posterize Time",
-            Self::StrobeLight { .. } => "Strobe Light",
-            Self::Timecode { .. } => "Timecode",
-            Self::ClipName { .. } => "Clip Name",
-            Self::Transform { .. } => "Transform",
-            Self::Basic3D { .. } => "Basic 3D",
-            Self::Spherize { .. } => "Spherize",
-            Self::Emboss { .. } => "Emboss",
-            Self::TurbulentDisplace { .. } => "Turbulent Displace",
-            Self::ChannelMixer { .. } => "Channel Mixer",
-            Self::ChangeToColor { .. } => "Change to Color",
-            Self::LumaKey { .. } => "Luma Key",
-            Self::AlphaAdjust { .. } => "Alpha Adjust",
-            Self::Solarize { .. } => "Solarize",
-            Self::Threshold { .. } => "Threshold",
-            Self::Replicate { .. } => "Replicate",
-            Self::ColorBalanceRgb { .. } => "Color Balance (RGB)",
-            Self::Checkerboard { .. } => "Checkerboard",
-            Self::Grid { .. } => "Grid",
-            Self::Circle { .. } => "Circle",
-            Self::FourColorGradient { .. } => "4-Color Gradient",
-            Self::LensFlare { .. } => "Lens Flare",
-            Self::Magnify { .. } => "Magnify",
-            Self::Levels { .. } => "Levels",
-            Self::ProcAmp { .. } => "ProcAmp",
-            Self::LinearWipe { .. } => "Linear Wipe",
-            Self::RadialWipe { .. } => "Radial Wipe",
-            Self::VenetianBlinds { .. } => "Venetian Blinds",
-            Self::BlockDissolve { .. } => "Block Dissolve",
-            Self::UnsharpMask(_) => "Unsharp Mask",
-            Self::Median(_) => "Median",
-            Self::DustAndScratches(_) => "Dust & Scratches",
-            Self::EdgeFeather(_) => "Edge Feather",
-            Self::NoiseHls(_) => "Noise HLS",
-            Self::ChannelBlur(_) => "Channel Blur",
-            Self::CameraBlur { .. } => "Camera Blur",
-            Self::Echo(_) => "Echo",
-            Self::GarbageMatte(matte) => matte.name(),
-            Self::AutoReframe(_) => "Auto Reframe",
         }
     }
 }

@@ -3,11 +3,13 @@ use timeline::{AlphaInterpretation, KeyOutput};
 use crate::adjust::Adjust;
 use crate::clip_wipes::ClipWipes;
 use crate::detail::Detail;
+use crate::edges::Edges;
 use crate::generate::Generate;
 use crate::optics::Optics;
 use crate::recolor::Recolor;
 use crate::reshape::Reshape;
 use crate::style::PictureStyle;
+use crate::tone::Tone;
 
 /// Per-pixel effects on a layer, all off by default. Colors are linear RGB.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -32,6 +34,8 @@ pub struct PixelEffects {
     pub optics: Optics,
     pub clip_wipes: ClipWipes,
     pub detail: Detail,
+    pub edges: Edges,
+    pub tone: Tone,
     /// How the source's alpha channel is read.
     pub alpha: AlphaInterpretation,
 }
@@ -103,6 +107,8 @@ impl PixelEffects {
         optics: Optics::NONE,
         clip_wipes: ClipWipes::NONE,
         detail: Detail::NONE,
+        edges: Edges::NONE,
+        tone: Tone::NONE,
         alpha: AlphaInterpretation::Straight,
     };
 

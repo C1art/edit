@@ -5,18 +5,27 @@ use crate::{AutoReframe, Param, Stabilizer};
 mod catalog;
 mod detail;
 mod echo;
+mod edges;
 mod garbage;
+mod generate;
 mod key;
+mod names;
 mod options;
 mod params;
+mod tone;
 
 pub use detail::{EdgeFeather, Median, NoiseHls, UnsharpMask};
 pub use echo::{ChannelBlur, Echo, EchoOperator};
+pub use edges::{AlphaGlow, Bevel, RoughenEdgeType, RoughenEdges};
 pub use garbage::GarbageMatte;
+pub use generate::{Checkerboard, Circle, FourColorGradient, Grid};
 pub use key::{KeyOutput, MatteChannel, ULTRA_KEY_REACH};
 pub use options::{
     ClipNameSource, ColorChange, ColorMatch, EffectCategory, LensType, MagnifyShape,
     RadialWipeDirection, RampShape, Rgb, TimecodeSource,
+};
+pub use tone::{
+    AscCdl, ColorReplace, ConvolutionKernel, Extract, LimiterMethod, ShadowHighlight, VideoLimiter,
 };
 
 /// A video effect from the effect stack. Percentages are stored as their numbers.
@@ -341,51 +350,10 @@ pub enum VideoEffect {
     ColorBalanceRgb {
         gains: [Param; 3],
     },
-    /// Covers every other square of a board laid from `anchor` with `color`.
-    Checkerboard {
-        /// Percent of the picture's width and height.
-        anchor: [Param; 2],
-        /// Each square's width and height in the picture's pixels.
-        size: [Param; 2],
-        color: Rgb,
-        /// Percent.
-        opacity: Param,
-    },
-    /// Draws lines `border` pixels wide around cells laid from `anchor`.
-    Grid {
-        /// Percent of the picture's width and height.
-        anchor: [Param; 2],
-        /// Each cell's width and height in the picture's pixels.
-        size: [Param; 2],
-        border: Param,
-        color: Rgb,
-        /// Percent.
-        opacity: Param,
-        /// Fills the cells instead of the lines.
-        invert: bool,
-    },
-    Circle {
-        /// Percent of the picture's width and height.
-        center: [Param; 2],
-        /// In the picture's pixels, as is the feather fading its outer edge.
-        radius: Param,
-        feather: Param,
-        color: Rgb,
-        /// Percent.
-        opacity: Param,
-        /// Fills outside the circle instead.
-        invert: bool,
-    },
-    /// Fills the picture with four colors, each strongest at its point.
-    FourColorGradient {
-        /// Percent of the picture's width and height.
-        points: [[Param; 2]; 4],
-        colors: [Rgb; 4],
-        /// How smoothly the colors run together, from 1.
-        blend: Param,
-        /// Percent.
-        opacity: Param,
-    },
+    Checkerboard(Checkerboard),
+    Grid(Grid),
+    Circle(Circle),
+    FourColorGradient(FourColorGradient),
     /// Adds the glare and reflections of a bright light shining into the lens.
     LensFlare {
         /// Percent of the picture's width and height.
@@ -472,4 +440,21 @@ pub enum VideoEffect {
     GarbageMatte(GarbageMatte),
     /// Fills a frame of another shape with the picture, following its subject.
     AutoReframe(AutoReframe),
+    RoughenEdges(RoughenEdges),
+    BevelEdges(Bevel),
+    BevelAlpha(Bevel),
+    AlphaGlow(AlphaGlow),
+    /// Emboss's relief, lighting the picture's colors rather than grey.
+    ColorEmboss {
+        direction: Param,
+        relief: Param,
+        contrast: Param,
+        blend: Param,
+    },
+    ConvolutionKernel(ConvolutionKernel),
+    Extract(Extract),
+    ShadowHighlight(ShadowHighlight),
+    VideoLimiter(VideoLimiter),
+    AscCdl(AscCdl),
+    ColorReplace(ColorReplace),
 }

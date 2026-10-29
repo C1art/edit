@@ -30,6 +30,7 @@ mod sound;
 mod speed;
 mod structure;
 mod submix;
+mod subsequence;
 mod sync;
 mod through;
 mod trim;
@@ -76,6 +77,7 @@ pub use structure::{
     SetTrackSwitch, TrackSwitch,
 };
 pub use submix::{AddSubmix, RemoveSubmix, SetSubmix, SetTrackOutput};
+pub use subsequence::{CloseGaps, MakeSubsequence};
 pub use sync::{IntoSync, SyncMethod};
 pub use through::{is_through_edit, JoinThroughEdits};
 pub use trim::{Edge, Roll, Slide, Slip, Trim, TrimMode};

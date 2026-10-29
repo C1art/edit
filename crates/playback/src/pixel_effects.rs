@@ -9,7 +9,9 @@ use timeline::{
 use crate::adjust_effects::set_adjust_effect;
 use crate::clip_wipes::set_clip_wipe;
 use crate::detail_effects::set_detail_effect;
+use crate::edge_effects::set_edge_effect;
 use crate::optics_effects::set_optics_effect;
+use crate::tone_effects::set_tone_effect;
 
 /// The per-pixel part of an effect stack at source time `time`. The shader runs each
 /// kind of effect once, so repeats of a kind combine, the last one's colors winning.
@@ -363,12 +365,12 @@ pub(crate) fn pixel_effects(
                     *balance *= unit(gain).max(0.0);
                 }
             }
-            VideoEffect::Checkerboard {
+            VideoEffect::Checkerboard(timeline::Checkerboard {
                 anchor,
                 size,
                 color,
                 opacity,
-            } => {
+            }) => {
                 pixel.generate.checkerboard = Some(Checkerboard {
                     anchor: anchor.each_ref().map(unit),
                     size: size.each_ref().map(|side| side.value_at(time)),
@@ -376,14 +378,14 @@ pub(crate) fn pixel_effects(
                     opacity: unit(opacity).clamp(0.0, 1.0),
                 });
             }
-            VideoEffect::Grid {
+            VideoEffect::Grid(timeline::Grid {
                 anchor,
                 size,
                 border,
                 color,
                 opacity,
                 invert,
-            } => {
+            }) => {
                 pixel.generate.grid = Some(Grid {
                     anchor: anchor.each_ref().map(unit),
                     size: size.each_ref().map(|side| side.value_at(time)),
@@ -393,14 +395,14 @@ pub(crate) fn pixel_effects(
                     invert: *invert,
                 });
             }
-            VideoEffect::Circle {
+            VideoEffect::Circle(timeline::Circle {
                 center,
                 radius,
                 feather,
                 color,
                 opacity,
                 invert,
-            } => {
+            }) => {
                 pixel.generate.circle = Some(Circle {
                     center: center.each_ref().map(unit),
                     radius: radius.value_at(time),
@@ -410,12 +412,12 @@ pub(crate) fn pixel_effects(
                     invert: *invert,
                 });
             }
-            VideoEffect::FourColorGradient {
+            VideoEffect::FourColorGradient(timeline::FourColorGradient {
                 points,
                 colors,
                 blend,
                 opacity,
-            } => {
+            }) => {
                 pixel.generate.four_color = Some(FourColorGradient {
                     points: points.each_ref().map(|point| point.each_ref().map(unit)),
                     colors: colors.map(encoded),
@@ -440,12 +442,23 @@ pub(crate) fn pixel_effects(
             | VideoEffect::DustAndScratches(_)
             | VideoEffect::EdgeFeather(_)
             | VideoEffect::NoiseHls(_) => set_detail_effect(&mut pixel.detail, effect, time),
+            VideoEffect::RoughenEdges(_)
+            | VideoEffect::BevelEdges(_)
+            | VideoEffect::BevelAlpha(_)
+            | VideoEffect::AlphaGlow(_)
+            | VideoEffect::ColorEmboss { .. } => set_edge_effect(&mut pixel.edges, effect, time),
+            VideoEffect::ConvolutionKernel(_)
+            | VideoEffect::Extract(_)
+            | VideoEffect::ShadowHighlight(_)
+            | VideoEffect::VideoLimiter(_)
+            | VideoEffect::AscCdl(_)
+            | VideoEffect::ColorReplace(_) => set_tone_effect(&mut pixel.tone, effect, time),
         }
     }
     pixel
 }
 
-fn encoded(color: Rgb) -> [f32; 3] {
+pub(crate) fn encoded(color: Rgb) -> [f32; 3] {
     [color.r, color.g, color.b].map(|channel| f32::from(channel) / 255.0)
 }
 

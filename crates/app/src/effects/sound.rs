@@ -29,7 +29,9 @@ pub(crate) fn category(effect: &AudioEffect) -> &'static str {
         | AudioEffect::NoiseGate { .. }
         | AudioEffect::DeEsser { .. }
         | AudioEffect::ChannelVolume { .. }
-        | AudioEffect::MultibandCompressor { .. } => CATEGORIES[0],
+        | AudioEffect::MultibandCompressor { .. }
+        | AudioEffect::Dynamics(_)
+        | AudioEffect::TubeCompressor { .. } => CATEGORIES[0],
         AudioEffect::Bass { .. }
         | AudioEffect::Treble { .. }
         | AudioEffect::Equalizer { .. }
@@ -51,8 +53,10 @@ pub(crate) fn category(effect: &AudioEffect) -> &'static str {
         | AudioEffect::FillRightWithLeft
         | AudioEffect::SwapChannels
         | AudioEffect::Invert => CATEGORIES[6],
-        AudioEffect::DeNoise { .. } | AudioEffect::DeHum { .. } => CATEGORIES[7],
-        AudioEffect::Distortion { .. } => CATEGORIES[8],
+        AudioEffect::DeNoise { .. }
+        | AudioEffect::DeHum { .. }
+        | AudioEffect::AutomaticClickRemover { .. } => CATEGORIES[7],
+        AudioEffect::Distortion { .. } | AudioEffect::VocalEnhancer { .. } => CATEGORIES[8],
         AudioEffect::StereoExpander { .. } => CATEGORIES[9],
     }
 }

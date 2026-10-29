@@ -390,6 +390,7 @@ mod render_replace;
 mod replace;
 mod speed;
 mod submix;
+mod subsequence;
 mod through;
 mod track;
 mod trim;

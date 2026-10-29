@@ -13,6 +13,7 @@ mod edl;
 mod effect;
 mod error;
 mod file_url;
+mod find;
 mod generator;
 mod group;
 mod history;
@@ -59,7 +60,10 @@ mod xmeml_import;
 mod xmeml_markers;
 mod xml;
 
-pub use audio_effect::AudioEffect;
+pub use audio_effect::{
+    AudioEffect, CompressorSection, Dynamics, ExpanderSection, GateSection, LimiterSection,
+    VocalMode,
+};
 pub use audio_plan::{audio_fade, audio_span, clip_balance, clip_level, track_automation};
 pub use audio_type::AudioType;
 pub use bin::{Bin, BinId};
@@ -72,30 +76,33 @@ pub use ducking::{active_spans, ducked_volume};
 pub use edit::{
     clamp_delta, is_through_edit, AddBin, AddEdits, AddFrameHold, AddGenerated, AddMarker, AddNest,
     AddSpeedKeyframe, AddSubmix, AddTrack, ApplyEffect, Attribute, AutoDuck, ClipEffect, ClipSound,
-    Clipboard, CloseGap, CreateMulticam, DuplicateMedia, Edge, ExtractMarked, FlattenMulticam,
-    FrameFit, ImportMedia, InNest, InterpretFootage, IntoSync, JoinThroughEdits, Lift, LiftMarked,
-    MakeOffline, MakeSubclip, MarkerOwner, MergeClips, MoveClips, MoveMode, MoveToBin, NestClips,
-    NestFromMedia, NormalizeClipGains, PasteAttributes, PasteClips, PlaceClip, PlaceMode,
-    RateStretch, Razor, RazorTarget, ReframeSequence, RelinkMedia, RemoveAttributes, RemoveBin,
-    RemoveMarker, RemoveMedia, RemoveSpeedKeyframe, RemoveSubmix, RemoveTimeRemap, RemoveTrack,
-    RenameBin, RenameClips, RenameMedia, RenameTrack, RenderAndReplace, ReplaceClip,
-    RestoreUnrendered, RippleDelete, RippleTrimToPlayhead, Roll, SetCaptions, SetChannelMap,
-    SetClipAudioEffects, SetClipGain, SetClipLabel, SetClipLook, SetClipPan, SetClipSpeed,
-    SetClipVolume, SetClipsEnabled, SetClipsSound, SetGenerator, SetGrouped, SetLinked,
-    SetLinkedSelection, SetMarks, SetMasterEffects, SetMasterGain, SetMediaLog, SetProxy,
-    SetSegmentSpeed, SetSequenceFormat, SetSubmix, SetTimeInterpolation, SetToFrameSize,
-    SetTrackAutomation, SetTrackEffects, SetTrackMix, SetTrackOutput, SetTrackSwitch,
-    SetTransition, Slide, Slip, SwitchAngle, SyncMethod, TrackSwitch, Trim, TrimMode,
-    TrimToPlayhead, Unlinked, UpdateMarker,
+    Clipboard, CloseGap, CloseGaps, CreateMulticam, DuplicateMedia, Edge, ExtractMarked,
+    FlattenMulticam, FrameFit, ImportMedia, InNest, InterpretFootage, IntoSync, JoinThroughEdits,
+    Lift, LiftMarked, MakeOffline, MakeSubclip, MakeSubsequence, MarkerOwner, MergeClips,
+    MoveClips, MoveMode, MoveToBin, NestClips, NestFromMedia, NormalizeClipGains, PasteAttributes,
+    PasteClips, PlaceClip, PlaceMode, RateStretch, Razor, RazorTarget, ReframeSequence,
+    RelinkMedia, RemoveAttributes, RemoveBin, RemoveMarker, RemoveMedia, RemoveSpeedKeyframe,
+    RemoveSubmix, RemoveTimeRemap, RemoveTrack, RenameBin, RenameClips, RenameMedia, RenameTrack,
+    RenderAndReplace, ReplaceClip, RestoreUnrendered, RippleDelete, RippleTrimToPlayhead, Roll,
+    SetCaptions, SetChannelMap, SetClipAudioEffects, SetClipGain, SetClipLabel, SetClipLook,
+    SetClipPan, SetClipSpeed, SetClipVolume, SetClipsEnabled, SetClipsSound, SetGenerator,
+    SetGrouped, SetLinked, SetLinkedSelection, SetMarks, SetMasterEffects, SetMasterGain,
+    SetMediaLog, SetProxy, SetSegmentSpeed, SetSequenceFormat, SetSubmix, SetTimeInterpolation,
+    SetToFrameSize, SetTrackAutomation, SetTrackEffects, SetTrackMix, SetTrackOutput,
+    SetTrackSwitch, SetTransition, Slide, Slip, SwitchAngle, SyncMethod, TrackSwitch, Trim,
+    TrimMode, TrimToPlayhead, Unlinked, UpdateMarker,
 };
 pub use edl::to_edl;
 pub use effect::{
-    ChannelBlur, ClipNameSource, ColorChange, ColorMatch, Echo, EchoOperator, EdgeFeather,
-    EffectCategory, GarbageMatte, KeyOutput, LensType, MagnifyShape, MatteChannel, Median,
-    NoiseHls, RadialWipeDirection, RampShape, Rgb, TimecodeSource, UnsharpMask, VideoEffect,
-    ULTRA_KEY_REACH,
+    AlphaGlow, AscCdl, Bevel, ChannelBlur, Checkerboard, Circle, ClipNameSource, ColorChange,
+    ColorMatch, ColorReplace, ConvolutionKernel, Echo, EchoOperator, EdgeFeather, EffectCategory,
+    Extract, FourColorGradient, GarbageMatte, Grid, KeyOutput, LensType, LimiterMethod,
+    MagnifyShape, MatteChannel, Median, NoiseHls, RadialWipeDirection, RampShape, Rgb,
+    RoughenEdgeType, RoughenEdges, ShadowHighlight, TimecodeSource, UnsharpMask, VideoEffect,
+    VideoLimiter, ULTRA_KEY_REACH,
 };
 pub use error::TimelineError;
+pub use find::{next_found, FindOperator, FindQuery, Found};
 pub use generator::{
     held_length, Generator, Shape, ShapeKind, TextAlign, TextStroke, Title, TitleFont,
     GENERATED_SECONDS,

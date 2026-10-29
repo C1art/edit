@@ -3,6 +3,7 @@ mod clip_wipes;
 mod color;
 mod curves;
 mod detail;
+mod edges;
 mod generate;
 mod generated;
 mod hue_curves;
@@ -22,6 +23,7 @@ mod secondary;
 mod sound;
 mod sound_more;
 mod stabilizer;
+mod tone;
 mod transitions;
 mod video_effects;
 

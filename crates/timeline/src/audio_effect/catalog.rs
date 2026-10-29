@@ -1,9 +1,9 @@
-use super::AudioEffect;
+use super::{AudioEffect, Dynamics, VocalMode};
 use crate::Param;
 
 impl AudioEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 32] {
+    pub fn catalog() -> [Self; 36] {
         [
             Self::Amplify {
                 gain: Param::default(),
@@ -136,6 +136,21 @@ impl AudioEffect {
                 tone: Param::from_value(3_000.0),
                 mix: Param::from_value(35.0),
             },
+            Self::Dynamics(Dynamics::default()),
+            Self::AutomaticClickRemover {
+                threshold: Param::from_value(30.0),
+            },
+            Self::VocalEnhancer {
+                mode: VocalMode::default(),
+            },
+            Self::TubeCompressor {
+                threshold: Param::from_value(-20.0),
+                ratio: Param::from_value(4.0),
+                attack: Param::from_value(10.0),
+                release: Param::from_value(150.0),
+                makeup: Param::default(),
+                warmth: Param::from_value(40.0),
+            },
             Self::FillLeftWithRight,
             Self::FillRightWithLeft,
             Self::SwapChannels,
@@ -177,6 +192,10 @@ impl AudioEffect {
             Self::StereoExpander { .. } => "Stereo Expander",
             Self::MultitapDelay { .. } => "Multitap Delay",
             Self::AnalogDelay { .. } => "Analog Delay",
+            Self::Dynamics(_) => "Dynamics",
+            Self::AutomaticClickRemover { .. } => "Automatic Click Remover",
+            Self::VocalEnhancer { .. } => "Vocal Enhancer",
+            Self::TubeCompressor { .. } => "Tube-modeled Compressor",
         }
     }
 }

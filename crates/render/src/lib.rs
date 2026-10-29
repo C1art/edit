@@ -6,6 +6,7 @@ mod clip_wipes;
 mod compositor;
 mod creative;
 mod detail;
+mod edges;
 mod error;
 mod generate;
 mod grade;
@@ -21,6 +22,7 @@ mod reshape;
 mod scope;
 mod secondary;
 mod style;
+mod tone;
 mod warp;
 mod wipe;
 
@@ -32,6 +34,7 @@ pub use clip_wipes::{
 pub use compositor::{Background, Compositor, LayerImage, Picture, Presented};
 pub use creative::{Creative, CreativeVignette};
 pub use detail::{Detail, MedianFilter, NoiseHls, UnsharpMask};
+pub use edges::{AlphaGlow, Bevel, ColorEmboss, Edges, RoughenEdges};
 pub use error::RenderError;
 pub use generate::{Checkerboard, Circle, FourColorGradient, Generate, Grid};
 pub use grade::{Grade, CURVE_SIZE};
@@ -46,6 +49,9 @@ pub use reshape::{Mirror, PageFold, Reshape};
 pub use scope::Scope;
 pub use secondary::SecondaryAdjust;
 pub use style::PictureStyle;
+pub use tone::{
+    Cdl, ColorReplace, Convolution, ExtractRange, LimitBy, Limiter, ShadowHighlight, Tone,
+};
 pub use warp::{PlaneTransform, Warp, MAX_WARPS};
 pub use wipe::LayerWipe;
 

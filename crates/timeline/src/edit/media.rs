@@ -219,7 +219,7 @@ impl Edit for DuplicateMedia {
 
 /// Gives a copied sequence's clips, links and groups ids of their own, so nothing kept per
 /// clip, such as a selection or a cached preview, mistakes the copy for its original.
-fn renumber(nest: &mut Nest, ids: &mut IdGenerator) {
+pub(super) fn renumber(nest: &mut Nest, ids: &mut IdGenerator) {
     let mut links: HashMap<LinkId, LinkId> = HashMap::new();
     let mut groups: HashMap<GroupId, GroupId> = HashMap::new();
     let tracks = nest.video.iter_mut().chain(&mut nest.audio);

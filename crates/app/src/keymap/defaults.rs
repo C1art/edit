@@ -33,6 +33,7 @@ impl Command {
             Self::CancelDrag => vec![plain(Key::Escape)],
             Self::SelectAll => vec![ctrl(Key::A)],
             Self::DeselectAll => vec![ctrl_shift(Key::A)],
+            Self::Find => vec![ctrl(Key::F)],
             Self::KeyboardShortcuts => vec![ctrl_alt(Key::K)],
             Self::SpeedDuration => vec![ctrl(Key::R)],
             Self::AudioGain => vec![plain(Key::G)],

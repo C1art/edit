@@ -1,4 +1,8 @@
-use super::{ChannelBlur, Echo, EdgeFeather, Median, NoiseHls, UnsharpMask, VideoEffect};
+use super::{
+    AlphaGlow, AscCdl, Bevel, ChannelBlur, Checkerboard, Circle, ColorReplace, ConvolutionKernel,
+    Echo, EdgeFeather, Extract, FourColorGradient, Grid, Median, NoiseHls, RoughenEdges,
+    ShadowHighlight, UnsharpMask, VideoEffect, VideoLimiter,
+};
 use crate::{AutoReframe, Param};
 
 // One match serves both borrows: default binding modes make the same patterns bind
@@ -164,40 +168,40 @@ macro_rules! effect_params {
             VideoEffect::LumaKey { threshold, cutoff } => vec![threshold, cutoff],
             VideoEffect::AlphaAdjust { opacity, .. } => vec![opacity],
             VideoEffect::ColorBalanceRgb { gains } => gains.$iter().collect(),
-            VideoEffect::Checkerboard {
+            VideoEffect::Checkerboard(Checkerboard {
                 anchor,
                 size,
                 opacity,
                 ..
-            } => anchor
+            }) => anchor
                 .$iter()
                 .chain(size.$iter())
                 .chain([opacity])
                 .collect(),
-            VideoEffect::Grid {
+            VideoEffect::Grid(Grid {
                 anchor,
                 size,
                 border,
                 opacity,
                 ..
-            } => anchor
+            }) => anchor
                 .$iter()
                 .chain(size.$iter())
                 .chain([border, opacity])
                 .collect(),
-            VideoEffect::Circle {
+            VideoEffect::Circle(Circle {
                 center,
                 radius,
                 feather,
                 opacity,
                 ..
-            } => center.$iter().chain([radius, feather, opacity]).collect(),
-            VideoEffect::FourColorGradient {
+            }) => center.$iter().chain([radius, feather, opacity]).collect(),
+            VideoEffect::FourColorGradient(FourColorGradient {
                 points,
                 blend,
                 opacity,
                 ..
-            } => points.$iter().flatten().chain([blend, opacity]).collect(),
+            }) => points.$iter().flatten().chain([blend, opacity]).collect(),
             VideoEffect::LensFlare {
                 center,
                 brightness,
@@ -293,6 +297,91 @@ macro_rules! effect_params {
                 scale,
                 ..
             }) => vec![x, y, scale],
+            VideoEffect::RoughenEdges(RoughenEdges {
+                border,
+                edge_sharpness,
+                fractal_influence,
+                scale,
+                offset: [x, y],
+                complexity,
+                evolution,
+                ..
+            }) => vec![
+                border,
+                edge_sharpness,
+                fractal_influence,
+                scale,
+                x,
+                y,
+                complexity,
+                evolution,
+            ],
+            VideoEffect::BevelEdges(Bevel {
+                edge_thickness,
+                light_angle,
+                light_intensity,
+                ..
+            })
+            | VideoEffect::BevelAlpha(Bevel {
+                edge_thickness,
+                light_angle,
+                light_intensity,
+                ..
+            }) => vec![edge_thickness, light_angle, light_intensity],
+            VideoEffect::AlphaGlow(AlphaGlow {
+                glow, brightness, ..
+            }) => vec![glow, brightness],
+            VideoEffect::ColorEmboss {
+                direction,
+                relief,
+                contrast,
+                blend,
+            } => vec![direction, relief, contrast, blend],
+            VideoEffect::ConvolutionKernel(ConvolutionKernel {
+                kernel,
+                offset,
+                scale,
+            }) => kernel.$iter().chain([offset, scale]).collect(),
+            VideoEffect::Extract(Extract {
+                black_input_level,
+                white_input_level,
+                softness,
+                invert: _,
+            }) => vec![black_input_level, white_input_level, softness],
+            VideoEffect::ShadowHighlight(ShadowHighlight {
+                shadow_amount,
+                highlight_amount,
+                shadow_tonal_width,
+                highlight_tonal_width,
+                radius,
+                midtone_contrast,
+                blend_with_original,
+            }) => vec![
+                shadow_amount,
+                highlight_amount,
+                shadow_tonal_width,
+                highlight_tonal_width,
+                radius,
+                midtone_contrast,
+                blend_with_original,
+            ],
+            VideoEffect::VideoLimiter(VideoLimiter {
+                clip_level,
+                compression_before_clipping,
+                ..
+            }) => vec![clip_level, compression_before_clipping],
+            VideoEffect::AscCdl(AscCdl {
+                slope,
+                offset,
+                power,
+                saturation,
+            }) => slope
+                .$iter()
+                .chain(offset.$iter())
+                .chain(power.$iter())
+                .chain([saturation])
+                .collect(),
+            VideoEffect::ColorReplace(ColorReplace { similarity, .. }) => vec![similarity],
         }
     };
 }

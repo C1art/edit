@@ -83,6 +83,7 @@ pub struct Editor {
     pub(crate) duck_dialog: Option<crate::duck_dialog::DuckDialog>,
     pub(crate) interpret_dialog: Option<crate::interpret_dialog::InterpretDialog>,
     pub(crate) channels_dialog: Option<crate::channels_dialog::ChannelsDialog>,
+    pub(crate) find: crate::find_dialog::FindDialog,
     pub(crate) project_manager: Option<crate::project_manager::ProjectManager>,
     pub(crate) sequence_settings: Option<crate::sequence_settings::SequenceSettings>,
     pub(crate) reframe_dialog: Option<crate::reframe_dialog::ReframeDialog>,
@@ -220,6 +221,7 @@ impl Editor {
             duck_dialog: None,
             interpret_dialog: None,
             channels_dialog: None,
+            find: Default::default(),
             project_manager: None,
             sequence_settings: None,
             reframe_dialog: None,
@@ -468,6 +470,7 @@ impl eframe::App for Editor {
         crate::sequence_settings::dialog(self, &ctx);
         crate::reframe_dialog::dialog(self, &ctx);
         crate::fit_clip::dialog(self, &ctx);
+        crate::find_dialog::dialog(self, &ctx);
         crate::attributes_dialog::dialog(self, &ctx);
         crate::loudness_window::window(self, &ctx);
         crate::speed_dialog::dialog(self, &ctx);

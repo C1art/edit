@@ -161,6 +161,35 @@ struct Placement {
     detail_unsharp: vec4<f32>,
     detail_median: vec4<f32>,
     detail_noise: vec4<f32>,
+    // Roughen Edges' border, softness, fractal scale and complexity; its evolution,
+    // fractal influence and offset; its edge color and whether to show it. Bevel Edges'
+    // thickness, light angle and intensity, then its light color, and Bevel Alpha's the
+    // same. Alpha Glow's size, brightness and fade-out, its start and end colors; then
+    // Color Emboss's direction, relief, contrast and share (see edges.wgsl).
+    edges_roughen: vec4<f32>,
+    edges_roughen_noise: vec4<f32>,
+    edges_roughen_color: vec4<f32>,
+    edges_bevel: vec4<f32>,
+    edges_bevel_color: vec4<f32>,
+    edges_bevel_alpha: vec4<f32>,
+    edges_bevel_alpha_color: vec4<f32>,
+    edges_glow: vec4<f32>,
+    edges_glow_start: vec4<f32>,
+    edges_glow_end: vec4<f32>,
+    edges_emboss: vec4<f32>,
+    tone_kernel_a: vec4<f32>,
+    tone_kernel_b: vec4<f32>,
+    tone_kernel_c: vec4<f32>,
+    tone_extract: vec4<f32>,
+    tone_lift: vec4<f32>,
+    tone_lift_more: vec4<f32>,
+    tone_limit: vec4<f32>,
+    tone_limit_warning: vec4<f32>,
+    tone_cdl_slope: vec4<f32>,
+    tone_cdl_offset: vec4<f32>,
+    tone_cdl_power: vec4<f32>,
+    tone_replace_target: vec4<f32>,
+    tone_replace_with: vec4<f32>,
 };
 
 const OUTLINE_VEC4S: u32 = 32u;
@@ -198,13 +227,13 @@ fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
         vec2<f32>(0.0, 0.0), vec2<f32>(1.0, 0.0), vec2<f32>(0.0, 1.0),
         vec2<f32>(0.0, 1.0), vec2<f32>(1.0, 0.0), vec2<f32>(1.0, 1.0),
     );
-    // Waves and a shadow reach past the picture, so the quad grows to hold them.
+    // Waves, a shadow and a glow reach past the picture, so the quad grows to hold them.
     let shadow = placement.style_shadow;
     let reach = abs(placement.style_wave.x) + select(
         0.0,
         max(abs(shadow.x), abs(shadow.y)) + shadow.z,
         shadow.w > 0.0,
-    );
+    ) + select(0.0, placement.edges_glow.x, placement.edges_glow.y > 0.0);
     let margin = vec2<f32>(reach) / picture_size();
     var low = placement.crop.xy - margin;
     var high = vec2<f32>(1.0) - placement.crop.zw + margin;
@@ -390,16 +419,21 @@ fn layer_color(in: VertexOutput) -> vec4<f32> {
     let wiped = wipe_cover(in.canvas);
     let matte = key_alpha(color.rgb, uv);
     let keyed = key_shown(matte);
-    let sharp = unsharp(sharpen(median_filtered(despill(color.rgb, matte), uv), uv), uv);
-    var rgb = noise_hls(adjusted(restyle(stylize(secondary(creative_grade(correct(change_to_color(mix_channels(leave_color(sharp)))))), pinned), uv)), pinned);
-    rgb = page_side(key_view(rgb, matte), page);
+    let sharp = unsharp(sharpen(median_filtered(convolved(despill(color.rgb, matte), uv), uv), uv), uv);
+    var rgb = noise_hls(adjusted(restyle(stylize(secondary(creative_grade(correct(change_to_color(mix_channels(leave_color(toned(sharp, uv))))))), pinned), uv)), pinned);
+    let rough = roughened(pinned);
+    rgb = roughen_colored(edge_lit(rgb, pinned, uv), rough.y);
+    rgb = page_side(key_view(limited(rgb), matte), page);
     rgb = mix(rgb, vec3<f32>(1.0), placement.balance.w);
-    let viewed = alpha_view(rgb, adjusted_alpha(color.a) * keyed * luma_matte(color.rgb) * f32(in_crop(pinned)));
+    let viewed = alpha_view(rgb, adjusted_alpha(color.a) * keyed * luma_matte(color.rgb) * f32(in_crop(pinned)) * rough.x);
     rgb = viewed.rgb;
     let picture = viewed.a;
     let shadow = shadow_alpha(pinned);
-    let covered = picture + shadow * (1.0 - picture);
-    rgb = mix(placement.style_shadow_color.rgb, rgb, picture / max(covered, 1e-6));
+    let glow = alpha_glow(pinned);
+    let backing = glow.a + shadow * (1.0 - glow.a);
+    let backing_rgb = mix(placement.style_shadow_color.rgb, glow.rgb, glow.a / max(backing, 1e-6));
+    let covered = picture + backing * (1.0 - picture);
+    rgb = mix(backing_rgb, rgb, picture / max(covered, 1e-6));
     let opacity = placement.axis_y_opacity.z * mask_coverage(page.uv) * clip_wipes_shown(page.uv)
         * edge_feathered(pinned);
     let shown = covered * wiped.picture;

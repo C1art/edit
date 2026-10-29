@@ -295,10 +295,10 @@ impl Rows {
             | VideoEffect::LumaKey { .. }
             | VideoEffect::AlphaAdjust { .. }
             | VideoEffect::GarbageMatte(_) => self.keying(ui, effect, video_tracks),
-            VideoEffect::Checkerboard { .. }
-            | VideoEffect::Grid { .. }
-            | VideoEffect::Circle { .. }
-            | VideoEffect::FourColorGradient { .. } => self.generate(ui, effect),
+            VideoEffect::Checkerboard(_)
+            | VideoEffect::Grid(_)
+            | VideoEffect::Circle(_)
+            | VideoEffect::FourColorGradient(_) => self.generate(ui, effect),
             VideoEffect::LensFlare { .. } | VideoEffect::Magnify { .. } => self.optics(ui, effect),
             VideoEffect::LinearWipe { .. }
             | VideoEffect::RadialWipe { .. }
@@ -309,6 +309,17 @@ impl Rows {
             | VideoEffect::DustAndScratches(_)
             | VideoEffect::EdgeFeather(_)
             | VideoEffect::NoiseHls(_) => self.detail(ui, effect),
+            VideoEffect::RoughenEdges(_)
+            | VideoEffect::BevelEdges(_)
+            | VideoEffect::BevelAlpha(_)
+            | VideoEffect::AlphaGlow(_)
+            | VideoEffect::ColorEmboss { .. } => self.edges(ui, effect),
+            VideoEffect::ConvolutionKernel(_)
+            | VideoEffect::Extract(_)
+            | VideoEffect::ShadowHighlight(_)
+            | VideoEffect::VideoLimiter(_)
+            | VideoEffect::AscCdl(_)
+            | VideoEffect::ColorReplace(_) => self.tone(ui, effect),
             VideoEffect::ChannelBlur(_) | VideoEffect::CameraBlur { .. } | VideoEffect::Echo(_) => {
                 self.blur_echo(ui, effect)
             }

@@ -9,12 +9,12 @@ impl Rows {
     /// The controls of the Generate category's drawn effects; other effects have none here.
     pub(super) fn generate(&mut self, ui: &mut egui::Ui, effect: &mut VideoEffect) {
         match effect {
-            VideoEffect::Checkerboard {
+            VideoEffect::Checkerboard(timeline::Checkerboard {
                 anchor: [x, y],
                 size: [width, height],
                 color,
                 opacity,
-            } => {
+            }) => {
                 self.param(ui, "Anchor X", x, POINT, "%");
                 self.param(ui, "Anchor Y", y, POINT, "%");
                 self.param(ui, "Width", width, 1.0..=2000.0, "px");
@@ -22,14 +22,14 @@ impl Rows {
                 self.color(ui, "Color", color);
                 self.param(ui, "Opacity", opacity, 0.0..=100.0, "%");
             }
-            VideoEffect::Grid {
+            VideoEffect::Grid(timeline::Grid {
                 anchor: [x, y],
                 size: [width, height],
                 border,
                 color,
                 opacity,
                 invert,
-            } => {
+            }) => {
                 self.param(ui, "Anchor X", x, POINT, "%");
                 self.param(ui, "Anchor Y", y, POINT, "%");
                 self.param(ui, "Width", width, 1.0..=2000.0, "px");
@@ -39,14 +39,14 @@ impl Rows {
                 self.color(ui, "Color", color);
                 self.param(ui, "Opacity", opacity, 0.0..=100.0, "%");
             }
-            VideoEffect::Circle {
+            VideoEffect::Circle(timeline::Circle {
                 center: [x, y],
                 radius,
                 feather,
                 color,
                 opacity,
                 invert,
-            } => {
+            }) => {
                 self.param(ui, "Center X", x, POINT, "%");
                 self.param(ui, "Center Y", y, POINT, "%");
                 self.param(ui, "Radius", radius, PIXELS, "px");
@@ -55,12 +55,12 @@ impl Rows {
                 self.color(ui, "Color", color);
                 self.param(ui, "Opacity", opacity, 0.0..=100.0, "%");
             }
-            VideoEffect::FourColorGradient {
+            VideoEffect::FourColorGradient(timeline::FourColorGradient {
                 points,
                 colors,
                 blend,
                 opacity,
-            } => {
+            }) => {
                 for (number, ([x, y], color)) in (1..).zip(points.iter_mut().zip(colors)) {
                     self.param(ui, &format!("Point {number} X"), x, POINT, "%");
                     self.param(ui, &format!("Point {number} Y"), y, POINT, "%");

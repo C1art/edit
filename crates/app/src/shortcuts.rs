@@ -94,6 +94,7 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
             editor.view.selection.clear();
             editor.view.edit_point = None;
         }
+        Command::Find => editor.open_find(),
         Command::KeyboardShortcuts => {
             editor.keymap_window = Some(KeymapWindow::default());
         }
