@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use media::{DecodedFrame, MediaError, MediaReader, Streams, VideoFrame};
+use media::{DecodedFrame, MediaError, MediaReader, Progress, Streams, VideoFrame};
 use timeline::{Generator, MediaItem, SourceId, Ticks, TimeInterpolation, Timebase};
 
 use crate::clip_frame::ClipFrame;
@@ -54,6 +54,17 @@ pub(crate) struct TrackVideo {
     history: usize,
     /// Whether pictures the GPU can turn into RGB are left in their planes.
     planar: bool,
+    /// The time the reader last sought for; decoding on toward it doesn't seek again.
+    sought: Option<Ticks>,
+    /// Why opening failed while prerolling, for the next request to report.
+    unreported: Option<MediaError>,
+}
+
+/// What the source followed has to show, once it's opened.
+enum Ready {
+    Reader,
+    Offline,
+    Nothing,
 }
 
 impl TrackVideo {
@@ -70,6 +81,8 @@ impl TrackVideo {
             flow: None,
             history: 0,
             planar: false,
+            sought: None,
+            unreported: None,
         }
     }
 
@@ -91,6 +104,7 @@ impl TrackVideo {
         self.next = None;
         self.behind.clear();
         self.flow = None;
+        self.sought = None;
     }
 
     /// The picture showing at `time` in `media`. A file that can't be opened is
@@ -106,9 +120,62 @@ impl TrackVideo {
             let frame = self.generated(media, generator, time, canvas);
             return Ok(Some(ClipFrame::Rgba(frame)));
         }
-        if media.offline {
-            return Ok(Some(ClipFrame::Rgba(offline_frame(canvas[0], canvas[1]))));
+        let offline = || Ok(Some(ClipFrame::Rgba(offline_frame(canvas[0], canvas[1]))));
+        if let Some(error) = self.unreported.take() {
+            return Err(error);
         }
+        if media.offline {
+            return offline();
+        }
+        match self.ready(media, resolution)? {
+            Ready::Reader => {}
+            Ready::Offline => return offline(),
+            Ready::Nothing => return Ok(None),
+        }
+        // A picture is decoded once and held, as seeking past its only frame finds none.
+        let time = if media.still { Ticks::ZERO } else { time };
+        let current = self.current.as_ref().map(ClipFrame::pts);
+        let backward = current.is_some_and(|current| time < current);
+        if backward {
+            if let Some(frame) = frame_before(&self.behind, time) {
+                return Ok(Some(frame));
+            }
+        } else if self.history == 0 {
+            self.behind.clear();
+        }
+        let history = self.history.min(backward_frames(media));
+        let keep = if backward { backward_frames(media) } else { 0 }.max(history);
+        self.decode_to(media, time, keep, usize::MAX)?;
+        Ok(self.current.clone())
+    }
+
+    /// Decodes toward `time` in `media`, reading at most `packets` packets at once, so that
+    /// asking for it later finds it without waiting. Returns whether it's there.
+    pub(crate) fn preroll(
+        &mut self,
+        media: &MediaItem,
+        time: Ticks,
+        resolution: Resolution,
+        packets: usize,
+    ) -> Result<bool, MediaError> {
+        if media.generator.is_some() || media.offline || media.still {
+            return Ok(true);
+        }
+        match self.ready(media, resolution) {
+            Ok(Ready::Reader) => {
+                self.behind.clear();
+                self.decode_to(media, time, 0, packets)
+            }
+            Ok(Ready::Offline | Ready::Nothing) => Ok(true),
+            Err(error) => {
+                self.unreported = Some(error);
+                Ok(true)
+            }
+        }
+    }
+
+    /// Opens `media` unless it's open already, sized for `resolution`.
+    fn ready(&mut self, media: &MediaItem, resolution: Resolution) -> Result<Ready, MediaError> {
         let same_media = match &self.source {
             Source::Open(id, path, _) => *id == media.id && *path == media.path,
             Source::Failed(id, path, at) => {
@@ -130,10 +197,8 @@ impl TrackVideo {
         }
         let reader = match &mut self.source {
             Source::Open(_, _, reader) => reader,
-            Source::Failed(..) => {
-                return Ok(Some(ClipFrame::Rgba(offline_frame(canvas[0], canvas[1]))))
-            }
-            Source::None | Source::Generated(..) => return Ok(None),
+            Source::Failed(..) => return Ok(Ready::Offline),
+            Source::None | Source::Generated(..) => return Ok(Ready::Nothing),
         };
         reader.set_planar(self.planar);
         if !same_media || resolution != self.resolution {
@@ -149,24 +214,32 @@ impl TrackVideo {
             self.behind.clear();
             self.flow = None;
         }
-        // A picture is decoded once and held, as seeking past its only frame finds none.
-        let time = if media.still { Ticks::ZERO } else { time };
+        Ok(Ready::Reader)
+    }
+
+    /// Decodes until the picture showing at `time` is `current`, keeping the last
+    /// `keep` decoded, or until `packets` packets are read. Returns whether it got
+    /// there.
+    fn decode_to(
+        &mut self,
+        media: &MediaItem,
+        time: Ticks,
+        keep: usize,
+        packets: usize,
+    ) -> Result<bool, MediaError> {
+        let Source::Open(_, _, reader) = &mut self.source else {
+            return Ok(true);
+        };
         let decode_ahead = Timebase::new(1, 1).map_or(Ticks::ZERO, |second| {
             Ticks(MAX_DECODE_AHEAD_SECONDS).rescale(second, self.timebase)
         });
-        let current = self.current.as_ref().map(ClipFrame::pts);
-        let backward = current.is_some_and(|current| time < current);
-        if backward {
-            if let Some(frame) = frame_before(&self.behind, time) {
-                return Ok(Some(frame));
-            }
-        } else if self.history == 0 {
-            self.behind.clear();
-        }
-        let continuous =
-            current.is_some_and(|current| current <= time && time <= current + decode_ahead);
-        let history = self.history.min(backward_frames(media));
-        let keep = if backward { backward_frames(media) } else { 0 }.max(history);
+        let near = |from: Ticks| from <= time && time <= from + decode_ahead;
+        // A seek still on its way to its target counts as being there.
+        let sought = self.sought.is_some_and(near);
+        let continuous = match &self.current {
+            Some(current) => current.pts() <= time && (near(current.pts()) || sought),
+            None => sought,
+        };
         if !continuous {
             // Going backwards, start early enough that the frames before `time` are
             // decoded on the way and kept for the requests that follow.
@@ -174,22 +247,25 @@ impl TrackVideo {
                 video.frame_rate.frame_start(keep as i64, self.timebase)
             });
             reader.seek((time - back).max(Ticks::ZERO))?;
+            self.sought = Some(time);
             self.current = None;
             self.next = None;
             self.ended = false;
             self.behind.clear();
         }
+        let mut packets = packets;
         loop {
             if self.next.is_none() && !self.ended {
-                match reader.next_frame()? {
-                    Some(DecodedFrame::Video(frame)) => {
+                match reader.next_frame_within(&mut packets)? {
+                    Progress::Frame(DecodedFrame::Video(frame)) => {
                         self.next = Some(ClipFrame::Rgba(Arc::new(frame)));
                     }
-                    Some(DecodedFrame::Planar(frame)) => {
+                    Progress::Frame(DecodedFrame::Planar(frame)) => {
                         self.next = Some(ClipFrame::Planar(Arc::new(frame)));
                     }
-                    Some(DecodedFrame::Audio(_)) => continue,
-                    None => self.ended = true,
+                    Progress::Frame(DecodedFrame::Audio(_)) => continue,
+                    Progress::Ended => self.ended = true,
+                    Progress::Unfinished => return Ok(false),
                 }
             }
             let due = self
@@ -197,7 +273,7 @@ impl TrackVideo {
                 .as_ref()
                 .is_some_and(|next| next.pts() <= time || self.current.is_none());
             if !due {
-                break;
+                return Ok(true);
             }
             self.current = self.next.take();
             if let Some(current) = self.current.as_ref().filter(|_| keep > 0) {
@@ -207,7 +283,6 @@ impl TrackVideo {
                 self.behind.push_back(current.clone());
             }
         }
-        Ok(self.current.clone())
     }
 
     /// Like `frame_at`, but faded toward the following frame by how far `time` lies
@@ -305,4 +380,51 @@ fn backward_frames(media: &MediaItem) -> usize {
         (video.width as usize * video.height as usize * 4).max(1)
     });
     (BACKWARD_BYTES / bytes).clamp(2, MAX_BACKWARD_FRAMES)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fixture() -> MediaItem {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/testsrc_2s_25fps_44k.mp4");
+        MediaItem {
+            id: SourceId(1),
+            name: "testsrc".into(),
+            path,
+            duration: Ticks(180_000),
+            video: None,
+            has_audio: true,
+            proxy: None,
+            bin: None,
+            generator: None,
+            nest: None,
+            subclip: None,
+            interpreted_rate: None,
+            interpreted_aspect: None,
+            interpreted_color: None,
+            interpreted_fields: None,
+            alpha: Default::default(),
+            log: Default::default(),
+            offline: false,
+            still: false,
+            channel_map: None,
+        }
+    }
+
+    #[test]
+    fn preroll_decodes_toward_a_time_bit_by_bit_and_leaves_it_ready() {
+        let timebase = Timebase::new(1, 90_000).unwrap();
+        let mut video = TrackVideo::new(timebase);
+        let (media, time) = (fixture(), Ticks(162_000));
+        // The fixture's keyframes are a second apart, so 1.8 s takes some decoding
+        // from the one at 1 s, which seeking again at every step would never finish.
+        let steps = (1..=1000)
+            .find(|_| video.preroll(&media, time, Resolution::Full, 1).unwrap())
+            .unwrap();
+        assert!(steps > 10, "{steps}");
+        let frame = video.frame_at(&media, time, [320, 240], Resolution::Full);
+        assert_eq!(frame.unwrap().unwrap().pts(), time);
+    }
 }

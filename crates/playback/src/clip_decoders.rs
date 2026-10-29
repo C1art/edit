@@ -18,8 +18,18 @@ impl<T> ClipDecoders<T> {
 
     /// The decoder following `clip`, or else one that no clip in `keep` is using.
     pub(crate) fn for_clip(&mut self, clip: ClipId, keep: &[ClipId]) -> &mut T {
-        let index = self
-            .decoders
+        let index = self.free(clip, keep).unwrap_or(0);
+        self.claim(index, clip)
+    }
+
+    /// Like `for_clip`, but `None` when every decoder follows a clip in `keep`.
+    pub(crate) fn spare(&mut self, clip: ClipId, keep: &[ClipId]) -> Option<&mut T> {
+        let index = self.free(clip, keep)?;
+        Some(self.claim(index, clip))
+    }
+
+    fn free(&self, clip: ClipId, keep: &[ClipId]) -> Option<usize> {
+        self.decoders
             .iter()
             .position(|(owner, _)| *owner == Some(clip))
             .or_else(|| {
@@ -27,7 +37,9 @@ impl<T> ClipDecoders<T> {
                     .iter()
                     .position(|(owner, _)| owner.is_none_or(|owner| !keep.contains(&owner)))
             })
-            .unwrap_or(0);
+    }
+
+    fn claim(&mut self, index: usize, clip: ClipId) -> &mut T {
         let (owner, decoder) = &mut self.decoders[index];
         *owner = Some(clip);
         decoder

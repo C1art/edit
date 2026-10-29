@@ -6,6 +6,7 @@ use timeline::{Sequence, SourceId, Ticks};
 
 use crate::command::{coalesce, Coalesced, Command, Event};
 use crate::frame_picker::TaggedFrame;
+use crate::preroll::preroll;
 use crate::previews::PreviewPictures;
 use crate::{compose, ComposedFrame, Layer, Resolution};
 
@@ -33,6 +34,7 @@ pub(crate) fn spawn(
             pending: None,
             finished: true,
             composed: false,
+            prerolling: false,
             warned: Vec::new(),
             resolution: Resolution::Full,
             previews: None,
@@ -52,6 +54,8 @@ struct VideoWorker {
     finished: bool,
     /// Whether a frame went out since the last seek.
     composed: bool,
+    /// Whether decoding ahead for clips about to start may have more to do.
+    prerolling: bool,
     /// Media already reported as unreadable.
     warned: Vec<SourceId>,
     resolution: Resolution,
@@ -68,7 +72,17 @@ impl VideoWorker {
                 let mut select = Select::new();
                 let room = select.send(&self.channels.frames);
                 select.recv(&self.channels.commands);
-                let ready = select.select();
+                // The wait for room is spent readying the clips coming up.
+                let ready = match select.try_select() {
+                    Ok(ready) => ready,
+                    Err(_) if self.prerolling => {
+                        let (sequence, pts) = (&self.sequence, frame.pts);
+                        self.prerolling = preroll(sequence, pts, &mut self.tracks, self.resolution);
+                        self.pending = Some(frame);
+                        continue;
+                    }
+                    Err(_) => select.select(),
+                };
                 if ready.index() == room {
                     let tagged = TaggedFrame {
                         generation: self.generation,
@@ -192,6 +206,7 @@ impl VideoWorker {
             layers,
         });
         self.composed = true;
+        self.prerolling = true;
     }
 
     /// The preview's picture where one covers `pts`. A preview that can't be read is

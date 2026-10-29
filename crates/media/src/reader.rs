@@ -80,6 +80,13 @@ impl<C: Default> StreamDecoder<C> {
     }
 }
 
+pub enum Progress {
+    Frame(DecodedFrame),
+    Ended,
+    /// The packets allowed ran out before a frame came out.
+    Unfinished,
+}
+
 /// Demuxes and decodes the best video and audio stream of a file. All calls block on file
 /// I/O and decoding, so the reader belongs on a worker thread.
 pub struct MediaReader {
@@ -230,18 +237,36 @@ impl MediaReader {
 
     /// Returns frames in decode order, interleaving video and audio; `None` at end of media.
     pub fn next_frame(&mut self) -> Result<Option<DecodedFrame>, MediaError> {
+        let mut packets = usize::MAX;
+        loop {
+            match self.next_frame_within(&mut packets)? {
+                Progress::Frame(frame) => return Ok(Some(frame)),
+                Progress::Ended => return Ok(None),
+                Progress::Unfinished => {}
+            }
+        }
+    }
+
+    /// Like [`Self::next_frame`], but reads no more than `packets` packets, taking off
+    /// those it reads. After a seek, the frames up to the target are decoded and dropped
+    /// before one comes out, so this bounds that work too.
+    pub fn next_frame_within(&mut self, packets: &mut usize) -> Result<Progress, MediaError> {
         loop {
             if let Some(trimmed) = self.trim.pop() {
-                return self.finish(trimmed).map(Some);
+                return self.finish(trimmed).map(Progress::Frame);
             }
             match self.state {
-                ReadState::Finished => return Ok(None),
+                ReadState::Finished => return Ok(Progress::Ended),
                 ReadState::Draining => {
                     self.decode(None)?;
                     self.trim.finish();
                     self.state = ReadState::Finished;
                 }
                 ReadState::Reading => {
+                    if *packets == 0 {
+                        return Ok(Progress::Unfinished);
+                    }
+                    *packets -= 1;
                     if self.input.read_packet(&mut self.packet)? {
                         let index = self.packet.stream_index();
                         self.decode(index)?;

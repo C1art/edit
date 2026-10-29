@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use render::{Grade, LayerLook};
 use timeline::{
-    track_layers_at, ClipId, Generator, MediaItem, PlannedLayer, Reveal, Sequence, SourceId, Ticks,
-    TimeInterpolation, Track, TrackRef, VideoEffect,
+    track_layers_at, Clip, ClipId, Generator, MediaItem, PlannedLayer, Reveal, Sequence, SourceId,
+    Ticks, TimeInterpolation, Track, TrackRef, VideoEffect,
 };
 
 use crate::clip_decoders::ClipDecoders;
@@ -190,9 +190,7 @@ fn clip_picture(
             let resolution = decoding.resolution;
             let echo = echo_of(effects);
             decoder.keep_history(0);
-            let planar = echo.is_none()
-                && plan.clip.interpolation == TimeInterpolation::FrameSampling
-                && !effects.iter().any(draws_on_pixels);
+            let planar = decodes_planes(plan.clip);
             decoder.keep_planes(planar);
             let frame = match (echo, plan.clip.interpolation) {
                 (Some(echo), _) => {
@@ -236,6 +234,14 @@ fn clip_picture(
             }
         }
     }
+}
+
+/// Whether the pictures of `clip` can be left in their planes for the GPU.
+pub(crate) fn decodes_planes(clip: &Clip) -> bool {
+    let effects = &clip.look.effects;
+    echo_of(effects).is_none()
+        && clip.interpolation == TimeInterpolation::FrameSampling
+        && !effects.iter().any(draws_on_pixels)
 }
 
 /// Whether `effect` is drawn into the decoded picture on the CPU, needing its RGBA.

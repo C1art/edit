@@ -41,6 +41,7 @@ mod optics_effects;
 mod paint_bucket;
 mod pixel_effects;
 mod player;
+mod preroll;
 mod previews;
 mod remix;
 mod resolution;

@@ -42,7 +42,7 @@ pub use motion::{track_motion, Motion};
 pub use peaks::{read_peaks, Peaks};
 pub use probe::{probe, MediaInfo, StreamInfo, StreamKind};
 pub use proxy::{create_proxy, proxy_size};
-pub use reader::{MediaReader, SourceInfo, Streams, VideoInfo};
+pub use reader::{MediaReader, Progress, SourceInfo, Streams, VideoInfo};
 pub use region_track::{track_region, RegionTrack, TrackDirection, TrackedFrame};
 pub use scenes::detect_scenes;
 pub use sequence::{
