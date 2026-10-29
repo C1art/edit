@@ -260,29 +260,33 @@ impl Pool<'_> {
             ui.painter()
                 .rect_stroke(rect, 2.0, stroke, StrokeKind::Inside);
         }
-        // In project order, whatever order they were picked in.
-        let cameras: Vec<SourceId> = self
-            .sequence
-            .media
-            .iter()
-            .filter(|item| selected.contains(&item.id) && item.is_file() && item.video.is_some())
-            .map(|item| item.id)
-            .collect();
-        let merge = merge_sources(self.sequence, selected, item.id);
-        let to_take_offline: Vec<SourceId> = if selected.contains(&item.id) {
-            self.sequence
-                .media
-                .iter()
-                .filter(|item| selected.contains(&item.id) && item.is_file() && !item.offline)
-                .map(|item| item.id)
-                .collect()
-        } else {
-            vec![item.id]
-        };
         if response.double_clicked() && item.nest.is_some() {
             self.action = Some(PoolAction::OpenNest(item.id));
         }
         response.context_menu(|ui| {
+            // In project order, whatever order they were picked in.
+            let cameras: Vec<SourceId> = self
+                .sequence
+                .media
+                .iter()
+                .filter(|item| {
+                    self.view.selected.contains(&item.id) && item.is_file() && item.video.is_some()
+                })
+                .map(|item| item.id)
+                .collect();
+            let merge = merge_sources(self.sequence, &self.view.selected, item.id);
+            let to_take_offline: Vec<SourceId> = if self.view.selected.contains(&item.id) {
+                self.sequence
+                    .media
+                    .iter()
+                    .filter(|item| {
+                        self.view.selected.contains(&item.id) && item.is_file() && !item.offline
+                    })
+                    .map(|item| item.id)
+                    .collect()
+            } else {
+                vec![item.id]
+            };
             if ui.button("Open in Source Monitor").clicked() {
                 self.action = Some(PoolAction::Open(item.id));
             }

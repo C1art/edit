@@ -117,6 +117,15 @@ impl ClipArt {
     }
 
     fn evict(&mut self) {
+        let shown = self
+            .pictures
+            .values()
+            .flat_map(BTreeMap::values)
+            .filter(|picture| matches!(picture, Picture::Ready { .. }))
+            .count();
+        if shown <= MAX_PICTURES {
+            return;
+        }
         let mut ready: Vec<(u64, PathBuf, Ticks)> = self
             .pictures
             .iter()
@@ -129,9 +138,6 @@ impl ClipArt {
                     })
             })
             .collect();
-        if ready.len() <= MAX_PICTURES {
-            return;
-        }
         ready.sort_unstable_by_key(|(used, _, _)| *used);
         let excess = ready.len() - MAX_PICTURES * 3 / 4;
         for (_, path, at) in ready.into_iter().take(excess) {
@@ -160,6 +166,10 @@ impl ClipArt {
     }
 
     fn peak_state(&mut self, path: &Path) -> &PeakState {
+        // Looked up before `entry`, which would copy the path on every call.
+        if self.peaks.contains_key(path) {
+            return &self.peaks[path];
+        }
         self.peaks
             .entry(path.to_owned())
             .or_insert_with(|| match &self.waveforms {

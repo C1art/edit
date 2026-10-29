@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use std::cmp::Reverse;
 
 use egui::{Align2, Color32, FontId, Rect, Sense, Stroke};
 use timeline::{MediaItem, Ticks, Timebase};
@@ -47,19 +47,18 @@ impl PoolSort {
         items: impl Iterator<Item = &'a MediaItem>,
     ) -> Vec<&'a MediaItem> {
         let mut items: Vec<_> = items.collect();
-        let order: fn(&&MediaItem, &&MediaItem) -> Ordering = match self {
-            Self::Project => return items,
-            Self::Name => |_, _| Ordering::Equal,
-            Self::Duration => |a, b| b.duration.cmp(&a.duration),
-            Self::Kind => |a, b| kind_rank(a).cmp(&kind_rank(b)),
+        if self == Self::Project {
+            return items;
+        }
+        let first = |item: &MediaItem| match self {
+            Self::Project | Self::Name => (Reverse(Ticks::ZERO), 0),
+            Self::Duration => (Reverse(item.duration), 0),
+            Self::Kind => (Reverse(Ticks::ZERO), kind_rank(item)),
         };
-        items.sort_by(|a, b| order(a, b).then_with(|| by_name(a, b)));
+        // Names are lowered once each, not once per comparison.
+        items.sort_by_cached_key(|item| (first(item), item.name.to_lowercase()));
         items
     }
-}
-
-fn by_name(a: &&MediaItem, b: &&MediaItem) -> Ordering {
-    a.name.to_lowercase().cmp(&b.name.to_lowercase())
 }
 
 fn kind_rank(item: &MediaItem) -> u8 {

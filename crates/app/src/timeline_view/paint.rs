@@ -376,9 +376,9 @@ fn speed_marks(painter: &Painter, rect: Rect, scale: &TimeScale, clip: &Clip) {
 
 /// Shades where a clip's transitions play: across a shared cut or inside the clip.
 fn transition_marks(painter: &Painter, row: &Row, scale: &TimeScale, track: &Track, clip: &Clip) {
-    let previous = track.clips.iter().find(|other| other.end() == clip.start);
     let mut spans = Vec::new();
     if let Some(transition) = clip.transition_in {
+        let previous = track.clips.iter().find(|other| other.end() == clip.start);
         let span = match previous {
             Some(previous) => {
                 let (before, after) = cut_window(previous, clip, transition);

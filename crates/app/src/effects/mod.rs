@@ -101,11 +101,11 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
             .map(|&(track, clip)| (track, clip.clone()))
     };
     let (picture, sound) = (first(TrackKind::Video), first(TrackKind::Audio));
-    let Some((track, clip)) = picture.clone().or_else(|| sound.clone()) else {
+    let Some(&(track, ref clip)) = picture.as_ref().or(sound.as_ref()) else {
         ui.label("Select a clip to adjust its motion, opacity, crop, effects and transitions.");
         return;
     };
-    let name = clip_name(sequence, &clip).to_owned();
+    let name = clip_name(sequence, clip).to_owned();
     ui.horizontal(|ui| {
         ui.label(RichText::new(name).strong());
         let save = ui
@@ -124,7 +124,7 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
             volume_controls(editor, ui, clip);
             audio_effect_controls(editor, ui, clip);
         }
-        transitions::controls(editor, ui, track, &clip);
+        transitions::controls(editor, ui, track, clip);
     });
     editor.effects.keys.end_frame(ui, clip.id);
 }
