@@ -32,10 +32,33 @@ pub fn ui(ui: &mut egui::Ui, player: &mut Player, marks: Option<Marks>) {
                 .size(14.0)
                 .color(theme::ACCENT),
         );
-        // The buttons sit in the middle, when there is room left of them.
-        let buttons = 4.0 * BUTTON.x + 3.0 * ui.spacing().item_spacing.x;
-        let gap = row.center().x - buttons / 2.0 - ui.cursor().left();
-        ui.add_space(gap.max(0.0));
+        let duration = Timecode::new(player.duration(), timebase, rate);
+        let mut times = vec![(
+            RichText::new(duration.to_string())
+                .monospace()
+                .color(theme::WEAK_TEXT),
+            "Duration",
+        )];
+        if let Marks {
+            mark_in: Some(mark_in),
+            mark_out: Some(mark_out),
+        } = marks
+        {
+            let marked = Timecode::new(mark_out - mark_in, timebase, rate);
+            let text = RichText::new(format!("In-Out {marked}")).monospace().weak();
+            times.push((text, "Duration of the marked range"));
+        }
+        let spacing = ui.spacing().item_spacing.x;
+        let times_width: f32 = times
+            .iter()
+            .map(|(text, _)| text_width(ui, text) + spacing)
+            .sum();
+        // The buttons sit in the middle, unless that would put them over the times.
+        let buttons = 4.0 * BUTTON.x + 3.0 * spacing;
+        let start = (row.center().x - buttons / 2.0)
+            .min(row.right() - times_width - buttons)
+            .max(ui.cursor().left());
+        ui.add_space(start - ui.cursor().left());
         if icons::button(ui, Icon::StepBack, BUTTON)
             .on_hover_text("Previous frame (←)")
             .clicked()
@@ -66,19 +89,27 @@ pub fn ui(ui: &mut egui::Ui, player: &mut Player, marks: Option<Marks>) {
             handle_key(player, TransportKey::ToggleLoop, marks);
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let duration = Timecode::new(player.duration(), timebase, rate).to_string();
-            ui.label(RichText::new(duration).monospace().color(theme::WEAK_TEXT));
-            if let Marks {
-                mark_in: Some(mark_in),
-                mark_out: Some(mark_out),
-            } = marks
-            {
-                let marked = Timecode::new(mark_out - mark_in, timebase, rate);
-                ui.label(RichText::new(format!("In-Out {marked}")).monospace().weak())
-                    .on_hover_text("Duration of the marked range");
+            // A narrow monitor drops the In-Out duration first, then the whole one.
+            for (text, hover) in times {
+                if text_width(ui, &text) > ui.available_width() {
+                    break;
+                }
+                ui.label(text).on_hover_text(hover);
             }
         });
     });
+}
+
+fn text_width(ui: &egui::Ui, text: &RichText) -> f32 {
+    egui::WidgetText::from(text.clone())
+        .into_galley(
+            ui,
+            Some(egui::TextWrapMode::Extend),
+            f32::INFINITY,
+            egui::TextStyle::Body,
+        )
+        .size()
+        .x
 }
 
 /// Where an out mark set now falls: after the frame on screen, which it includes, as in
