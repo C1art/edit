@@ -43,6 +43,8 @@ pub enum WipePattern {
     Scatter,
     /// Blotches that spread until they meet.
     Splatter,
+    /// Through a soft cloudy gradient, darkest first, drifting from the entry side.
+    Gradient,
 }
 
 /// Whether a wipe uncovers the incoming picture as its pattern grows, or as it shrinks:
@@ -94,6 +96,8 @@ pub struct Wipe {
     pub progress: f32,
     pub sweep: Sweep,
     pub border: Border,
+    /// How much of the pattern's order the edge blurs across, from 0 to 1.
+    pub softness: f32,
 }
 
 impl Wipe {

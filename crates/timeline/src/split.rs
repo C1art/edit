@@ -88,6 +88,7 @@ impl Reveal {
             progress,
             sweep: Sweep::Forward,
             border: Border::NONE,
+            softness: 0.0,
         };
         // Only cuts inside the picture need hiding; its own edges stay as they are.
         let cuts = [

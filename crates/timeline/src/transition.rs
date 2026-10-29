@@ -65,6 +65,8 @@ pub enum TransitionKind {
     /// Bridges a jump cut by warping each picture toward the other along the motion
     /// between them as it dissolves, so a talking head seems to move rather than jump.
     MorphCut,
+    /// The incoming picture shows through a gradient, its darkest parts first.
+    GradientWipe,
     /// Audio only: a linear crossfade, which dips in loudness through the middle.
     ConstantGain,
     /// Audio only: a crossfade linear in decibels, quick to fade out and slow to fade in.
@@ -72,7 +74,7 @@ pub enum TransitionKind {
 }
 
 impl TransitionKind {
-    pub const VIDEO: [Self; 37] = [
+    pub const VIDEO: [Self; 38] = [
         Self::CrossDissolve,
         Self::AdditiveDissolve,
         Self::NonAdditiveDissolve,
@@ -102,6 +104,7 @@ impl TransitionKind {
         Self::SpiralBoxes,
         Self::ZigZagBlocks,
         Self::PaintSplatter,
+        Self::GradientWipe,
         Self::Slide,
         Self::Push,
         Self::Split,
@@ -159,6 +162,7 @@ impl TransitionKind {
             Self::PageTurn => "Page Turn",
             Self::PagePeel => "Page Peel",
             Self::MorphCut => "Morph Cut",
+            Self::GradientWipe => "Gradient Wipe",
         }
     }
 
@@ -208,6 +212,7 @@ impl TransitionKind {
             Self::ZigZagBlocks => WipePattern::ZigZag,
             Self::RandomWipe => WipePattern::Scatter,
             Self::PaintSplatter => WipePattern::Splatter,
+            Self::GradientWipe => WipePattern::Gradient,
             Self::Inset => WipePattern::Inset,
             Self::RandomBlocks => WipePattern::Blocks,
             Self::BandWipe => WipePattern::Bands,
@@ -234,6 +239,7 @@ impl TransitionKind {
                 | Self::RandomWipe
                 | Self::Inset
                 | Self::BandWipe
+                | Self::GradientWipe
                 | Self::FlipOver
                 | Self::CubeSpin
                 | Self::PageTurn
@@ -353,6 +359,10 @@ pub struct Transition {
     /// For wipes only.
     #[serde(default, skip_serializing_if = "Border::is_none")]
     pub border: Border,
+    /// For wipes only: percent of the wipe its edge blurs across, the kind's usual
+    /// softness when unset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub softness: Option<u8>,
 }
 
 impl Transition {
@@ -364,11 +374,21 @@ impl Transition {
             from: None,
             sweep: Sweep::Forward,
             border: Border::NONE,
+            softness: None,
         }
     }
 
     pub fn side(self) -> Side {
         self.from.unwrap_or(self.kind.default_side())
+    }
+
+    /// As a share of the wipe, from 0 to 1.
+    pub fn softness(self) -> f32 {
+        let usual = match self.kind {
+            TransitionKind::GradientWipe => 10,
+            _ => 0,
+        };
+        f32::from(self.softness.unwrap_or(usual).min(100)) / 100.0
     }
 }
 

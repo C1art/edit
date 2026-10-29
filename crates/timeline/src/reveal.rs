@@ -109,6 +109,7 @@ impl Transition {
                 progress,
                 sweep: self.sweep,
                 border: self.border,
+                softness: self.softness(),
             };
             return (
                 Reveal::FULL,
@@ -236,6 +237,7 @@ fn uncovered(pattern: WipePattern, from: Side, progress: f32) -> Reveal {
         progress,
         sweep: crate::Sweep::Forward,
         border: crate::Border::NONE,
+        softness: 0.0,
     };
     Reveal {
         wipes: [Some(wipe), None],
