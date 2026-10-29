@@ -6,6 +6,7 @@ use timeline::{
 };
 
 use super::look::{icon_button, Icon, Rows, ANIMATED};
+use crate::icons::{self, Look};
 use crate::mask_tracking::TrackSpan;
 
 /// The masks under Opacity: each shape's geometry and edge, and buttons to add more.
@@ -50,14 +51,25 @@ pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, masks: &mut Vec<Mask>
         masks.remove(index);
         rows.commit();
     }
-    ui.horizontal_wrapped(|ui| {
-        for shape in MaskShape::ALL {
-            let add = egui::Button::new(format!("Add {} Mask", shape.name())).small();
-            if ui.add_enabled(masks.len() < MAX_MASKS, add).clicked() {
-                masks.push(Mask::new(shape));
-                rows.commit();
+    ui.horizontal(|ui| {
+        ui.label("Add Mask");
+        ui.add_enabled_ui(masks.len() < MAX_MASKS, |ui| {
+            for shape in MaskShape::ALL {
+                let icon = match shape {
+                    MaskShape::Ellipse => icons::Icon::Ellipse,
+                    MaskShape::Rectangle => icons::Icon::Rectangle,
+                    MaskShape::Path => icons::Icon::Pen,
+                };
+                let hover = format!("Add {} Mask", shape.name());
+                if icons::toggle(ui, false, icon, Look::Filled)
+                    .on_hover_text(hover)
+                    .clicked()
+                {
+                    masks.push(Mask::new(shape));
+                    rows.commit();
+                }
             }
-        }
+        });
     });
 }
 

@@ -24,6 +24,9 @@ pub(crate) enum Icon {
     Up,
     Folder,
     File,
+    Ellipse,
+    Rectangle,
+    Pen,
 }
 
 const BUTTON: egui::Vec2 = vec2(22.0, 20.0);
@@ -230,6 +233,29 @@ pub(crate) fn paint(painter: &Painter, rect: Rect, icon: Icon, color: Color32) {
                 at(0.16, 0.96),
             ];
             painter.add(Shape::convex_polygon(page, color, Stroke::NONE));
+        }
+        Icon::Ellipse => {
+            painter.add(Shape::ellipse_stroke(
+                rect.center(),
+                vec2(0.5, 0.36) * rect.width(),
+                stroke,
+            ));
+        }
+        Icon::Rectangle => {
+            let outline = Rect::from_min_max(at(0.04, 0.18), at(0.96, 0.82));
+            painter.rect_stroke(outline, 1.0, stroke, egui::StrokeKind::Middle);
+        }
+        Icon::Pen => {
+            let nib = vec![
+                at(0.5, 0.0),
+                at(0.86, 0.46),
+                at(0.62, 0.96),
+                at(0.38, 0.96),
+                at(0.14, 0.46),
+            ];
+            painter.add(Shape::convex_polygon(nib, color, Stroke::NONE));
+            let slit = [at(0.5, 0.22), at(0.5, 0.6)];
+            painter.line_segment(slit, Stroke::new(1.3, Color32::BLACK));
         }
     }
 }
