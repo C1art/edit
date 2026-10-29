@@ -300,6 +300,11 @@ impl Rows {
             | VideoEffect::RadialWipe { .. }
             | VideoEffect::VenetianBlinds { .. }
             | VideoEffect::BlockDissolve { .. } => self.clip_wipes(ui, effect),
+            VideoEffect::UnsharpMask(_)
+            | VideoEffect::Median(_)
+            | VideoEffect::DustAndScratches(_)
+            | VideoEffect::EdgeFeather(_)
+            | VideoEffect::NoiseHls(_) => self.detail(ui, effect),
             VideoEffect::LeaveColor {
                 color,
                 amount,

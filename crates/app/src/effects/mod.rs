@@ -1,6 +1,7 @@
 mod clip_wipes;
 mod color;
 mod curves;
+mod detail;
 mod generate;
 mod generated;
 mod hue_curves;
