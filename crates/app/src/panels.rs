@@ -113,6 +113,12 @@ impl Editor {
     }
 
     pub(crate) fn timeline_panel(&mut self, ui: &mut egui::Ui) {
+        // Working in the timeline points the transport keys at the program, so End after
+        // a click there goes to the sequence's end and not the source clip's.
+        let pressed = ui.input(|input| input.pointer.any_pressed());
+        if pressed && ui.rect_contains_pointer(ui.max_rect()) {
+            self.focus = Focus::Program;
+        }
         crate::menus::timeline_toolbar(self, ui);
         let playhead = self.playhead();
         let playing = self
@@ -153,6 +159,7 @@ impl Editor {
             self.clear_marker(id);
         }
         if let Some(drop) = output.drop {
+            self.focus = Focus::Program;
             crate::placing::drop_media(self, drop);
         }
         if let Some(drop) = output.effect_drop {

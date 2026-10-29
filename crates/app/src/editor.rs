@@ -428,6 +428,9 @@ impl eframe::App for Editor {
         if self.importer.as_ref().is_some_and(Importer::is_busy) {
             ctx.request_repaint();
         }
+        // Panels edit after the sync below, and a key pressed in the next frame, such as
+        // End, must already see that edit.
+        self.sync_program();
         crate::shortcuts::handle(self, &ctx);
         self.update_window();
         self.sync_program();
