@@ -103,7 +103,11 @@ impl Encoder {
                 };
                 options.push((c"profile", profile.to_owned()));
             }
-            (VideoCodec::Gif, _) => {}
+            // Both compare palette indices with the last picture's, but each picture has
+            // its own palette, so an unchanged index can be a changed color.
+            (VideoCodec::Gif, _) => {
+                options.push((c"gifflags", c"-offsetting-transdiff".to_owned()))
+            }
         }
         if settings.codec.is_prores() {
             // Apple's vendor code, which some players check before trusting the stream.

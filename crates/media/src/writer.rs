@@ -341,6 +341,8 @@ mod tests {
             [30, 30, 200],
             [30, 30, 200],
             [240, 240, 60],
+            // Back to the first picture's palette, with the same indices as the last.
+            [200, 30, 30],
         ];
         for [r, g, b] in colors {
             writer.write_video(&[r, g, b, 255].repeat(64 * 36)).unwrap();
