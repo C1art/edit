@@ -30,6 +30,10 @@ pub enum Focus {
 /// The source monitor on the left and the program monitor on the right.
 pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
     let focus = editor.focus;
+    // Columns narrower than the gap between them have no width at all.
+    if ui.available_width() <= 2.0 * ui.spacing().item_spacing.x {
+        return;
+    }
     ui.columns(2, |columns| {
         // Each monitor measures its own controls; the columns alone don't tell them apart.
         theme::focus_card(&mut columns[0], focus == Focus::Source, |ui| {

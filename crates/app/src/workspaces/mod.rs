@@ -17,6 +17,10 @@ pub(crate) use menu::{dialog, window_menu, workspace_bar, NamingWorkspace};
 
 /// The room under the menu bar of the window the built-in layouts were drawn for.
 const REFERENCE: Vec2 = Vec2::new(1600.0, 870.0);
+/// The most of the window's width the media or side panel may take; together they
+/// leave the monitors a fifth of it.
+const MOST_SIDE_SHARE: f32 = 0.4;
+const MOST_TIMELINE_SHARE: f32 = 0.75;
 
 /// Where the panels sit, as shares of the room under the menu bar so that they keep
 /// their proportions on any screen, and which tabs they show.
@@ -266,7 +270,9 @@ impl Editor {
         // monitors on a smaller screen, so the panels are set to their shares again.
         let refit = room != self.workspaces.room;
         self.workspaces.room = room;
-        let sized = |panel: Panel, size: f32| {
+        // However the panels are dragged, the monitors keep a share of the window.
+        let sized = |panel: Panel, share: f32, most: f32, of: f32| {
+            let (size, most) = (share.min(most) * of, most * of);
             let panel = panel
                 .resizable(true)
                 .frame(theme::dock())
@@ -274,22 +280,28 @@ impl Editor {
             if refit {
                 panel.exact_size(size)
             } else {
-                panel.default_size(size)
+                panel.default_size(size).max_size(most)
             }
         };
         let media = sized(
             Panel::left(("media_pool", generation)),
-            layout.media_share * room.x,
+            layout.media_share,
+            MOST_SIDE_SHARE,
+            room.x,
         )
         .show(ui, |ui| theme::card(ui, |ui| self.media_panel(ui)));
         let side = sized(
             Panel::right(("side_panel", generation)),
-            layout.side_share * room.x,
+            layout.side_share,
+            MOST_SIDE_SHARE,
+            room.x,
         )
         .show(ui, |ui| theme::card(ui, |ui| self.side_panel(ui)));
         let timeline = sized(
             Panel::bottom(("timeline", generation)),
-            layout.timeline_share * room.y,
+            layout.timeline_share,
+            MOST_TIMELINE_SHARE,
+            room.y,
         )
         .show(ui, |ui| {
             Panel::right(("audio_meters", generation))
