@@ -5,6 +5,7 @@ use timeline::PlaceMode;
 use crate::editor::Editor;
 use crate::icons::Icon;
 use crate::keymap::{Command, Keymap};
+use crate::monitor_drop;
 use crate::placing;
 use crate::program_zoom::MonitorZoom;
 use crate::project_files::PathPurpose;
@@ -31,10 +32,20 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
     ui.columns(2, |columns| {
         // Each monitor measures its own controls; the columns alone don't tell them apart.
         theme::focus_card(&mut columns[0], focus == Focus::Source, |ui| {
-            ui.push_id("source", |ui| fitted(ui, |ui| source(editor, ui)));
+            ui.push_id("source", |ui| {
+                fitted(ui, |ui| source(editor, ui));
+                monitor_drop::source(editor, ui, ui.min_rect());
+            });
         });
         theme::focus_card(&mut columns[1], focus == Focus::Program, |ui| {
-            ui.push_id("program", |ui| fitted(ui, |ui| program(editor, ui)));
+            ui.push_id("program", |ui| {
+                fitted(ui, |ui| program(editor, ui));
+                let mut picture = ui.min_rect();
+                if let Some(bottom) = ui.data(|data| data.get_temp(picture_bottom_id(ui))) {
+                    picture.max.y = bottom;
+                }
+                monitor_drop::program(editor, ui, picture);
+            });
         });
     });
 }
@@ -100,7 +111,7 @@ fn source(editor: &mut Editor, ui: &mut egui::Ui) {
         ui.painter().text(
             rect.center(),
             egui::Align2::CENTER_CENTER,
-            "Click an item in the project to open it here",
+            "Click or drag an item from the project to open it here",
             egui::FontId::proportional(13.0),
             ui.visuals().weak_text_color(),
         );

@@ -61,6 +61,13 @@ impl Editor {
             }
             PoolAction::Move(entry, to) => {
                 let (media, bins) = match entry {
+                    // Moving one of several selected items takes the others along.
+                    PoolEntry::Media(id) if self.pool.selected.contains(&id) => {
+                        let sequence = self.timeline.project();
+                        let media = self.pool.selected.iter().copied();
+                        let media = media.filter(|&id| sequence.media_item(id).is_some());
+                        (media.collect(), Vec::new())
+                    }
                     PoolEntry::Media(id) => (vec![id], Vec::new()),
                     PoolEntry::Bin(id) => (Vec::new(), vec![id]),
                 };

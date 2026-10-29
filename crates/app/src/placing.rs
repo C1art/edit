@@ -1,6 +1,6 @@
 use timeline::{
     edit_points, AddGenerated, AddTrack, ClipId, FourPoint, Generator, PlaceClip, PlaceClips,
-    PlaceMode, SourceId, TrackKind,
+    PlaceMode, SourceId, Ticks, TrackKind,
 };
 
 use egui::DragAndDrop;
@@ -112,17 +112,55 @@ pub fn drop_media(editor: &mut Editor, drop: MediaDrop) {
     };
     editor.match_format(first.source);
     let (video_track, audio_track) = drop_tracks(editor.timeline.sequence(), &media, track);
-    let pieces = media
-        .iter()
-        .map(|drag| (drag.source, drag.range.0, drag.range.1))
-        .collect();
     editor.apply(PlaceClips {
-        pieces,
+        pieces: pieces(&media),
         at,
         video_track,
         audio_track,
         mode,
     });
+}
+
+/// Edits dragged media in at `at` on the targeted tracks, as a drop on the program
+/// monitor does, then parks the playhead after it.
+pub fn place_carried(editor: &mut Editor, media: &[SourceDrag], at: Ticks, mode: PlaceMode) {
+    let Some(first) = media.first() else {
+        return;
+    };
+    let targets = editor.view.targets;
+    let any_but = |take: Take| media.iter().any(|drag| drag.take != take);
+    let video_track = targets.video.filter(|_| any_but(Take::AudioOnly));
+    let audio_track = targets.audio.filter(|_| any_but(Take::VideoOnly));
+    if video_track.is_none() && audio_track.is_none() {
+        editor.notice("Target a video or audio track first (click a track name)");
+        return;
+    }
+    editor.match_format(first.source);
+    let sequence = editor.timeline.sequence();
+    let length = media
+        .iter()
+        .filter_map(|drag| {
+            let item = sequence.media_item(drag.source)?;
+            Some(item.conform().sequence_span(drag.range.1))
+        })
+        .fold(Ticks::ZERO, |sum, span| sum + span);
+    let placed = editor.apply(PlaceClips {
+        pieces: pieces(media),
+        at,
+        video_track,
+        audio_track,
+        mode,
+    });
+    if placed {
+        editor.seek_program(at + length);
+    }
+}
+
+fn pieces(media: &[SourceDrag]) -> Vec<(SourceId, Ticks, Ticks)> {
+    media
+        .iter()
+        .map(|drag| (drag.source, drag.range.0, drag.range.1))
+        .collect()
 }
 
 /// Adds `generator` to the project and lays it at the playhead on the first free video

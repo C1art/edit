@@ -42,6 +42,7 @@ mod menus;
 mod metadata_panel;
 mod mixer;
 mod monitor;
+mod monitor_drop;
 mod monitors;
 mod motion_analysis;
 mod multicam;
