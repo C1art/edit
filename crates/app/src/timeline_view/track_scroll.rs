@@ -28,7 +28,8 @@ impl TimelineView {
 
     /// Keeps the scroll in range as tracks come and go. Until the tracks are scrolled
     /// it centres the line between video and audio, as other editors do, so a short
-    /// panel shows V1 and A1 rather than only video tracks.
+    /// panel shows V1 and A1 rather than only video tracks. The top is then moved to the
+    /// nearest track edge, so no track shows only half its header.
     pub(super) fn place_tracks(&mut self, sequence: &Sequence, tracks: Rect) {
         if !self.tracks_scrolled {
             let rows = layout::rows(sequence, &self.heights, 0.0);
@@ -36,7 +37,13 @@ impl TimelineView {
                 .iter()
                 .find(|row| row.track == TrackRef::audio(0))
                 .map_or(0.0, |row| row.top - layout::DIVIDER / 2.0);
-            self.scroll_y = divide - tracks.height() / 2.0;
+            let centred = divide - tracks.height() / 2.0;
+            self.scroll_y = rows
+                .iter()
+                .map(|row| row.top)
+                .filter(|top| *top <= divide)
+                .min_by(|a, b| (a - centred).abs().total_cmp(&(b - centred).abs()))
+                .unwrap_or(centred);
         }
         self.clamp_track_scroll(sequence, tracks);
     }
