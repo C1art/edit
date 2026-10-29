@@ -105,6 +105,24 @@ pub(super) fn effect_rows(ui: &mut egui::Ui, rows: &mut Rows, effect: &mut Audio
             rows.param(ui, "Makeup", makeup, 0.0..=24.0, " dB");
             rows.param(ui, "Warmth", warmth, 0.0..=100.0, "%");
         }
+        AudioEffect::DeReverb { amount, gain } => {
+            rows.param(ui, "Amount", amount, 0.0..=100.0, "%");
+            rows.param(ui, "Gain", gain, -12.0..=12.0, " dB");
+        }
+        AudioEffect::SpeechVolumeLeveler {
+            target,
+            amount,
+            noise_threshold,
+        } => {
+            rows.param(ui, "Target Volume Level", target, -40.0..=0.0, " dB");
+            rows.param(ui, "Leveling Amount", amount, 0.0..=100.0, "%");
+            rows.param(ui, "Noise Threshold", noise_threshold, LEVEL_DB, " dB");
+        }
+        AudioEffect::SimpleParametricEq { frequency, gain, q } => {
+            rows.param(ui, "Center", frequency, HEARING_HZ, " Hz");
+            rows.param(ui, "Gain", gain, -24.0..=24.0, " dB");
+            rows.param(ui, "Q", q, 0.1..=20.0, "");
+        }
         _ => {}
     }
 }

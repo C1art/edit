@@ -1,6 +1,7 @@
 use audio::{
     distort, widen, AnalogDelay, AnalogDelaySettings, Biquad, ClickRemover, Coefficients,
-    Compressor, CompressorSettings, MultitapDelay, Phaser, PhaserSettings, SampleRate, Tap,
+    Compressor, CompressorSettings, DeReverb, LevelerSettings, MultitapDelay, Phaser,
+    PhaserSettings, SampleRate, SpeechLeveler, Tap,
 };
 use timeline::{AudioEffect, Param, Ticks};
 
@@ -17,7 +18,8 @@ const CLICK_SENSITIVITY_PER_PERCENT: f32 = 0.25;
 
 /// The running state of the effects added after the first set: bandpass, phaser,
 /// distortion, stereo expander, the multitap and analog delays, Dynamics, Automatic Click
-/// Remover, Vocal Enhancer and the Tube-modeled Compressor.
+/// Remover, Vocal Enhancer, the Tube-modeled Compressor, DeReverb, Speech Volume Leveler
+/// and Simple Parametric EQ.
 pub(crate) enum MoreUnit {
     Filter(Biquad),
     Phaser(Box<Phaser>),
@@ -27,6 +29,8 @@ pub(crate) enum MoreUnit {
     Clicks(ClickRemover),
     Vocal(Box<VocalChain>),
     Compressor(Compressor),
+    DeReverb(Box<DeReverb>),
+    Leveler(SpeechLeveler),
     Stateless,
 }
 
@@ -34,7 +38,11 @@ impl MoreUnit {
     /// The state `effect` keeps, when it is one of these.
     pub(crate) fn for_effect(effect: &AudioEffect, rate: SampleRate) -> Option<Self> {
         Some(match effect {
-            AudioEffect::BandPass { .. } => Self::Filter(Biquad::default()),
+            AudioEffect::BandPass { .. } | AudioEffect::SimpleParametricEq { .. } => {
+                Self::Filter(Biquad::default())
+            }
+            AudioEffect::DeReverb { .. } => Self::DeReverb(Box::new(DeReverb::new(rate))),
+            AudioEffect::SpeechVolumeLeveler { .. } => Self::Leveler(SpeechLeveler::default()),
             AudioEffect::Phaser { .. } => Self::Phaser(Box::new(Phaser::new(rate))),
             AudioEffect::MultitapDelay { .. } => Self::Multitap(Box::new(MultitapDelay::new(rate))),
             AudioEffect::AnalogDelay { .. } => Self::Analog(Box::new(AnalogDelay::new(rate))),
@@ -57,6 +65,8 @@ impl MoreUnit {
             Self::Clicks(remover) => remover.reset(),
             Self::Vocal(chain) => chain.reset(),
             Self::Compressor(compressor) => compressor.reset(),
+            Self::DeReverb(dereverb) => dereverb.reset(),
+            Self::Leveler(leveler) => leveler.reset(),
             Self::Stateless => {}
         }
     }
@@ -160,6 +170,34 @@ impl MoreUnit {
                 };
                 compressor.process(&settings, rate, samples);
                 distort(TUBE_DRIVE_DB, fraction(warmth), samples);
+            }
+            (AudioEffect::DeReverb { amount, gain }, Self::DeReverb(dereverb)) => {
+                dereverb.process(fraction(amount), value(gain), samples);
+            }
+            (
+                AudioEffect::SpeechVolumeLeveler {
+                    target,
+                    amount,
+                    noise_threshold,
+                },
+                Self::Leveler(leveler),
+            ) => {
+                let settings = LevelerSettings {
+                    target_db: value(target),
+                    amount: fraction(amount),
+                    noise_threshold_db: value(noise_threshold),
+                };
+                leveler.process(&settings, rate, samples);
+            }
+            (AudioEffect::SimpleParametricEq { frequency, gain, q }, Self::Filter(filter)) => {
+                let q = value(q).max(0.1);
+                filter.set(Coefficients::peaking(
+                    rate,
+                    value(frequency),
+                    q,
+                    value(gain),
+                ));
+                filter.process(samples);
             }
             _ => {}
         }

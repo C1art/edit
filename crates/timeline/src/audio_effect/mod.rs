@@ -212,6 +212,25 @@ pub enum AudioEffect {
         makeup: Param,
         warmth: Param,
     },
+    /// Turns a room's echo down by `amount` percent, then adds `gain` decibels to make up
+    /// for the level it takes away.
+    DeReverb {
+        amount: Param,
+        gain: Param,
+    },
+    /// Rides a voice's level toward `target` decibels, `amount` percent of the way; sound
+    /// under `noise_threshold` decibels is taken for pauses and left as it is.
+    SpeechVolumeLeveler {
+        target: Param,
+        amount: Param,
+        noise_threshold: Param,
+    },
+    /// One bell at `frequency` hertz, `gain` decibels up or down, `q` narrow.
+    SimpleParametricEq {
+        frequency: Param,
+        gain: Param,
+        q: Param,
+    },
     /// Plays the right side on both.
     FillLeftWithRight,
     /// Plays the left side on both.
@@ -317,6 +336,13 @@ impl AudioEffect {
                 makeup,
                 warmth,
             } => vec![threshold, ratio, attack, release, makeup, warmth],
+            Self::DeReverb { amount, gain } => vec![amount, gain],
+            Self::SpeechVolumeLeveler {
+                target,
+                amount,
+                noise_threshold,
+            } => vec![target, amount, noise_threshold],
+            Self::SimpleParametricEq { frequency, gain, q } => vec![frequency, gain, q],
             Self::VocalEnhancer { .. }
             | Self::FillLeftWithRight
             | Self::FillRightWithLeft

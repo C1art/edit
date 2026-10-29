@@ -31,7 +31,8 @@ pub(crate) fn category(effect: &AudioEffect) -> &'static str {
         | AudioEffect::ChannelVolume { .. }
         | AudioEffect::MultibandCompressor { .. }
         | AudioEffect::Dynamics(_)
-        | AudioEffect::TubeCompressor { .. } => CATEGORIES[0],
+        | AudioEffect::TubeCompressor { .. }
+        | AudioEffect::SpeechVolumeLeveler { .. } => CATEGORIES[0],
         AudioEffect::Bass { .. }
         | AudioEffect::Treble { .. }
         | AudioEffect::Equalizer { .. }
@@ -39,7 +40,8 @@ pub(crate) fn category(effect: &AudioEffect) -> &'static str {
         | AudioEffect::HighPass { .. }
         | AudioEffect::LowPass { .. }
         | AudioEffect::Notch { .. }
-        | AudioEffect::BandPass { .. } => CATEGORIES[1],
+        | AudioEffect::BandPass { .. }
+        | AudioEffect::SimpleParametricEq { .. } => CATEGORIES[1],
         AudioEffect::Chorus { .. } | AudioEffect::Flanger { .. } | AudioEffect::Phaser { .. } => {
             CATEGORIES[2]
         }
@@ -55,7 +57,8 @@ pub(crate) fn category(effect: &AudioEffect) -> &'static str {
         | AudioEffect::Invert => CATEGORIES[6],
         AudioEffect::DeNoise { .. }
         | AudioEffect::DeHum { .. }
-        | AudioEffect::AutomaticClickRemover { .. } => CATEGORIES[7],
+        | AudioEffect::AutomaticClickRemover { .. }
+        | AudioEffect::DeReverb { .. } => CATEGORIES[7],
         AudioEffect::Distortion { .. } | AudioEffect::VocalEnhancer { .. } => CATEGORIES[8],
         AudioEffect::StereoExpander { .. } => CATEGORIES[9],
     }
