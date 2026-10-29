@@ -35,10 +35,12 @@ struct Opening {
 }
 
 impl AudioSwitch {
-    fn open(&mut self) -> std::io::Result<()> {
+    /// The worker wakes the editor when it's done, so nothing polls meanwhile.
+    fn open(&mut self, ctx: &egui::Context) -> std::io::Result<()> {
         let (sender, output) = channel::bounded(1);
         let choice = self.chosen.clone();
         let wanted = choice.clone();
+        let ctx = ctx.clone();
         std::thread::Builder::new()
             .name("audio open".to_owned())
             .spawn(move || {
@@ -47,6 +49,7 @@ impl AudioSwitch {
                     error => Err(error),
                 });
                 let _ = sender.send(opened);
+                ctx.request_repaint();
             })?;
         self.opening = Some(Opening { choice, output });
         Ok(())
@@ -86,7 +89,6 @@ impl Editor {
         self.receive_output();
         let switch = &mut self.audio_switch;
         if switch.opening.is_some() {
-            ctx.request_repaint_after(Duration::from_millis(50));
             return;
         }
         let reopen = match &self.audio {
@@ -99,12 +101,9 @@ impl Editor {
             }
             return;
         }
-        match switch.open() {
-            Ok(()) => ctx.request_repaint_after(Duration::from_millis(50)),
-            Err(error) => {
-                switch.retry_at = Some(Instant::now() + RETRY);
-                self.notices.push(format!("Audio disabled: {error}"));
-            }
+        if let Err(error) = switch.open(ctx) {
+            switch.retry_at = Some(Instant::now() + RETRY);
+            self.notices.push(format!("Audio disabled: {error}"));
         }
     }
 
