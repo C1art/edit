@@ -16,6 +16,10 @@ const MICROSECONDS: Timebase = match Timebase::new(1, 1_000_000) {
     Some(timebase) => timebase,
     None => unreachable!(),
 };
+/// How far before the target an audio-only seek lands, in microseconds. Audio decoders
+/// need the packets before the first sample they output (AAC overlaps frames, Opus
+/// declares 80 ms of pre-roll), and the trim drops what comes before the target anyway.
+const AUDIO_PREROLL: i64 = 250_000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceInfo {
@@ -117,7 +121,7 @@ impl MediaReader {
         timebase: Timebase,
         streams: Streams,
     ) -> Result<Self, MediaError> {
-        let (input, sequence) = open_input(path)?;
+        let (mut input, sequence) = open_input(path)?;
         let video = match streams {
             Streams::Audio => None,
             _ => StreamDecoder::<Scaler>::open(&input, StreamKind::Video)?,
@@ -129,6 +133,14 @@ impl MediaReader {
         if video.is_none() && audio.is_none() {
             return Err(MediaError::NoPlayableStream);
         }
+        let decoded: Vec<usize> = [
+            video.as_ref().map(|v| v.index),
+            audio.as_ref().map(|a| a.index),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        input.keep_only(&decoded);
         let to_ticks = |micros: i64| Ticks(micros).rescale(MICROSECONDS, timebase);
         let mut video = video;
         if let Some(video) = &mut video {
@@ -225,8 +237,15 @@ impl MediaReader {
         } else {
             position
         };
-        let target = (position + self.start).rescale(self.timebase, MICROSECONDS);
-        self.input.seek(target.0)?;
+        let mut target = (position + self.start)
+            .rescale(self.timebase, MICROSECONDS)
+            .0;
+        if self.video.is_none() {
+            // With video, FFmpeg seeks on its keyframes, well before the audio is needed;
+            // without, it lands on the very audio packet.
+            target -= AUDIO_PREROLL;
+        }
+        self.input.seek(target)?;
         if let Some(video) = &mut self.video {
             video.decoder.flush();
         }

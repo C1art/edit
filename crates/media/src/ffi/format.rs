@@ -223,6 +223,21 @@ impl InputContext {
         .map(drop)
     }
 
+    /// Has the demuxer skip every stream but `kept`, so reading one stream of a file
+    /// doesn't also read the data of the others.
+    pub(crate) fn keep_only(&mut self, kept: &[usize]) {
+        for (index, &stream) in self.raw_streams().iter().enumerate() {
+            let discard = if kept.contains(&index) {
+                sys::AVDiscard::AVDISCARD_DEFAULT
+            } else {
+                sys::AVDiscard::AVDISCARD_ALL
+            };
+            // SAFETY: `raw_streams` holds valid stream pointers owned by the open context,
+            // which `&mut self` lets this call change.
+            unsafe { (*stream).discard = discard };
+        }
+    }
+
     /// The timestamp of the last keyframe at or before `timestamp` in stream `index`, both
     /// in the stream's timebase, when the container indexes its keyframes.
     pub(crate) fn keyframe_before(&self, index: usize, timestamp: i64) -> Option<i64> {
