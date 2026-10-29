@@ -172,6 +172,13 @@ impl Editor {
         });
     }
 
+    /// Whether Delete Render Files has anything to delete or stop.
+    pub(crate) fn has_render_files(&self) -> bool {
+        self.render_previews
+            .as_ref()
+            .is_some_and(|previews| !previews.rendered.is_empty() || previews.job.is_some())
+    }
+
     pub(crate) fn delete_render_files(&mut self) {
         if let Some(previews) = &mut self.render_previews {
             previews.job = None;

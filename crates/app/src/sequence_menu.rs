@@ -48,7 +48,8 @@ pub(crate) fn sequence_menu(editor: &mut Editor, ui: &mut egui::Ui) {
     if ui.add_enabled(has_clips, render).clicked() {
         editor.render_in_to_out();
     }
-    if ui.button("Delete Render Files").clicked() {
+    let delete = Button::new("Delete Render Files");
+    if ui.add_enabled(editor.has_render_files(), delete).clicked() {
         editor.delete_render_files();
     }
     ui.separator();
