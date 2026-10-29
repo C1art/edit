@@ -15,6 +15,7 @@ mod navigate;
 mod paint;
 mod rubber_band;
 mod scale;
+mod scrub;
 mod time_scrollbar;
 mod tool;
 mod track_heights;
@@ -253,21 +254,7 @@ impl TimelineView {
         self.corner_timecode(ui, corner, timeline.sequence(), playhead, &mut output);
         let ruler_response = ui.interact(ruler, ruler_id, Sense::click_and_drag());
         self.ruler_markers(&ruler_response, timeline.sequence(), &scale, &mut output);
-        if let Some(pointer) = ruler_response.interact_pointer_pos() {
-            let sequence = timeline.sequence();
-            let marker = markers::hit(&scale, sequence, pointer.x)
-                .filter(|_| !ruler_response.dragged())
-                .and_then(|id| sequence.markers.iter().find(|marker| marker.id == id));
-            let time = marker.map_or_else(
-                || {
-                    scale::nearest_frame(
-                        scale.time(pointer.x).max(Ticks::ZERO),
-                        sequence.format.frame_rate,
-                        sequence.timebase,
-                    )
-                },
-                |marker| marker.at,
-            );
+        if let Some(time) = self.scrub(&ruler_response, timeline.sequence(), &scale) {
             output.seek = Some(time);
         }
 
