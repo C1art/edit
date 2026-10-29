@@ -7,7 +7,10 @@ use std::thread;
 use crossbeam::channel::{self, Receiver, Sender};
 use media::Peaks;
 
-/// Reads the audio peaks of one file at a time on a worker thread.
+use super::peak_cache::PeakCache;
+
+/// Reads the audio peaks of one file at a time on a worker thread, from the peak file
+/// left by an earlier session where there is one.
 pub struct WaveformWorker {
     requests: Sender<PathBuf>,
     replies: Receiver<(PathBuf, Option<Peaks>)>,
@@ -20,18 +23,25 @@ impl WaveformWorker {
         let (reply_tx, reply_rx) = channel::unbounded();
         let cancel = Arc::new(AtomicBool::new(false));
         let stop = Arc::clone(&cancel);
+        let cache = PeakCache::new(crate::project_store::app_folder().join("Peak Files"));
         thread::Builder::new()
             .name("waveforms".to_owned())
             .spawn(move || {
+                cache.clear_unused();
                 for path in request_rx {
-                    let peaks = media::read_peaks(&path, |_| {
-                        if stop.load(Ordering::Relaxed) {
-                            ControlFlow::Break(())
-                        } else {
-                            ControlFlow::Continue(())
-                        }
+                    let peaks = cache.read(&path).or_else(|| {
+                        let peaks = media::read_peaks(&path, |_| {
+                            if stop.load(Ordering::Relaxed) {
+                                ControlFlow::Break(())
+                            } else {
+                                ControlFlow::Continue(())
+                            }
+                        })
+                        .ok()?;
+                        cache.write(&path, &peaks);
+                        Some(peaks)
                     });
-                    if reply_tx.send((path, peaks.ok())).is_err() {
+                    if reply_tx.send((path, peaks)).is_err() {
                         break;
                     }
                 }

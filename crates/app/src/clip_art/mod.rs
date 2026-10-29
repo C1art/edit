@@ -1,3 +1,4 @@
+mod peak_cache;
 mod thumbnails;
 mod waveforms;
 
