@@ -1,4 +1,5 @@
 mod clip_art;
+mod clip_marks;
 mod clip_tip;
 mod corner;
 mod cursor;
