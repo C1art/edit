@@ -149,6 +149,7 @@ impl Command {
             Self::PlayInToOut => ("play_in_to_out", "Play In to Out"),
             Self::PlayAround => ("play_around", "Play Around"),
             Self::ToggleLoop => ("toggle_loop", "Loop Playback"),
+            Self::ToggleAudioScrubbing => ("toggle_audio_scrubbing", "Audio During Scrubbing"),
             Self::Workspace(slot) => WORKSPACE_WORDS
                 .get(usize::from(slot))
                 .copied()

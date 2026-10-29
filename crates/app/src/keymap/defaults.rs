@@ -127,6 +127,7 @@ impl Command {
             Self::PlayInToOut => vec![ctrl_shift(Key::Space)],
             Self::PlayAround => vec![shift(Key::K)],
             Self::ToggleLoop => vec![ctrl_shift(Key::L)],
+            Self::ToggleAudioScrubbing => vec![shift(Key::S)],
             Self::Workspace(slot) => DIGIT_KEYS
                 .get(usize::from(slot))
                 .map(|&key| vec![alt_shift(key)])

@@ -178,6 +178,10 @@ impl AudioWriter {
         self.shared.queue.is_empty()
     }
 
+    pub fn queued_frames(&self) -> usize {
+        self.shared.queue.len() / usize::from(self.shared.format.channels)
+    }
+
     /// Frames the device has taken from the queue since the output was opened; this is the
     /// master clock.
     pub fn frames_played(&self) -> u64 {
@@ -188,6 +192,15 @@ impl AudioWriter {
         let session = lock(&self.shared.session);
         if *session == self.session {
             self.shared.paused.store(paused, Ordering::Release);
+        }
+    }
+
+    /// Unpauses only if `still_wanted` holds while no other producer can pause meanwhile,
+    /// so a worker acting on a stale request can't undo a newer pause.
+    pub fn resume_if(&self, still_wanted: impl FnOnce() -> bool) {
+        let session = lock(&self.shared.session);
+        if *session == self.session && still_wanted() {
+            self.shared.paused.store(false, Ordering::Release);
         }
     }
 }

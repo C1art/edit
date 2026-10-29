@@ -262,7 +262,7 @@ fn scrub_bar(ui: &mut egui::Ui, player: &mut Player, marks: Marks) {
     painter.circle_filled(egui::pos2(playhead, rect.center().y), 4.5, theme::ACCENT);
     if let Some(pointer) = response.interact_pointer_pos() {
         let fraction = f64::from((pointer.x - rect.left()) / rect.width()).clamp(0.0, 1.0);
-        player.seek(Ticks((fraction * duration.0 as f64).round() as i64));
+        player.scrub(Ticks((fraction * duration.0 as f64).round() as i64));
     }
 }
 

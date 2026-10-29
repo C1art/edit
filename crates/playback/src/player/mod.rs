@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::ops::Range;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -7,8 +8,10 @@ use audio::AudioWriter;
 use crossbeam::channel::{self, Receiver, Sender};
 use timeline::{FrameRate, Sequence, Ticks, Timebase};
 
+mod moves;
+
 use crate::clock::PlaybackClock;
-use crate::command::{Command, Event};
+use crate::command::{Command, Event, Seek};
 use crate::frame_picker::{FramePicker, TaggedFrame};
 use crate::shuttle::Shuttle;
 use crate::{
@@ -41,6 +44,8 @@ pub struct Player {
     clock: PlaybackClock,
     picker: FramePicker,
     generation: u64,
+    /// `generation`, shared with the audio worker.
+    latest_seek: Arc<AtomicU64>,
     awaiting_seek: bool,
     playing: bool,
     video_ended: bool,
@@ -55,6 +60,9 @@ pub struct Player {
     /// While set, playing wraps from this range's end back to its start.
     looping: Option<Range<Ticks>>,
     stop: Option<Stop>,
+    scrub_audio: bool,
+    /// Whether the last move was a scrub, which leaves no audio queued to play on with.
+    scrubbed: bool,
 }
 
 /// Where playback started by [`Player::play_range`] ends.
@@ -73,14 +81,18 @@ impl Player {
         let (video_tx, video_rx) = channel::unbounded();
         let (event_tx, event_rx) = channel::unbounded();
         let (frame_tx, frame_rx) = channel::bounded(FRAME_QUEUE);
+        let latest_seek = Arc::new(AtomicU64::new(0));
         let audio_commands = match &writer {
             Some(writer) => {
                 let (audio_tx, audio_rx) = channel::unbounded();
                 audio_worker::spawn(
                     Arc::clone(&sequence),
                     writer.clone(),
-                    audio_rx,
-                    event_tx.clone(),
+                    audio_worker::AudioChannels {
+                        commands: audio_rx,
+                        events: event_tx.clone(),
+                        latest_seek: Arc::clone(&latest_seek),
+                    },
                 )
                 .map_err(PlaybackError::WorkerSpawn)?;
                 Some(audio_tx)
@@ -113,6 +125,7 @@ impl Player {
             sequence,
             picker: FramePicker::default(),
             generation: 0,
+            latest_seek,
             awaiting_seek: false,
             playing: false,
             video_ended: false,
@@ -124,6 +137,8 @@ impl Player {
             shuttle: None,
             looping: None,
             stop: None,
+            scrub_audio: true,
+            scrubbed: false,
         };
         player.seek(Ticks::ZERO);
         Ok(player)
@@ -204,19 +219,6 @@ impl Player {
         }
     }
 
-    /// Plays at `rate` times normal speed, backwards when negative. Off normal speed only
-    /// pictures play, as when shuttling a deck.
-    pub fn shuttle(&mut self, rate: i32) {
-        match rate {
-            0 => self.pause(),
-            1 => self.play(),
-            _ => {
-                self.pause();
-                self.shuttle = Some(Shuttle::new(rate, self.position(), Instant::now()));
-            }
-        }
-    }
-
     pub fn current_frame(&self) -> Option<&ComposedFrame> {
         self.picker.current()
     }
@@ -286,11 +288,12 @@ impl Player {
             .clone()
             .filter(|range| !range.contains(&self.position()))
         {
-            self.go_to(range.start);
+            self.go_to(range.start, false);
         } else if self.reached_end(self.position()) {
             self.seek(Ticks::ZERO);
-        } else if reclaimed {
-            // Another player used the device meanwhile, so this one's queued audio is gone.
+        } else if reclaimed || self.scrubbed {
+            // Another player used the device meanwhile, or scrubbing played out what was
+            // queued, so the audio must be made again from here.
             self.seek(self.position());
         }
         self.playing = true;
@@ -326,70 +329,14 @@ impl Player {
     pub fn seek(&mut self, position: Ticks) {
         self.shuttle = None;
         self.stop = None;
-        self.go_to(position);
+        self.go_to(position, false);
     }
 
-    /// Plays `range` once, then stops, going back to `back_to` when given.
-    pub fn play_range(&mut self, range: Range<Ticks>, back_to: Option<Ticks>) {
-        if range.is_empty() {
-            return;
-        }
-        self.pause();
-        self.seek(range.start);
-        self.play();
-        self.stop = Some(Stop {
-            at: range.end,
-            back_to,
-        });
-    }
-
-    pub fn is_looping(&self) -> bool {
-        self.looping.is_some()
-    }
-
-    /// Loops `range` while playing, or plays on through when `None`.
-    pub fn set_looping(&mut self, range: Option<Range<Ticks>>) {
-        self.looping = range.filter(|range| !range.is_empty());
-    }
-
-    fn keep_in_range(&mut self, position: Ticks) {
-        if let Some(stop) = self.stop.filter(|stop| position >= stop.at) {
-            self.pause();
-            // The clock runs past the end by up to a frame; rest on the range's last one.
-            let (rate, timebase) = (self.frame_rate(), self.sequence.timebase);
-            let last = rate.frame_start(rate.frame_at(stop.at - Ticks(1), timebase), timebase);
-            self.seek(stop.back_to.unwrap_or(last));
-        } else if let Some(range) = self.looping.clone() {
-            if position >= range.end {
-                self.go_to(range.start);
-            }
-        }
-    }
-
-    fn advance_shuttle(&mut self) {
-        let Some(mut shuttle) = self.shuttle else {
-            return;
-        };
-        let now = Instant::now();
-        let shown = !self.awaiting_seek && self.picker.is_settled();
-        if !shuttle.wants_seek(shown, now) {
-            return;
-        }
-        let target = shuttle.position(now, self.sequence.timebase, self.duration());
-        let at = self.clock.position(self.count());
-        let frame = |time| self.frame_rate().frame_at(time, self.sequence.timebase);
-        if frame(target) != frame(at) {
-            shuttle.sought(now);
-            self.go_to(target);
-            self.shuttle = Some(shuttle);
-        } else if target == Ticks::ZERO || target == self.duration() {
-            self.shuttle = None;
-        }
-    }
-
-    fn go_to(&mut self, position: Ticks) {
+    fn go_to(&mut self, position: Ticks, scrub: bool) {
         let position = position.clamp(Ticks::ZERO, self.duration());
         self.generation += 1;
+        self.latest_seek.store(self.generation, Ordering::Release);
+        self.scrubbed = scrub;
         self.awaiting_seek = true;
         self.video_ended = false;
         let was_playing = self.playing;
@@ -399,23 +346,17 @@ impl Player {
         self.picker.reset(self.generation);
         self.pending_levels.clear();
         self.levels = None;
-        self.send(Command::Seek {
+        self.send(Command::Seek(Seek {
             position,
             generation: self.generation,
-        });
-    }
-
-    /// Moves by whole frames from the frame on screen, pausing first.
-    pub fn step(&mut self, frames: i64) {
-        self.pause();
-        let rate = self.frame_rate();
-        let from = self
-            .current_frame()
-            .map_or(self.position(), |frame| frame.pts);
-        let frame = rate
-            .frame_at(from, self.sequence.timebase)
-            .saturating_add(frames);
-        self.seek(rate.frame_start(frame, self.sequence.timebase));
+            scrub,
+        }));
+        // A scrub may have left the device running; audio readied while paused waits.
+        if !self.playing && !scrub {
+            if let Some(writer) = &self.writer {
+                writer.set_paused(true);
+            }
+        }
     }
 
     fn send(&self, command: Command) {

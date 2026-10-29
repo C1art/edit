@@ -47,6 +47,8 @@ pub struct Editor {
     pub(crate) clip_art: ClipArt,
     /// Whether the monitors play proxies where media has them.
     pub(crate) use_proxies: bool,
+    /// Whether dragging the playhead and stepping frames sound the audio there.
+    pub(crate) scrub_audio: bool,
     /// Outlines the action and title safe areas over the program picture.
     pub(crate) safe_margins: bool,
     pub(crate) program_zoom: crate::program_zoom::ProgramZoom,
@@ -202,6 +204,7 @@ impl Editor {
             render_replace: None,
             clip_art,
             use_proxies: false,
+            scrub_audio: true,
             safe_margins: false,
             program_zoom: Default::default(),
             multicam_view: false,
@@ -332,6 +335,13 @@ impl Editor {
             .map_or(Ticks::ZERO, |program| program.player.position())
     }
 
+    pub(crate) fn scrub_program(&mut self, position: Ticks) {
+        self.sync_program();
+        if let Some(program) = &mut self.program {
+            program.player.scrub(position);
+        }
+    }
+
     pub(crate) fn seek_program(&mut self, position: Ticks) {
         // The player clamps seeks to its sequence, which must include any edit just made.
         self.sync_program();
@@ -384,6 +394,7 @@ impl Editor {
         ];
         for viewer in viewers.into_iter().flatten() {
             viewer.player.set_proxies(self.use_proxies);
+            viewer.player.set_scrub_audio(self.scrub_audio);
         }
         if let Some(program) = &mut self.program {
             notices.extend(program.update(ctx));

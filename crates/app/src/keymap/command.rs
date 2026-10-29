@@ -116,6 +116,7 @@ pub enum Command {
     PlayInToOut,
     PlayAround,
     ToggleLoop,
+    ToggleAudioScrubbing,
     /// Switches to the workspace in this place of the Workspaces menu, from zero.
     Workspace(u8),
     ResetWorkspace,
@@ -126,7 +127,7 @@ pub enum Command {
 pub const WORKSPACE_SLOTS: u8 = 9;
 
 impl Command {
-    pub const ALL: [Self; 126] = [
+    pub const ALL: [Self; 127] = [
         Self::NewProject,
         Self::OpenProject,
         Self::Save,
@@ -242,6 +243,7 @@ impl Command {
         Self::PlayInToOut,
         Self::PlayAround,
         Self::ToggleLoop,
+        Self::ToggleAudioScrubbing,
         Self::Workspace(0),
         Self::Workspace(1),
         Self::Workspace(2),
@@ -332,7 +334,7 @@ impl Command {
             | EllipseTool => "Tools",
             PlayStop | ShuttleLeft | ShuttleStop | ShuttleRight | StepBack | StepForward
             | StepBackFive | StepForwardFive | GoToStart | GoToEnd | PreviousEdit | NextEdit
-            | PlayInToOut | PlayAround | ToggleLoop => "Playback",
+            | PlayInToOut | PlayAround | ToggleLoop | ToggleAudioScrubbing => "Playback",
             Workspace(_) | ResetWorkspace | MaximizePanel => "Window",
         }
     }

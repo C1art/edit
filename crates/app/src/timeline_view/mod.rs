@@ -93,6 +93,8 @@ impl Targets {
 #[derive(Debug, Default)]
 pub struct TimelineOutput {
     pub seek: Option<Ticks>,
+    /// Where pressing or dragging on the ruler puts the playhead.
+    pub scrub: Option<Ticks>,
     /// A marker to open in the marker dialog.
     pub edit_marker: Option<(MarkerOwner, MarkerId)>,
     pub clear_marker: Option<(MarkerOwner, MarkerId)>,
@@ -256,7 +258,7 @@ impl TimelineView {
         let ruler_response = ui.interact(ruler, ruler_id, Sense::click_and_drag());
         self.ruler_markers(&ruler_response, timeline.sequence(), &scale, &mut output);
         if let Some(time) = self.scrub(&ruler_response, timeline.sequence(), &scale) {
-            output.seek = Some(time);
+            output.scrub = Some(time);
         }
 
         let response = ui.interact(

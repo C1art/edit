@@ -131,8 +131,8 @@ impl VideoWorker {
             if let Some(previews) = previews {
                 self.previews = PreviewPictures::new(&previews, &self.sequence);
             }
-            if let Some((position, generation)) = seek {
-                self.seek(position, generation);
+            if let Some(seek) = seek {
+                self.seek(seek.position, seek.generation);
             }
         }
     }

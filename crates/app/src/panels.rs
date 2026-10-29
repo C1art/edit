@@ -154,6 +154,10 @@ impl Editor {
             self.focus = Focus::Program;
             self.seek_program(position);
         }
+        if let Some(position) = output.scrub {
+            self.focus = Focus::Program;
+            self.scrub_program(position);
+        }
         if let Some(id) = output.edit_marker {
             self.edit_marker(id);
         }
