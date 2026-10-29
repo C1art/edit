@@ -1,4 +1,13 @@
-use crate::{Captions, Marker, Marks, Nest, Sequence, Ticks, TimelineError, Track, TrackRef};
+use std::collections::HashMap;
+
+use crate::{
+    Captions, Marker, Marks, MediaItem, Nest, Sequence, SourceId, Ticks, TimelineError, Track,
+    TrackRef,
+};
+
+/// The media pool by id, as looking every clip's media up in turn would take as long as
+/// clips times media.
+type Pool<'a> = HashMap<SourceId, &'a MediaItem>;
 
 /// Years at any timebase, yet far enough from `i64::MAX` that times can be added to one
 /// another and scaled by the fastest speed without overflowing.
@@ -11,7 +20,8 @@ const LATEST: Ticks = Ticks(1 << 52);
 /// sequence contains itself. Captions are in order and don't overlap. No time is past
 /// [`LATEST`]. Nested sequences are held to the same rules.
 pub(crate) fn check(before: &Sequence, after: &Sequence) -> Result<(), TimelineError> {
-    check_tracks(after, before.tracks(), after.tracks())?;
+    let pool: Pool = after.media.iter().map(|item| (item.id, item)).collect();
+    check_tracks(&pool, before.tracks(), after.tracks())?;
     check_markers(&after.markers)?;
     check_marks(after.marks)?;
     check_captions(&after.captions)?;
@@ -20,7 +30,7 @@ pub(crate) fn check(before: &Sequence, after: &Sequence) -> Result<(), TimelineE
             continue;
         };
         let old = before.media_item(item.id).and_then(|old| old.nest.as_ref());
-        check_tracks(after, old.into_iter().flat_map(Nest::tracks), nest.tracks())?;
+        check_tracks(&pool, old.into_iter().flat_map(Nest::tracks), nest.tracks())?;
         check_markers(&nest.markers)?;
         check_marks(nest.marks)?;
         check_captions(&nest.captions)?;
@@ -31,9 +41,8 @@ pub(crate) fn check(before: &Sequence, after: &Sequence) -> Result<(), TimelineE
     Ok(())
 }
 
-/// `media` resolves the clips' sources.
 fn check_tracks<'a>(
-    media: &Sequence,
+    pool: &Pool,
     before: impl Iterator<Item = (TrackRef, &'a Track)>,
     after: impl Iterator<Item = (TrackRef, &'a Track)>,
 ) -> Result<(), TimelineError> {
@@ -72,12 +81,11 @@ fn check_tracks<'a>(
                     at: clip.start,
                 });
             }
-            let item = media
-                .media_item(clip.source)
+            let item = pool
+                .get(&clip.source)
                 .ok_or(TimelineError::MediaNotFound(clip.source))?;
             if let Some(unrendered) = clip.unrendered {
-                media
-                    .media_item(unrendered)
+                pool.get(&unrendered)
                     .ok_or(TimelineError::MediaNotFound(unrendered))?;
             }
             if !clip.speed.is_in_range() || clip.remap.as_ref().is_some_and(|r| !r.is_valid()) {
