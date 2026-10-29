@@ -50,22 +50,18 @@ impl fmt::Display for TimelineError {
         match self {
             Self::TrackNotFound(track) => write!(f, "track {track} does not exist"),
             Self::TrackLocked(track) => write!(f, "track {track} is locked"),
-            Self::ClipNotFound(clip) => write!(f, "clip {} does not exist", clip.0),
-            Self::MarkerNotFound(marker) => write!(f, "marker {} does not exist", marker.0),
-            Self::MediaNotFound(source) => write!(f, "media {} is not in the project", source.0),
+            Self::ClipNotFound(_) => f.write_str("the clip no longer exists"),
+            Self::MarkerNotFound(_) => f.write_str("the marker no longer exists"),
+            Self::MediaNotFound(_) => f.write_str("the media is no longer in the project"),
             Self::MediaInUse(_) => write!(
                 f,
                 "clips rendered and replaced from it need it to restore their original"
             ),
-            Self::BinNotFound(bin) => write!(f, "bin {} does not exist", bin.0),
+            Self::BinNotFound(_) => f.write_str("the bin no longer exists"),
             Self::BinCycle(_) => f.write_str("a bin can't go inside itself"),
             Self::SearchBin(_) => f.write_str("a search bin can't hold items or bins"),
-            Self::ClipOverlap { track, at } => {
-                write!(
-                    f,
-                    "clip overlaps another clip on track {track} at tick {}",
-                    at.0
-                )
+            Self::ClipOverlap { track, .. } => {
+                write!(f, "clips would overlap on track {track}")
             }
             Self::MarkersOutOfOrder => f.write_str("markers are out of time order"),
             Self::SpeedOutOfRange(_) => f.write_str("clip speed must be between 1% and 10,000%"),
