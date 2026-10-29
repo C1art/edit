@@ -287,3 +287,12 @@ pub(crate) fn segmented<R>(ui: &mut egui::Ui, content: impl FnOnce(&mut egui::Ui
     ui.data_mut(|data| data.insert_temp(width_id, width));
     shown.inner
 }
+
+/// A scroll bar thumb's fill, lighter while it is hovered or dragged.
+pub(crate) fn thumb_fill(response: &egui::Response) -> Color32 {
+    if response.hovered() || response.dragged() {
+        Color32::from_rgb(92, 97, 106)
+    } else {
+        PRESSED
+    }
+}

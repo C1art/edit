@@ -12,6 +12,7 @@ mod navigate;
 mod paint;
 mod rubber_band;
 mod scale;
+mod time_scrollbar;
 mod tool;
 mod track_heights;
 mod track_scroll;
@@ -228,7 +229,11 @@ impl TimelineView {
             headers.max..=area.right(),
             area.top()..=area.top() + RULER_HEIGHT,
         );
-        let tracks = Rect::from_x_y_ranges(ruler.x_range(), ruler.bottom()..=area.bottom());
+        let time_bar = Rect::from_x_y_ranges(
+            ruler.x_range(),
+            area.bottom() - time_scrollbar::HEIGHT..=area.bottom(),
+        );
+        let tracks = Rect::from_x_y_ranges(ruler.x_range(), ruler.bottom()..=time_bar.top());
         self.width = tracks.width();
 
         self.place_tracks(timeline.sequence(), tracks);
@@ -393,6 +398,7 @@ impl TimelineView {
             }
         }
         self.track_scrollbar(ui, timeline.sequence(), tracks);
+        self.time_scrollbar(ui, timeline.sequence(), time_bar);
         output
     }
 

@@ -2,6 +2,7 @@ use egui::{Rect, Sense};
 use timeline::{Sequence, TrackRef};
 
 use super::{layout, TimelineView};
+use crate::theme;
 
 /// Room below the last track, so its bottom edge can still be dragged to resize it.
 const BOTTOM_ROOM: f32 = 20.0;
@@ -78,9 +79,8 @@ impl TimelineView {
         let thumb_top = bar.top() + self.scroll_y / overflow * travel;
         let thumb = Rect::from_x_y_ranges(bar.x_range(), thumb_top..=thumb_top + thumb_height)
             .shrink2(egui::vec2(2.0, 1.0));
-        let visuals = ui.style().interact(&response);
         let painter = ui.painter_at(tracks);
         painter.rect_filled(bar, 0.0, ui.visuals().extreme_bg_color.gamma_multiply(0.6));
-        painter.rect_filled(thumb, thumb.width() / 2.0, visuals.bg_fill);
+        painter.rect_filled(thumb, thumb.width() / 2.0, theme::thumb_fill(&response));
     }
 }
