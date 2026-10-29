@@ -68,6 +68,7 @@ impl Command {
             Self::TrimBackwardMany => vec![ctrl_shift(Key::ArrowLeft)],
             Self::TrimForwardMany => vec![ctrl_shift(Key::ArrowRight)],
             Self::MatchFrame => vec![plain(Key::F)],
+            Self::ReverseMatchFrame => vec![shift(Key::R)],
             Self::ToggleSnapping => vec![plain(Key::S)],
             Self::ZoomIn => vec![plain(Key::Equals), plain(Key::Plus)],
             Self::ZoomOut => vec![plain(Key::Minus)],

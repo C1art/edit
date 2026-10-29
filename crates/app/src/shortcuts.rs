@@ -136,6 +136,7 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         Command::TrimBackwardMany => editor.trim_edit_point(-5),
         Command::TrimForwardMany => editor.trim_edit_point(5),
         Command::MatchFrame => editor.match_frame(),
+        Command::ReverseMatchFrame => editor.reverse_match_frame(),
         Command::ToggleSnapping => editor.view.snapping = !editor.view.snapping,
         Command::ToggleLinkedSelection => editor.toggle_linked_selection(),
         Command::ZoomIn => editor.view.zoom(2.0, None),

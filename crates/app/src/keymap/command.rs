@@ -57,6 +57,7 @@ pub enum Command {
     TrimBackwardMany,
     TrimForwardMany,
     MatchFrame,
+    ReverseMatchFrame,
     ToggleSnapping,
     ToggleLinkedSelection,
     ZoomIn,
@@ -133,7 +134,7 @@ const WORKSPACE_WORDS: [(&str, &str); WORKSPACE_SLOTS as usize] = [
 ];
 
 impl Command {
-    pub const ALL: [Self; 121] = [
+    pub const ALL: [Self; 122] = [
         Self::NewProject,
         Self::OpenProject,
         Self::Save,
@@ -190,6 +191,7 @@ impl Command {
         Self::TrimBackwardMany,
         Self::TrimForwardMany,
         Self::MatchFrame,
+        Self::ReverseMatchFrame,
         Self::ToggleSnapping,
         Self::ToggleLinkedSelection,
         Self::ZoomIn,
@@ -322,6 +324,7 @@ impl Command {
             Self::TrimBackwardMany => ("trim_backward_many", "Trim Backward Many"),
             Self::TrimForwardMany => ("trim_forward_many", "Trim Forward Many"),
             Self::MatchFrame => ("match_frame", "Match Frame"),
+            Self::ReverseMatchFrame => ("reverse_match_frame", "Reverse Match Frame"),
             Self::ToggleSnapping => ("toggle_snapping", "Snap in Timeline"),
             Self::ToggleLinkedSelection => ("toggle_linked_selection", "Linked Selection"),
             Self::ZoomIn => ("zoom_in", "Zoom In"),
@@ -438,6 +441,7 @@ impl Command {
             | TrimBackwardMany
             | TrimForwardMany
             | MatchFrame
+            | ReverseMatchFrame
             | ToggleSnapping
             | ToggleLinkedSelection
             | ZoomIn

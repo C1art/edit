@@ -357,6 +357,15 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             {
                 editor.match_frame();
             }
+            if ui
+                .add(
+                    Button::new("Reverse Match Frame")
+                        .shortcut_text(editor.keymap.label(Command::ReverseMatchFrame)),
+                )
+                .clicked()
+            {
+                editor.reverse_match_frame();
+            }
             ui.separator();
             if ui.button("Add Video Track").clicked() {
                 editor.add_track(TrackKind::Video);

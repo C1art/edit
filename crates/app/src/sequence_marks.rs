@@ -1,3 +1,5 @@
+use std::cmp::Reverse;
+
 use timeline::{
     Edge, ExtractMarked, LiftMarked, Marks, RippleTrimToPlayhead, SetMarks, Ticks, TimelineError,
     TrackKind, TrimToPlayhead,
@@ -208,6 +210,38 @@ impl Editor {
         {
             source.show_media(clip.source_in..clip.source_out(), clip.source_time(at));
         }
+    }
+
+    /// Moves the program playhead to where the source monitor's frame plays in the
+    /// sequence: on a selected clip of that media first, then the topmost video.
+    pub(crate) fn reverse_match_frame(&mut self) {
+        let Some(source) = &self.source else {
+            self.notice("Open a clip in the source monitor to find its frame in the sequence");
+            return;
+        };
+        let (media, frame) = (source.source, source.viewer.player.position());
+        let sequence = self.timeline.sequence();
+        let mut showing: Vec<_> = sequence
+            .tracks()
+            .flat_map(|(track, contents)| contents.clips.iter().map(move |clip| (track, clip)))
+            .filter(|(_, clip)| clip.source == media && !clip.hold)
+            .filter(|(_, clip)| (clip.source_in..clip.source_out()).contains(&frame))
+            .collect();
+        showing.sort_by_key(|(track, clip)| {
+            let selected = self.view.selection.contains(&clip.id);
+            (
+                !selected,
+                track.kind != TrackKind::Video,
+                Reverse(track.index),
+                clip.start,
+            )
+        });
+        let Some(&(_, clip)) = showing.first() else {
+            self.notice("The source monitor's frame isn't used in this sequence");
+            return;
+        };
+        let at = clip.position_of(frame);
+        self.seek_program(at);
     }
 }
 
