@@ -2,24 +2,28 @@ use std::cell::RefCell;
 use std::fmt;
 
 use ffmpeg_sys_next as sys;
-use timeline::{ChromaSiting, Ticks, YuvColor, YuvMatrix, YuvRange};
+use timeline::{
+    ChromaSiting, ChromaSubsampling, PlaneFormat, SampleDepth, Ticks, YuvColor, YuvMatrix, YuvRange,
+};
 
 use super::{Picture, Scaler};
 use crate::{MediaError, VideoFrame};
 
-/// A decoded picture left in the decoder's 8-bit 4:2:0 planes, to be turned into RGB
-/// on the GPU, where it costs next to nothing.
+/// A decoded picture left in the decoder's planes, to be turned into RGB on the GPU,
+/// where it costs next to nothing.
 pub struct PlanarFrame {
     /// In the reader's output timebase, relative to the start of the media.
     pub pts: Ticks,
     pub width: u32,
     pub height: u32,
     pub color: YuvColor,
+    pub format: PlaneFormat,
     layout: Layout,
     picture: Picture,
 }
 
-/// One plane's rows, `stride` bytes apart, each starting with `width` samples.
+/// One plane's rows, `stride` bytes apart, each starting with `width` samples or, for
+/// interleaved chroma, pairs of samples.
 #[derive(Debug, Clone, Copy)]
 pub struct Plane<'a> {
     pub bytes: &'a [u8],
@@ -53,15 +57,16 @@ thread_local! {
 }
 
 impl PlanarFrame {
-    /// The picture as a planar frame if it is 8-bit 4:2:0 in a color the GPU path
+    /// The picture as a planar frame if its planes and color are ones the GPU path
     /// converts, else the picture back.
     pub(crate) fn new(pts: Ticks, picture: Picture) -> Result<Self, Picture> {
         match Self::layout(&picture) {
-            Some((layout, color, width, height)) => Ok(Self {
+            Some((layout, format, color, (width, height))) => Ok(Self {
                 pts,
                 width,
                 height,
                 color,
+                format,
                 layout,
                 picture,
             }),
@@ -69,35 +74,52 @@ impl PlanarFrame {
         }
     }
 
-    fn layout(picture: &Picture) -> Option<(Layout, YuvColor, u32, u32)> {
+    fn layout(picture: &Picture) -> Option<(Layout, PlaneFormat, YuvColor, (u32, u32))> {
         use sys::AVPixelFormat::*;
-        let layout = match picture.format() {
-            AV_PIX_FMT_YUV420P | AV_PIX_FMT_YUVJ420P => Layout::Separate,
-            AV_PIX_FMT_NV12 => Layout::Interleaved,
+        use ChromaSubsampling::*;
+        use SampleDepth::*;
+        let (layout, subsampling, depth) = match picture.format() {
+            AV_PIX_FMT_YUV420P | AV_PIX_FMT_YUVJ420P => (Layout::Separate, Yuv420, Eight),
+            AV_PIX_FMT_NV12 => (Layout::Interleaved, Yuv420, Eight),
+            AV_PIX_FMT_YUV422P | AV_PIX_FMT_YUVJ422P => (Layout::Separate, Yuv422, Eight),
+            AV_PIX_FMT_YUV444P | AV_PIX_FMT_YUVJ444P => (Layout::Separate, Yuv444, Eight),
+            AV_PIX_FMT_YUV420P10LE => (Layout::Separate, Yuv420, Ten),
+            AV_PIX_FMT_YUV422P10LE => (Layout::Separate, Yuv422, Ten),
+            AV_PIX_FMT_YUV444P10LE => (Layout::Separate, Yuv444, Ten),
+            AV_PIX_FMT_YUV420P12LE => (Layout::Separate, Yuv420, Twelve),
+            AV_PIX_FMT_YUV422P12LE => (Layout::Separate, Yuv422, Twelve),
+            AV_PIX_FMT_YUV444P12LE => (Layout::Separate, Yuv444, Twelve),
+            AV_PIX_FMT_YUV420P16LE => (Layout::Separate, Yuv420, Sixteen),
+            // Ten bits at the top of each word read the same as sixteen.
+            AV_PIX_FMT_P010LE | AV_PIX_FMT_P016LE => (Layout::Interleaved, Yuv420, Sixteen),
+            AV_PIX_FMT_YUV422P16LE => (Layout::Separate, Yuv422, Sixteen),
+            AV_PIX_FMT_YUV444P16LE => (Layout::Separate, Yuv444, Sixteen),
             _ => return None,
         };
+        let format = PlaneFormat { subsampling, depth };
         let raw = picture.frame().raw();
         let width = u32::try_from(raw.width).ok().filter(|&width| width > 0)?;
         let height = u32::try_from(raw.height)
             .ok()
             .filter(|&height| height > 0)?;
-        let chroma_width = width.div_ceil(2);
+        let (chroma_width, _) = subsampling.chroma_size((width, height));
         let row_bytes = match layout {
             Layout::Separate => [width, chroma_width, chroma_width],
             Layout::Interleaved => [width, chroma_width * 2, 0],
-        };
+        }
+        .map(|samples| samples * depth.bytes());
         let planes_fit = row_bytes.iter().enumerate().all(|(index, &bytes)| {
             bytes == 0
                 || (!raw.data[index].is_null()
                     && u32::try_from(raw.linesize[index]).is_ok_and(|stride| stride >= bytes))
         });
         let color = yuv_color(picture)?;
-        planes_fit.then_some((layout, color, width, height))
+        planes_fit.then_some((layout, format, color, (width, height)))
     }
 
     pub fn planes(&self) -> Planes<'_> {
         let (width, height) = (self.width, self.height);
-        let (chroma_width, chroma_height) = (width.div_ceil(2), height.div_ceil(2));
+        let (chroma_width, chroma_height) = self.format.subsampling.chroma_size((width, height));
         let luma = self.plane(0, width, height, 1);
         let chroma = match self.layout {
             Layout::Separate => Chroma::Separate(
@@ -114,7 +136,8 @@ impl PlanarFrame {
     fn plane(&self, index: usize, width: u32, height: u32, samples: u32) -> Plane<'_> {
         let raw = self.picture.frame().raw();
         let stride = raw.linesize[index].unsigned_abs();
-        let length = stride as usize * (height as usize - 1) + (width * samples) as usize;
+        let row_bytes = width * samples * self.format.depth.bytes();
+        let length = stride as usize * (height as usize - 1) + row_bytes as usize;
         // SAFETY: `new` checked the plane's pointer is set and its stride covers a row.
         // The decoder's buffers hold `height` rows of `stride` bytes from that pointer,
         // and the frame keeps them alive and unchanged for as long as `self` lives;
@@ -149,6 +172,7 @@ impl fmt::Debug for PlanarFrame {
             .field("width", &self.width)
             .field("height", &self.height)
             .field("color", &self.color)
+            .field("format", &self.format)
             .finish_non_exhaustive()
     }
 }
@@ -165,7 +189,12 @@ fn yuv_color(picture: &Picture) -> Option<YuvColor> {
         _ if raw.height >= 720 => YuvMatrix::Bt709,
         _ => YuvMatrix::Bt601,
     };
-    let jpeg = picture.format() == sys::AVPixelFormat::AV_PIX_FMT_YUVJ420P;
+    let jpeg = matches!(
+        picture.format(),
+        sys::AVPixelFormat::AV_PIX_FMT_YUVJ420P
+            | sys::AVPixelFormat::AV_PIX_FMT_YUVJ422P
+            | sys::AVPixelFormat::AV_PIX_FMT_YUVJ444P
+    );
     let range = if jpeg || raw.color_range == sys::AVColorRange::AVCOL_RANGE_JPEG {
         YuvRange::Full
     } else {

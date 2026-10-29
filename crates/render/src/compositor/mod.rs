@@ -4,7 +4,7 @@ mod slots;
 use std::any::Any;
 use std::sync::Arc;
 
-use timeline::{MatteChannel, YuvColor};
+use timeline::{MatteChannel, PlaneFormat, YuvColor};
 
 use crate::backdrop::{Backdrop, Drawn};
 use crate::blit::{self, Blit, DISPLAY_FORMAT};
@@ -50,8 +50,8 @@ pub enum Picture<'a> {
         /// same source as last time keeps its texture instead of uploading it again.
         source: Option<Arc<dyn Any + Send + Sync>>,
     },
-    /// A 4:2:0 picture's planes, in the source transfer function, turned into RGB on
-    /// the GPU.
+    /// A picture's planes, in the source transfer function, turned into RGB on the
+    /// GPU.
     Planes {
         width: u32,
         height: u32,
@@ -60,6 +60,7 @@ pub enum Picture<'a> {
         luma: PlaneRows<'a>,
         chroma: ChromaRows<'a>,
         color: YuvColor,
+        format: PlaneFormat,
         /// As for [`Picture::Pixels`].
         source: Option<Arc<dyn Any + Send + Sync>>,
     },
@@ -139,8 +140,7 @@ pub struct Compositor {
     pub(crate) queue: wgpu::Queue,
     blit: Blit,
     slots: Vec<Slot>,
-    /// Built the first time a picture comes as planes.
-    yuv: Option<YuvConverter>,
+    yuv: YuvConverter,
     targets: Option<Targets>,
     scope: Option<ScopeTrace>,
     background: Background,
@@ -162,7 +162,7 @@ impl Compositor {
             device: device.clone(),
             queue: queue.clone(),
             slots: Vec::new(),
-            yuv: None,
+            yuv: YuvConverter::new(device),
             targets: None,
             scope: None,
             background: Background::Black,
@@ -175,6 +175,7 @@ impl Compositor {
     /// being built come back [`Presented::Pending`]. For compositors on the UI thread.
     pub fn compile_in_background(&mut self) {
         self.blit.layers.build_in_background();
+        self.yuv.build_in_background();
         // What a plain frame needs, so the first one is ready as soon as possible.
         let working = Placement {
             premultiplied: true,
@@ -187,7 +188,7 @@ impl Compositor {
 
     /// Whether shaders asked for are still being built in the background.
     pub fn compiling(&self) -> bool {
-        self.blit.layers.building()
+        self.blit.layers.building() || self.yuv.building()
     }
 
     /// The presented frame, valid until the next [`Presented::NewTarget`].
@@ -276,12 +277,17 @@ impl Compositor {
         // aren't uploaded again.
         let mut conversions = encoder_named("yuv");
         let mut encoder = encoder_named("compositor");
+        let mut unconverted = false;
         for step in &steps {
             match step {
                 Step::Convert(index) => {
-                    let slot = &self.slots[*index];
-                    if let (Some(planes), Some(yuv)) = (&slot.planes, &self.yuv) {
-                        planes.draw(&mut conversions, yuv, &slot.view);
+                    let slot = &mut self.slots[*index];
+                    if let Some(planes) = &slot.planes {
+                        if !planes.draw(&mut conversions, &self.yuv, &slot.view) {
+                            // Uploaded again next time, when the converter is built.
+                            slot.uploaded = None;
+                            unconverted = true;
+                        }
                     }
                 }
                 Step::Blur(index) => {
@@ -372,7 +378,7 @@ impl Compositor {
             );
         }
         // The encoder is dropped unsubmitted: a frame with layers left out isn't shown.
-        if self.blit.layers.take_missed() {
+        if self.blit.layers.take_missed() | unconverted {
             self.queue.submit([conversions.finish()]);
             self.unshown_target |= presented == Presented::NewTarget;
             return Ok(Presented::Pending);

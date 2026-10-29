@@ -31,12 +31,13 @@ impl Compositor {
                     output,
                     luma,
                     chroma,
+                    format,
                     ..
                 } => {
                     self.check_size(*width, *height)?;
                     self.check_size(output.0, output.1)?;
                     let size = (*width, *height);
-                    if !yuv::holds(*luma, *width, *height) || !yuv::chroma_holds(chroma, size) {
+                    if !yuv::planes_hold((*luma, chroma), size, *format) {
                         return Err(RenderError::PlaneSize {
                             width: *width,
                             height: *height,
@@ -91,9 +92,10 @@ impl Compositor {
                     luma,
                     chroma,
                     color,
+                    format,
                     source,
                 } => {
-                    let kind = SlotKind::Planes(chroma.layout(), (*width, *height));
+                    let kind = SlotKind::Planes(chroma.layout(), *format, (*width, *height));
                     let index = self.claim(next, *output, kind);
                     if self.upload_planes(index, (*luma, chroma), *color, source.as_ref()) {
                         steps.push(Step::Convert(index));

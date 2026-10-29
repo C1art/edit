@@ -187,9 +187,10 @@ impl MediaReader {
         }
     }
 
-    /// Leaves 8-bit 4:2:0 pictures in their planes, as [`DecodedFrame::Planar`], from
-    /// the next decoded frame on, while they need no deinterlacing. Planes keep their
-    /// decoded size; the video size applies only to pictures turned into RGBA.
+    /// Leaves pictures in planes [`PlanarFrame`] takes in theirs, as
+    /// [`DecodedFrame::Planar`], from the next decoded frame on, while they need no
+    /// deinterlacing. Planes keep their decoded size; the video size applies only to
+    /// pictures turned into RGBA.
     pub fn set_planar(&mut self, planar: bool) {
         if let Some(video) = &mut self.video {
             video.converter.set_planar(planar);

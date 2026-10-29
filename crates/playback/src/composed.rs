@@ -57,6 +57,7 @@ impl Layer {
                         Chroma::Interleaved(both) => ChromaRows::Interleaved(rows(both)),
                     },
                     color: frame.color,
+                    format: frame.format,
                     source: Some(Arc::clone(frame) as Arc<dyn Any + Send + Sync>),
                 }
             }

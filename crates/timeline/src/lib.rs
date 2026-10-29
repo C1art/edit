@@ -168,4 +168,6 @@ pub use transition::{nearest_transition_edge, Alignment, Side, Transition, Trans
 pub use wipe::{Border, Sweep, Wipe, WipePattern};
 pub use xmeml::to_xmeml;
 pub use xmeml_import::{read_xmeml, ImportXmeml};
-pub use yuv::{ChromaSiting, YuvColor, YuvMatrix, YuvRange};
+pub use yuv::{
+    ChromaSiting, ChromaSubsampling, PlaneFormat, SampleDepth, YuvColor, YuvMatrix, YuvRange,
+};

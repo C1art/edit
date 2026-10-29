@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use timeline::{AlphaInterpretation, BlendMode};
+use timeline::{AlphaInterpretation, BlendMode, PlaneFormat};
 
 use super::{extent, Compositor, LayerImage};
 use crate::blit::Blit;
@@ -9,7 +9,7 @@ use crate::blur::BlurTargets;
 use crate::grade::Grade;
 use crate::layer_shader::Features;
 use crate::placement::{fit_scale, Placement};
-use crate::yuv::{ChromaLayout, ChromaRows, PlaneRows, PlaneTextures, YuvConverter};
+use crate::yuv::{ChromaLayout, ChromaRows, PlaneRows, PlaneTextures};
 use crate::WORKING_FORMAT;
 
 /// Decoded frames arrive gamma-encoded. BT.709 video is treated as sRGB, which matches
@@ -23,7 +23,7 @@ pub(super) enum SlotKind {
     /// A canvas-sized working texture that a group is drawn into.
     Group,
     /// A working texture that uploaded planes of this size are turned into.
-    Planes(ChromaLayout, (u32, u32)),
+    Planes(ChromaLayout, PlaneFormat, (u32, u32)),
 }
 
 /// Texture and placement for one layer, reused while the layer's size and kind hold.
@@ -197,11 +197,12 @@ impl Compositor {
         let placement = Blit::placement_buffer(&self.device);
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         let planes = match kind {
-            SlotKind::Planes(layout, size) => {
-                let device = &self.device;
-                let converter = self.yuv.get_or_insert_with(|| YuvConverter::new(device));
-                Some(PlaneTextures::new(device, converter, size, layout))
-            }
+            SlotKind::Planes(layout, format, size) => Some(PlaneTextures::new(
+                &self.device,
+                &self.yuv,
+                size,
+                (layout, format),
+            )),
             SlotKind::Picture | SlotKind::Group => None,
         };
         Slot {

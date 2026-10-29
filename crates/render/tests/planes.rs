@@ -2,10 +2,17 @@ mod common;
 
 use common::{compositor, layer};
 use render::{ChromaRows, LayerImage, Picture, PlaneRows, RenderError};
-use timeline::{BlendMode, ChromaSiting, YuvColor, YuvMatrix, YuvRange};
+use timeline::{
+    BlendMode, ChromaSiting, ChromaSubsampling, PlaneFormat, SampleDepth, YuvColor, YuvMatrix,
+    YuvRange,
+};
 
 const WIDTH: u32 = 16;
 const HEIGHT: u32 = 4;
+const EIGHT_BIT_420: PlaneFormat = PlaneFormat {
+    subsampling: ChromaSubsampling::Yuv420,
+    depth: SampleDepth::Eight,
+};
 /// Each four pixels wide, as luma, blue- and red-difference at video levels.
 const STRIPES: [[u8; 3]; 4] = [
     [63, 102, 240],
@@ -48,6 +55,30 @@ fn planes(stride: u32) -> (Vec<u8>, [Vec<u8>; 2]) {
     let cb = row(&|[_, cb, _]| vec![cb; 2], half).repeat(HEIGHT as usize / 2);
     let cr = row(&|[.., cr]| vec![cr; 2], half).repeat(HEIGHT as usize / 2);
     (luma, [cb, cr])
+}
+
+/// The stripes in `format`, rows packed tight: luma, then each chroma plane.
+fn planes_in(format: PlaneFormat) -> [(Vec<u8>, u32); 3] {
+    let (chroma_width, chroma_height) = format.subsampling.chroma_size((WIDTH, HEIGHT));
+    let per_stripe = chroma_width / 4;
+    let shift = format.depth.bits() - 8;
+    let plane = |pick: fn([u8; 3]) -> u8, width: u32, height: u32| {
+        let row: Vec<u8> = STRIPES
+            .iter()
+            .flat_map(|&yuv| vec![u16::from(pick(yuv)) << shift; (width / 4) as usize])
+            .flat_map(|sample| match format.depth {
+                SampleDepth::Eight => vec![sample as u8],
+                _ => sample.to_le_bytes().to_vec(),
+            })
+            .collect();
+        let stride = row.len() as u32;
+        (row.repeat(height as usize), stride)
+    };
+    [
+        plane(|[y, ..]| y, WIDTH, HEIGHT),
+        plane(|[_, cb, _]| cb, per_stripe * 4, chroma_height),
+        plane(|[.., cr]| cr, per_stripe * 4, chroma_height),
+    ]
 }
 
 fn shown(layer: &LayerImage<'_>) -> Result<Vec<u8>, RenderError> {
@@ -103,6 +134,7 @@ fn planes_show_as_the_rgb_they_encode_in_either_layout() -> Result<(), RenderErr
             output: (WIDTH, HEIGHT),
             luma,
             chroma,
+            format: EIGHT_BIT_420,
             color: YuvColor {
                 matrix: YuvMatrix::Bt709,
                 range: YuvRange::Limited,
@@ -117,6 +149,75 @@ fn planes_show_as_the_rgb_they_encode_in_either_layout() -> Result<(), RenderErr
             .map(|(got, wanted)| got.abs_diff(*wanted))
             .max();
         assert!(worst <= Some(2), "{got:?} is not {wanted:?}");
+    }
+    Ok(())
+}
+
+#[test]
+#[ignore = "needs a GPU"]
+fn planes_of_any_subsampling_and_depth_show_the_same_rgb() -> Result<(), RenderError> {
+    #[derive(Debug)]
+    enum Layout {
+        Separate,
+        Interleaved,
+    }
+    use Layout::*;
+    let reference = reference();
+    let mut rgb = layer(&reference, BlendMode::Normal);
+    rgb.picture = Picture::Pixels {
+        width: WIDTH,
+        height: HEIGHT,
+        rgba: &reference,
+        source: None,
+    };
+    let wanted = stripe_middles(&shown(&rgb)?);
+    let formats = [
+        (ChromaSubsampling::Yuv422, SampleDepth::Eight, Separate),
+        (ChromaSubsampling::Yuv444, SampleDepth::Eight, Separate),
+        (ChromaSubsampling::Yuv420, SampleDepth::Ten, Separate),
+        (ChromaSubsampling::Yuv422, SampleDepth::Twelve, Separate),
+        (ChromaSubsampling::Yuv444, SampleDepth::Sixteen, Separate),
+        (ChromaSubsampling::Yuv420, SampleDepth::Sixteen, Interleaved),
+    ];
+    for (subsampling, depth, layout) in formats {
+        let format = PlaneFormat { subsampling, depth };
+        let [(luma, luma_stride), (cb, cb_stride), (cr, cr_stride)] = planes_in(format);
+        let size = depth.bytes() as usize;
+        let interleaved: Vec<u8> = cb
+            .chunks(size)
+            .zip(cr.chunks(size))
+            .flat_map(|(cb, cr)| [cb, cr].concat())
+            .collect();
+        let rows = |bytes, stride| PlaneRows { bytes, stride };
+        let chroma = match layout {
+            Separate => ChromaRows::Separate(rows(&cb, cb_stride), rows(&cr, cr_stride)),
+            Interleaved => ChromaRows::Interleaved(rows(&interleaved, cb_stride * 2)),
+        };
+        let mut image = rgb.clone();
+        image.picture = Picture::Planes {
+            width: WIDTH,
+            height: HEIGHT,
+            output: (WIDTH, HEIGHT),
+            luma: rows(&luma, luma_stride),
+            chroma,
+            format,
+            color: YuvColor {
+                matrix: YuvMatrix::Bt709,
+                range: YuvRange::Limited,
+                siting: ChromaSiting::Left,
+            },
+            source: None,
+        };
+        let got = stripe_middles(&shown(&image)?);
+        let worst = got
+            .iter()
+            .zip(&wanted)
+            .map(|(got, wanted)| got.abs_diff(*wanted))
+            .max();
+        assert!(
+            worst <= Some(2),
+            "{format:?} {layout:?}: {got:?} is not {wanted:?}"
+        );
     }
     Ok(())
 }
@@ -139,6 +240,7 @@ fn planes_too_short_for_their_picture_are_refused() {
             bytes: &chroma,
             stride: 4,
         }),
+        format: EIGHT_BIT_420,
         color: YuvColor {
             matrix: YuvMatrix::Bt709,
             range: YuvRange::Limited,
@@ -173,6 +275,7 @@ fn shrunk_planes_average_the_pixels_each_output_pixel_covers() -> Result<(), Ren
                 stride: width,
             },
             chroma: ChromaRows::Separate(half, half),
+            format: EIGHT_BIT_420,
             color: YuvColor {
                 matrix: YuvMatrix::Bt709,
                 range: YuvRange::Limited,
