@@ -7,14 +7,14 @@ use std::sync::Arc;
 
 use media::VideoFrame;
 use timeline::{
-    CaptionStyle, Generator, Rgb, Shape, TextAlign, Ticks, Title, TitleFont, TitleMotion,
+    CaptionStyle, Generator, Rgb, ShadowStyle, Shape, TextAlign, Ticks, Title, TitleFont,
+    TitleMotion,
 };
 
 use coverage::Coverage;
 pub(crate) use scroll::scrolled;
 use shape::shape_coverage;
 
-const SHADOW_OPACITY: f32 = 0.7;
 /// Faux bold thickens the strokes of the built-in light face by this fraction of the size
 /// each way.
 const BOLD_GROWTH: f32 = 1.0 / 40.0;
@@ -184,10 +184,7 @@ fn draw_title(canvas: &mut Canvas, title: &Title, anchor: Anchor) {
     }
     let silhouette = outline.as_ref().map_or(&text, |(outline, _)| outline);
     if title.shadow {
-        let offset = (size / 24.0).round().max(1.0) as i64;
-        let blur = (size / 32.0).round() as usize;
-        let shadow = silhouette.shifted(offset, offset).blurred(blur);
-        canvas.paint(&shadow, Rgb::BLACK, SHADOW_OPACITY);
+        canvas.cast_shadow(silhouette, title.shadow_look());
     }
     // Text over a transparent canvas would otherwise sample black fringes from the
     // pixels around it when scaled.
@@ -221,11 +218,7 @@ fn draw_shape(canvas: &mut Canvas, shape: &Shape) {
             )
         });
         let silhouette = silhouette.as_ref().unwrap_or(&body);
-        // Scaled to the frame, as a 1080-line sequence offsets it 9 pixels.
-        let offset = (height / 120).max(1) as i64;
-        let blur = (height / 160) as usize;
-        let shadow = silhouette.shifted(offset, offset).blurred(blur);
-        canvas.paint(&shadow, Rgb::BLACK, SHADOW_OPACITY);
+        canvas.cast_shadow(silhouette, shape.shadow_look(height));
     } else if let Some(color) = shape.fill.or(stroke.map(|stroke| stroke.color)) {
         canvas.bleed(color);
     }
@@ -251,6 +244,16 @@ impl Canvas {
             height,
             pixels: vec![[0.0; 4]; width as usize * height as usize],
         }
+    }
+
+    fn cast_shadow(&mut self, silhouette: &Coverage, style: ShadowStyle) {
+        let (dx, dy) = style.offset();
+        let shadow = silhouette
+            .dilated(style.size as f32)
+            .shifted(dx, dy)
+            .blurred(style.blur as usize);
+        let opacity = f32::from(style.opacity.min(100)) / 100.0;
+        self.paint(&shadow, style.color, opacity);
     }
 
     fn fill(&mut self, color: Rgb) {
