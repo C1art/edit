@@ -1,10 +1,11 @@
 use std::path::PathBuf;
 
 use timeline::{
-    AlphaInterpretation, AudioEffect, Bin, BinId, Caption, Clip, ClipId, CurvePoint, Gain,
-    Generator, Interpolation, Keyframe, Marks, Mask, MaskShape, MediaItem, MediaLog, Nest, Pan,
-    Param, PixelAspect, Rgb, Scroll, ShadowStyle, SourceId, TextAlign, TextStroke, Ticks, Timebase,
-    Title, TitleFont, TitleMotion, Track, Transition, TransitionKind, VideoEffect, VideoFormat,
+    AlphaInterpretation, AudioEffect, Bin, BinId, BinSearch, Caption, Clip, ClipId, CurvePoint,
+    Gain, Generator, Interpolation, Keyframe, Marks, Mask, MaskShape, MediaItem, MediaLog, Nest,
+    Pan, Param, PixelAspect, Rgb, Scroll, SearchField, ShadowStyle, SourceId, TextAlign,
+    TextStroke, Ticks, Timebase, Title, TitleFont, TitleMotion, Track, Transition, TransitionKind,
+    VideoEffect, VideoFormat,
 };
 
 use super::*;
@@ -93,11 +94,22 @@ fn sample() -> ProjectFile {
             id: BinId(4),
             name: "Graphics".to_owned(),
             parent: None,
+            search: None,
         },
         Bin {
             id: BinId(5),
             name: "Titles".to_owned(),
             parent: Some(BinId(4)),
+            search: None,
+        },
+        Bin {
+            id: BinId(40),
+            name: "Interviews".to_owned(),
+            parent: None,
+            search: Some(BinSearch {
+                text: "interview".to_owned(),
+                field: SearchField::Name,
+            }),
         },
     ];
     let mut nest = Nest::with_default_tracks();

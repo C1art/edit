@@ -1,11 +1,12 @@
 mod actions;
 mod rows;
+mod search_bins;
 mod tiles;
 
 use std::iter;
 
-use egui::{CollapsingHeader, DragAndDrop, Response, RichText, Sense, StrokeKind, TextEdit};
-use timeline::{Bin, BinId, MediaItem, Sequence, SourceId};
+use egui::{CollapsingHeader, DragAndDrop, Response, RichText, Sense, StrokeKind};
+use timeline::{Bin, BinId, BinSearch, MediaItem, Sequence, SourceId};
 
 use crate::clip_art::ClipArt;
 use crate::multicam_sync::MulticamSync;
@@ -33,6 +34,9 @@ pub enum PoolAction {
     AudioChannels(SourceId),
     /// Adds a bin inside the given one, or at the top, and starts naming it.
     NewBin(Option<BinId>),
+    /// Adds a search bin at the top of the project and starts naming it.
+    NewSearchBin(BinSearch),
+    SetBinSearch(BinId, BinSearch),
     RenameBin(BinId, String),
     RemoveBin(BinId),
     Move(PoolEntry, Option<BinId>),
@@ -91,11 +95,7 @@ pub fn ui(
         }
         pool.view_options(ui);
     });
-    ui.add(
-        TextEdit::singleline(&mut pool.view.search)
-            .hint_text("Search")
-            .desired_width(f32::INFINITY),
-    );
+    pool.search_row(ui);
     let wanted = pool.view.search.to_lowercase();
     egui::ScrollArea::vertical()
         .auto_shrink([false, true])
@@ -136,7 +136,7 @@ impl Pool<'_> {
         for child in sequence.bins.iter().filter(|child| child.parent == bin) {
             self.bin(ui, child);
         }
-        self.items(ui, sequence.media.iter().filter(|item| item.bin == bin));
+        self.items(ui, sequence.bin_items(bin));
     }
 
     /// `items` in the chosen order, as rows or as tiles wrapped across the panel.
@@ -187,12 +187,9 @@ impl Pool<'_> {
             .iter()
             .filter(|child| child.parent == inside)
             .count()
-            + sequence
-                .media
-                .iter()
-                .filter(|item| item.bin == inside)
-                .count();
-        let title = RichText::new(format!("{} ({count})", bin.name)).strong();
+            + sequence.bin_items(inside).count();
+        let icon = if bin.search.is_some() { "🔍 " } else { "" };
+        let title = RichText::new(format!("{icon}{} ({count})", bin.name)).strong();
         let shown = CollapsingHeader::new(title)
             .id_salt(("bin", bin.id.0))
             .show(ui, |ui| self.contents(ui, inside));
@@ -200,10 +197,17 @@ impl Pool<'_> {
         if header.drag_started() {
             header.dnd_set_drag_payload(bin.id);
         }
-        self.drop_target(ui, &header, inside);
+        if bin.search.is_none() {
+            self.drop_target(ui, &header, inside);
+        }
         header.context_menu(|ui| {
-            if ui.button("New Bin Inside").clicked() {
-                self.action = Some(PoolAction::NewBin(inside));
+            match &bin.search {
+                Some(search) => self.search_bin_menu(ui, bin.id, search),
+                None => {
+                    if ui.button("New Bin Inside").clicked() {
+                        self.action = Some(PoolAction::NewBin(inside));
+                    }
+                }
             }
             if ui.button("Rename").clicked() {
                 self.view.renaming = Some((entry, bin.name.clone()));

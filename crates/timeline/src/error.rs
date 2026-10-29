@@ -13,6 +13,8 @@ pub enum TimelineError {
     BinNotFound(BinId),
     /// The bin would go inside itself.
     BinCycle(BinId),
+    /// Search bins show what matches their search and hold nothing of their own.
+    SearchBin(BinId),
     ClipOverlap {
         track: TrackRef,
         at: Ticks,
@@ -54,6 +56,7 @@ impl fmt::Display for TimelineError {
             Self::MediaInUse(source) => write!(f, "media {} is used in the sequence", source.0),
             Self::BinNotFound(bin) => write!(f, "bin {} does not exist", bin.0),
             Self::BinCycle(_) => f.write_str("a bin can't go inside itself"),
+            Self::SearchBin(_) => f.write_str("a search bin can't hold items or bins"),
             Self::ClipOverlap { track, at } => {
                 write!(
                     f,

@@ -41,7 +41,7 @@ mod tests;
 pub use apply_effect::{ApplyEffect, ClipEffect};
 pub use arrange::{CloseGap, Lift, MoveClips, MoveMode, RippleDelete};
 pub use attributes::{Attribute, PasteAttributes, RemoveAttributes};
-pub use bin::{AddBin, MoveToBin, RemoveBin, RenameBin};
+pub use bin::{AddBin, MoveToBin, RemoveBin, RenameBin, SetBinSearch};
 pub use caption::SetCaptions;
 pub use enable::SetClipsEnabled;
 pub use frame_size::{FrameFit, SetToFrameSize};

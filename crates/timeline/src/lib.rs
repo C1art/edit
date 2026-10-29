@@ -68,7 +68,7 @@ pub use audio_effect::{
 };
 pub use audio_plan::{audio_fade, audio_span, clip_balance, clip_level, track_automation};
 pub use audio_type::AudioType;
-pub use bin::{Bin, BinId};
+pub use bin::{Bin, BinId, BinSearch, SearchField};
 pub use blend::BlendMode;
 pub use caption::{captions_from_cues, Caption, CaptionStyle, Captions};
 pub use collect::{collect_files, Collect, FileCopy};
@@ -86,13 +86,13 @@ pub use edit::{
     RelinkMedia, RemoveAttributes, RemoveBin, RemoveMarker, RemoveMedia, RemoveSpeedKeyframe,
     RemoveSubmix, RemoveTimeRemap, RemoveTrack, RenameBin, RenameClips, RenameMedia, RenameTrack,
     RenderAndReplace, ReplaceClip, RestoreUnrendered, RippleDelete, RippleTrimToPlayhead, Roll,
-    SetCaptions, SetChannelMap, SetClipAudioEffects, SetClipGain, SetClipLabel, SetClipLook,
-    SetClipPan, SetClipSpeed, SetClipVolume, SetClipsEnabled, SetClipsSound, SetGenerator,
-    SetGrouped, SetLinked, SetLinkedSelection, SetMarks, SetMasterEffects, SetMasterGain,
-    SetMediaLog, SetProxy, SetSegmentSpeed, SetSequenceFormat, SetSubmix, SetTimeInterpolation,
-    SetToFrameSize, SetTrackAutomation, SetTrackEffects, SetTrackMix, SetTrackOutput,
-    SetTrackSwitch, SetTransition, Slide, Slip, SwitchAngle, SyncMethod, TrackSwitch, Trim,
-    TrimMode, TrimToPlayhead, Unlinked, UpdateMarker,
+    SetBinSearch, SetCaptions, SetChannelMap, SetClipAudioEffects, SetClipGain, SetClipLabel,
+    SetClipLook, SetClipPan, SetClipSpeed, SetClipVolume, SetClipsEnabled, SetClipsSound,
+    SetGenerator, SetGrouped, SetLinked, SetLinkedSelection, SetMarks, SetMasterEffects,
+    SetMasterGain, SetMediaLog, SetProxy, SetSegmentSpeed, SetSequenceFormat, SetSubmix,
+    SetTimeInterpolation, SetToFrameSize, SetTrackAutomation, SetTrackEffects, SetTrackMix,
+    SetTrackOutput, SetTrackSwitch, SetTransition, Slide, Slip, SwitchAngle, SyncMethod,
+    TrackSwitch, Trim, TrimMode, TrimToPlayhead, Unlinked, UpdateMarker,
 };
 pub use edl::to_edl;
 pub use effect::{

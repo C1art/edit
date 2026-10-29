@@ -1,9 +1,9 @@
 use std::path::{Path, PathBuf};
 
 use timeline::{
-    AddBin, CreateMulticam, DuplicateMedia, Edit, InterpretFootage, MakeOffline, MakeSubclip,
-    MergeClips, MoveToBin, RelinkMedia, RemoveBin, RemoveMedia, RenameBin, RenameMedia, SetProxy,
-    SourceId, Ticks, TimelineError,
+    AddBin, BinSearch, CreateMulticam, DuplicateMedia, Edit, InterpretFootage, MakeOffline,
+    MakeSubclip, MergeClips, MoveToBin, RelinkMedia, RemoveBin, RemoveMedia, RenameBin,
+    RenameMedia, SetBinSearch, SetProxy, SourceId, Ticks, TimelineError,
 };
 
 use super::{PoolAction, PoolEntry};
@@ -48,7 +48,11 @@ impl Editor {
             }
             PoolAction::Interpret(id) => self.open_interpret_footage(id),
             PoolAction::AudioChannels(id) => self.open_audio_channels(id),
-            PoolAction::NewBin(parent) => self.new_bin(parent),
+            PoolAction::NewBin(parent) => self.new_bin(parent, None),
+            PoolAction::NewSearchBin(search) => self.new_bin(None, Some(search)),
+            PoolAction::SetBinSearch(bin, search) => {
+                self.apply_to_pool(SetBinSearch { bin, search });
+            }
             PoolAction::RenameBin(bin, name) => {
                 self.apply_to_pool(RenameBin { bin, name });
             }
@@ -116,12 +120,17 @@ impl Editor {
         }
     }
 
-    /// Adds a bin numbered after the project's others and opens its name for typing.
-    fn new_bin(&mut self, parent: Option<timeline::BinId>) {
-        let name = format!("Bin {}", self.timeline.project().bins.len() + 1);
+    /// Adds a bin, numbered after the project's others or named for its search, and opens
+    /// its name for typing.
+    fn new_bin(&mut self, parent: Option<timeline::BinId>, search: Option<BinSearch>) {
+        let name = match &search {
+            Some(search) => format!("Search: {}", search.text),
+            None => format!("Bin {}", self.timeline.project().bins.len() + 1),
+        };
         if self.apply_to_pool(AddBin {
             name: name.clone(),
             parent,
+            search,
         }) {
             if let Some(bin) = self.timeline.project().bins.last() {
                 self.pool.renaming = Some((PoolEntry::Bin(bin.id), name));
