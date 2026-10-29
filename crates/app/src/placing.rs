@@ -1,6 +1,6 @@
 use timeline::{
-    edit_points, AddGenerated, AddTrack, ClipId, FourPoint, Generator, PlaceClip, PlaceMode,
-    SourceId, TrackKind,
+    edit_points, AddGenerated, AddTrack, ClipId, FourPoint, Generator, PlaceClip, PlaceClips,
+    PlaceMode, SourceId, TrackKind,
 };
 
 use egui::DragAndDrop;
@@ -63,25 +63,39 @@ pub(crate) fn place_from_source(editor: &mut Editor, mode: PlaceMode, fit: Optio
     }
 }
 
-/// The media being dragged. An item from the pool that was marked in the source
-/// monitor carries only the marked part, as in Premiere.
-pub fn carried_media(editor: &Editor, ctx: &egui::Context) -> Option<SourceDrag> {
+/// The media being dragged. Dragging one of several items selected in the project
+/// carries them all, in the order they were selected, and an item that was marked in
+/// the source monitor carries only the marked part, as in Premiere.
+pub fn carried_media(editor: &Editor, ctx: &egui::Context) -> Vec<SourceDrag> {
     if let Some(drag) = DragAndDrop::payload::<SourceDrag>(ctx) {
-        return Some(*drag);
+        return vec![*drag];
     }
-    let source = *DragAndDrop::payload::<SourceId>(ctx)?;
-    let range = editor.source_marked(source).or_else(|| {
-        let sequence = editor.timeline.sequence();
-        let range = sequence
-            .media_item(source)?
-            .default_range(sequence.timebase);
-        Some((range.start, range.end - range.start))
-    })?;
-    Some(SourceDrag {
-        source,
-        range,
-        take: Take::Both,
-    })
+    let Some(grabbed) = DragAndDrop::payload::<SourceId>(ctx).map(|id| *id) else {
+        return Vec::new();
+    };
+    let selected = &editor.pool.selected;
+    let sources = if selected.contains(&grabbed) {
+        selected.as_slice()
+    } else {
+        std::slice::from_ref(&grabbed)
+    };
+    sources
+        .iter()
+        .filter_map(|&source| {
+            let range = editor.source_marked(source).or_else(|| {
+                let sequence = editor.timeline.sequence();
+                let range = sequence
+                    .media_item(source)?
+                    .default_range(sequence.timebase);
+                Some((range.start, range.end - range.start))
+            })?;
+            Some(SourceDrag {
+                source,
+                range,
+                take: Take::Both,
+            })
+        })
+        .collect()
 }
 
 /// Edits media dropped onto the timeline into it, keeping its video and audio together
@@ -93,22 +107,21 @@ pub fn drop_media(editor: &mut Editor, drop: MediaDrop) {
         at,
         mode,
     } = drop;
-    let sequence = editor.timeline.sequence();
-    let Some(item) = sequence.media_item(media.source) else {
+    let Some(first) = media.first() else {
         return;
     };
-    let (video_track, audio_track) = drop_tracks(sequence, item, track, media.take);
-    let (source_in, duration) = media.range;
-    editor.match_format(media.source);
-    editor.apply(PlaceClip {
-        source: media.source,
-        source_in,
-        duration,
+    editor.match_format(first.source);
+    let (video_track, audio_track) = drop_tracks(editor.timeline.sequence(), &media, track);
+    let pieces = media
+        .iter()
+        .map(|drag| (drag.source, drag.range.0, drag.range.1))
+        .collect();
+    editor.apply(PlaceClips {
+        pieces,
         at,
         video_track,
         audio_track,
         mode,
-        fill: None,
     });
 }
 

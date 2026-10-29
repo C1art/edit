@@ -133,7 +133,7 @@ impl Editor {
             &mut self.clip_art,
             playhead,
             playing,
-            carried,
+            &carried,
         );
         if let Some(response) = output.clip_menu {
             response.context_menu(|ui| {

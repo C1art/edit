@@ -225,7 +225,7 @@ impl TimelineView {
         art: &mut ClipArt,
         playhead: Ticks,
         playing: bool,
-        carried: Option<SourceDrag>,
+        carried: &[SourceDrag],
     ) -> TimelineOutput {
         let mut output = TimelineOutput::default();
         let area = ui.available_rect_before_wrap();

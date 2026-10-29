@@ -9,10 +9,11 @@ use super::scale::{self, TimeScale};
 use super::{paint, TimelineOutput, SNAP_POINTS};
 use crate::effects_panel::{EffectDrop, EffectItem};
 
-/// Media dropped from the pool or the source monitor onto a track.
-#[derive(Debug, Clone, Copy)]
+/// Media dropped from the pool or the source monitor onto a track, laid end to end
+/// when several items were dragged.
+#[derive(Debug, Clone)]
 pub struct MediaDrop {
-    pub media: SourceDrag,
+    pub media: Vec<SourceDrag>,
     pub track: TrackRef,
     pub at: Ticks,
     pub mode: PlaceMode,
@@ -36,21 +37,28 @@ pub enum Take {
 }
 
 /// The video and audio track indexes media dropped on `track` lands on: that one and
-/// the first of the other kind, as far as the media and `take` have picture and sound.
+/// the first of the other kind, as far as any of the media and its take have picture
+/// and sound.
 pub fn drop_tracks(
     sequence: &Sequence,
-    item: &MediaItem,
+    media: &[SourceDrag],
     track: TrackRef,
-    take: Take,
 ) -> (Option<usize>, Option<usize>) {
     let first = |count: usize| (count > 0).then_some(0);
     let (video, audio) = match track.kind {
         TrackKind::Video => (Some(track.index), first(sequence.audio.len())),
         TrackKind::Audio => (first(sequence.video.len()), Some(track.index)),
     };
+    let takes = |wanted: fn(&MediaItem, Take) -> bool| {
+        media.iter().any(|drag| {
+            sequence
+                .media_item(drag.source)
+                .is_some_and(|item| wanted(item, drag.take))
+        })
+    };
     (
-        video.filter(|_| item.video.is_some() && take != Take::AudioOnly),
-        audio.filter(|_| item.has_audio && take != Take::VideoOnly),
+        video.filter(|_| takes(|item, take| item.video.is_some() && take != Take::AudioOnly)),
+        audio.filter(|_| takes(|item, take| item.has_audio && take != Take::VideoOnly)),
     )
 }
 
@@ -77,7 +85,7 @@ pub(super) fn handle_drop(
     rows: &[Row],
     scale: TimeScale,
     snapping_with: Option<Ticks>,
-    carried: Option<SourceDrag>,
+    carried: &[SourceDrag],
     output: &mut TimelineOutput,
 ) -> Option<DropHint> {
     // `hover_pos` is unset while the drag that brings a payload holds the pointer.
@@ -89,9 +97,12 @@ pub(super) fn handle_drop(
     let row = layout::row_at(rows, pos.y);
     let from_pool = response.dnd_hover_payload::<SourceId>().is_some();
     let hovering = from_pool || response.dnd_hover_payload::<SourceDrag>().is_some();
-    if let Some(media) = carried.filter(|_| hovering) {
-        let item = sequence.media_item(media.source)?;
-        let length = item.conform().sequence_span(media.range.1);
+    if hovering && !carried.is_empty() {
+        let mut length = Ticks::ZERO;
+        for drag in carried {
+            let item = sequence.media_item(drag.source)?;
+            length = length + item.conform().sequence_span(drag.range.1);
+        }
         let mut at = scale::nearest_frame(time, sequence.format.frame_rate, sequence.timebase);
         if let Some(playhead) = snapping_with {
             let targets = scale::snap_targets(sequence, &[], playhead);
@@ -114,13 +125,13 @@ pub(super) fn handle_drop(
         };
         if released {
             output.drop = Some(MediaDrop {
-                media,
+                media: carried.to_vec(),
                 track: row.track,
                 at,
                 mode,
             });
         }
-        let (video, audio) = drop_tracks(sequence, item, row.track, media.take);
+        let (video, audio) = drop_tracks(sequence, carried, row.track);
         return Some(DropHint::Media {
             start: at,
             end: at + length,
