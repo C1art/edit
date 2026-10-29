@@ -8,6 +8,7 @@ mod audio_mastering;
 mod audio_worker;
 mod clip_audio;
 mod clip_decoders;
+mod clip_frame;
 mod clip_wipes;
 mod clock;
 mod command;

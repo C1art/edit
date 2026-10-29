@@ -101,10 +101,12 @@ fn seeks_show_the_clip_frame_or_black_in_gaps() {
         shown(player) == Some((Ticks(60 * FRAME), 1))
     });
     let frame = player.current_frame().unwrap();
-    let LayerPicture::Frame(picture) = &frame.layers[0].picture else {
-        panic!("a file clip shows a decoded frame");
+    let pts = match &frame.layers[0].picture {
+        LayerPicture::Frame(picture) => picture.pts,
+        LayerPicture::Planes(picture) => picture.pts,
+        _ => panic!("a file clip shows a decoded frame"),
     };
-    assert_eq!(picture.pts, Ticks(35 * FRAME));
+    assert_eq!(pts, Ticks(35 * FRAME));
 
     player.step(-25);
     pump_until(&mut player, |player| {

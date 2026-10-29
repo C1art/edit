@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 use media::{DecodedFrame, MediaError, MediaReader, Streams, VideoFrame};
 use timeline::{Generator, MediaItem, SourceId, Ticks, TimeInterpolation, Timebase};
 
+use crate::clip_frame::ClipFrame;
 use crate::compose::TrackDecoders;
 use crate::generated::offline_frame;
 use crate::optical_flow::{self, Flow};
@@ -36,12 +37,12 @@ enum Source {
 pub(crate) struct TrackVideo {
     timebase: Timebase,
     source: Source,
-    current: Option<Arc<VideoFrame>>,
-    next: Option<VideoFrame>,
+    current: Option<ClipFrame>,
+    next: Option<ClipFrame>,
     ended: bool,
     /// The pictures decoded up to `current`, oldest first, kept while requests go
     /// backwards.
-    behind: VecDeque<Arc<VideoFrame>>,
+    behind: VecDeque<ClipFrame>,
     /// The decoders of a nested sequence's tracks, when the clip followed is one.
     pub(crate) nested: Vec<TrackDecoders>,
     /// What the open reader's pictures are sized for.
@@ -51,6 +52,8 @@ pub(crate) struct TrackVideo {
     flow: Option<((Ticks, Ticks), Arc<Flow>)>,
     /// How many of the last pictures decoded to keep, going forwards too.
     history: usize,
+    /// Whether pictures the GPU can turn into RGB are left in their planes.
+    planar: bool,
 }
 
 impl TrackVideo {
@@ -66,7 +69,14 @@ impl TrackVideo {
             resolution: Resolution::Full,
             flow: None,
             history: 0,
+            planar: false,
         }
+    }
+
+    /// Leaves the pictures decoded from now on in their planes where it can, for
+    /// clips no effect needs the RGBA of.
+    pub(crate) fn keep_planes(&mut self, planar: bool) {
+        self.planar = planar;
     }
 
     /// Keeps up to the last `frames` pictures decoded, so that requests that far back
@@ -91,12 +101,13 @@ impl TrackVideo {
         time: Ticks,
         canvas: [u32; 2],
         resolution: Resolution,
-    ) -> Result<Option<Arc<VideoFrame>>, MediaError> {
+    ) -> Result<Option<ClipFrame>, MediaError> {
         if let Some(generator) = &media.generator {
-            return Ok(Some(self.generated(media, generator, time, canvas)));
+            let frame = self.generated(media, generator, time, canvas);
+            return Ok(Some(ClipFrame::Rgba(frame)));
         }
         if media.offline {
-            return Ok(Some(offline_frame(canvas[0], canvas[1])));
+            return Ok(Some(ClipFrame::Rgba(offline_frame(canvas[0], canvas[1]))));
         }
         let same_media = match &self.source {
             Source::Open(id, path, _) => *id == media.id && *path == media.path,
@@ -119,9 +130,12 @@ impl TrackVideo {
         }
         let reader = match &mut self.source {
             Source::Open(_, _, reader) => reader,
-            Source::Failed(..) => return Ok(Some(offline_frame(canvas[0], canvas[1]))),
+            Source::Failed(..) => {
+                return Ok(Some(ClipFrame::Rgba(offline_frame(canvas[0], canvas[1]))))
+            }
             Source::None | Source::Generated(..) => return Ok(None),
         };
+        reader.set_planar(self.planar);
         if !same_media || resolution != self.resolution {
             let size = media
                 .video
@@ -140,7 +154,7 @@ impl TrackVideo {
         let decode_ahead = Timebase::new(1, 1).map_or(Ticks::ZERO, |second| {
             Ticks(MAX_DECODE_AHEAD_SECONDS).rescale(second, self.timebase)
         });
-        let current = self.current.as_ref().map(|current| current.pts);
+        let current = self.current.as_ref().map(ClipFrame::pts);
         let backward = current.is_some_and(|current| time < current);
         if backward {
             if let Some(frame) = frame_before(&self.behind, time) {
@@ -168,8 +182,12 @@ impl TrackVideo {
         loop {
             if self.next.is_none() && !self.ended {
                 match reader.next_frame()? {
-                    Some(DecodedFrame::Video(frame)) => self.next = Some(frame),
-                    Some(DecodedFrame::Planar(frame)) => self.next = Some(frame.to_rgba()?),
+                    Some(DecodedFrame::Video(frame)) => {
+                        self.next = Some(ClipFrame::Rgba(Arc::new(frame)));
+                    }
+                    Some(DecodedFrame::Planar(frame)) => {
+                        self.next = Some(ClipFrame::Planar(Arc::new(frame)));
+                    }
                     Some(DecodedFrame::Audio(_)) => continue,
                     None => self.ended = true,
                 }
@@ -177,16 +195,16 @@ impl TrackVideo {
             let due = self
                 .next
                 .as_ref()
-                .is_some_and(|next| next.pts <= time || self.current.is_none());
+                .is_some_and(|next| next.pts() <= time || self.current.is_none());
             if !due {
                 break;
             }
-            self.current = self.next.take().map(Arc::new);
+            self.current = self.next.take();
             if let Some(current) = self.current.as_ref().filter(|_| keep > 0) {
                 if self.behind.len() == keep {
                     self.behind.pop_front();
                 }
-                self.behind.push_back(Arc::clone(current));
+                self.behind.push_back(current.clone());
             }
         }
         Ok(self.current.clone())
@@ -203,7 +221,7 @@ impl TrackVideo {
         canvas: [u32; 2],
         resolution: Resolution,
         interpolation: TimeInterpolation,
-    ) -> Result<Option<Arc<VideoFrame>>, MediaError> {
+    ) -> Result<Option<ClipFrame>, MediaError> {
         let Some(earlier) = self.frame_at(media, time, canvas, resolution)? else {
             return Ok(None);
         };
@@ -211,33 +229,34 @@ impl TrackVideo {
         let decoded_last = self
             .current
             .as_ref()
-            .is_some_and(|current| Arc::ptr_eq(current, &earlier));
+            .is_some_and(|current| current.is(&earlier));
         let later = self.next.as_ref().filter(|later| {
-            decoded_last && later.pts > earlier.pts && later.pixels.len() == earlier.pixels.len()
+            decoded_last && later.pts() > earlier.pts() && later.size() == earlier.size()
         });
         let Some(later) = later else {
             return Ok(Some(earlier));
         };
-        let weight = frame_blend::weight(earlier.pts, later.pts, time);
+        let weight = frame_blend::weight(earlier.pts(), later.pts(), time);
         if weight == 0 {
             return Ok(Some(earlier));
         }
+        let (earlier, later) = (earlier.rgba()?, later.rgba()?);
         if interpolation != TimeInterpolation::OpticalFlow {
-            return Ok(Some(Arc::new(frame_blend::blend(&earlier, later, weight))));
+            let blended = frame_blend::blend(&earlier, &later, weight);
+            return Ok(Some(ClipFrame::Rgba(Arc::new(blended))));
         }
         let pair = (earlier.pts, later.pts);
         let flow = match &self.flow {
             Some((kept, flow)) if *kept == pair => Arc::clone(flow),
             _ => {
-                let flow = Arc::new(Flow::between(&earlier, later));
+                let flow = Arc::new(Flow::between(&earlier, &later));
                 self.flow = Some((pair, Arc::clone(&flow)));
                 flow
             }
         };
         let fraction = weight as f32 / frame_blend::FULL as f32;
-        Ok(Some(Arc::new(optical_flow::interpolate(
-            &earlier, later, &flow, fraction,
-        ))))
+        let interpolated = optical_flow::interpolate(&earlier, &later, &flow, fraction);
+        Ok(Some(ClipFrame::Rgba(Arc::new(interpolated))))
     }
 
     /// The offline picture, when the file followed couldn't be opened.
@@ -270,11 +289,15 @@ impl TrackVideo {
 }
 
 /// The kept picture showing at `time`, when the kept ones reach back that far.
-fn frame_before(behind: &VecDeque<Arc<VideoFrame>>, time: Ticks) -> Option<Arc<VideoFrame>> {
-    if behind.front().is_none_or(|first| first.pts > time) {
+fn frame_before(behind: &VecDeque<ClipFrame>, time: Ticks) -> Option<ClipFrame> {
+    if behind.front().is_none_or(|first| first.pts() > time) {
         return None;
     }
-    behind.iter().rev().find(|frame| frame.pts <= time).cloned()
+    behind
+        .iter()
+        .rev()
+        .find(|frame| frame.pts() <= time)
+        .cloned()
 }
 
 fn backward_frames(media: &MediaItem) -> usize {

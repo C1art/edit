@@ -61,7 +61,8 @@ pub(crate) fn echoed_frame_at(
     order.sort_by_key(|&index| times[index]);
     let mut pictures = vec![None; times.len()];
     for index in order {
-        pictures[index] = decoder.frame_at(media, times[index], canvas, resolution)?;
+        let picture = decoder.frame_at(media, times[index], canvas, resolution)?;
+        pictures[index] = picture.map(|picture| picture.rgba()).transpose()?;
     }
     let weighted: Vec<(&VideoFrame, f32)> = pictures
         .iter()

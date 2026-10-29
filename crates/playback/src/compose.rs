@@ -3,10 +3,11 @@ use std::sync::Arc;
 use render::{Grade, LayerLook};
 use timeline::{
     track_layers_at, ClipId, Generator, MediaItem, PlannedLayer, Reveal, Sequence, SourceId, Ticks,
-    TimeInterpolation, Track, TrackRef,
+    TimeInterpolation, Track, TrackRef, VideoEffect,
 };
 
 use crate::clip_decoders::ClipDecoders;
+use crate::clip_frame::ClipFrame;
 use crate::echo::{echo_of, echoed_frame_at};
 use crate::generated::{caption_frame, scrolled};
 use crate::grades::grade_for;
@@ -189,9 +190,14 @@ fn clip_picture(
             let resolution = decoding.resolution;
             let echo = echo_of(effects);
             decoder.keep_history(0);
+            let planar = echo.is_none()
+                && plan.clip.interpolation == TimeInterpolation::FrameSampling
+                && !effects.iter().any(draws_on_pixels);
+            decoder.keep_planes(planar);
             let frame = match (echo, plan.clip.interpolation) {
                 (Some(echo), _) => {
                     echoed_frame_at(decoder, sequence, media, (time, echo), size, resolution)
+                        .map(|frame| frame.map(ClipFrame::Rgba))
                 }
                 (None, TimeInterpolation::FrameSampling) => {
                     decoder.frame_at(media, time, size, resolution)
@@ -200,7 +206,16 @@ fn clip_picture(
                     decoder.interpolated_frame_at(media, time, size, resolution, interpolation)
                 }
             };
-            match frame {
+            // Pictures decoded before the clip took an effect drawing on them, or
+            // before it lost its last one, can come either way.
+            let rgba = match frame {
+                Ok(Some(ClipFrame::Planar(planes))) if planar => {
+                    return Some(LayerPicture::Planes(planes));
+                }
+                Ok(frame) => frame.map(|frame| frame.rgba()).transpose(),
+                Err(error) => Err(error),
+            };
+            match rgba {
                 Ok(frame) => frame
                     .map(|frame| scrolled(frame, sequence, plan.clip, media, time))
                     .map(|frame| bucket_filled(frame, effects, time))
@@ -219,6 +234,20 @@ fn clip_picture(
             }
         }
     }
+}
+
+/// Whether `effect` is drawn into the decoded picture on the CPU, needing its RGBA.
+fn draws_on_pixels(effect: &VideoEffect) -> bool {
+    matches!(
+        effect,
+        VideoEffect::PaintBucket(_)
+            | VideoEffect::WriteOn(_)
+            | VideoEffect::ImageMatteKey(_)
+            | VideoEffect::Timecode { .. }
+            | VideoEffect::ClipName { .. }
+            | VideoEffect::SimpleText(_)
+            | VideoEffect::Lightning(_)
+    )
 }
 
 /// What video track `index` shows at `pts` for use as a matte, hidden or not. Its

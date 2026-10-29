@@ -1,8 +1,8 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use media::VideoFrame;
-use render::{Combine, Grade, LayerImage, LayerLook, Picture};
+use media::{Chroma, PlanarFrame, Plane, VideoFrame};
+use render::{ChromaRows, Combine, Grade, LayerImage, LayerLook, Picture, PlaneRows};
 use timeline::{MatteChannel, Ticks, TrackRef};
 
 /// One picture placed in the program picture.
@@ -17,6 +17,8 @@ pub struct Layer {
 #[derive(Debug, Clone)]
 pub enum LayerPicture {
     Frame(Arc<VideoFrame>),
+    /// A decoded picture left in its planes, for the GPU to turn into RGB.
+    Planes(Arc<PlanarFrame>),
     /// What a nested sequence shows, bottom layer first, composited before the look.
     Nest(Vec<Layer>),
     /// A clip's layer shown where the layers of its track matte let it.
@@ -43,6 +45,20 @@ impl Layer {
                 rgba: &frame.pixels,
                 source: Some(Arc::clone(frame) as Arc<dyn Any + Send + Sync>),
             },
+            LayerPicture::Planes(frame) => {
+                let planes = frame.planes();
+                Picture::Planes {
+                    width: frame.width,
+                    height: frame.height,
+                    luma: rows(planes.luma),
+                    chroma: match planes.chroma {
+                        Chroma::Separate(cb, cr) => ChromaRows::Separate(rows(cb), rows(cr)),
+                        Chroma::Interleaved(both) => ChromaRows::Interleaved(rows(both)),
+                    },
+                    color: frame.color,
+                    source: Some(Arc::clone(frame) as Arc<dyn Any + Send + Sync>),
+                }
+            }
             LayerPicture::Nest(layers) => Picture::Group(images(layers)),
             LayerPicture::Matted {
                 fill,
@@ -70,6 +86,13 @@ impl Layer {
             look: self.look,
             grade: self.grade.clone(),
         }
+    }
+}
+
+fn rows(plane: Plane<'_>) -> PlaneRows<'_> {
+    PlaneRows {
+        bytes: plane.bytes,
+        stride: plane.stride,
     }
 }
 
