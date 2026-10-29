@@ -22,7 +22,7 @@ const SKIN_TONE_DEGREES: f32 = 123.0;
 pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
     let id = ui.scope_id().with("scope");
     let mut scope: Scope = ui.data(|data| data.get_temp(id)).unwrap_or_default();
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         for (kind, name) in [
             (Scope::LumaWaveform, "Luma Waveform"),
             (Scope::RgbParade, "RGB Parade"),
