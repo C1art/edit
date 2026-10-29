@@ -1,7 +1,8 @@
 use crate::{Marker, Nest, Sequence, Ticks, TimelineError, Track, TrackRef};
 
 /// Checks the invariants every edit must preserve: on each track clips are sorted,
-/// don't overlap and have positive length, every clip stays within its media, and
+/// don't overlap and have positive length, as do their transitions, every clip stays
+/// within its media, and
 /// locked tracks are untouched since `before`. Markers are in time order, and no nested
 /// sequence contains itself. Nested sequences are held to the same rules.
 pub(crate) fn check(before: &Sequence, after: &Sequence) -> Result<(), TimelineError> {
@@ -40,7 +41,13 @@ fn check_tracks<'a>(
             if clip.start < Ticks::ZERO {
                 return Err(TimelineError::BeforeSequenceStart);
             }
-            if clip.duration <= Ticks::ZERO {
+            let transitions = [clip.transition_in, clip.transition_out];
+            if clip.duration <= Ticks::ZERO
+                || transitions
+                    .iter()
+                    .flatten()
+                    .any(|transition| transition.duration <= Ticks::ZERO)
+            {
                 return Err(TimelineError::NonPositiveDuration);
             }
             check_markers(&clip.markers)?;
