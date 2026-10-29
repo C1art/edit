@@ -1,4 +1,4 @@
-use egui::{Rect, RichText, Sense, Stroke};
+use egui::{Color32, Rect, RichText, Sense, Stroke};
 use playback::Player;
 use timeline::{Marks, Ticks, Timebase, Timecode};
 
@@ -225,14 +225,33 @@ fn scrub_bar(ui: &mut egui::Ui, player: &mut Player, marks: Marks) {
     }
     let to_x =
         |time: Ticks| rect.left() + rect.width() * (time.0 as f64 / duration.0 as f64) as f32;
-    if marks.is_set() {
-        let marked = marks.range(duration);
-        let range = Rect::from_x_y_ranges(to_x(marked.start)..=to_x(marked.end), track.y_range());
-        painter.rect_filled(range, 2.0, visuals.selection.bg_fill);
-    }
     let playhead = to_x(player.position());
     let played = Rect::from_x_y_ranges(track.left()..=playhead, track.y_range());
     painter.rect_filled(played, 2.0, theme::ACCENT.gamma_multiply(0.5));
+    // Over the played part, which would hide them otherwise.
+    if marks.is_set() {
+        let marked = marks.range(duration);
+        let (left, right) = (to_x(marked.start), to_x(marked.end));
+        let band = Rect::from_x_y_ranges(left..=right, rect.y_range().shrink(3.0));
+        painter.rect_filled(band, 1.0, Color32::from_white_alpha(40));
+        let stroke = Stroke::new(1.5, Color32::from_gray(220));
+        let bracket = |x: f32, toward: f32| {
+            let (top, bottom) = (band.top(), band.bottom());
+            let points = vec![
+                egui::pos2(x + toward, top),
+                egui::pos2(x, top),
+                egui::pos2(x, bottom),
+                egui::pos2(x + toward, bottom),
+            ];
+            egui::Shape::line(points, stroke)
+        };
+        if marks.mark_in.is_some() {
+            painter.add(bracket(left, 4.0));
+        }
+        if marks.mark_out.is_some() {
+            painter.add(bracket(right, -4.0));
+        }
+    }
     painter.line_segment(
         [
             egui::pos2(playhead, rect.top() + 2.0),
