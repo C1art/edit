@@ -156,6 +156,9 @@ pub struct TimelineView {
     last_playhead: Ticks,
     /// Whether the sequence had anything in it at the last layout.
     filled: bool,
+    /// The width and zoom of the last fit to the sequence, kept while nothing else
+    /// zooms so the view can be fitted again when the panel changes size.
+    fitted: Option<(f32, f64)>,
 }
 
 impl Default for TimelineView {
@@ -182,6 +185,7 @@ impl Default for TimelineView {
             render_bar: Vec::new(),
             last_playhead: Ticks::ZERO,
             filled: false,
+            fitted: None,
         }
     }
 }

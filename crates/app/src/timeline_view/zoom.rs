@@ -19,10 +19,12 @@ impl TimelineView {
         ));
         self.ticks_per_point = (duration.0 as f64 / f64::from(self.width.max(1.0)) * 1.05).max(1.0);
         self.scroll = Ticks::ZERO;
+        self.fitted = Some((self.width, self.ticks_per_point));
     }
 
-    /// Fits the view to a sequence that just got its first clips, and brings the
-    /// playhead into view when it plays or jumps out of it.
+    /// Fits the view to a sequence that just got its first clips, or again when the
+    /// panel changes size while it still shows the whole sequence, as a switch of
+    /// workspace does. Brings the playhead into view when it plays or jumps out of it.
     pub(super) fn keep_in_view(
         &mut self,
         ui: &egui::Ui,
@@ -31,7 +33,12 @@ impl TimelineView {
         playing: bool,
     ) {
         let filled = sequence.duration() > Ticks::ZERO;
-        if filled && !self.filled {
+        let resized_while_fitted = self.fitted.is_some_and(|(width, ticks_per_point)| {
+            width != self.width
+                && ticks_per_point == self.ticks_per_point
+                && self.scroll == Ticks::ZERO
+        });
+        if (filled && !self.filled) || resized_while_fitted {
             self.zoom_to_fit(sequence);
         }
         self.filled = filled;
