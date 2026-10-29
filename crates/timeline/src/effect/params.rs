@@ -1,4 +1,4 @@
-use super::VideoEffect;
+use super::{EdgeFeather, Median, NoiseHls, UnsharpMask, VideoEffect};
 use crate::Param;
 
 // One match serves both borrows: default binding modes make the same patterns bind
@@ -256,6 +256,23 @@ macro_rules! effect_params {
                 block_height: third,
                 feather,
             } => vec![first, second, third, feather],
+            VideoEffect::UnsharpMask(UnsharpMask {
+                amount,
+                radius,
+                threshold,
+            }) => vec![amount, radius, threshold],
+            VideoEffect::Median(Median { radius, threshold })
+            | VideoEffect::DustAndScratches(Median { radius, threshold }) => {
+                vec![radius, threshold]
+            }
+            VideoEffect::EdgeFeather(EdgeFeather { amount }) => vec![amount],
+            VideoEffect::NoiseHls(NoiseHls {
+                hue,
+                lightness,
+                saturation,
+                grain_size,
+                phase,
+            }) => vec![hue, lightness, saturation, grain_size, phase],
         }
     };
 }

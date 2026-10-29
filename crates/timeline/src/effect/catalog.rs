@@ -1,12 +1,13 @@
 use super::{
-    ClipNameSource, ColorChange, ColorMatch, EffectCategory, KeyOutput, LensType, MagnifyShape,
-    MatteChannel, RadialWipeDirection, RampShape, Rgb, TimecodeSource, VideoEffect,
+    ClipNameSource, ColorChange, ColorMatch, EdgeFeather, EffectCategory, KeyOutput, LensType,
+    MagnifyShape, MatteChannel, Median, NoiseHls, RadialWipeDirection, RampShape, Rgb,
+    TimecodeSource, UnsharpMask, VideoEffect,
 };
 use crate::{Param, Stabilizer};
 
 impl VideoEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 57] {
+    pub fn catalog() -> [Self; 62] {
         [
             Self::GaussianBlur {
                 blurriness: Param::from_value(10.0),
@@ -296,14 +297,26 @@ impl VideoEffect {
                 block_height: Param::from_value(10.0),
                 feather: Param::default(),
             },
+            Self::UnsharpMask(UnsharpMask::default()),
+            Self::Median(Median::new(2.0)),
+            Self::DustAndScratches(Median::new(1.0)),
+            Self::EdgeFeather(EdgeFeather {
+                amount: Param::from_value(10.0),
+            }),
+            Self::NoiseHls(NoiseHls::default()),
         ]
     }
 
     pub fn category(&self) -> EffectCategory {
         match self {
-            Self::GaussianBlur { .. } | Self::Sharpen { .. } | Self::DirectionalBlur { .. } => {
-                EffectCategory::BlurAndSharpen
-            }
+            Self::GaussianBlur { .. }
+            | Self::Sharpen { .. }
+            | Self::DirectionalBlur { .. }
+            | Self::UnsharpMask(_) => EffectCategory::BlurAndSharpen,
+            Self::Noise { .. }
+            | Self::Median(_)
+            | Self::DustAndScratches(_)
+            | Self::NoiseHls(_) => EffectCategory::NoiseAndGrain,
             Self::Tint { .. } | Self::BrightnessContrast { .. } => EffectCategory::ColorCorrection,
             Self::Twirl { .. }
             | Self::LensDistortion { .. }
@@ -337,7 +350,6 @@ impl VideoEffect {
             Self::Invert { .. }
             | Self::Vignette { .. }
             | Self::Posterize { .. }
-            | Self::Noise { .. }
             | Self::FindEdges { .. }
             | Self::Mosaic { .. }
             | Self::StrobeLight { .. }
@@ -347,7 +359,9 @@ impl VideoEffect {
             | Self::Replicate { .. } => EffectCategory::Stylize,
             Self::PosterizeTime { .. } => EffectCategory::Time,
             Self::Timecode { .. } | Self::ClipName { .. } => EffectCategory::Video,
-            Self::HorizontalFlip | Self::VerticalFlip => EffectCategory::Transform,
+            Self::HorizontalFlip | Self::VerticalFlip | Self::EdgeFeather(_) => {
+                EffectCategory::Transform
+            }
             Self::Levels { .. } | Self::ProcAmp { .. } => EffectCategory::Adjust,
             Self::LinearWipe { .. }
             | Self::RadialWipe { .. }
@@ -415,6 +429,11 @@ impl VideoEffect {
             Self::RadialWipe { .. } => "Radial Wipe",
             Self::VenetianBlinds { .. } => "Venetian Blinds",
             Self::BlockDissolve { .. } => "Block Dissolve",
+            Self::UnsharpMask(_) => "Unsharp Mask",
+            Self::Median(_) => "Median",
+            Self::DustAndScratches(_) => "Dust & Scratches",
+            Self::EdgeFeather(_) => "Edge Feather",
+            Self::NoiseHls(_) => "Noise HLS",
         }
     }
 }

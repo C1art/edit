@@ -3,33 +3,17 @@ use serde::{Deserialize, Serialize};
 use crate::{Param, Stabilizer};
 
 mod catalog;
+mod detail;
 mod key;
 mod options;
 mod params;
 
+pub use detail::{EdgeFeather, Median, NoiseHls, UnsharpMask};
 pub use key::{KeyOutput, MatteChannel, ULTRA_KEY_REACH};
 pub use options::{
     ClipNameSource, ColorChange, ColorMatch, EffectCategory, LensType, MagnifyShape,
-    RadialWipeDirection, RampShape, TimecodeSource,
+    RadialWipeDirection, RampShape, Rgb, TimecodeSource,
 };
-
-/// An sRGB color as stored in a project.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct Rgb {
-    pub r: u8,
-    pub g: u8,
-    pub b: u8,
-}
-
-impl Rgb {
-    pub const BLACK: Self = Self::new(0, 0, 0);
-    pub const WHITE: Self = Self::new(255, 255, 255);
-    pub const GREEN: Self = Self::new(0, 255, 0);
-
-    pub const fn new(r: u8, g: u8, b: u8) -> Self {
-        Self { r, g, b }
-    }
-}
 
 /// A video effect from the effect stack. Percentages are stored as their numbers.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -469,4 +453,9 @@ pub enum VideoEffect {
         block_height: Param,
         feather: Param,
     },
+    UnsharpMask(UnsharpMask),
+    Median(Median),
+    DustAndScratches(Median),
+    EdgeFeather(EdgeFeather),
+    NoiseHls(NoiseHls),
 }

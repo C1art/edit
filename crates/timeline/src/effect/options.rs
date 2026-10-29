@@ -188,6 +188,7 @@ pub enum EffectCategory {
     Generate,
     ImageControl,
     Keying,
+    NoiseAndGrain,
     Perspective,
     Stylize,
     Time,
@@ -197,7 +198,7 @@ pub enum EffectCategory {
 }
 
 impl EffectCategory {
-    pub const ALL: [Self; 13] = [
+    pub const ALL: [Self; 14] = [
         Self::Adjust,
         Self::BlurAndSharpen,
         Self::ColorCorrection,
@@ -205,6 +206,7 @@ impl EffectCategory {
         Self::Generate,
         Self::ImageControl,
         Self::Keying,
+        Self::NoiseAndGrain,
         Self::Perspective,
         Self::Stylize,
         Self::Time,
@@ -222,6 +224,7 @@ impl EffectCategory {
             Self::Generate => "Generate",
             Self::ImageControl => "Image Control",
             Self::Keying => "Keying",
+            Self::NoiseAndGrain => "Noise & Grain",
             Self::Perspective => "Perspective",
             Self::Stylize => "Stylize",
             Self::Time => "Time",
@@ -229,5 +232,23 @@ impl EffectCategory {
             Self::Transition => "Transition",
             Self::Video => "Video",
         }
+    }
+}
+
+/// An sRGB color as stored in a project.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Rgb {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+}
+
+impl Rgb {
+    pub const BLACK: Self = Self::new(0, 0, 0);
+    pub const WHITE: Self = Self::new(255, 255, 255);
+    pub const GREEN: Self = Self::new(0, 255, 0);
+
+    pub const fn new(r: u8, g: u8, b: u8) -> Self {
+        Self { r, g, b }
     }
 }
