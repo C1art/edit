@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use crossbeam::channel::{self, Receiver, TryRecvError};
 use media::{MediaError, Motion};
-use timeline::{ClipId, SetClipLook, TrackKind, VideoEffect};
+use timeline::{CameraPath, ClipId, SetClipLook, TrackKind, VideoEffect};
 
 use crate::editor::Editor;
 use crate::scene_edits::source_span;
@@ -23,7 +23,7 @@ pub struct MotionJob {
 }
 
 impl Editor {
-    /// Starts tracking the camera through `clip`'s footage, for its Warp Stabilizer.
+    /// Starts tracking the camera through `clip`'s footage, for its Warp Stabilizer or Rolling Shutter Repair.
     pub(crate) fn analyze_motion(&mut self, clip: ClipId) {
         if let Some(job) = &self.motion_job {
             if job.clip != clip {
@@ -41,7 +41,7 @@ impl Editor {
             .media_item(found.source)
             .filter(|item| item.is_file() && item.video.is_some());
         let (Some(item), TrackKind::Video) = (item, track.kind) else {
-            self.notice("Warp Stabilizer needs a clip of video footage");
+            self.notice("Motion analysis needs a clip of video footage");
             return;
         };
         let (path, range, timebase) = (item.path.clone(), source_span(found), sequence.timebase);
@@ -117,17 +117,26 @@ impl Editor {
             return;
         };
         let mut look = found.look.clone();
-        let stabilizer = look.effects.iter_mut().find_map(|effect| match effect {
-            VideoEffect::WarpStabilizer(stabilizer) => Some(stabilizer),
-            _ => None,
-        });
-        let Some(stabilizer) = stabilizer else {
+        let mut notice = None;
+        for effect in &mut look.effects {
+            match effect {
+                VideoEffect::WarpStabilizer(stabilizer) => {
+                    stabilizer.analyzed(motion.size, &motion.steps, sequence.timebase);
+                    let scale = f64::from(stabilizer.auto_scale) / 10.0;
+                    notice = Some(format!("Stabilized; Auto-scale {scale:.1}%"));
+                }
+                VideoEffect::RollingShutterRepair(repair) => {
+                    repair.path = Some(CameraPath::tracked(motion.size, &motion.steps));
+                    notice.get_or_insert_with(|| "Rolling shutter repaired".to_owned());
+                }
+                _ => {}
+            }
+        }
+        let Some(notice) = notice else {
             return;
         };
-        stabilizer.analyzed(motion.size, &motion.steps, sequence.timebase);
-        let scale = f64::from(stabilizer.auto_scale) / 10.0;
         if self.apply(SetClipLook { clip, look }) {
-            self.notice(format!("Stabilized; Auto-scale {scale:.1}%"));
+            self.notice(notice);
         }
     }
 }

@@ -184,6 +184,22 @@ macro_rules! more_effect_params {
                 contrast,
                 soft_knee,
             }) => vec![brightness, contrast, soft_knee],
+            VideoEffect::DifferenceMatte(DifferenceMatte {
+                matching_tolerance,
+                matching_softness,
+                blur_before_difference,
+                ..
+            }) => vec![
+                matching_tolerance,
+                matching_softness,
+                blur_before_difference,
+            ],
+            VideoEffect::CompoundBlur(CompoundBlur { maximum_blur, .. }) => vec![maximum_blur],
+            VideoEffect::Texturize(Texturize {
+                light_direction,
+                texture_contrast,
+                ..
+            }) => vec![light_direction, texture_contrast],
             // `effect_params!` forwards only the variants handled above.
             _ => Vec::new(),
         }

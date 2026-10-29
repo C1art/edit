@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use render::{Grade, LayerLook};
 use timeline::{
-    track_layers_at, BlendMode, ClipId, Generator, MatteChannel, MediaItem, PlannedLayer, Reveal,
-    Sequence, SourceId, Ticks, TimeInterpolation, Track, TrackRef, VideoEffect,
+    track_layers_at, ClipId, Generator, MediaItem, PlannedLayer, Reveal, Sequence, SourceId, Ticks,
+    TimeInterpolation, Track, TrackRef,
 };
 
 use crate::clip_decoders::ClipDecoders;
@@ -11,6 +11,7 @@ use crate::echo::{echo_of, echoed_frame_at};
 use crate::generated::{caption_frame, scrolled};
 use crate::grades::grade_for;
 use crate::layer_look::{interpreted, layer_look};
+use crate::layered::{combination, combined, matted, track_matte};
 use crate::morph_cut::morphed;
 use crate::time_effects::{posterized, with_burn_ins};
 use crate::track_video::TrackVideo;
@@ -108,6 +109,12 @@ fn video_layers(
                         matte_layers(sequence, video, matte.track, pts, tracks, decoding);
                     (matte, pictures)
                 });
+            let combination = combination(&plan.clip.look.effects, time)
+                .filter(|(track, _)| *track != index && *track < video.len())
+                .map(|(track, combine)| {
+                    let pictures = matte_layers(sequence, video, track, pts, tracks, decoding);
+                    (combine, pictures)
+                });
             let decoders = &mut tracks[index];
             let Some(picture) = clip_picture(sequence, &plan, media, decoders, &showing, decoding)
             else {
@@ -134,6 +141,10 @@ fn video_layers(
                     picture: picture.clone(),
                     look: look_of(piece),
                     grade: grade.clone(),
+                };
+                let layer = match &combination {
+                    Some((combine, pictures)) => combined(layer, *combine, pictures.clone()),
+                    None => layer,
                 };
                 layers.push(match &matte {
                     Some((matte, pictures)) => matted(layer, *matte, pictures.clone()),
@@ -204,35 +215,6 @@ fn clip_picture(
     }
 }
 
-/// The track matte a clip's effects ask for; the last Track Matte Key or Set Matte with
-/// one wins.
-#[derive(Debug, Clone, Copy)]
-struct TrackMatte {
-    track: usize,
-    channel: MatteChannel,
-    reverse: bool,
-}
-
-fn track_matte(effects: &[VideoEffect]) -> Option<TrackMatte> {
-    effects.iter().rev().find_map(|effect| match *effect {
-        VideoEffect::TrackMatteKey {
-            matte: Some(track),
-            channel,
-            reverse,
-        }
-        | VideoEffect::SetMatte {
-            matte: Some(track),
-            channel,
-            reverse,
-        } => Some(TrackMatte {
-            track,
-            channel,
-            reverse,
-        }),
-        _ => None,
-    })
-}
-
 /// What video track `index` shows at `pts` for use as a matte, hidden or not. Its
 /// adjustment layers and its own track mattes are left out.
 fn matte_layers(
@@ -270,33 +252,6 @@ fn matte_layers(
         }
     }
     layers
-}
-
-/// `fill` shown through `pictures`, its blend mode applied once matted.
-fn matted(fill: Layer, matte: TrackMatte, pictures: Vec<Layer>) -> Layer {
-    let look = LayerLook {
-        blend: fill.look.blend,
-        ..LayerLook::IDENTITY
-    };
-    let track = fill.track;
-    let fill = Layer {
-        look: LayerLook {
-            blend: BlendMode::Normal,
-            ..fill.look
-        },
-        ..fill
-    };
-    Layer {
-        track,
-        picture: LayerPicture::Matted {
-            fill: Box::new(fill),
-            matte: pictures,
-            channel: matte.channel,
-            reverse: matte.reverse,
-        },
-        look,
-        grade: None,
-    }
 }
 
 /// Applies an adjustment layer's look to the picture of `layers` as one. Below full

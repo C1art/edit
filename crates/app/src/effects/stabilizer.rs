@@ -1,8 +1,9 @@
-use egui::DragValue;
-use timeline::{Framing, Look, StabilizeMethod, Stabilizer, Timebase, VideoEffect};
+use timeline::{
+    Framing, Look, RollingShutterRepair, ScanDirection, StabilizeMethod, Stabilizer, Timebase,
+    VideoEffect,
+};
 
 use super::look::Rows;
-use crate::mixer::response_state;
 
 /// Brings each stabilizer's correction in line with its settings.
 pub(super) fn retune(look: &mut Look, timebase: Timebase) {
@@ -14,7 +15,8 @@ pub(super) fn retune(look: &mut Look, timebase: Timebase) {
 }
 
 impl Rows {
-    pub(super) fn stabilizer(&mut self, ui: &mut egui::Ui, stabilizer: &mut Stabilizer) {
+    /// The analysis's progress, or whether it has been done and a button to do it.
+    fn motion_analysis(&mut self, ui: &mut egui::Ui, analyzed: bool) {
         ui.horizontal(|ui| {
             ui.add_space(20.0);
             if let Some(done) = self.analyzing {
@@ -22,7 +24,6 @@ impl Rows {
                 ui.add(egui::ProgressBar::new(done).desired_width(180.0).text(text));
                 return;
             }
-            let analyzed = stabilizer.path.is_some();
             ui.label(if analyzed { "Analyzed" } else { "Not analyzed" });
             let button = if analyzed { "Reanalyze" } else { "Analyze" };
             if ui
@@ -33,6 +34,10 @@ impl Rows {
                 self.output.analyze_motion = true;
             }
         });
+    }
+
+    pub(super) fn stabilizer(&mut self, ui: &mut egui::Ui, stabilizer: &mut Stabilizer) {
+        self.motion_analysis(ui, stabilizer.path.is_some());
         self.choice(ui, "Result", |ui| {
             let mut chosen = false;
             egui::ComboBox::from_id_salt("stabilize_method")
@@ -47,16 +52,7 @@ impl Rows {
             chosen
         });
         if stabilizer.method == StabilizeMethod::SmoothMotion {
-            ui.horizontal(|ui| {
-                ui.add_space(20.0);
-                ui.add_sized([72.0, 18.0], egui::Label::new("Smoothness"));
-                let response = ui.add(
-                    DragValue::new(&mut stabilizer.smoothness)
-                        .range(0..=100)
-                        .suffix("%"),
-                );
-                self.output.change = response_state(&response, self.output.change);
-            });
+            self.whole(ui, "Smoothness", &mut stabilizer.smoothness, 0..=100, "%");
         }
         self.choice(ui, "Framing", |ui| {
             let mut chosen = false;
@@ -78,5 +74,20 @@ impl Rows {
                 ui.weak(format!("Auto-scale enlarges the picture to {percent:.1}%"));
             });
         }
+    }
+
+    pub(super) fn rolling_shutter(&mut self, ui: &mut egui::Ui, repair: &mut RollingShutterRepair) {
+        self.motion_analysis(ui, repair.path.is_some());
+        self.whole(ui, "Rate", &mut repair.rate, 0..=100, "%");
+        let scan = &mut repair.scan;
+        let (all, name) = (ScanDirection::ALL, ScanDirection::name);
+        self.options(
+            ui,
+            "Scan Direction",
+            "rolling_shutter_scan",
+            scan,
+            all,
+            name,
+        );
     }
 }

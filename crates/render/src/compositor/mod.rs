@@ -1,3 +1,4 @@
+mod prepare;
 mod slots;
 
 use std::sync::Arc;
@@ -6,11 +7,12 @@ use timeline::MatteChannel;
 
 use crate::backdrop::{Backdrop, Drawn};
 use crate::blit::{self, Blit, DISPLAY_FORMAT};
+use crate::combine::Combine;
 use crate::grade::Grade;
 use crate::placement::{LayerLook, Placement};
 use crate::scope::{Scope, ScopeTrace};
 use crate::{RenderError, WORKING_FORMAT};
-use slots::{Slot, SlotKind};
+use slots::Slot;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Presented {
@@ -47,6 +49,12 @@ pub enum Picture<'a> {
         channel: MatteChannel,
         reverse: bool,
     },
+    /// `layer` composited as a group, combined with the group `other`.
+    Combined {
+        layer: Vec<LayerImage<'a>>,
+        other: Vec<LayerImage<'a>>,
+        combine: Combine,
+    },
 }
 
 /// GPU work that must run before the layers that use it are drawn.
@@ -65,6 +73,13 @@ enum Step {
         matte: usize,
         channel: MatteChannel,
         reverse: bool,
+    },
+    /// Draws the group slot `layer`, combined with the group slot `other`, into the
+    /// group slot `index`.
+    Combine {
+        index: usize,
+        layer: usize,
+        other: usize,
     },
 }
 
@@ -242,6 +257,23 @@ impl Compositor {
                         wgpu::LoadOp::Load,
                     );
                 }
+                Step::Combine {
+                    index,
+                    layer,
+                    other,
+                } => {
+                    let other = self
+                        .blit
+                        .bind_backdrop(&self.device, &self.slots[*other].view);
+                    let groups = [self.slots[*layer].placed(), &self.blit.grade.none, &other];
+                    blit::draw(
+                        &mut encoder,
+                        &self.slots[*index].view,
+                        &self.blit.combined,
+                        &[groups],
+                        wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                    );
+                }
             }
         }
         targets.backdrop.draw_layers(
@@ -283,111 +315,6 @@ impl Compositor {
                 }
             })
             .collect()
-    }
-
-    fn check_layers(&self, layers: &[LayerImage<'_>]) -> Result<(), RenderError> {
-        for layer in layers {
-            match &layer.picture {
-                Picture::Pixels {
-                    width,
-                    height,
-                    rgba,
-                } => {
-                    self.check_size(*width, *height)?;
-                    if rgba.len() != *width as usize * *height as usize * 4 {
-                        return Err(RenderError::FrameSize {
-                            width: *width,
-                            height: *height,
-                            bytes: rgba.len(),
-                        });
-                    }
-                }
-                Picture::Group(members) => self.check_layers(members)?,
-                Picture::Matted { fill, matte, .. } => {
-                    self.check_layers(fill)?;
-                    self.check_layers(matte)?;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// Uploads and places `layers` in the slots from `next` on, adding the work they
-    /// need before drawing to `steps`. Returns their slots, bottom first.
-    fn prepare(
-        &mut self,
-        layers: &[LayerImage<'_>],
-        canvas: (u32, u32),
-        next: &mut usize,
-        steps: &mut Vec<Step>,
-    ) -> Vec<usize> {
-        let mut placed = Vec::with_capacity(layers.len());
-        for layer in layers {
-            let index = match &layer.picture {
-                Picture::Pixels {
-                    width,
-                    height,
-                    rgba,
-                } => {
-                    let index = self.claim(next, (*width, *height), SlotKind::Picture);
-                    self.upload(index, rgba);
-                    index
-                }
-                Picture::Group(members) => self.group(members, canvas, next, steps),
-                Picture::Matted {
-                    fill,
-                    matte,
-                    channel,
-                    reverse,
-                } => {
-                    let fill = self.prepare(fill, canvas, next, steps);
-                    let matte = self.group(matte, canvas, next, steps);
-                    let unchanged = LayerImage {
-                        picture: Picture::Group(Vec::new()),
-                        look: LayerLook::IDENTITY,
-                        grade: None,
-                    };
-                    self.place(matte, &unchanged, canvas);
-                    let index = self.claim(next, canvas, SlotKind::Group);
-                    steps.push(Step::Matte {
-                        index,
-                        fill,
-                        matte,
-                        channel: *channel,
-                        reverse: *reverse,
-                    });
-                    index
-                }
-            };
-            self.place(index, layer, canvas);
-            if self.slots[index].blurred {
-                steps.push(Step::Blur(index));
-            }
-            placed.push(index);
-        }
-        placed
-    }
-
-    /// Prepares `members` to be drawn into a canvas-sized group slot, returned.
-    fn group(
-        &mut self,
-        members: &[LayerImage<'_>],
-        canvas: (u32, u32),
-        next: &mut usize,
-        steps: &mut Vec<Step>,
-    ) -> usize {
-        let members = self.prepare(members, canvas, next, steps);
-        let index = self.claim(next, canvas, SlotKind::Group);
-        steps.push(Step::Group { index, members });
-        index
-    }
-
-    fn check_size(&self, width: u32, height: u32) -> Result<(), RenderError> {
-        let max = self.device.limits().max_texture_dimension_2d;
-        if width == 0 || height == 0 || width > max || height > max {
-            return Err(RenderError::FrameTooLarge { width, height, max });
-        }
-        Ok(())
     }
 
     fn create_targets(&self, width: u32, height: u32) -> Targets {

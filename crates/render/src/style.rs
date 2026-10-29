@@ -75,6 +75,11 @@ pub struct PictureStyle {
     pub turbulence_complexity: f32,
     /// Turns; changing it changes the noise smoothly.
     pub turbulence_evolution: f32,
+    /// Rolling Shutter Repair: how far the picture moved, right and down in shares of its
+    /// longer side, while the sensor read it from its first line to its last.
+    pub shutter_travel: [f32; 2],
+    /// The way the sensor's read moved across the picture, right and down.
+    pub shutter_scan: [f32; 2],
 }
 
 impl PictureStyle {
@@ -115,10 +120,12 @@ impl PictureStyle {
         turbulence_center: [0.5; 2],
         turbulence_complexity: 1.0,
         turbulence_evolution: 0.0,
+        shutter_travel: [0.0; 2],
+        shutter_scan: [0.0, 1.0],
     };
 
-    /// The shader's view, as thirteen vec4s.
-    pub(crate) fn uniform(&self) -> [f32; 52] {
+    /// The shader's view, as fourteen vec4s.
+    pub(crate) fn uniform(&self) -> [f32; 56] {
         let inverted = if self.edges_inverted { 1.0 } else { 0.0 };
         let [mosaic_x, mosaic_y] = self.mosaic;
         let [offset_x, offset_y] = self.offset;
@@ -183,6 +190,10 @@ impl PictureStyle {
             self.turbulence_center[1],
             0.0,
             turbulent,
+            self.shutter_travel[0],
+            self.shutter_travel[1],
+            self.shutter_scan[0],
+            self.shutter_scan[1],
         ]
     }
 }

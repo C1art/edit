@@ -144,12 +144,20 @@ fn warp(uv_in: vec2<f32>) -> vec2<f32> {
 fn steadied(uv: vec2<f32>, aspect: vec2<f32>) -> vec2<f32> {
     let stabilize = placement.style_stabilize;
     if all(stabilize == vec4<f32>(0.0, 0.0, 0.0, 1.0)) {
-        return uv;
+        return unskewed(uv, aspect);
     }
     let p = (uv - vec2<f32>(0.5)) * aspect;
     let turn = vec2<f32>(sin(stabilize.z), cos(stabilize.z));
     let turned = vec2<f32>(turn.y * p.x - turn.x * p.y, turn.x * p.x + turn.y * p.y);
-    return (turned * stabilize.w + stabilize.xy) / aspect + vec2<f32>(0.5);
+    return unskewed((turned * stabilize.w + stabilize.xy) / aspect + vec2<f32>(0.5), aspect);
+}
+
+// Each line was read a little before or after the frame's middle, when the picture had
+// not yet reached or had already passed where the frame shows it.
+fn unskewed(uv: vec2<f32>, aspect: vec2<f32>) -> vec2<f32> {
+    let shutter = placement.style_shutter;
+    let read = dot(uv - vec2<f32>(0.5), shutter.zw);
+    return uv + shutter.xy * read / aspect;
 }
 
 fn smeared(uv: vec2<f32>) -> vec4<f32> {

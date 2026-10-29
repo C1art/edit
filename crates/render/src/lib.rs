@@ -4,6 +4,7 @@ mod blit;
 mod blur;
 mod cineon;
 mod clip_wipes;
+mod combine;
 mod compositor;
 mod creative;
 mod detail;
@@ -39,6 +40,7 @@ pub use cineon::{Cineon, CineonKind};
 pub use clip_wipes::{
     BlockDissolve, ClipWipes, LinearWipe, RadialSweep, RadialWipe, VenetianBlinds,
 };
+pub use combine::{Combine, DifferenceShown};
 pub use compositor::{Background, Compositor, LayerImage, Picture, Presented};
 pub use creative::{Creative, CreativeVignette};
 pub use detail::{Detail, MedianFilter, NoiseHls, UnsharpMask};

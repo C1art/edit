@@ -1,6 +1,7 @@
 use timeline::BlendMode;
 
 use crate::cineon::Cineon;
+use crate::combine::Combine;
 use crate::creative::Creative;
 use crate::lighting::Lighting;
 use crate::mask::{self, LayerMask, MAX_MASKS};
@@ -277,6 +278,11 @@ impl Placement {
                     .flatten(),
             )
             .chain(self.effects.paint.uniform().into_iter().flatten())
+            .chain(
+                Combine::uniform(self.effects.combine.as_ref())
+                    .into_iter()
+                    .flatten(),
+            )
             .flat_map(f32::to_le_bytes)
             .collect()
     }
@@ -324,20 +330,21 @@ mod tests {
         let bytes = Placement::new((1920, 1080), (1920, 1080), &look).to_bytes();
         // Twenty-two vec4s, five of them added by the wipes, lead the shader's struct. The
         // masks follow: the header, three vec4s each, then their outlines at two points
-        // a vec4; then the picture style's thirteen, the reshape's six, the recolor's twelve,
+        // a vec4; then the picture style's fourteen, the reshape's six, the recolor's twelve,
         // the key's two, the adjustments' six, Lumetri Creative's three,
         // the Generate effects' thirteen, Lens Flare and Magnify's three and the
         // Transition effects' five, the detail effects' three, the edge effects' eleven
         // the tone effects' thirteen, Change Color and Color Balance's six, Ellipse
         // and Cell Pattern's seven, Lighting Effects' eighteen, Radial Shadow's two,
-        // Noise Alpha's two, Cineon Converter's two and the paint effects' five.
+        // Noise Alpha's two, Cineon Converter's two, the paint effects' five and the
+        // combining pass's two.
         let outlines = MAX_MASKS * MAX_OUTLINE_POINTS / 2;
         assert_eq!(
             bytes.len(),
             (25 + 1
                 + 3 * MAX_MASKS
                 + outlines
-                + 13
+                + 14
                 + 6
                 + 12
                 + 2
@@ -355,7 +362,8 @@ mod tests {
                 + 2
                 + 2
                 + 2
-                + 5)
+                + 5
+                + 2)
                 * 16
         );
         assert!(bytes.len() as u64 <= crate::blit::UNIFORM_BYTES);

@@ -42,6 +42,7 @@ mod reframe;
 mod remap;
 mod render_segments;
 mod reveal;
+mod rolling_shutter;
 mod secondary;
 mod shadow;
 mod speed;
@@ -99,13 +100,14 @@ pub use effect::{
     AlphaGlow, AlphaNoise, AlphaOverflow, AscCdl, Bevel, BrushStrokes, CellKind, CellPattern,
     ChangeColor, ChangeColorView, ChannelBlur, Checkerboard, CineonConversion, CineonConverter,
     Circle, ClipNameSource, ColorBalance, ColorChange, ColorEmboss, ColorMatch, ColorPass,
-    ColorReplace, ConvolutionKernel, Echo, EchoOperator, EdgeFeather, EffectCategory, Ellipse,
-    Extract, EyedropperFill, FourColorGradient, GarbageMatte, Grid, KeyOutput, LensType, Light,
-    LightKind, LightingEffects, Lightning, LimiterMethod, MagnifyShape, MatchColors, MatteChannel,
-    Median, NoiseAlpha, NoiseHls, NoiseHlsAuto, OriginalAlpha, PaintSurface, RadialShadow,
-    RadialWipeDirection, RampShape, ReduceInterlaceFlicker, Rgb, RoughenEdgeType, RoughenEdges,
-    SdrConform, ShadowHighlight, ShadowRender, SimpleText, TimecodeSource, UnsharpMask,
-    VideoEffect, VideoLimiter, MAX_LIGHTS, ULTRA_KEY_REACH,
+    ColorReplace, CompoundBlur, ConvolutionKernel, DifferenceMatte, DifferenceView, Echo,
+    EchoOperator, EdgeFeather, EffectCategory, Ellipse, Extract, EyedropperFill, FourColorGradient,
+    GarbageMatte, Grid, KeyOutput, LensType, Light, LightKind, LightingEffects, Lightning,
+    LimiterMethod, MagnifyShape, MatchColors, MatteChannel, Median, NoiseAlpha, NoiseHls,
+    NoiseHlsAuto, OriginalAlpha, PaintSurface, RadialShadow, RadialWipeDirection, RampShape,
+    ReduceInterlaceFlicker, Rgb, RoughenEdgeType, RoughenEdges, SdrConform, ShadowHighlight,
+    ShadowRender, SimpleText, Texturize, TimecodeSource, UnsharpMask, VideoEffect, VideoLimiter,
+    MAX_LIGHTS, ULTRA_KEY_REACH,
 };
 pub use error::TimelineError;
 pub use find::{next_found, FindOperator, FindQuery, Found};
@@ -145,6 +147,7 @@ pub use reframe::{AutoReframe, ReframeMotion, SubjectPath};
 pub use remap::{Anchor, TimeRemap};
 pub use render_segments::{render_segments, segment_content};
 pub use reveal::{Fold, Reveal, Turn};
+pub use rolling_shutter::{RollingShutterRepair, ScanDirection};
 pub use secondary::HslSecondary;
 pub use shadow::ShadowStyle;
 pub use speed::{Speed, TimeInterpolation};

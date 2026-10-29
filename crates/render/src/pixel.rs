@@ -3,6 +3,7 @@ use timeline::{AlphaInterpretation, KeyOutput};
 use crate::adjust::Adjust;
 use crate::cineon::Cineon;
 use crate::clip_wipes::ClipWipes;
+use crate::combine::Combine;
 use crate::detail::Detail;
 use crate::edges::Edges;
 use crate::generate::Generate;
@@ -50,6 +51,8 @@ pub struct PixelEffects {
     pub noise_alpha: Option<NoisyAlpha>,
     pub cineon: Option<Cineon>,
     pub paint: Paint,
+    /// Read only by the pass that draws a combined picture; see `Picture::Combined`.
+    pub combine: Option<Combine>,
     /// How the source's alpha channel is read.
     pub alpha: AlphaInterpretation,
 }
@@ -130,6 +133,7 @@ impl PixelEffects {
         noise_alpha: NoisyAlpha::NONE,
         cineon: Cineon::NONE,
         paint: Paint::NONE,
+        combine: None,
         alpha: AlphaInterpretation::Straight,
     };
 

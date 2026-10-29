@@ -298,7 +298,9 @@ pub(crate) fn drop_effect(editor: &mut Editor, drop: EffectDrop) {
 fn apply_effect(editor: &mut Editor, clips: Vec<ClipId>, effect: ClipEffect) {
     let analyzed: Option<fn(&mut Editor, ClipId)> = match &effect {
         ClipEffect::Video(effect) => match **effect {
-            VideoEffect::WarpStabilizer(_) => Some(Editor::analyze_motion),
+            VideoEffect::WarpStabilizer(_) | VideoEffect::RollingShutterRepair(_) => {
+                Some(Editor::analyze_motion)
+            }
             VideoEffect::AutoReframe(_) => Some(Editor::analyze_reframe),
             _ => None,
         },

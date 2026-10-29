@@ -160,6 +160,29 @@ pub struct CameraPath {
     pub size: [u32; 2],
 }
 
+impl CameraPath {
+    /// Chains each frame's motion from the frame before, which the first frame's is
+    /// ignored, into poses.
+    pub fn tracked(size: [u32; 2], steps: &[(Ticks, Similarity)]) -> Self {
+        let mut camera = Similarity::IDENTITY;
+        let poses = steps
+            .iter()
+            .enumerate()
+            .map(|(index, (_, step))| {
+                if index > 0 {
+                    camera = camera.then(step);
+                }
+                Pose::from(camera)
+            })
+            .collect();
+        Self {
+            frames: steps.iter().map(|&(time, _)| time).collect(),
+            poses,
+            size,
+        }
+    }
+}
+
 /// Warp Stabilizer's settings and the correction they make of the analyzed path.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Stabilizer {
@@ -199,22 +222,7 @@ impl Stabilizer {
     /// Takes the analysis of a clip: its picture's `size` and each frame's motion from
     /// the frame before, which the first frame's is ignored.
     pub fn analyzed(&mut self, size: [u32; 2], steps: &[(Ticks, Similarity)], timebase: Timebase) {
-        let mut camera = Similarity::IDENTITY;
-        let poses = steps
-            .iter()
-            .enumerate()
-            .map(|(index, (_, step))| {
-                if index > 0 {
-                    camera = camera.then(step);
-                }
-                Pose::from(camera)
-            })
-            .collect();
-        self.path = Some(CameraPath {
-            frames: steps.iter().map(|&(time, _)| time).collect(),
-            poses,
-            size,
-        });
+        self.path = Some(CameraPath::tracked(size, steps));
         self.retune(timebase);
     }
 

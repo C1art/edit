@@ -13,8 +13,10 @@ pub(super) fn add_menu(ui: &mut egui::Ui, rows: &mut Rows, effects: &mut Vec<Vid
                 for effect in catalog.into_iter().filter(|e| e.category() == category) {
                     if ui.button(effect.name()).clicked() {
                         // Premiere analyzes as soon as the stabilizer is applied.
-                        rows.output.analyze_motion |=
-                            matches!(effect, VideoEffect::WarpStabilizer(_));
+                        rows.output.analyze_motion |= matches!(
+                            effect,
+                            VideoEffect::WarpStabilizer(_) | VideoEffect::RollingShutterRepair(_)
+                        );
                         rows.output.analyze_reframe |=
                             matches!(effect, VideoEffect::AutoReframe(_));
                         effects.push(effect);
@@ -287,6 +289,7 @@ impl Rows {
                 self.param(ui, "Feather", feather, 0.0..=100.0, "");
             }
             VideoEffect::WarpStabilizer(stabilizer) => self.stabilizer(ui, stabilizer),
+            VideoEffect::RollingShutterRepair(repair) => self.rolling_shutter(ui, repair),
             VideoEffect::AutoReframe(reframe) => self.auto_reframe(ui, reframe),
             VideoEffect::UltraKey { .. }
             | VideoEffect::TrackMatteKey { .. }
@@ -295,6 +298,9 @@ impl Rows {
             | VideoEffect::LumaKey { .. }
             | VideoEffect::AlphaAdjust { .. }
             | VideoEffect::GarbageMatte(_) => self.keying(ui, effect, video_tracks),
+            VideoEffect::DifferenceMatte(_)
+            | VideoEffect::CompoundBlur(_)
+            | VideoEffect::Texturize(_) => self.layered(ui, effect, video_tracks),
             VideoEffect::Checkerboard(_)
             | VideoEffect::Grid(_)
             | VideoEffect::Circle(_)

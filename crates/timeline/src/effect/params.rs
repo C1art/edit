@@ -1,10 +1,10 @@
 use super::{
     AlphaGlow, AscCdl, Bevel, BrushStrokes, CellPattern, ChangeColor, ChannelBlur, Checkerboard,
-    CineonConverter, Circle, ColorBalance, ColorEmboss, ColorPass, ColorReplace, ConvolutionKernel,
-    Echo, EdgeFeather, Ellipse, Extract, EyedropperFill, FourColorGradient, Grid, Light,
-    LightingEffects, Lightning, Median, NoiseAlpha, NoiseHls, NoiseHlsAuto, RadialShadow,
-    ReduceInterlaceFlicker, RoughenEdges, SdrConform, ShadowHighlight, SimpleText, UnsharpMask,
-    VideoEffect, VideoLimiter,
+    CineonConverter, Circle, ColorBalance, ColorEmboss, ColorPass, ColorReplace, CompoundBlur,
+    ConvolutionKernel, DifferenceMatte, Echo, EdgeFeather, Ellipse, Extract, EyedropperFill,
+    FourColorGradient, Grid, Light, LightingEffects, Lightning, Median, NoiseAlpha, NoiseHls,
+    NoiseHlsAuto, RadialShadow, ReduceInterlaceFlicker, RoughenEdges, SdrConform, ShadowHighlight,
+    SimpleText, Texturize, UnsharpMask, VideoEffect, VideoLimiter,
 };
 use crate::{AutoReframe, Param};
 
@@ -45,7 +45,8 @@ macro_rules! effect_params {
             | VideoEffect::BlackAndWhite
             | VideoEffect::TrackMatteKey { .. }
             | VideoEffect::SetMatte { .. }
-            | VideoEffect::WarpStabilizer(_) => Vec::new(),
+            | VideoEffect::WarpStabilizer(_)
+            | VideoEffect::RollingShutterRepair(_) => Vec::new(),
             VideoEffect::Tint { amount, .. }
             | VideoEffect::Invert { amount }
             | VideoEffect::Sharpen { amount } => {
@@ -397,6 +398,9 @@ macro_rules! effect_params {
             | VideoEffect::ReduceInterlaceFlicker(_)
             | VideoEffect::RoughenEdges(_)
             | VideoEffect::SdrConform(_)
+            | VideoEffect::DifferenceMatte(_)
+            | VideoEffect::CompoundBlur(_)
+            | VideoEffect::Texturize(_)
             | VideoEffect::ShadowHighlight(_)
             | VideoEffect::VideoLimiter(_)) => more_effect_params!(other, $iter),
         }

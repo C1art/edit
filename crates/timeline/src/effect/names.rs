@@ -27,6 +27,7 @@ impl VideoEffect {
             Self::DropShadow { .. } => "Drop Shadow",
             Self::WaveWarp { .. } => "Wave Warp",
             Self::WarpStabilizer(_) => "Warp Stabilizer",
+            Self::RollingShutterRepair(_) => "Rolling Shutter Repair",
             Self::ColorKey { .. } => "Color Key",
             Self::LeaveColor { .. } => "Leave Color",
             Self::GradientRamp { .. } => "Gradient Ramp",
@@ -98,6 +99,9 @@ impl VideoEffect {
             Self::BrushStrokes(_) => "Brush Strokes",
             Self::EyedropperFill(_) => "Eyedropper Fill",
             Self::SdrConform(_) => "SDR Conform",
+            Self::DifferenceMatte(_) => "Difference Matte",
+            Self::CompoundBlur(_) => "Compound Blur",
+            Self::Texturize(_) => "Texturize",
         }
     }
 }

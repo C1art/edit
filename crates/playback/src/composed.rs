@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use media::VideoFrame;
-use render::{Grade, LayerImage, LayerLook, Picture};
+use render::{Combine, Grade, LayerImage, LayerLook, Picture};
 use timeline::{MatteChannel, Ticks, TrackRef};
 
 /// One picture placed in the program picture.
@@ -25,6 +25,12 @@ pub enum LayerPicture {
         channel: MatteChannel,
         reverse: bool,
     },
+    /// A clip's layer combined with the layers of the track one of its effects reads.
+    Combined {
+        layer: Box<Layer>,
+        other: Vec<Layer>,
+        combine: Combine,
+    },
 }
 
 impl Layer {
@@ -46,6 +52,15 @@ impl Layer {
                 matte: images(matte),
                 channel: *channel,
                 reverse: *reverse,
+            },
+            LayerPicture::Combined {
+                layer,
+                other,
+                combine,
+            } => Picture::Combined {
+                layer: vec![layer.image()],
+                other: images(other),
+                combine: *combine,
             },
         };
         LayerImage {

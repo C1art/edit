@@ -5,11 +5,11 @@ use super::{
     MatteChannel, Median, NoiseHls, RadialWipeDirection, RampShape, Rgb, RoughenEdges,
     ShadowHighlight, TimecodeSource, UnsharpMask, VideoEffect, VideoLimiter,
 };
-use crate::{AutoReframe, Param, Stabilizer};
+use crate::{AutoReframe, Param, RollingShutterRepair, Stabilizer};
 
 impl VideoEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 97] {
+    pub fn catalog() -> [Self; 101] {
         [
             Self::GaussianBlur {
                 blurriness: Param::from_value(10.0),
@@ -347,6 +347,10 @@ impl VideoEffect {
             Self::BrushStrokes(Default::default()),
             Self::EyedropperFill(Default::default()),
             Self::SdrConform(Default::default()),
+            Self::DifferenceMatte(Default::default()),
+            Self::CompoundBlur(Default::default()),
+            Self::Texturize(Default::default()),
+            Self::RollingShutterRepair(RollingShutterRepair::default()),
         ]
     }
 
@@ -370,6 +374,7 @@ impl VideoEffect {
             | Self::Offset { .. }
             | Self::WaveWarp { .. }
             | Self::WarpStabilizer(_)
+            | Self::RollingShutterRepair(_)
             | Self::Mirror { .. }
             | Self::CornerPin { .. }
             | Self::Transform { .. }
@@ -437,7 +442,9 @@ impl VideoEffect {
             | Self::ColorBalance(_) => EffectCategory::ColorCorrection,
             Self::ColorReplace(_) | Self::ColorPass(_) => EffectCategory::ImageControl,
             Self::CineonConverter(_) | Self::SdrConform(_) => EffectCategory::Utility,
-            Self::BrushStrokes(_) => EffectCategory::Stylize,
+            Self::BrushStrokes(_) | Self::Texturize(_) => EffectCategory::Stylize,
+            Self::DifferenceMatte(_) => EffectCategory::Keying,
+            Self::CompoundBlur(_) => EffectCategory::BlurAndSharpen,
             Self::EyedropperFill(_) => EffectCategory::Generate,
             Self::LinearWipe { .. }
             | Self::RadialWipe { .. }

@@ -78,6 +78,8 @@ struct Placement {
     // in turns; then the noise's center as fractions of the picture, and 1 when on.
     style_turbulence: vec4<f32>,
     style_turbulence_center: vec4<f32>,
+    // Rolling Shutter Repair's travel during the read and the way the read moves.
+    style_shutter: vec4<f32>,
     // Mirror's center, angle and 1 when on; the warps' map back to the picture, its
     // first row ending in 1 when on; the warped picture's bounds; then a page fold's
     // corner, progress, and 1 when flat or 2 when curling (see reshape.wgsl).
@@ -228,6 +230,10 @@ struct Placement {
     paint_fill: vec4<f32>,
     paint_fill_look: vec4<f32>,
     paint_conform: vec4<f32>,
+    // How a group combines with another track's (see combine.wgsl): the kind, then its
+    // settings.
+    combine: vec4<f32>,
+    combine_view: vec4<f32>,
 };
 
 const OUTLINE_VEC4S: u32 = 32u;

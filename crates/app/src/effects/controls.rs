@@ -1,6 +1,10 @@
+use std::ops::RangeInclusive;
+
+use egui::DragValue;
 use timeline::Rgb;
 
 use super::look::Rows;
+use crate::mixer::response_state;
 
 impl Rows {
     /// A labelled row of controls that return whether they made a choice.
@@ -39,6 +43,23 @@ impl Rows {
                     }
                 });
             chosen
+        });
+    }
+
+    /// A setting in whole numbers that can't be keyframed.
+    pub(super) fn whole(
+        &mut self,
+        ui: &mut egui::Ui,
+        label: &str,
+        value: &mut u32,
+        range: RangeInclusive<u32>,
+        suffix: &str,
+    ) {
+        ui.horizontal(|ui| {
+            ui.add_space(20.0);
+            ui.add_sized([72.0, 18.0], egui::Label::new(label));
+            let response = ui.add(DragValue::new(value).range(range).suffix(suffix));
+            self.output.change = response_state(&response, self.output.change);
         });
     }
 

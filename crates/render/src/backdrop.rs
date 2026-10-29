@@ -29,14 +29,7 @@ impl Backdrop {
             view_formats: &[],
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let binding = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("backdrop_bind_group"),
-            layout: &blit.backdrop_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::TextureView(&view),
-            }],
-        });
+        let binding = blit.bind_backdrop(device, &view);
         Self { texture, binding }
     }
 

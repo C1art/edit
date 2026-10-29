@@ -30,9 +30,11 @@ pub(crate) struct Blit {
     /// Blends layers over the working texture.
     pub(crate) to_working: wgpu::RenderPipeline,
     /// The third bind group of blend-mode blits: a copy of what lies under the layer.
-    pub(crate) backdrop_layout: wgpu::BindGroupLayout,
+    backdrop_layout: wgpu::BindGroupLayout,
     /// Draws a layer over the working texture by its blend mode.
     pub(crate) blended: wgpu::RenderPipeline,
+    /// Draws a group combined with another, bound as the backdrop.
+    pub(crate) combined: wgpu::RenderPipeline,
     /// Keeps the part of a fill its track matte shows, by channel then reversed.
     /// One per `MatteChannel`, in its order, then normal and reversed.
     mattes: [[wgpu::RenderPipeline; 2]; 7],
@@ -71,6 +73,7 @@ impl Blit {
                     include_str!("../shaders/noise_alpha.wgsl"),
                     include_str!("../shaders/cineon.wgsl"),
                     include_str!("../shaders/paint.wgsl"),
+                    include_str!("../shaders/combine.wgsl"),
                     include_str!("../shaders/wipe.wgsl")
                 )
                 .into(),
@@ -207,6 +210,13 @@ impl Blit {
                 over,
                 "fs_blend",
             ),
+            combined: pipeline(
+                &blit_shader,
+                &blended_layout,
+                WORKING_FORMAT,
+                over,
+                "fs_combine",
+            ),
             backdrop_layout,
             mattes,
             to_display: pipeline(&blit_shader, &blit_layout, DISPLAY_FORMAT, None, "fs_main"),
@@ -220,6 +230,22 @@ impl Blit {
             layout,
             grade,
         }
+    }
+
+    /// Binds `view` where blend-mode blits read their backdrop.
+    pub(crate) fn bind_backdrop(
+        &self,
+        device: &wgpu::Device,
+        view: &wgpu::TextureView,
+    ) -> wgpu::BindGroup {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("backdrop_bind_group"),
+            layout: &self.backdrop_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(view),
+            }],
+        })
     }
 
     pub(crate) fn matte(&self, channel: MatteChannel, reverse: bool) -> &wgpu::RenderPipeline {

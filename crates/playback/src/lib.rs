@@ -25,6 +25,7 @@ mod generated;
 mod grades;
 mod image_effects;
 mod layer_look;
+mod layered;
 mod lighting_effects;
 mod lightning;
 mod loudness;

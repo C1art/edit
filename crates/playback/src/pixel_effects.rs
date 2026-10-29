@@ -37,7 +37,10 @@ pub(crate) fn pixel_effects(
             | VideoEffect::GarbageMatte(_)
             | VideoEffect::AutoReframe(_)
             | VideoEffect::TrackMatteKey { .. }
-            | VideoEffect::SetMatte { .. } => {}
+            | VideoEffect::SetMatte { .. }
+            | VideoEffect::DifferenceMatte(_)
+            | VideoEffect::CompoundBlur(_)
+            | VideoEffect::Texturize(_) => {}
             VideoEffect::BrightnessContrast {
                 brightness,
                 contrast,
@@ -115,6 +118,12 @@ pub(crate) fn pixel_effects(
                     let [x, y] = correction.shift;
                     pixel.style.stabilize =
                         [x, y, correction.angle, correction.scale].map(|value| value as f32);
+                }
+            }
+            VideoEffect::RollingShutterRepair(repair) => {
+                if let Some(travel) = repair.travel_at(time) {
+                    pixel.style.shutter_travel = travel.map(|value| value as f32);
+                    pixel.style.shutter_scan = repair.scan.axis().map(|value| value as f32);
                 }
             }
             VideoEffect::ColorKey {

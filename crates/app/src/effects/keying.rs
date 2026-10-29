@@ -54,21 +54,7 @@ impl Rows {
                     true => (MatteChannel::ALL.as_slice(), "Invert Matte"),
                     false => (MatteChannel::TRACK_MATTE.as_slice(), "Reverse"),
                 };
-                self.choice(ui, "Matte", |ui| {
-                    let name = |track: Option<usize>| {
-                        track.map_or("None".to_owned(), |index| format!("Video {}", index + 1))
-                    };
-                    let mut chosen = false;
-                    egui::ComboBox::from_id_salt("matte")
-                        .selected_text(name(*matte))
-                        .show_ui(ui, |ui| {
-                            let tracks = std::iter::once(None).chain((0..video_tracks).map(Some));
-                            for track in tracks {
-                                chosen |= ui.selectable_value(matte, track, name(track)).clicked();
-                            }
-                        });
-                    chosen
-                });
+                self.track_choice(ui, "Matte", matte, video_tracks);
                 self.options(
                     ui,
                     "Composite Using",
