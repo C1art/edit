@@ -1,7 +1,5 @@
 use std::path::Path;
 
-use ffmpeg_sys_next as sys;
-
 use crate::{ffi, MediaError};
 
 /// Lossless image formats a single frame can be saved in.
@@ -41,14 +39,6 @@ impl StillFormat {
             _ => None,
         }
     }
-
-    fn codec(self) -> sys::AVCodecID {
-        match self {
-            Self::Png => sys::AVCodecID::AV_CODEC_ID_PNG,
-            Self::Tiff => sys::AVCodecID::AV_CODEC_ID_TIFF,
-            Self::Dpx => sys::AVCodecID::AV_CODEC_ID_DPX,
-        }
-    }
 }
 
 /// Saves display-encoded RGBA8 pixels, `size.0 * 4` bytes a row, as an image file.
@@ -58,7 +48,7 @@ pub fn write_still(
     size: (u32, u32),
     rgba: &[u8],
 ) -> Result<(), MediaError> {
-    let file = ffi::encode_rgba(format.codec(), size, rgba)?;
+    let file = ffi::encode_rgba(format, size, rgba)?;
     std::fs::write(path, file).map_err(|error| MediaError::CannotWrite {
         path: path.to_owned(),
         reason: error.to_string(),

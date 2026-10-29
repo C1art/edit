@@ -223,16 +223,26 @@ impl Encoder {
         unsafe { self.0.as_ref() }
     }
 
-    pub(crate) fn timebase(&self) -> sys::AVRational {
+    pub(super) fn timebase(&self) -> sys::AVRational {
         self.raw().time_base
     }
 
-    pub(crate) fn pixel_format(&self) -> sys::AVPixelFormat {
+    pub(super) fn pixel_format(&self) -> sys::AVPixelFormat {
         self.raw().pix_fmt
     }
 
-    pub(crate) fn sample_format(&self) -> sys::AVSampleFormat {
-        self.raw().sample_fmt
+    /// A blank picture of `size` in the format this encoder takes.
+    pub(crate) fn video_frame(&self, size: (u32, u32)) -> Result<Frame, MediaError> {
+        Frame::for_video(size, self.pixel_format())
+    }
+
+    /// A blank block of `samples` in the format this encoder takes.
+    pub(crate) fn audio_frame(
+        &self,
+        sample_rate: u32,
+        samples: usize,
+    ) -> Result<Frame, MediaError> {
+        Frame::for_audio(sample_rate, samples, self.raw().sample_fmt)
     }
 
     /// Samples per audio frame; `None` when the encoder takes any size.

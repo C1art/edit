@@ -3,7 +3,7 @@ use std::ptr::{self, NonNull};
 use ffmpeg_sys_next as sys;
 
 use super::error::check;
-use super::{hardware, Frame, InputContext, Packet};
+use super::{hardware, Frame, InputContext, Packet, Picture};
 use crate::MediaError;
 
 pub(crate) enum Received {
@@ -140,7 +140,12 @@ impl Decoder {
     }
 
     /// The pixel format of the last frame received.
-    pub(crate) fn picture_format(&self) -> sys::AVPixelFormat {
+    /// Moves the picture just received into `frame` out, as this decoder's format.
+    pub(crate) fn take_picture(&self, frame: &mut Frame) -> Result<Picture, MediaError> {
+        Picture::take(frame, self.picture_format())
+    }
+
+    fn picture_format(&self) -> sys::AVPixelFormat {
         self.picture_format.unwrap_or(self.raw().pix_fmt)
     }
 

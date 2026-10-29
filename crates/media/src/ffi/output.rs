@@ -127,14 +127,15 @@ impl OutputContext {
         check(unsafe { sys::avformat_write_header(self.0.as_ptr(), ptr::null_mut()) }).map(drop)
     }
 
-    /// Hands the packet's data to the muxer, rescaling its timestamps from `timebase`
-    /// to the stream's. The packet is left blank.
+    /// Hands the packet's data to the muxer, rescaling its timestamps from `encoder`'s
+    /// timebase to the stream's. The packet is left blank.
     pub(crate) fn write_packet(
         &mut self,
         packet: &mut Packet,
         stream_index: usize,
-        timebase: sys::AVRational,
+        encoder: &Encoder,
     ) -> Result<(), MediaError> {
+        let timebase = encoder.timebase();
         let stream = self.stream_timebase(stream_index)?;
         let index = i32::try_from(stream_index).map_err(|_| MediaError::InvalidFrame)?;
         let raw = packet.as_mut_ptr();

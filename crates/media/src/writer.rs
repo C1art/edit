@@ -96,7 +96,7 @@ impl MediaWriter {
                 let encoder = Encoder::video(&settings, global_header)?;
                 Ok(VideoStream {
                     index: output.add_stream(&encoder)?,
-                    frame: Frame::for_video(size, encoder.pixel_format())?,
+                    frame: encoder.video_frame(size)?,
                     converter: Converter::new(&settings, &encoder)?,
                     encoder,
                     next_pts: 0,
@@ -112,11 +112,7 @@ impl MediaWriter {
                     .unwrap_or(settings.sample_rate as usize / 50);
                 Ok::<_, MediaError>(AudioStream {
                     index: output.add_stream(&encoder)?,
-                    frame: Frame::for_audio(
-                        settings.sample_rate,
-                        frame_size,
-                        encoder.sample_format(),
-                    )?,
+                    frame: encoder.audio_frame(settings.sample_rate, frame_size)?,
                     encoder,
                     frame_size,
                     pending: Vec::with_capacity(frame_size * STEREO * 2),
@@ -244,7 +240,7 @@ fn drain(
                 if let Some(duration) = target.packet_duration {
                     packet.fill_duration(duration);
                 }
-                output.write_packet(packet, target.index, target.encoder.timebase())?;
+                output.write_packet(packet, target.index, target.encoder)?;
             }
             Received::NeedsInput | Received::Drained => return Ok(()),
         }

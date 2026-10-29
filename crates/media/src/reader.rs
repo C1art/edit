@@ -376,7 +376,7 @@ impl MediaReader {
             video.decoder.send_packet(packet)?;
             while let Received::Frame = video.decoder.receive_frame(&mut self.frame)? {
                 let pts = clock.pts(&self.frame, video.timebase, video.next_pts);
-                let picture = Picture::take(&mut self.frame, video.decoder.picture_format())?;
+                let picture = video.decoder.take_picture(&mut self.frame)?;
                 video.next_pts = pts;
                 self.decoded = Some(pts);
                 self.trim.push_video(pts, picture);
