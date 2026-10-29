@@ -317,11 +317,13 @@ fn correct(rgb_in: vec3<f32>) -> vec3<f32> {
     // Contrast pivots on mid grey in log space, as a camera's tone curve does.
     let pivot = vec3<f32>(MID_GREY);
     rgb = pivot * pow(max(rgb, vec3<f32>(0.0)) / pivot, vec3<f32>(1.0 + tone.y));
+    // #if tone.z tone.w finish.x finish.y wheels
     let luma = dot(rgb, LUMA);
     let highlight_weight = smoothstep(MID_GREY, 1.0, luma);
     let shadow_weight = 1.0 - smoothstep(0.0, MID_GREY * 2.0, luma);
     rgb *= exp2(tone.z * highlight_weight + tone.w * shadow_weight);
     rgb = finish(rgb);
+    // #endif
     return saturate_color(rgb, balance.z, placement.finish.z);
 }
 
@@ -381,17 +383,24 @@ fn input_grade(rgb: vec3<f32>) -> vec3<f32> {
     if placement.grade.x < 2.0 {
         return rgb;
     }
+    // #if grade.x
     return lookup(input_lut, placement.grade.x, rgb);
+    // #else
+    return rgb;
+    // #endif
 }
 
 fn creative_grade(rgb_in: vec3<f32>) -> vec3<f32> {
     let grade = placement.grade;
     var rgb = rgb_in;
+    // #if grade.y
     if grade.y >= 2.0 {
         rgb = mix(rgb, lookup(look_lut, grade.y, rgb), grade.z);
     }
+    // #endif
     rgb = creative_tone(rgb);
     let flags = u32(grade.w + 0.5);
+    // #if grade.w
     if (flags & 1u) != 0u {
         let size = f32(textureDimensions(curves).x);
         let row = 0.5 / f32(textureDimensions(curves).y);
@@ -405,6 +414,7 @@ fn creative_grade(rgb_in: vec3<f32>) -> vec3<f32> {
     if (flags & 2u) != 0u {
         rgb = hue_curves(rgb);
     }
+    // #endif
     return rgb;
 }
 
@@ -417,6 +427,7 @@ fn to_linear(rgb: vec3<f32>) -> vec3<f32> {
 }
 
 fn stylize(rgb_in: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
+    // #if amounts.z amounts.w tint_black.w
     let amounts = placement.amounts;
     let mapped = mix(placement.tint_black.rgb, placement.tint_white.rgb, dot(rgb_in, LUMA));
     var rgb = mix(rgb_in, mapped, amounts.w);
@@ -432,6 +443,9 @@ fn stylize(rgb_in: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
         rgb = mix(rgb, vec3<f32>(1.0), amount * edge);
     }
     return creative_vignette(rgb, uv);
+    // #else
+    return creative_vignette(rgb_in, uv);
+    // #endif
 }
 
 @fragment

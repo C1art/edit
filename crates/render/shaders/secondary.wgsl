@@ -48,6 +48,7 @@ fn secondary(rgb_in: vec3<f32>) -> vec3<f32> {
     if mode < 0.5 {
         return rgb_in;
     }
+    // #if secondary_key.w
     let keyed = secondary_key(rgb_in);
     if mode > 1.5 {
         return mix(vec3<f32>(MID_GREY), rgb_in, keyed);
@@ -61,4 +62,7 @@ fn secondary(rgb_in: vec3<f32>) -> vec3<f32> {
     rgb = pivot * pow(max(rgb, vec3<f32>(0.0)) / pivot, vec3<f32>(1.0 + balance.z));
     rgb = saturate_color(rgb, balance.w, 0.0);
     return mix(rgb_in, rgb, keyed);
+    // #else
+    return rgb_in;
+    // #endif
 }

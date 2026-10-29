@@ -49,6 +49,7 @@ fn brushed(rgb: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
     if look.x < 0.5 {
         return rgb;
     }
+    // #if paint_brush_look.x
     let frame = stroke_frame(uv);
     let paint = stroke_color(frame);
     var surface = rgb;
@@ -61,6 +62,9 @@ fn brushed(rgb: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
         surface = paint;
     }
     return mix(mix(surface, paint, frame.cover), rgb, look.y);
+    // #else
+    return rgb;
+    // #endif
 }
 
 fn eyedropper_color() -> vec3<f32> {
@@ -79,19 +83,27 @@ fn eyedropper_filled(rgb: vec3<f32>) -> vec3<f32> {
     if placement.paint_fill.w < 0.5 {
         return rgb;
     }
+    // #if paint_fill.w
     return mix(eyedropper_color(), rgb, placement.paint_fill_look.x);
+    // #else
+    return rgb;
+    // #endif
 }
 
 fn painted_alpha(alpha: f32, uv: vec2<f32>) -> f32 {
     var painted = alpha;
+    // #if paint_fill.w
     let fill = placement.paint_fill_look;
     if placement.paint_fill.w > 0.5 && fill.y < 0.5 {
         painted = mix(1.0, alpha, fill.x);
     }
+    // #endif
+    // #if paint_brush_look.x
     let look = placement.paint_brush_look;
     if look.x > 1.5 && look.x < 2.5 {
         painted *= mix(stroke_frame(uv).cover, 1.0, look.y);
     }
+    // #endif
     return painted;
 }
 
@@ -102,10 +114,14 @@ fn sdr_conformed(rgb: vec3<f32>) -> vec3<f32> {
     if conform.w < 0.5 {
         return rgb;
     }
+    // #if paint_conform.w
     let exposed = max(rgb, vec3<f32>(0.0)) * exp2(conform.x * 2.0);
     let contrasted = 0.18 * pow(exposed / 0.18, vec3<f32>(1.0 + conform.y * 0.5));
     let start = 1.0 - conform.z;
     let over = max(contrasted - start, vec3<f32>(0.0));
     let eased = start + conform.z * (1.0 - exp(-over / max(conform.z, 1e-4)));
     return select(min(contrasted, vec3<f32>(1.0)), eased, contrasted > vec3<f32>(start));
+    // #else
+    return rgb;
+    // #endif
 }

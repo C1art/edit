@@ -40,6 +40,7 @@ fn lighting_effects(rgb: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
     if flags.x < 0.5 {
         return rgb;
     }
+    // #if lighting_flags.x
     let surface = placement.lighting_surface;
     let ambience = placement.lighting_ambience;
     let picture = picture_size();
@@ -69,4 +70,7 @@ fn lighting_effects(rgb: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
         highlight += tint.rgb * mix(vec3<f32>(1.0), rgb, surface.y) * shine;
     }
     return (rgb * diffuse + highlight) * surface.z;
+    // #else
+    return rgb;
+    // #endif
 }

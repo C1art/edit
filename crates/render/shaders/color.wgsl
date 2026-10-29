@@ -68,6 +68,7 @@ fn color_managed(rgb: vec3<f32>) -> vec3<f32> {
     if space == 0u {
         return rgb;
     }
+    // #if key_spill.w
     let transfer = space & 3u;
     var light = rgb;
     if transfer == 1u {
@@ -76,4 +77,7 @@ fn color_managed(rgb: vec3<f32>) -> vec3<f32> {
         light = hlg_to_light(srgb_encode(rgb));
     }
     return tone_mapped(max(to_rec709(light, space >> 2u), vec3<f32>(0.0)));
+    // #else
+    return rgb;
+    // #endif
 }

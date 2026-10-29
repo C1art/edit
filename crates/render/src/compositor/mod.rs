@@ -6,9 +6,10 @@ use std::sync::Arc;
 use timeline::MatteChannel;
 
 use crate::backdrop::{Backdrop, Drawn};
-use crate::blit::{self, Blit, DISPLAY_FORMAT};
+use crate::blit::{self, Blit, LayerPass, DISPLAY_FORMAT};
 use crate::combine::Combine;
 use crate::grade::Grade;
+use crate::layer_shader::Features;
 use crate::placement::{LayerLook, Placement};
 use crate::scope::{Scope, ScopeTrace};
 use crate::{RenderError, WORKING_FORMAT};
@@ -89,6 +90,8 @@ struct Targets {
     working_texture: wgpu::Texture,
     working: wgpu::TextureView,
     working_binding: wgpu::BindGroup,
+    /// The effects the working frame's placement uses: none.
+    working_features: Features,
     backdrop: Backdrop,
     output_texture: wgpu::Texture,
     output: wgpu::TextureView,
@@ -249,11 +252,13 @@ impl Compositor {
                         &self.placed(fill),
                         wgpu::Color::TRANSPARENT,
                     );
+                    let matte_slot = &self.slots[*matte];
+                    let pass = LayerPass::Matte(*channel, *reverse);
                     blit::draw(
                         &mut encoder,
                         &group.view,
-                        self.blit.matte(*channel, *reverse),
-                        &[[self.slots[*matte].placed(), &self.blit.grade.none]],
+                        &self.blit.pipeline(matte_slot.features, pass),
+                        &[[matte_slot.placed(), &self.blit.grade.none]],
                         wgpu::LoadOp::Load,
                     );
                 }
@@ -265,11 +270,12 @@ impl Compositor {
                     let other = self
                         .blit
                         .bind_backdrop(&self.device, &self.slots[*other].view);
-                    let groups = [self.slots[*layer].placed(), &self.blit.grade.none, &other];
+                    let layer = &self.slots[*layer];
+                    let groups = [layer.placed(), &self.blit.grade.none, &other];
                     blit::draw(
                         &mut encoder,
                         &self.slots[*index].view,
-                        &self.blit.combined,
+                        &self.blit.pipeline(layer.features, LayerPass::Combined),
                         &[groups],
                         wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
                     );
@@ -289,7 +295,9 @@ impl Compositor {
         blit::draw(
             &mut encoder,
             &targets.output,
-            &self.blit.to_display,
+            &self
+                .blit
+                .pipeline(targets.working_features, LayerPass::Display),
             &[[&targets.working_binding, &self.blit.grade.none]],
             wgpu::LoadOp::Clear(wgpu::Color::BLACK),
         );
@@ -312,6 +320,7 @@ impl Compositor {
                 Drawn {
                     groups: [slot.placed(), grade],
                     blend: slot.blend,
+                    features: slot.features,
                 }
             })
             .collect()
@@ -340,11 +349,12 @@ impl Compositor {
             premultiplied: true,
             ..Placement::FULL
         };
-        Blit::write_placement(&self.queue, &placement, working);
+        let working_features = self.blit.write_placement(&self.queue, &placement, working);
         Targets {
             width,
             height,
             working_binding: self.blit.bind(&self.device, &working_view, &placement),
+            working_features,
             working: working_view,
             working_texture,
             backdrop: Backdrop::new(&self.device, &self.blit, (width, height)),

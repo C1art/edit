@@ -29,6 +29,7 @@ fn cleaned_matte(rgb: vec3<f32>, uv: vec2<f32>) -> f32 {
     if cleanup.z <= 0.0 && cleanup.w <= 0.0 {
         return matte;
     }
+// #if key_matte.z key_matte.w
     let texel = 1.0 / vec2<f32>(textureDimensions(source));
     var eroded = matte;
     var blurred = matte;
@@ -40,6 +41,9 @@ fn cleaned_matte(rgb: vec3<f32>, uv: vec2<f32>) -> f32 {
     }
     blurred /= f32(KEY_TAPS + 1);
     return select(blurred, min(eroded, blurred), cleanup.z > 0.0);
+// #else
+    return matte;
+// #endif
 }
 
 // How much of the source the key leaves, Color Key's included.
@@ -47,11 +51,15 @@ fn key_alpha(rgb: vec3<f32>, uv: vec2<f32>) -> f32 {
     if placement.key.w < 0.0 {
         return color_key_alpha(rgb);
     }
+// #if key.w
     let cleanup = placement.key_matte;
     var matte = cleaned_matte(rgb, uv);
     matte = saturate((matte - cleanup.x) / max(1.0 - cleanup.x, 1e-4));
     matte = saturate((matte - 0.5) * (1.0 + 4.0 * cleanup.y) + 0.5);
     return matte * color_key_alpha(rgb);
+// #else
+    return color_key_alpha(rgb);
+// #endif
 }
 
 // The coverage the layer draws with: the views of the matte and the color are opaque.
@@ -73,6 +81,7 @@ fn despill(rgb: vec3<f32>, matte: f32) -> vec3<f32> {
     if placement.key.w < 0.0 || spill <= 0.0 {
         return rgb;
     }
+// #if key_spill.x
     let key = chroma(placement.key.rgb);
     let toward_key = key / max(length(key), 1e-4);
     var cbcr = chroma(rgb);
@@ -81,4 +90,7 @@ fn despill(rgb: vec3<f32>, matte: f32) -> vec3<f32> {
     let encoded = vec3<f32>(y + 1.5748 * cbcr.y, y - 0.1873 * cbcr.x - 0.4681 * cbcr.y, y + 1.8556 * cbcr.x);
     let despilled = to_linear(encoded);
     return mix(vec3<f32>(dot(despilled, LUMA)), despilled, mix(1.0, matte, min(spill * 2.0, 1.0)));
+// #else
+    return rgb;
+// #endif
 }

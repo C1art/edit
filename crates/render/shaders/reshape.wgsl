@@ -17,6 +17,7 @@ fn mirrored(uv: vec2<f32>) -> vec2<f32> {
     if mirror.w < 0.5 {
         return uv;
     }
+// #if reshape_mirror.w
     let picture = picture_size();
     let aspect = picture / max(picture.x, picture.y);
     let normal = vec2<f32>(cos(mirror.z), sin(mirror.z));
@@ -26,6 +27,9 @@ fn mirrored(uv: vec2<f32>) -> vec2<f32> {
         return uv;
     }
     return (p - 2.0 * beyond * normal) / aspect + mirror.xy;
+// #else
+    return uv;
+// #endif
 }
 
 // Where the point at `uv` of the warped picture lies in the picture before warping;
@@ -35,12 +39,16 @@ fn unpinned(uv: vec2<f32>) -> vec2<f32> {
     if rows[0].w < 0.5 {
         return uv;
     }
+// #if reshape_unpin
     let point = vec3<f32>(uv, 1.0);
     let w = dot(rows[2].xyz, point);
     if w <= 1e-6 {
         return vec2<f32>(-1.0);
     }
     return vec2<f32>(dot(rows[0].xyz, point), dot(rows[1].xyz, point)) / w;
+// #else
+    return uv;
+// #endif
 }
 
 struct Page {
@@ -61,6 +69,7 @@ fn folded(uv: vec2<f32>) -> Page {
     if fold.w < 0.5 {
         return Page(uv, 0.0, 0.0, 0.0);
     }
+// #if reshape_fold.w
     let picture = picture_size();
     let aspect = picture / max(picture.x, picture.y);
     let normal = normalize(fold.xy);
@@ -77,6 +86,9 @@ fn folded(uv: vec2<f32>) -> Page {
         return Page(back, 1.0, -beyond, 0.0);
     }
     return Page(uv, 0.0, -beyond, 0.0);
+// #else
+    return Page(uv, 0.0, 0.0, 0.0);
+// #endif
 }
 
 // The page's back: a curl's is pale like paper and lit along its roll.
@@ -84,9 +96,13 @@ fn page_side(rgb: vec3<f32>, page: Page) -> vec3<f32> {
     if page.back < 0.5 {
         return rgb;
     }
+// #if reshape_fold.w
     if placement.reshape_fold.w < 1.5 {
         return rgb * PAGE_BACK_SHADE;
     }
     let roll = smoothstep(0.0, CURL_WIDTH, page.depth);
     return mix(vec3<f32>(PAPER), rgb, PAPER_SHOW_THROUGH) * mix(1.3, 0.85, roll);
+// #else
+    return rgb;
+// #endif
 }

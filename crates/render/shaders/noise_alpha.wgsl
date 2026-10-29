@@ -6,6 +6,7 @@ fn noise_alpha(alpha: f32, uv: vec2<f32>) -> f32 {
     if timing.w < 0.5 {
         return alpha;
     }
+    // #if noise_alpha_timing.w
     let cell = floor(uv * picture_size());
     var noise = detail_hash(cell, timing.x) * 0.5 + 0.5;
     if timing.w > 1.5 {
@@ -42,4 +43,7 @@ fn noise_alpha(alpha: f32, uv: vec2<f32>) -> f32 {
         return select(folded, 2.0 - folded, folded > 1.0);
     }
     return clamp(noisy, 0.0, 1.0);
+    // #else
+    return alpha;
+    // #endif
 }

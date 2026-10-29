@@ -1,7 +1,8 @@
 use timeline::BlendMode;
 
-use crate::blit::{self, Blit};
+use crate::blit::{self, Blit, LayerPass};
 use crate::compositor::extent;
+use crate::layer_shader::Features;
 use crate::WORKING_FORMAT;
 
 /// A canvas-sized copy of what lies under a layer drawn with a blend mode.
@@ -14,6 +15,7 @@ pub(crate) struct Backdrop {
 pub(crate) struct Drawn<'a> {
     pub(crate) groups: [&'a wgpu::BindGroup; 2],
     pub(crate) blend: BlendMode,
+    pub(crate) features: Features,
 }
 
 impl Backdrop {
@@ -46,13 +48,22 @@ impl Backdrop {
     ) {
         let mut load = wgpu::LoadOp::Clear(clear);
         let mut normal = Vec::new();
+        let draw_normal = |encoder: &mut wgpu::CommandEncoder,
+                           normal: &[(wgpu::RenderPipeline, [&wgpu::BindGroup; 2])],
+                           load| {
+            let quads: Vec<_> = normal
+                .iter()
+                .map(|(pipeline, groups)| (pipeline, *groups))
+                .collect();
+            blit::draw_each(encoder, view, &quads, load);
+        };
         for layer in layers {
             if layer.blend == BlendMode::Normal {
-                normal.push(layer.groups);
+                normal.push((blit.pipeline(layer.features, LayerPass::Over), layer.groups));
                 continue;
             }
             if !normal.is_empty() || load != wgpu::LoadOp::Load {
-                blit::draw(encoder, view, &blit.to_working, &normal, load);
+                draw_normal(encoder, &normal, load);
                 normal.clear();
                 load = wgpu::LoadOp::Load;
             }
@@ -63,10 +74,11 @@ impl Backdrop {
             );
             let [placed, grade] = layer.groups;
             let groups = [placed, grade, &self.binding];
-            blit::draw(encoder, view, &blit.blended, &[groups], load);
+            let blended = blit.pipeline(layer.features, LayerPass::Blended);
+            blit::draw(encoder, view, &blended, &[groups], load);
         }
         if !normal.is_empty() || load != wgpu::LoadOp::Load {
-            blit::draw(encoder, view, &blit.to_working, &normal, load);
+            draw_normal(encoder, &normal, load);
         }
     }
 }

@@ -3,6 +3,7 @@ fn change_color(rgb: vec3<f32>) -> vec3<f32> {
     if target_color.w < 0.0 {
         return rgb;
     }
+    // #if shift_change_target.w
     let amounts = placement.shift_change_amounts;
     let detail = placement.shift_change_detail;
     let encoded = to_gamma(max(rgb, vec3<f32>(0.0)));
@@ -32,6 +33,9 @@ fn change_color(rgb: vec3<f32>) -> vec3<f32> {
         clamp(color.z + amounts.y * select(color.z, 1.0 - color.z, amounts.y > 0.0), 0.0, 1.0),
     );
     return to_linear(mix(encoded, from_hsl(changed), weight));
+    // #else
+    return rgb;
+    // #endif
 }
 
 fn color_balance(rgb: vec3<f32>) -> vec3<f32> {
@@ -39,6 +43,7 @@ fn color_balance(rgb: vec3<f32>) -> vec3<f32> {
     if shadows.w < 0.5 {
         return rgb;
     }
+    // #if shift_balance_shadows.w
     let midtones = placement.shift_balance_midtones;
     let highlights = placement.shift_balance_highlights;
     let encoded = clamp(to_gamma(max(rgb, vec3<f32>(0.0))), vec3<f32>(0.0), vec3<f32>(1.0));
@@ -53,4 +58,7 @@ fn color_balance(rgb: vec3<f32>) -> vec3<f32> {
         balanced = clamp(balanced + vec3<f32>(luma - dot(balanced, LUMA)), vec3<f32>(0.0), vec3<f32>(1.0));
     }
     return to_linear(balanced);
+    // #else
+    return rgb;
+    // #endif
 }

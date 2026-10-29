@@ -19,7 +19,11 @@ fn cineon(rgb: vec3<f32>) -> vec3<f32> {
     if placement.cineon_shape.z < 0.5 {
         return rgb;
     }
+    // #if cineon_shape.z
     return to_linear(cineon_converted(to_gamma(rgb)));
+    // #else
+    return rgb;
+    // #endif
 }
 
 // Codes are read from and written as gamma-encoded levels, as the files carry them.

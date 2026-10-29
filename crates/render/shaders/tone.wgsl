@@ -6,6 +6,7 @@ fn convolved(rgb: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
     if c.z < 0.5 {
         return rgb;
     }
+    // #if tone_kernel_c.z
     var weights = array<f32, 9>(a.x, a.y, a.z, a.w, b.x, b.y, b.z, b.w, c.x);
     let step = 1.0 / picture_size();
     var sum = vec3<f32>(0.0);
@@ -18,6 +19,9 @@ fn convolved(rgb: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
         sum += weights[tap] * to_gamma(sample);
     }
     return to_linear(clamp(sum + c.y, vec3<f32>(0.0), vec3<f32>(1.0)));
+    // #else
+    return rgb;
+    // #endif
 }
 
 // Shadow/Highlight: the surroundings' encoded luma decides how far a pixel is lifted
@@ -28,6 +32,7 @@ fn shadow_highlight(rgb: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
     if more.z >= 1.0 {
         return rgb;
     }
+    // #if tone_lift_more.z
     let reach = max(more.x, 1.0) / picture_size();
     var sum = 0.0;
     for (var tap = 0; tap < DETAIL_TAPS; tap++) {
@@ -49,6 +54,9 @@ fn shadow_highlight(rgb: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
     let midtones = clamp(1.0 - abs(2.0 * luma - 1.0), 0.0, 1.0);
     toned = mix(toned, (toned - 0.5) * (1.0 + more.y) + 0.5, midtones);
     return to_linear(mix(toned, encoded, more.z));
+    // #else
+    return rgb;
+    // #endif
 }
 
 // ASC CDL: slope, offset and power per channel on encoded levels, then saturation
@@ -59,10 +67,14 @@ fn cdl_graded(rgb: vec3<f32>) -> vec3<f32> {
     if offset.w < 0.5 {
         return rgb;
     }
+    // #if tone_cdl_offset.w
     let sloped = clamp(to_gamma(rgb) * slope.xyz + offset.xyz, vec3<f32>(0.0), vec3<f32>(1.0));
     let graded = pow(sloped, placement.tone_cdl_power.xyz);
     let luma = dot(graded, LUMA);
     return to_linear(luma + slope.w * (graded - luma));
+    // #else
+    return rgb;
+    // #endif
 }
 
 // Color Replace: colors within the similarity of the target take on the replacement,
@@ -73,6 +85,7 @@ fn color_replaced(rgb: vec3<f32>) -> vec3<f32> {
     if replacement.w == 0.0 {
         return rgb;
     }
+    // #if tone_replace_with.w
     let encoded = to_gamma(rgb);
     let distance = length(encoded - target_color.rgb) / sqrt(3.0);
     let similarity = max(target_color.w, 1e-4);
@@ -82,6 +95,9 @@ fn color_replaced(rgb: vec3<f32>) -> vec3<f32> {
         replaced = replacement.rgb;
     }
     return to_linear(mix(encoded, replaced, near));
+    // #else
+    return rgb;
+    // #endif
 }
 
 // Extract: white where the encoded luma lies between the levels, black elsewhere.
@@ -90,6 +106,7 @@ fn extracted(rgb: vec3<f32>) -> vec3<f32> {
     if levels.w == 0.0 {
         return rgb;
     }
+    // #if tone_extract.w
     let luma = dot(to_gamma(rgb), LUMA);
     let soft = max(levels.z, 1e-4);
     var inside = smoothstep(levels.x - soft, levels.x, luma)
@@ -98,6 +115,9 @@ fn extracted(rgb: vec3<f32>) -> vec3<f32> {
         inside = 1.0 - inside;
     }
     return to_linear(vec3<f32>(inside));
+    // #else
+    return rgb;
+    // #endif
 }
 
 fn toned(rgb: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
@@ -111,6 +131,7 @@ fn limited(rgb: vec3<f32>) -> vec3<f32> {
     if limit.z == 0.0 {
         return rgb;
     }
+    // #if tone_limit.z
     let encoded = to_gamma(rgb);
     let peak = max(encoded.r, max(encoded.g, encoded.b));
     let knee = limit.x * (1.0 - limit.y);
@@ -144,4 +165,7 @@ fn limited(rgb: vec3<f32>) -> vec3<f32> {
         out -= max(luma + top * keep - eased, 0.0);
     }
     return to_linear(out);
+    // #else
+    return rgb;
+    // #endif
 }

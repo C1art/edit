@@ -26,6 +26,7 @@ fn roughened(uv: vec2<f32>) -> vec2<f32> {
     if settings.x <= 0.0 {
         return vec2<f32>(1.0, 0.0);
     }
+    // #if edges_roughen.x
     let noise = placement.edges_roughen_noise;
     let picture = picture_size();
     // The covered share of a disc as wide as the border: a half on an edge, all of it
@@ -45,6 +46,9 @@ fn roughened(uv: vec2<f32>) -> vec2<f32> {
     let band = cut + settings.y;
     let colored = 1.0 - smoothstep(band, band + 0.2, depth);
     return vec2<f32>(kept, colored * placement.edges_roughen_color.w);
+    // #else
+    return vec2<f32>(1.0, 0.0);
+    // #endif
 }
 
 fn roughen_colored(rgb: vec3<f32>, colored: f32) -> vec3<f32> {
@@ -57,6 +61,7 @@ fn bevel_edges(rgb: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
     if bevel.x <= 0.0 || bevel.z <= 0.0 {
         return rgb;
     }
+    // #if edges_bevel.x edges_bevel.z
     let picture = picture_size();
     let inside = vec4<f32>(uv, vec2<f32>(1.0) - uv) * vec4<f32>(picture, picture);
     let nearest = min(min(inside.x, inside.y), min(inside.z, inside.w));
@@ -73,6 +78,9 @@ fn bevel_edges(rgb: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
     }
     let facing = dot(outward, light_toward(bevel.y)) * bevel.z;
     return lit(rgb, facing, placement.edges_bevel_color.rgb);
+    // #else
+    return rgb;
+    // #endif
 }
 
 // Bevel Alpha: faces sloping down the picture's coverage, as wide as the thickness.
@@ -81,6 +89,7 @@ fn bevel_alpha(rgb: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
     if bevel.x <= 0.0 || bevel.z <= 0.0 {
         return rgb;
     }
+    // #if edges_bevel_alpha.x edges_bevel_alpha.z
     let step = bevel.x / picture_size();
     let across = vec2<f32>(step.x, 0.0);
     let down = vec2<f32>(0.0, step.y);
@@ -96,6 +105,9 @@ fn bevel_alpha(rgb: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
     let outward = -slope / steepness;
     let facing = dot(outward, light_toward(bevel.y)) * bevel.z * saturate(steepness * 2.0);
     return lit(rgb, facing, placement.edges_bevel_alpha_color.rgb);
+    // #else
+    return rgb;
+    // #endif
 }
 
 // Color Emboss: Emboss's relief lighting the picture's colors rather than grey.
@@ -104,10 +116,14 @@ fn color_emboss(rgb: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
     if emboss.w <= 0.0 {
         return rgb;
     }
+    // #if edges_emboss.w
     let toward = light_toward(emboss.x) * emboss.y / picture_size();
     let rise = encoded_luma(uv - toward) - encoded_luma(uv + toward);
     let embossed = to_linear(to_gamma(rgb) + vec3<f32>(rise * emboss.z * 2.0));
     return mix(rgb, embossed, emboss.w);
+    // #else
+    return rgb;
+    // #endif
 }
 
 fn edge_lit(rgb: vec3<f32>, pinned: vec2<f32>, uv: vec2<f32>) -> vec3<f32> {
@@ -122,6 +138,7 @@ fn alpha_glow(uv: vec2<f32>) -> vec4<f32> {
     if glow.x <= 0.0 || glow.y <= 0.0 {
         return vec4<f32>(0.0);
     }
+    // #if edges_glow.x edges_glow.y
     let picture = picture_size();
     var strongest = 0.0;
     var reach = 0.0;
@@ -143,4 +160,7 @@ fn alpha_glow(uv: vec2<f32>) -> vec4<f32> {
     }
     let color = mix(placement.edges_glow_start.rgb, placement.edges_glow_end.rgb, reach);
     return vec4<f32>(color, saturate(strongest * glow.y));
+    // #else
+    return vec4<f32>(0.0);
+    // #endif
 }

@@ -28,7 +28,11 @@ fn split_tone(rgb: vec3<f32>) -> vec3<f32> {
 }
 
 fn creative_tone(rgb: vec3<f32>) -> vec3<f32> {
+    // #if creative_shadow creative_highlight
     return split_tone(faded(rgb));
+    // #else
+    return rgb;
+    // #endif
 }
 
 fn superellipse_radius(p: vec2<f32>, power: f32) -> f32 {
@@ -50,12 +54,16 @@ fn creative_vignette(rgb: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
     if vignette.x == 0.0 {
         return rgb;
     }
+    // #if creative_vignette.x
     let distance = vignette_distance(uv, vignette.z);
     let edge = smoothstep(vignette.y, vignette.y + max(vignette.w, 0.01), distance);
     if vignette.x < 0.0 {
         return rgb * (1.0 + vignette.x * edge);
     }
     return mix(rgb, vec3<f32>(1.0), vignette.x * edge);
+    // #else
+    return rgb;
+    // #endif
 }
 
 // Gamma-encoded color from hue in turns, saturation and lightness.

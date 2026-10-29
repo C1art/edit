@@ -12,6 +12,7 @@ mod edges;
 mod error;
 mod generate;
 mod grade;
+mod layer_shader;
 mod lighting;
 mod lut;
 mod mask;

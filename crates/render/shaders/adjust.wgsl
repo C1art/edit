@@ -13,12 +13,14 @@ fn adjusted(rgb: vec3<f32>) -> vec3<f32> {
     let levels = placement.adjust_levels;
     var encoded = to_gamma(max(rgb, vec3<f32>(0.0))) * placement.adjust_balance.rgb;
     encoded = proc_amp(leveled(encoded));
+// #if adjust_levels.x adjust_levels.y
     if levels.x >= 0.0 {
         encoded = select(encoded, 1.0 - encoded, encoded > vec3<f32>(levels.x));
     }
     if levels.y >= 0.0 {
         encoded = vec3<f32>(step(levels.y, dot(encoded, LUMA)));
     }
+// #endif
     return to_linear(encoded);
 }
 
@@ -47,12 +49,16 @@ fn luma_matte(rgb: vec3<f32>) -> f32 {
     if threshold < 0.0 {
         return 1.0;
     }
+// #if adjust_levels.z
     let cutoff = placement.adjust_levels.w;
     let luma = dot(to_gamma(max(rgb, vec3<f32>(0.0))), LUMA);
     if abs(threshold - cutoff) < 1e-4 {
         return step(threshold, luma);
     }
     return saturate((luma - cutoff) / (threshold - cutoff));
+// #else
+    return 1.0;
+// #endif
 }
 
 fn adjusted_alpha(alpha: f32) -> f32 {

@@ -6,6 +6,7 @@ fn ellipse_ring(color: vec4<f32>, p: vec2<f32>, picture: vec2<f32>) -> vec4<f32>
     if detail.w < 0.5 {
         return color;
     }
+    // #if pattern_ellipse_detail.w
     let shape = placement.pattern_ellipse;
     let radii = max(shape.zw * 0.5, vec2<f32>(1.0));
     // Pixels from the outline, close enough for a ring that is not too eccentric.
@@ -20,6 +21,9 @@ fn ellipse_ring(color: vec4<f32>, p: vec2<f32>, picture: vec2<f32>) -> vec4<f32>
         under = color;
     }
     return drawn_over(under, fill, cover);
+    // #else
+    return color;
+    // #endif
 }
 
 fn patterned(color: vec4<f32>, uv: vec2<f32>) -> vec4<f32> {
@@ -41,6 +45,7 @@ fn cell_pattern(color: vec4<f32>, p: vec2<f32>) -> vec4<f32> {
     if cells.x < 0.0 {
         return color;
     }
+    // #if pattern_cells.x
     let more = placement.pattern_cells_more;
     let at = (p - more.xy) / cells.y;
     let home = floor(at);
@@ -80,4 +85,7 @@ fn cell_pattern(color: vec4<f32>, p: vec2<f32>) -> vec4<f32> {
         value = 1.0 - value;
     }
     return drawn_over(color, vec3<f32>(value), 1.0 - more.w);
+    // #else
+    return color;
+    // #endif
 }

@@ -6,6 +6,7 @@ use super::{extent, Compositor, LayerImage};
 use crate::blit::Blit;
 use crate::blur::BlurTargets;
 use crate::grade::Grade;
+use crate::layer_shader::Features;
 use crate::placement::{fit_scale, Placement};
 use crate::WORKING_FORMAT;
 
@@ -34,6 +35,8 @@ pub(super) struct Slot {
     pub(super) blur: Option<BlurTargets>,
     pub(super) blurred: bool,
     pub(super) blend: BlendMode,
+    /// The effects its placement uses, which pick its pipelines.
+    pub(super) features: Features,
     /// The lookups last drawn with and their textures' binding.
     pub(super) grade: Option<(Arc<Grade>, wgpu::BindGroup)>,
 }
@@ -122,7 +125,9 @@ impl Compositor {
             grade: Grade::uniform(layer.grade.as_deref(), look.color.look_intensity),
             ..Placement::new(shown, canvas, look)
         };
-        Blit::write_placement(&self.queue, &slot.placement, placement);
+        slot.features = self
+            .blit
+            .write_placement(&self.queue, &slot.placement, placement);
     }
 
     fn create_slot(&self, (width, height): (u32, u32), kind: SlotKind) -> Slot {
@@ -153,6 +158,7 @@ impl Compositor {
             blur: None,
             blurred: false,
             blend: BlendMode::Normal,
+            features: Features::NONE,
             grade: None,
         }
     }

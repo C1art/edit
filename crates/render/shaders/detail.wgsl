@@ -17,6 +17,7 @@ fn unsharp(rgb: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
     if settings.x <= 0.0 || settings.y <= 0.0 {
         return rgb;
     }
+    // #if detail_unsharp.x detail_unsharp.y
     let reach = settings.y / picture_size();
     var sum = vec3<f32>(0.0);
     for (var tap = 0; tap < DETAIL_TAPS; tap++) {
@@ -27,6 +28,9 @@ fn unsharp(rgb: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
     let blurred = sum / f32(DETAIL_TAPS);
     let passes = step(settings.z, encoded_distance(rgb, blurred));
     return max(rgb + settings.x * (rgb - blurred) * passes, vec3<f32>(0.0));
+    // #else
+    return rgb;
+    // #endif
 }
 
 fn sorted_pair(a: ptr<function, vec3<f32>>, b: ptr<function, vec3<f32>>) {
@@ -42,6 +46,7 @@ fn median_filtered(rgb: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
     if radius <= 0.0 {
         return rgb;
     }
+    // #if detail_unsharp.w
     let step = radius / picture_size();
     var p0 = graded_at(uv + vec2<f32>(-step.x, -step.y));
     var p1 = graded_at(uv + vec2<f32>(0.0, -step.y));
@@ -60,6 +65,9 @@ fn median_filtered(rgb: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
     sorted_pair(&p4, &p7); sorted_pair(&p4, &p2); sorted_pair(&p6, &p4);
     sorted_pair(&p4, &p2);
     return select(rgb, p4, encoded_distance(rgb, p4) > placement.detail_median.x);
+    // #else
+    return rgb;
+    // #endif
 }
 
 // The picture's opacity fading toward its edges, Edge Feather's pixels in from each.
@@ -83,6 +91,7 @@ fn noise_hls(rgb: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
     if all(amounts == vec3<f32>(0.0)) {
         return rgb;
     }
+    // #if detail_noise
     let cell = floor(uv * picture_size() / placement.detail_median.z);
     let phase = placement.detail_median.w / TAU;
     let turn = floor(phase);
@@ -100,4 +109,7 @@ fn noise_hls(rgb: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
     let luma = dot(turned, LUMA);
     let shifted = vec3<f32>(luma) + (turned - luma) * (1.0 + noise.z) + noise.y;
     return to_linear(max(shifted, vec3<f32>(0.0)));
+    // #else
+    return rgb;
+    // #endif
 }

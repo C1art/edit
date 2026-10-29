@@ -55,6 +55,7 @@ fn mask_coverage(uv: vec2<f32>) -> f32 {
     if count == 0u {
         return 1.0;
     }
+// #if mask_space.z
     let picture = placement.mask_space.xy;
     var uncovered = 1.0;
     var adding = false;
@@ -91,4 +92,7 @@ fn mask_coverage(uv: vec2<f32>) -> f32 {
         }
     }
     return select(1.0, 1.0 - uncovered, adding) * kept;
+// #else
+    return 1.0;
+// #endif
 }
