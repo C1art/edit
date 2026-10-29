@@ -3,11 +3,11 @@ use super::{
     GarbageMatte, KeyOutput, LensType, MagnifyShape, MatteChannel, Median, NoiseHls,
     RadialWipeDirection, RampShape, Rgb, TimecodeSource, UnsharpMask, VideoEffect,
 };
-use crate::{Param, Stabilizer};
+use crate::{AutoReframe, Param, Stabilizer};
 
 impl VideoEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 68] {
+    pub fn catalog() -> [Self; 69] {
         [
             Self::GaussianBlur {
                 blurriness: Param::from_value(10.0),
@@ -312,6 +312,7 @@ impl VideoEffect {
             Self::GarbageMatte(GarbageMatte::new(4)),
             Self::GarbageMatte(GarbageMatte::new(8)),
             Self::GarbageMatte(GarbageMatte::new(16)),
+            Self::AutoReframe(AutoReframe::default()),
         ]
     }
 
@@ -370,9 +371,10 @@ impl VideoEffect {
             | Self::Replicate { .. } => EffectCategory::Stylize,
             Self::PosterizeTime { .. } | Self::Echo(_) => EffectCategory::Time,
             Self::Timecode { .. } | Self::ClipName { .. } => EffectCategory::Video,
-            Self::HorizontalFlip | Self::VerticalFlip | Self::EdgeFeather(_) => {
-                EffectCategory::Transform
-            }
+            Self::HorizontalFlip
+            | Self::VerticalFlip
+            | Self::EdgeFeather(_)
+            | Self::AutoReframe(_) => EffectCategory::Transform,
             Self::Levels { .. } | Self::ProcAmp { .. } => EffectCategory::Adjust,
             Self::LinearWipe { .. }
             | Self::RadialWipe { .. }
@@ -449,6 +451,7 @@ impl VideoEffect {
             Self::CameraBlur { .. } => "Camera Blur",
             Self::Echo(_) => "Echo",
             Self::GarbageMatte(matte) => matte.name(),
+            Self::AutoReframe(_) => "Auto Reframe",
         }
     }
 }

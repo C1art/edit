@@ -16,6 +16,7 @@ mod matte_overlay;
 mod motion_overlay;
 mod optics;
 mod picture_frame;
+mod reframe;
 mod remap;
 mod secondary;
 mod sound;
@@ -137,6 +138,7 @@ fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
     let keys = std::mem::take(&mut editor.effects.keys);
     let mut rows = Rows::new(time, lane(editor, ui, clip), keys);
     rows.analyzing = editor.motion_analysis_progress(clip.id);
+    rows.reframing = editor.reframe_analysis_progress(clip.id);
     rows.tracking = editor.mask_tracking(clip.id);
     rows.tone = match (editor.analyzing_tone(clip.id), &editor.comparison) {
         (true, _) => ToneState::Analyzing,
@@ -146,7 +148,9 @@ fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
     let mut output = look::controls(ui, &mut look, rows, video_tracks);
     editor.effects.keys = std::mem::take(&mut output.keys);
     if output.change.is_some() {
-        stabilizer::retune(&mut look, editor.timeline.sequence().timebase);
+        let timebase = editor.timeline.sequence().timebase;
+        stabilizer::retune(&mut look, timebase);
+        reframe::retune(&mut look, timebase);
     }
     seek_to_key(editor, clip, output.seek);
     if let Some(slot) = output.choose_lut {
@@ -178,6 +182,9 @@ fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
     }
     if output.analyze_motion {
         editor.analyze_motion(clip.id);
+    }
+    if output.analyze_reframe {
+        editor.analyze_reframe(clip.id);
     }
     if let Some((mask, direction, span)) = output.track_mask {
         editor.track_mask(clip.id, mask, direction, span);

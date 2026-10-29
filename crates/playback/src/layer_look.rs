@@ -1,10 +1,10 @@
 use render::{
     ColorAdjust, Creative, CreativeVignette, LayerLook, LayerMask, LayerWipe, Outline, PageFold,
-    PixelEffects, SecondaryAdjust, Warp, MAX_MASKS, MAX_OUTLINE_POINTS,
+    PixelEffects, Reframe, SecondaryAdjust, Warp, MAX_MASKS, MAX_OUTLINE_POINTS,
 };
 use timeline::{
-    ColorCorrection, HslSecondary, Look, Mask, MaskShape, MediaItem, Param, Reveal, Ticks,
-    Timebase, VideoEffect,
+    AutoReframe, ColorCorrection, HslSecondary, Look, Mask, MaskShape, MediaItem, Param, Reveal,
+    Ticks, Timebase, VideoEffect,
 };
 
 use crate::pixel_effects::{linear, pixel_effects, transform_opacity};
@@ -34,7 +34,12 @@ pub(crate) fn layer_look(
     let value = |param: &Param| param.value_at(time);
     let percent = |param: &Param| param.value_at(time) / 100.0;
     let crop = &look.crop;
-    let position = look.motion.position.each_ref().map(value);
+    let reframe = look.effects.iter().rev().find_map(|effect| match effect {
+        VideoEffect::AutoReframe(reframe) => Some(reframe),
+        _ => None,
+    });
+    let nudge = reframe.map_or([0.0; 2], |reframe| reframe.offset.each_ref().map(value));
+    let position = [0, 1].map(|axis| look.motion.position[axis].value_at(time) + nudge[axis]);
     // Zooming about the canvas center scales the picture's offset from it too.
     let offset =
         [0, 1].map(|axis| (position[axis] + reveal.shift[axis] * canvas[axis]) * reveal.zoom);
@@ -71,7 +76,7 @@ pub(crate) fn layer_look(
         effects: smeared(turned(effects, reveal, canvas), reveal, canvas),
         blend: reveal.blend.unwrap_or(look.blend),
         pixel_aspect: 1.0,
-        reframe: None,
+        reframe: reframe.map(|reframe| reframed(reframe, time)),
     }
 }
 
@@ -180,6 +185,13 @@ fn secondary_adjust(secondary: &HslSecondary, time: Ticks) -> Option<SecondaryAd
         saturation: unit(&secondary.saturation),
         wheel: secondary.wheel.params().map(unit),
     })
+}
+
+fn reframed(reframe: &AutoReframe, time: Ticks) -> Reframe {
+    Reframe {
+        subject: reframe.subject_at(time),
+        zoom: reframe.scale.value_at(time) / 100.0,
+    }
 }
 
 /// The garbage mattes, then the masks, as many as fit; the effect controls offer no

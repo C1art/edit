@@ -16,6 +16,7 @@ mod scenes;
 mod seek_trim;
 mod sequence;
 mod still;
+mod subject;
 #[cfg(test)]
 mod test_picture;
 mod writer;
@@ -45,4 +46,5 @@ pub use sequence::{
     sequence_frame, sequence_frames, sequence_pattern, source_exists, source_files,
 };
 pub use still::{write_still, StillFormat};
+pub use subject::track_subject;
 pub use writer::{AudioSettings, EncodeProfile, MediaWriter, VideoSettings};

@@ -281,7 +281,7 @@ fn aspect([width, height]: [u32; 2]) -> [f64; 2] {
     [f64::from(width) / longer, f64::from(height) / longer]
 }
 
-fn frames_per_second(frames: &[Ticks], timebase: Timebase) -> f64 {
+pub(crate) fn frames_per_second(frames: &[Ticks], timebase: Timebase) -> f64 {
     let (Some(first), Some(last)) = (frames.first(), frames.last()) else {
         return 0.0;
     };
@@ -295,7 +295,7 @@ fn frames_per_second(frames: &[Ticks], timebase: Timebase) -> f64 {
 
 /// Each value averaged with its neighbors by a Gaussian of `sigma` frames; the ends
 /// repeat beyond the clip.
-fn smooth(values: &[[f64; 4]], sigma: f64) -> Vec<[f64; 4]> {
+pub(crate) fn smooth<const N: usize>(values: &[[f64; N]], sigma: f64) -> Vec<[f64; N]> {
     if sigma < 0.5 {
         return values.to_vec();
     }
@@ -307,7 +307,7 @@ fn smooth(values: &[[f64; 4]], sigma: f64) -> Vec<[f64; 4]> {
     let last = values.len() as i64 - 1;
     (0..=last)
         .map(|index| {
-            let mut sum = [0.0; 4];
+            let mut sum = [0.0; N];
             for (offset, weight) in (-reach..=reach).zip(&weights) {
                 let neighbor = values[(index + offset).clamp(0, last) as usize];
                 for (sum, value) in sum.iter_mut().zip(neighbor) {

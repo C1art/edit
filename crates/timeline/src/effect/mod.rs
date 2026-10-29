@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{Param, Stabilizer};
+use crate::{AutoReframe, Param, Stabilizer};
 
 mod catalog;
 mod detail;
@@ -470,4 +470,6 @@ pub enum VideoEffect {
     },
     Echo(Echo),
     GarbageMatte(GarbageMatte),
+    /// Fills a frame of another shape with the picture, following its subject.
+    AutoReframe(AutoReframe),
 }

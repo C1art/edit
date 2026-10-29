@@ -35,6 +35,7 @@ mod nest;
 mod param;
 mod plan;
 mod preset;
+mod reframe;
 mod remap;
 mod render_segments;
 mod reveal;
@@ -75,16 +76,17 @@ pub use edit::{
     FrameFit, ImportMedia, InNest, InterpretFootage, IntoSync, JoinThroughEdits, Lift, LiftMarked,
     MakeOffline, MakeSubclip, MarkerOwner, MergeClips, MoveClips, MoveMode, MoveToBin, NestClips,
     NestFromMedia, NormalizeClipGains, PasteAttributes, PasteClips, PlaceClip, PlaceMode,
-    RateStretch, Razor, RazorTarget, RelinkMedia, RemoveAttributes, RemoveBin, RemoveMarker,
-    RemoveMedia, RemoveSpeedKeyframe, RemoveSubmix, RemoveTimeRemap, RemoveTrack, RenameBin,
-    RenameClips, RenameMedia, RenameTrack, RenderAndReplace, ReplaceClip, RestoreUnrendered,
-    RippleDelete, RippleTrimToPlayhead, Roll, SetCaptions, SetChannelMap, SetClipAudioEffects,
-    SetClipGain, SetClipLabel, SetClipLook, SetClipPan, SetClipSpeed, SetClipVolume,
-    SetClipsEnabled, SetClipsSound, SetGenerator, SetGrouped, SetLinked, SetLinkedSelection,
-    SetMarks, SetMasterEffects, SetMasterGain, SetMediaLog, SetProxy, SetSegmentSpeed,
-    SetSequenceFormat, SetSubmix, SetTimeInterpolation, SetToFrameSize, SetTrackAutomation,
-    SetTrackEffects, SetTrackMix, SetTrackOutput, SetTrackSwitch, SetTransition, Slide, Slip,
-    SwitchAngle, SyncMethod, TrackSwitch, Trim, TrimMode, TrimToPlayhead, Unlinked, UpdateMarker,
+    RateStretch, Razor, RazorTarget, ReframeSequence, RelinkMedia, RemoveAttributes, RemoveBin,
+    RemoveMarker, RemoveMedia, RemoveSpeedKeyframe, RemoveSubmix, RemoveTimeRemap, RemoveTrack,
+    RenameBin, RenameClips, RenameMedia, RenameTrack, RenderAndReplace, ReplaceClip,
+    RestoreUnrendered, RippleDelete, RippleTrimToPlayhead, Roll, SetCaptions, SetChannelMap,
+    SetClipAudioEffects, SetClipGain, SetClipLabel, SetClipLook, SetClipPan, SetClipSpeed,
+    SetClipVolume, SetClipsEnabled, SetClipsSound, SetGenerator, SetGrouped, SetLinked,
+    SetLinkedSelection, SetMarks, SetMasterEffects, SetMasterGain, SetMediaLog, SetProxy,
+    SetSegmentSpeed, SetSequenceFormat, SetSubmix, SetTimeInterpolation, SetToFrameSize,
+    SetTrackAutomation, SetTrackEffects, SetTrackMix, SetTrackOutput, SetTrackSwitch,
+    SetTransition, Slide, Slip, SwitchAngle, SyncMethod, TrackSwitch, Trim, TrimMode,
+    TrimToPlayhead, Unlinked, UpdateMarker,
 };
 pub use edl::to_edl;
 pub use effect::{
@@ -124,6 +126,7 @@ pub use nest::Nest;
 pub use param::Param;
 pub use plan::{cut_window, track_layers_at, PlannedLayer};
 pub use preset::EffectPreset;
+pub use reframe::{AutoReframe, ReframeMotion, SubjectPath};
 pub use remap::{Anchor, TimeRemap};
 pub use render_segments::{render_segments, segment_content};
 pub use reveal::{Fold, Reveal, Turn};

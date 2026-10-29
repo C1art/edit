@@ -53,6 +53,7 @@ pub struct Editor {
     pub(crate) scene_job: Option<crate::scene_edits::SceneJob>,
     pub(crate) still_job: Option<playback::StillJob>,
     pub(crate) motion_job: Option<crate::motion_analysis::MotionJob>,
+    pub(crate) reframe_jobs: crate::reframe_analysis::ReframeJobs,
     pub(crate) tone_analysis: Option<crate::color_match::ToneAnalysis>,
     pub(crate) mask_track_job: Option<crate::mask_tracking::MaskTrackJob>,
     pub(crate) hardware_decoding: bool,
@@ -84,6 +85,7 @@ pub struct Editor {
     pub(crate) channels_dialog: Option<crate::channels_dialog::ChannelsDialog>,
     pub(crate) project_manager: Option<crate::project_manager::ProjectManager>,
     pub(crate) sequence_settings: Option<crate::sequence_settings::SequenceSettings>,
+    pub(crate) reframe_dialog: Option<crate::reframe_dialog::ReframeDialog>,
     /// An edit from the source waiting on how to fit its clip to the sequence marks.
     pub(crate) fit_clip: Option<timeline::PlaceMode>,
     pub(crate) attributes_dialog: Option<crate::attributes_dialog::AttributesDialog>,
@@ -193,6 +195,7 @@ impl Editor {
             scene_job: None,
             still_job: None,
             motion_job: None,
+            reframe_jobs: Default::default(),
             tone_analysis: None,
             mask_track_job: None,
             hardware_decoding: true,
@@ -219,6 +222,7 @@ impl Editor {
             channels_dialog: None,
             project_manager: None,
             sequence_settings: None,
+            reframe_dialog: None,
             fit_clip: None,
             attributes_dialog: None,
             loudness: None,
@@ -439,6 +443,7 @@ impl eframe::App for Editor {
         self.poll_multicam_sync(&ctx);
         self.poll_scene_edits(&ctx);
         self.poll_motion_analysis(&ctx);
+        self.poll_reframe_analysis(&ctx);
         self.poll_tone_analysis(&ctx);
         self.poll_mask_tracking(&ctx);
         self.poll_export_frame(&ctx);
@@ -461,6 +466,7 @@ impl eframe::App for Editor {
         crate::interpret_dialog::dialog(self, &ctx);
         crate::channels_dialog::dialog(self, &ctx);
         crate::sequence_settings::dialog(self, &ctx);
+        crate::reframe_dialog::dialog(self, &ctx);
         crate::fit_clip::dialog(self, &ctx);
         crate::attributes_dialog::dialog(self, &ctx);
         crate::loudness_window::window(self, &ctx);

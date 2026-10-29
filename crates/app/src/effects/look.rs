@@ -23,6 +23,8 @@ pub(super) struct Output {
     pub(super) choose_lut: Option<LutSlot>,
     /// Whether to analyze the clip's motion for Warp Stabilizer.
     pub(super) analyze_motion: bool,
+    /// Whether to find the clip's subject for Auto Reframe.
+    pub(super) analyze_reframe: bool,
     /// A mask to track through the footage from the playhead.
     pub(super) track_mask: Option<(usize, TrackDirection, TrackSpan)>,
     pub(super) stop_tracking: bool,
@@ -146,6 +148,8 @@ pub(super) struct Rows {
     lane: Option<Lane>,
     /// How much of the clip's motion has been analyzed, while it is being.
     pub(super) analyzing: Option<f32>,
+    /// How much of the clip has been analyzed for Auto Reframe, while it is being.
+    pub(super) reframing: Option<f32>,
     /// Which mask is being tracked and how far along, while one is.
     pub(super) tracking: Option<(usize, f32)>,
     pub(super) tone: ToneState,
@@ -158,6 +162,7 @@ impl Rows {
             time,
             lane,
             analyzing: None,
+            reframing: None,
             tracking: None,
             tone: ToneState::default(),
             output: Output {
@@ -165,6 +170,7 @@ impl Rows {
                 seek: None,
                 choose_lut: None,
                 analyze_motion: false,
+                analyze_reframe: false,
                 track_mask: None,
                 stop_tracking: false,
                 analyze_tone: None,

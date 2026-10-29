@@ -16,6 +16,8 @@ pub(super) fn add_menu(ui: &mut egui::Ui, rows: &mut Rows, effects: &mut Vec<Vid
                         // Premiere analyzes as soon as the stabilizer is applied.
                         rows.output.analyze_motion |=
                             matches!(effect, VideoEffect::WarpStabilizer(_));
+                        rows.output.analyze_reframe |=
+                            matches!(effect, VideoEffect::AutoReframe(_));
                         effects.push(effect);
                         rows.commit();
                         ui.close();
@@ -286,6 +288,7 @@ impl Rows {
                 self.param(ui, "Feather", feather, 0.0..=100.0, "");
             }
             VideoEffect::WarpStabilizer(stabilizer) => self.stabilizer(ui, stabilizer),
+            VideoEffect::AutoReframe(reframe) => self.auto_reframe(ui, reframe),
             VideoEffect::UltraKey { .. }
             | VideoEffect::TrackMatteKey { .. }
             | VideoEffect::ColorKey { .. }

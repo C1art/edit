@@ -211,6 +211,9 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             if ui.button("Sequence Settings…").clicked() {
                 editor.open_sequence_settings();
             }
+            if ui.button("Auto Reframe Sequence…").clicked() {
+                editor.open_reframe_dialog();
+            }
             ui.separator();
             let add_edit =
                 Button::new("Add Edit").shortcut_text(editor.keymap.label(Command::AddEdit));

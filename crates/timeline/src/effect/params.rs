@@ -1,5 +1,5 @@
 use super::{ChannelBlur, Echo, EdgeFeather, Median, NoiseHls, UnsharpMask, VideoEffect};
-use crate::Param;
+use crate::{AutoReframe, Param};
 
 // One match serves both borrows: default binding modes make the same patterns bind
 // `&Param` or `&mut Param`, and `$iter` picks the iterator that matches.
@@ -288,6 +288,11 @@ macro_rules! effect_params {
                 operator: _,
             }) => vec![echo_time, echoes, starting_intensity, decay],
             VideoEffect::GarbageMatte(matte) => matte.points.$iter().flatten().collect(),
+            VideoEffect::AutoReframe(AutoReframe {
+                offset: [x, y],
+                scale,
+                ..
+            }) => vec![x, y, scale],
         }
     };
 }
