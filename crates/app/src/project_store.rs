@@ -52,6 +52,7 @@ pub enum Setting {
     Keymap,
     Presets,
     Workspaces,
+    Folders,
 }
 
 impl Setting {
@@ -60,6 +61,7 @@ impl Setting {
             Self::Keymap => "Keyboard Shortcuts.txt",
             Self::Presets => "Effect Presets.json",
             Self::Workspaces => "Workspaces.txt",
+            Self::Folders => "Recent Folders.txt",
         })
     }
 
@@ -69,6 +71,7 @@ impl Setting {
             Self::Keymap => "shortcuts",
             Self::Presets => "effect presets",
             Self::Workspaces => "workspaces",
+            Self::Folders => "recent folders",
         }
     }
 }

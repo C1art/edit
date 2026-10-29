@@ -171,6 +171,7 @@ impl Editor {
             store.read_setting(Setting::Keymap);
             store.read_setting(Setting::Presets);
             store.read_setting(Setting::Workspaces);
+            store.read_setting(Setting::Folders);
         }
         let program = Viewer::new(
             Arc::new(timeline.sequence().clone()),

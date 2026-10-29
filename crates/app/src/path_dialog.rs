@@ -1,9 +1,11 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use crate::editor::Editor;
 use crate::effects::LutSlot;
 use crate::file_browser::{self, FileBrowser, Outcome};
 use crate::project_files::{is_xml, AfterDiscard, Interchange, PathPurpose};
+use crate::project_store::Setting;
 
 pub fn path_dialog(editor: &mut Editor, ctx: &egui::Context) {
     let Some(prompt) = &mut editor.path_prompt else {
@@ -92,9 +94,15 @@ pub fn path_dialog(editor: &mut Editor, ctx: &egui::Context) {
         return;
     };
     if let Some(folder) = prompt.browser.folder() {
-        editor
+        let folder = folder.to_owned();
+        let previous = editor
             .browse_folders
-            .insert(FolderUse::of(purpose), folder.to_owned());
+            .insert(FolderUse::of(purpose), folder.clone());
+        if previous != Some(folder) {
+            if let Some(store) = &mut editor.store {
+                store.write_setting(Setting::Folders, folders_to_text(&editor.browse_folders));
+            }
+        }
     }
     editor.path_prompt = None;
     let paths = match outcome {
@@ -156,6 +164,17 @@ pub enum FolderUse {
 }
 
 impl FolderUse {
+    const ALL: [Self; 4] = [Self::Media, Self::Project, Self::Output, Self::Look];
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::Media => "media",
+            Self::Project => "project",
+            Self::Output => "output",
+            Self::Look => "look",
+        }
+    }
+
     fn of(purpose: PathPurpose) -> Self {
         match purpose {
             PathPurpose::Import
@@ -210,4 +229,43 @@ pub fn browser_for(editor: &Editor, purpose: PathPurpose, start: Option<&Path>) 
         .and_then(Path::parent)
         .map(Path::to_owned);
     FileBrowser::new(mode, filters, start, remembered, project_folder)
+}
+
+/// One `use<TAB>folder` line each, in a fixed order so the file only changes with them.
+pub fn folders_to_text(folders: &HashMap<FolderUse, PathBuf>) -> String {
+    FolderUse::ALL
+        .iter()
+        .filter_map(|usage| {
+            let folder = folders.get(usage)?;
+            Some(format!("{}\t{}\n", usage.name(), folder.display()))
+        })
+        .collect()
+}
+
+/// Lines it doesn't know are skipped, so a damaged file only forgets folders.
+pub fn folders_from_text(text: &str) -> HashMap<FolderUse, PathBuf> {
+    text.lines()
+        .filter_map(|line| {
+            let (name, folder) = line.split_once('\t')?;
+            let usage = FolderUse::ALL
+                .into_iter()
+                .find(|usage| usage.name() == name)?;
+            Some((usage, PathBuf::from(folder)))
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn remembered_folders_survive_the_text_file_and_bad_lines_are_skipped() {
+        let folders = HashMap::from([
+            (FolderUse::Media, PathBuf::from("D:\\Shoot 2\\Day\tone")),
+            (FolderUse::Look, PathBuf::from("C:\\Looks")),
+        ]);
+        let text = format!("{}nonsense\nzoom\tC:\\\n", folders_to_text(&folders));
+        assert_eq!(folders_from_text(&text), folders);
+    }
 }
