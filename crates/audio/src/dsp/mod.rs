@@ -31,7 +31,10 @@ pub use denoise::DeNoise;
 pub use dereverb::DeReverb;
 pub use dynamics::{Gate, Limiter};
 pub use expander::Expander;
-pub use graphic_eq::{GraphicEqualizer, GRAPHIC_BANDS_HZ};
+pub use graphic_eq::{
+    GraphicEqualizer, GraphicEqualizer10, GraphicEqualizer20, GraphicEqualizer30,
+    GRAPHIC_BANDS_20_HZ, GRAPHIC_BANDS_30_HZ, GRAPHIC_BANDS_HZ,
+};
 pub use leveler::{LevelerSettings, SpeechLeveler};
 pub use loudness::LoudnessMeter;
 pub use modulation::{ModulatedDelay, Sweep};

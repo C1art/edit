@@ -2,7 +2,7 @@ use std::mem::{discriminant, Discriminant};
 
 use audio::{
     Biquad, Coefficients, Compressor, CompressorSettings, DeEsser, DeHum, DeNoise, Delay, Gate,
-    GraphicEqualizer, Limiter, ModulatedDelay, MultibandCompressor, MultibandSettings,
+    GraphicEqualizer10, Limiter, ModulatedDelay, MultibandCompressor, MultibandSettings,
     PitchShifter, Reverb, SampleRate, Sweep,
 };
 use timeline::{AudioEffect, ClipId, Ticks};
@@ -25,7 +25,7 @@ const BUTTERWORTH_Q: f32 = std::f32::consts::FRAC_1_SQRT_2;
 
 enum Unit {
     Equalizer([Biquad; 3]),
-    Graphic(Box<GraphicEqualizer>),
+    Graphic(Box<GraphicEqualizer10>),
     Multiband(Box<MultibandCompressor>),
     Filter(Biquad),
     Compressor(Compressor),

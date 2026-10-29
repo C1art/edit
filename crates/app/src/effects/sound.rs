@@ -37,6 +37,8 @@ pub(crate) fn category(effect: &AudioEffect) -> &'static str {
         | AudioEffect::Treble { .. }
         | AudioEffect::Equalizer { .. }
         | AudioEffect::GraphicEqualizer { .. }
+        | AudioEffect::GraphicEqualizer20 { .. }
+        | AudioEffect::GraphicEqualizer30 { .. }
         | AudioEffect::HighPass { .. }
         | AudioEffect::LowPass { .. }
         | AudioEffect::Notch { .. }
@@ -140,6 +142,17 @@ pub(crate) fn track_effect_controls(
     (output.change, output.seek)
 }
 
+fn band_rows(ui: &mut egui::Ui, rows: &mut Rows, bands: &mut [Param], centers: &[f32]) {
+    for (band, &hz) in bands.iter_mut().zip(centers) {
+        let label = if hz < 1_000.0 {
+            format!("{hz} Hz")
+        } else {
+            format!("{} kHz", hz / 1_000.0)
+        };
+        rows.param(ui, &label, band, GAIN_DB, " dB");
+    }
+}
+
 fn effect_rows(ui: &mut egui::Ui, rows: &mut Rows, effect: &mut AudioEffect) {
     match effect {
         AudioEffect::Amplify { gain } => rows.param(ui, "Gain", gain, GAIN_DB, " dB"),
@@ -221,14 +234,13 @@ fn effect_rows(ui: &mut egui::Ui, rows: &mut Rows, effect: &mut AudioEffect) {
             rows.param(ui, "Right", right, GAIN_DB, " dB");
         }
         AudioEffect::GraphicEqualizer { bands } => {
-            for (band, hz) in bands.iter_mut().zip(audio::GRAPHIC_BANDS_HZ) {
-                let label = if hz < 1_000.0 {
-                    format!("{hz} Hz")
-                } else {
-                    format!("{} kHz", hz / 1_000.0)
-                };
-                rows.param(ui, &label, band, GAIN_DB, " dB");
-            }
+            band_rows(ui, rows, bands, &audio::GRAPHIC_BANDS_HZ);
+        }
+        AudioEffect::GraphicEqualizer20 { bands } => {
+            band_rows(ui, rows, &mut bands[..], &audio::GRAPHIC_BANDS_20_HZ);
+        }
+        AudioEffect::GraphicEqualizer30 { bands } => {
+            band_rows(ui, rows, &mut bands[..], &audio::GRAPHIC_BANDS_30_HZ);
         }
         AudioEffect::MultibandCompressor {
             low_crossover,

@@ -137,6 +137,14 @@ pub enum AudioEffect {
     GraphicEqualizer {
         bands: [Param; 10],
     },
+    /// Twenty bells half an octave apart from 31 Hz to 22 kHz.
+    GraphicEqualizer20 {
+        bands: Box<[Param; 20]>,
+    },
+    /// Thirty bells a third of an octave apart from 25 Hz to 20 kHz.
+    GraphicEqualizer30 {
+        bands: Box<[Param; 30]>,
+    },
     /// Compresses the lows under `low_crossover` hertz, the mids up to `high_crossover`
     /// and the highs above it each on its own, against its own threshold in decibels,
     /// as the Dynamics Compressor does, then lifts the sum by `makeup` decibels.
@@ -286,6 +294,8 @@ impl AudioEffect {
             } => vec![frequency, harmonics, reduction],
             Self::ChannelVolume { left, right } => vec![left, right],
             Self::GraphicEqualizer { bands } => bands.iter_mut().collect(),
+            Self::GraphicEqualizer20 { bands } => bands.iter_mut().collect(),
+            Self::GraphicEqualizer30 { bands } => bands.iter_mut().collect(),
             Self::MultibandCompressor {
                 low_crossover,
                 high_crossover,

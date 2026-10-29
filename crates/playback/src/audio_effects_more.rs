@@ -1,7 +1,7 @@
 use audio::{
     distort, widen, AnalogDelay, AnalogDelaySettings, Biquad, ClickRemover, Coefficients,
-    Compressor, CompressorSettings, DeReverb, LevelerSettings, MultitapDelay, Phaser,
-    PhaserSettings, SampleRate, SpeechLeveler, Tap,
+    Compressor, CompressorSettings, DeReverb, GraphicEqualizer20, GraphicEqualizer30,
+    LevelerSettings, MultitapDelay, Phaser, PhaserSettings, SampleRate, SpeechLeveler, Tap,
 };
 use timeline::{AudioEffect, Param, Ticks};
 
@@ -19,7 +19,7 @@ const CLICK_SENSITIVITY_PER_PERCENT: f32 = 0.25;
 /// The running state of the effects added after the first set: bandpass, phaser,
 /// distortion, stereo expander, the multitap and analog delays, Dynamics, Automatic Click
 /// Remover, Vocal Enhancer, the Tube-modeled Compressor, DeReverb, Speech Volume Leveler
-/// and Simple Parametric EQ.
+/// Simple Parametric EQ and the 20- and 30-band Graphic Equalizers.
 pub(crate) enum MoreUnit {
     Filter(Biquad),
     Phaser(Box<Phaser>),
@@ -31,6 +31,8 @@ pub(crate) enum MoreUnit {
     Compressor(Compressor),
     DeReverb(Box<DeReverb>),
     Leveler(SpeechLeveler),
+    Graphic20(Box<GraphicEqualizer20>),
+    Graphic30(Box<GraphicEqualizer30>),
     Stateless,
 }
 
@@ -43,6 +45,8 @@ impl MoreUnit {
             }
             AudioEffect::DeReverb { .. } => Self::DeReverb(Box::new(DeReverb::new(rate))),
             AudioEffect::SpeechVolumeLeveler { .. } => Self::Leveler(SpeechLeveler::default()),
+            AudioEffect::GraphicEqualizer20 { .. } => Self::Graphic20(Box::default()),
+            AudioEffect::GraphicEqualizer30 { .. } => Self::Graphic30(Box::default()),
             AudioEffect::Phaser { .. } => Self::Phaser(Box::new(Phaser::new(rate))),
             AudioEffect::MultitapDelay { .. } => Self::Multitap(Box::new(MultitapDelay::new(rate))),
             AudioEffect::AnalogDelay { .. } => Self::Analog(Box::new(AnalogDelay::new(rate))),
@@ -67,6 +71,8 @@ impl MoreUnit {
             Self::Compressor(compressor) => compressor.reset(),
             Self::DeReverb(dereverb) => dereverb.reset(),
             Self::Leveler(leveler) => leveler.reset(),
+            Self::Graphic20(equalizer) => equalizer.reset(),
+            Self::Graphic30(equalizer) => equalizer.reset(),
             Self::Stateless => {}
         }
     }
@@ -188,6 +194,12 @@ impl MoreUnit {
                     noise_threshold_db: value(noise_threshold),
                 };
                 leveler.process(&settings, rate, samples);
+            }
+            (AudioEffect::GraphicEqualizer20 { bands }, Self::Graphic20(equalizer)) => {
+                equalizer.process(bands.each_ref().map(value), rate, samples);
+            }
+            (AudioEffect::GraphicEqualizer30 { bands }, Self::Graphic30(equalizer)) => {
+                equalizer.process(bands.each_ref().map(value), rate, samples);
             }
             (AudioEffect::SimpleParametricEq { frequency, gain, q }, Self::Filter(filter)) => {
                 let q = value(q).max(0.1);

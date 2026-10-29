@@ -3,7 +3,7 @@ use crate::Param;
 
 impl AudioEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 39] {
+    pub fn catalog() -> [Self; 41] {
         [
             Self::Amplify {
                 gain: Param::default(),
@@ -93,6 +93,12 @@ impl AudioEffect {
                 right: Param::default(),
             },
             Self::GraphicEqualizer {
+                bands: Default::default(),
+            },
+            Self::GraphicEqualizer20 {
+                bands: Default::default(),
+            },
+            Self::GraphicEqualizer30 {
                 bands: Default::default(),
             },
             Self::MultibandCompressor {
@@ -199,6 +205,8 @@ impl AudioEffect {
             Self::DeHum { .. } => "DeHum",
             Self::ChannelVolume { .. } => "Channel Volume",
             Self::GraphicEqualizer { .. } => "Graphic Equalizer (10 Bands)",
+            Self::GraphicEqualizer20 { .. } => "Graphic Equalizer (20 Bands)",
+            Self::GraphicEqualizer30 { .. } => "Graphic Equalizer (30 Bands)",
             Self::MultibandCompressor { .. } => "Multiband Compressor",
             Self::BandPass { .. } => "Bandpass",
             Self::Phaser { .. } => "Phaser",

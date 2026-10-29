@@ -7,9 +7,10 @@ mod resampler;
 pub use dsp::{
     distort, widen, AnalogDelay, AnalogDelaySettings, Biquad, ClickRemover, Coefficients,
     Compressor, CompressorSettings, DeEsser, DeHum, DeNoise, DeReverb, Delay, Expander, Gate,
-    GraphicEqualizer, LevelerSettings, Limiter, LoudnessMeter, ModulatedDelay, MultibandCompressor,
-    MultibandSettings, MultitapDelay, Phaser, PhaserSettings, PitchShifter, Reverb, SpeechLeveler,
-    Sweep, Tap, GRAPHIC_BANDS_HZ, MAX_HARMONICS, MAX_PHASER_STAGES,
+    GraphicEqualizer, GraphicEqualizer10, GraphicEqualizer20, GraphicEqualizer30, LevelerSettings,
+    Limiter, LoudnessMeter, ModulatedDelay, MultibandCompressor, MultibandSettings, MultitapDelay,
+    Phaser, PhaserSettings, PitchShifter, Reverb, SpeechLeveler, Sweep, Tap, GRAPHIC_BANDS_20_HZ,
+    GRAPHIC_BANDS_30_HZ, GRAPHIC_BANDS_HZ, MAX_HARMONICS, MAX_PHASER_STAGES,
 };
 pub use error::AudioError;
 pub use output::{AudioOutput, AudioWriter, OutputFormat};
