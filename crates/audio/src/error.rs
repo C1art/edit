@@ -18,7 +18,8 @@ impl fmt::Display for AudioError {
         match self {
             Self::NoOutputDevice => f.write_str("no audio output device available"),
             Self::MissingDevice(name) => write!(f, "the audio device “{name}” is not connected"),
-            Self::Device(error) => write!(f, "audio device error: {error}"),
+            // Every message about it already says it is about audio.
+            Self::Device(error) => write!(f, "{error}"),
             Self::UnsupportedSampleFormat => {
                 f.write_str("audio device does not accept 32-bit float samples")
             }
