@@ -1,6 +1,6 @@
 use egui::Rangef;
 use timeline::{
-    clamp_delta, preview, ClipId, Edge, Edit, LinkedSelection, MoveClips, MoveMode, RateStretch,
+    preview, ClipId, DeltaBounds, Edge, Edit, LinkedSelection, MoveClips, MoveMode, RateStretch,
     Roll, Sequence, SetClipVolume, SetTrackAutomation, Slide, Slip, Ticks, Timeline, TimelineError,
     TrackKind, TrackRef, Trim, TrimMode, Unlinked,
 };
@@ -111,15 +111,13 @@ impl Gesture {
     pub fn moving_edges(&self, sequence: &Sequence) -> Vec<Ticks> {
         match self {
             Self::Move { clips, .. } | Self::Slide { clips } => sequence
-                .with_links(clips)
+                .clips_with_links(clips)
                 .into_iter()
-                .filter_map(|id| sequence.clip(id))
                 .flat_map(|(_, clip)| [clip.start, clip.end()])
                 .collect(),
             Self::Trim { clips, edge, .. } | Self::Stretch { clips, edge } => sequence
-                .with_links(clips)
+                .clips_with_links(clips)
                 .into_iter()
-                .filter_map(|id| sequence.clip(id))
                 .map(|(_, clip)| match edge {
                     Edge::Head => clip.start,
                     Edge::Tail => clip.end(),
@@ -160,6 +158,7 @@ impl Gesture {
         track: Option<TrackRef>,
         y: f32,
         mode: MoveMode,
+        bounds: &mut DeltaBounds,
     ) -> PendingEdit {
         match self {
             Self::Move { clips, from } => {
@@ -172,7 +171,7 @@ impl Gesture {
                     delta,
                     mode: *mode,
                 };
-                PendingEdit::Trim(make(clamp_delta(sequence, delta, make)))
+                PendingEdit::Trim(make(bounds.clamp(sequence, delta, make)))
             }
             Self::Roll { at, tracks } => {
                 let make = |delta| Roll {
@@ -180,7 +179,7 @@ impl Gesture {
                     tracks: tracks.clone(),
                     delta,
                 };
-                PendingEdit::Roll(make(clamp_delta(sequence, delta, make)))
+                PendingEdit::Roll(make(bounds.clamp(sequence, delta, make)))
             }
             Self::Stretch { clips, edge } => {
                 let make = |delta| RateStretch {
@@ -188,7 +187,7 @@ impl Gesture {
                     edge: *edge,
                     delta,
                 };
-                PendingEdit::Stretch(make(clamp_delta(sequence, delta, make)))
+                PendingEdit::Stretch(make(bounds.clamp(sequence, delta, make)))
             }
             Self::Slip { clips } => {
                 // Dragging right reveals earlier source material, as in other editors.
@@ -196,14 +195,14 @@ impl Gesture {
                     clips: clips.clone(),
                     delta,
                 };
-                PendingEdit::Slip(make(clamp_delta(sequence, Ticks(-delta.0), make)))
+                PendingEdit::Slip(make(bounds.clamp(sequence, Ticks(-delta.0), make)))
             }
             Self::Slide { clips } => {
                 let make = |delta| Slide {
                     clips: clips.clone(),
                     delta,
                 };
-                PendingEdit::Slide(make(clamp_delta(sequence, delta, make)))
+                PendingEdit::Slide(make(bounds.clamp(sequence, delta, make)))
             }
             Self::Volume {
                 owner,
@@ -237,9 +236,8 @@ fn clamped_move(
     mode: MoveMode,
 ) -> MoveClips {
     let moved: Vec<(TrackRef, Ticks)> = sequence
-        .with_links(clips)
+        .clips_with_links(clips)
         .into_iter()
-        .filter_map(|id| sequence.clip(id))
         .map(|(track, clip)| (track, clip.start))
         .collect();
     let earliest = moved.iter().map(|&(_, start)| start).min();

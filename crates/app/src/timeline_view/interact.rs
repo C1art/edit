@@ -1,7 +1,7 @@
 use egui::{Pos2, Rangef};
 use timeline::{
-    ClipId, LinkedSelection, MarkerOwner, MoveMode, Razor, RazorTarget, Sequence, SetClipVolume,
-    SetTrackAutomation, Ticks, Timeline, TrackKind, TrackRef,
+    ClipId, DeltaBounds, LinkedSelection, MarkerOwner, MoveMode, Razor, RazorTarget, Sequence,
+    SetClipVolume, SetTrackAutomation, Ticks, Timeline, TrackKind, TrackRef,
 };
 
 use super::gesture::{self, Gesture};
@@ -145,6 +145,7 @@ impl TimelineView {
                 pending: None,
                 preview: None,
                 unlinked: matches!(links, LinkedSelection::Apart).then(|| gesture::apart(sequence)),
+                bounds: DeltaBounds::default(),
             });
         }
 
@@ -167,7 +168,9 @@ impl TimelineView {
                     (true, false) => MoveMode::Insert,
                     (false, _) => MoveMode::Overwrite,
                 };
-                let pending = drag.gesture.edit(sequence, delta, over, pos.y, mode);
+                let pending =
+                    drag.gesture
+                        .edit(sequence, delta, over, pos.y, mode, &mut drag.bounds);
                 // The pointer moves far more often than a frame-snapped edit changes.
                 if drag.pending.as_ref() != Some(&pending) {
                     drag.preview = pending.preview(sequence).ok();

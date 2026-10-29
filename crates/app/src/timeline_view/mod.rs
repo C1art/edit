@@ -20,8 +20,8 @@ use std::collections::BTreeSet;
 
 use egui::{Rect, Sense};
 use timeline::{
-    AddTrack, ClipId, LinkedSelection, MarkerId, MarkerOwner, RemoveTrack, RenameTrack, Sequence,
-    SetTrackSwitch, Ticks, Timeline, TrackKind, TrackRef,
+    AddTrack, ClipId, DeltaBounds, LinkedSelection, MarkerId, MarkerOwner, RemoveTrack,
+    RenameTrack, Sequence, SetTrackSwitch, Ticks, Timeline, TrackKind, TrackRef,
 };
 
 use crate::clip_art::ClipArt;
@@ -109,6 +109,7 @@ struct Drag {
     preview: Option<Sequence>,
     /// The sequence with linked partners left be, made once as an `Apart` drag starts.
     unlinked: Option<Sequence>,
+    bounds: DeltaBounds,
 }
 
 pub struct TimelineView {
