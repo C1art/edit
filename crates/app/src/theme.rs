@@ -135,8 +135,14 @@ pub(crate) fn focus_card<R>(
         .corner_radius(CornerRadius::same(PANEL_RADIUS))
         .inner_margin(Margin::symmetric(10, 8))
         .show(ui, |ui| {
-            ui.set_min_size(ui.available_size());
-            content(ui)
+            // Content too wide is cut off rather than growing the panel: its size is
+            // the workspace's, and would otherwise jump with what is selected.
+            let room = ui.available_rect_before_wrap();
+            let mut inner = ui.new_child(egui::UiBuilder::new().max_rect(room));
+            inner.set_clip_rect(room.intersect(ui.clip_rect()));
+            let shown = content(&mut inner);
+            ui.advance_cursor_after_rect(room);
+            shown
         })
         .inner
 }
