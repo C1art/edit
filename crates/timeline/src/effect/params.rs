@@ -1,4 +1,4 @@
-use super::{EdgeFeather, Median, NoiseHls, UnsharpMask, VideoEffect};
+use super::{ChannelBlur, Echo, EdgeFeather, Median, NoiseHls, UnsharpMask, VideoEffect};
 use crate::Param;
 
 // One match serves both borrows: default binding modes make the same patterns bind
@@ -273,6 +273,20 @@ macro_rules! effect_params {
                 grain_size,
                 phase,
             }) => vec![hue, lightness, saturation, grain_size, phase],
+            VideoEffect::ChannelBlur(ChannelBlur {
+                red,
+                green,
+                blue,
+                alpha,
+            }) => vec![red, green, blue, alpha],
+            VideoEffect::CameraBlur { percent } => vec![percent],
+            VideoEffect::Echo(Echo {
+                echo_time,
+                echoes,
+                starting_intensity,
+                decay,
+                operator: _,
+            }) => vec![echo_time, echoes, starting_intensity, decay],
         }
     };
 }

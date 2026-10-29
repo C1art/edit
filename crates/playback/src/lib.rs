@@ -9,6 +9,7 @@ mod command;
 mod compose;
 mod composed;
 mod detail_effects;
+mod echo;
 mod envelope;
 mod error;
 mod export;

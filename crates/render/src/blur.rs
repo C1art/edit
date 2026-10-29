@@ -57,8 +57,8 @@ impl BlurTargets {
         }
     }
 
-    /// `sigma` is in layer pixels.
-    pub(crate) fn write(&self, queue: &wgpu::Queue, (width, height): (u32, u32), sigma: f32) {
+    /// `sigma` is the red, green, blue and alpha channels', in layer pixels.
+    pub(crate) fn write(&self, queue: &wgpu::Queue, (width, height): (u32, u32), sigma: [f32; 4]) {
         let horizontal = [1.0 / width as f32, 0.0];
         let vertical = [0.0, 1.0 / height as f32];
         queue.write_buffer(&self.horizontal_uniform, 0, &uniform(horizontal, sigma));
@@ -83,19 +83,16 @@ impl BlurTargets {
     }
 }
 
-/// Taps reach three sigma each side.
-fn uniform(texel: [f32; 2], sigma: f32) -> Vec<u8> {
-    let (spacing, taps) = tap_layout(sigma);
-    [
-        texel[0] * spacing,
-        texel[1] * spacing,
-        sigma / spacing,
-        taps,
-    ]
-    .into_iter()
-    .chain([0.0; 16])
-    .flat_map(f32::to_le_bytes)
-    .collect()
+/// Taps reach three of the widest sigma each side.
+fn uniform(texel: [f32; 2], sigma: [f32; 4]) -> Vec<u8> {
+    let widest = sigma.into_iter().fold(0.0, f32::max);
+    let (spacing, taps) = tap_layout(widest);
+    [texel[0] * spacing, texel[1] * spacing, 0.0, taps]
+        .into_iter()
+        .chain(sigma.map(|sigma| sigma / spacing))
+        .chain([0.0; 12])
+        .flat_map(f32::to_le_bytes)
+        .collect()
 }
 
 /// Texels between taps and taps each side.

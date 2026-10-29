@@ -51,7 +51,9 @@ pub(crate) fn layer_look(
         crop: [&crop.left, &crop.top, &crop.right, &crop.bottom].map(percent),
         opacity: percent(&look.opacity) * transform_opacity(&look.effects, time) * reveal.fade,
         opacity_masks: opacity_masks(&look.masks, time),
-        blur: look.blurriness_at(time) / BLURRINESS_PER_SIGMA,
+        blur: look
+            .blurriness_at(time)
+            .map(|blurriness| blurriness / BLURRINESS_PER_SIGMA),
         color: color_adjust(&look.color, time),
         wipes: reveal.wipes.map(|wipe| {
             wipe.map(|wipe| LayerWipe {

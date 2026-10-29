@@ -2,10 +2,12 @@
 // of the same size. Edges repeat through the clamping sampler.
 
 struct Blur {
-    // UV distance between taps, then the sigma and the tap count each side, in taps.
-    step_sigma_taps: vec4<f32>,
+    // UV distance between taps, then the tap count each side.
+    step_taps: vec4<f32>,
+    // Each channel's sigma, in taps.
+    sigma: vec4<f32>,
     // The rest of the shared uniform buffer.
-    reserved: array<vec4<f32>, 4>,
+    reserved: array<vec4<f32>, 3>,
 };
 
 struct VertexOutput {
@@ -32,13 +34,14 @@ fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let step = blur.step_sigma_taps.xy;
-    let sigma = blur.step_sigma_taps.z;
-    let taps = i32(blur.step_sigma_taps.w);
+    let step = blur.step_taps.xy;
+    let taps = i32(blur.step_taps.w);
+    // An unblurred channel keeps only its centre tap.
+    let sigma = max(blur.sigma, vec4<f32>(0.01));
     var sum = vec4<f32>(0.0);
-    var weights = 0.0;
+    var weights = vec4<f32>(0.0);
     for (var i = -taps; i <= taps; i++) {
-        let distance = f32(i) / sigma;
+        let distance = vec4<f32>(f32(i)) / sigma;
         let weight = exp(-0.5 * distance * distance);
         sum += textureSampleLevel(source, source_sampler, in.uv + step * f32(i), 0.0) * weight;
         weights += weight;

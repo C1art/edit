@@ -1,5 +1,7 @@
 // Helpers outside `#[test]` fns are not covered by `allow-expect-in-tests`.
 #![allow(clippy::expect_used)]
+// Each test binary compiles its own copy and uses only some of the helpers.
+#![allow(dead_code)]
 
 use std::future::Future;
 use std::task::{Context, Poll, Waker};

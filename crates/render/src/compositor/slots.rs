@@ -102,9 +102,10 @@ impl Compositor {
         let size = (slot.width, slot.height);
         let shown = look.shown_size(size);
         // The blur radius is in canvas pixels, but the blur runs on the layer itself.
-        let sigma = look.blur
-            / (fit_scale(shown, canvas) * (look.scale[0] * look.scale[1]).abs().sqrt().max(0.01));
-        slot.blurred = sigma >= 0.5;
+        let layer_pixels =
+            fit_scale(shown, canvas) * (look.scale[0] * look.scale[1]).abs().sqrt().max(0.01);
+        let sigma = look.blur.map(|sigma| sigma / layer_pixels);
+        slot.blurred = sigma.iter().any(|&sigma| sigma >= 0.5);
         if slot.blurred && slot.blur.is_none() {
             let blur =
                 BlurTargets::new(&self.device, &self.blit, &slot.view, &slot.placement, size);

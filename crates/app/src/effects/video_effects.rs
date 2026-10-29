@@ -305,6 +305,9 @@ impl Rows {
             | VideoEffect::DustAndScratches(_)
             | VideoEffect::EdgeFeather(_)
             | VideoEffect::NoiseHls(_) => self.detail(ui, effect),
+            VideoEffect::ChannelBlur(_) | VideoEffect::CameraBlur { .. } | VideoEffect::Echo(_) => {
+                self.blur_echo(ui, effect)
+            }
             VideoEffect::LeaveColor {
                 color,
                 amount,

@@ -48,6 +48,8 @@ pub(crate) struct TrackVideo {
     /// The motion between the last pair of frames optical flow was asked between,
     /// which a slowed clip shows several pictures from.
     flow: Option<((Ticks, Ticks), Arc<Flow>)>,
+    /// How many of the last pictures decoded to keep, going forwards too.
+    history: usize,
 }
 
 impl TrackVideo {
@@ -62,7 +64,14 @@ impl TrackVideo {
             nested: Vec::new(),
             resolution: Resolution::Full,
             flow: None,
+            history: 0,
         }
+    }
+
+    /// Keeps up to the last `frames` pictures decoded, so that requests that far back
+    /// find them without seeking, as Echo makes.
+    pub(crate) fn keep_history(&mut self, frames: usize) {
+        self.history = frames;
     }
 
     /// Drops decoder state, so the next request seeks.
@@ -135,12 +144,13 @@ impl TrackVideo {
             if let Some(frame) = frame_before(&self.behind, time) {
                 return Ok(Some(frame));
             }
-        } else {
+        } else if self.history == 0 {
             self.behind.clear();
         }
         let continuous =
             current.is_some_and(|current| current <= time && time <= current + decode_ahead);
-        let keep = if backward { backward_frames(media) } else { 0 };
+        let history = self.history.min(backward_frames(media));
+        let keep = if backward { backward_frames(media) } else { 0 }.max(history);
         if !continuous {
             // Going backwards, start early enough that the frames before `time` are
             // decoded on the way and kept for the requests that follow.

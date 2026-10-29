@@ -142,16 +142,28 @@ impl Look {
             .chain(self.color.params_mut())
     }
 
-    /// The blurriness of all Gaussian blurs together: blurring twice adds the squares.
-    pub fn blurriness_at(&self, time: Ticks) -> f32 {
-        self.effects
-            .iter()
-            .map(|effect| match effect {
-                VideoEffect::GaussianBlur { blurriness } => blurriness.value_at(time).powi(2),
-                _ => 0.0,
-            })
-            .sum::<f32>()
-            .sqrt()
+    /// The blurriness of all the blurs together for each of the red, green, blue and
+    /// alpha channels: blurring twice adds the squares.
+    pub fn blurriness_at(&self, time: Ticks) -> [f32; 4] {
+        let mut squares = [0.0f32; 4];
+        for effect in &self.effects {
+            let each = match effect {
+                VideoEffect::GaussianBlur { blurriness } => [blurriness.value_at(time); 4],
+                VideoEffect::CameraBlur { percent } => [percent.value_at(time).max(0.0) / 2.0; 4],
+                VideoEffect::ChannelBlur(channels) => [
+                    &channels.red,
+                    &channels.green,
+                    &channels.blue,
+                    &channels.alpha,
+                ]
+                .map(|blurriness| blurriness.value_at(time)),
+                _ => continue,
+            };
+            for (square, blurriness) in squares.iter_mut().zip(each) {
+                *square += blurriness.powi(2);
+            }
+        }
+        squares.map(f32::sqrt)
     }
 }
 

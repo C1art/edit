@@ -1,13 +1,13 @@
 use super::{
-    ClipNameSource, ColorChange, ColorMatch, EdgeFeather, EffectCategory, KeyOutput, LensType,
-    MagnifyShape, MatteChannel, Median, NoiseHls, RadialWipeDirection, RampShape, Rgb,
-    TimecodeSource, UnsharpMask, VideoEffect,
+    ChannelBlur, ClipNameSource, ColorChange, ColorMatch, Echo, EdgeFeather, EffectCategory,
+    KeyOutput, LensType, MagnifyShape, MatteChannel, Median, NoiseHls, RadialWipeDirection,
+    RampShape, Rgb, TimecodeSource, UnsharpMask, VideoEffect,
 };
 use crate::{Param, Stabilizer};
 
 impl VideoEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 62] {
+    pub fn catalog() -> [Self; 65] {
         [
             Self::GaussianBlur {
                 blurriness: Param::from_value(10.0),
@@ -304,6 +304,11 @@ impl VideoEffect {
                 amount: Param::from_value(10.0),
             }),
             Self::NoiseHls(NoiseHls::default()),
+            Self::ChannelBlur(ChannelBlur::default()),
+            Self::CameraBlur {
+                percent: Param::default(),
+            },
+            Self::Echo(Echo::default()),
         ]
     }
 
@@ -312,7 +317,9 @@ impl VideoEffect {
             Self::GaussianBlur { .. }
             | Self::Sharpen { .. }
             | Self::DirectionalBlur { .. }
-            | Self::UnsharpMask(_) => EffectCategory::BlurAndSharpen,
+            | Self::UnsharpMask(_)
+            | Self::ChannelBlur(_)
+            | Self::CameraBlur { .. } => EffectCategory::BlurAndSharpen,
             Self::Noise { .. }
             | Self::Median(_)
             | Self::DustAndScratches(_)
@@ -357,7 +364,7 @@ impl VideoEffect {
             | Self::Solarize { .. }
             | Self::Threshold { .. }
             | Self::Replicate { .. } => EffectCategory::Stylize,
-            Self::PosterizeTime { .. } => EffectCategory::Time,
+            Self::PosterizeTime { .. } | Self::Echo(_) => EffectCategory::Time,
             Self::Timecode { .. } | Self::ClipName { .. } => EffectCategory::Video,
             Self::HorizontalFlip | Self::VerticalFlip | Self::EdgeFeather(_) => {
                 EffectCategory::Transform
@@ -434,6 +441,9 @@ impl VideoEffect {
             Self::DustAndScratches(_) => "Dust & Scratches",
             Self::EdgeFeather(_) => "Edge Feather",
             Self::NoiseHls(_) => "Noise HLS",
+            Self::ChannelBlur(_) => "Channel Blur",
+            Self::CameraBlur { .. } => "Camera Blur",
+            Self::Echo(_) => "Echo",
         }
     }
 }

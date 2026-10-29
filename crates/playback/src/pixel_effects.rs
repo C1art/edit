@@ -23,7 +23,12 @@ pub(crate) fn pixel_effects(
     let mut pixel = PixelEffects::NONE;
     for effect in effects {
         match effect {
-            VideoEffect::GaussianBlur { .. } | VideoEffect::TrackMatteKey { .. } => {}
+            // Blurs fold into the layer's blur, and Echo into the frame decoded.
+            VideoEffect::GaussianBlur { .. }
+            | VideoEffect::ChannelBlur(_)
+            | VideoEffect::CameraBlur { .. }
+            | VideoEffect::Echo(_)
+            | VideoEffect::TrackMatteKey { .. } => {}
             VideoEffect::BrightnessContrast {
                 brightness,
                 contrast,

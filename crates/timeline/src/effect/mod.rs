@@ -4,11 +4,13 @@ use crate::{Param, Stabilizer};
 
 mod catalog;
 mod detail;
+mod echo;
 mod key;
 mod options;
 mod params;
 
 pub use detail::{EdgeFeather, Median, NoiseHls, UnsharpMask};
+pub use echo::{ChannelBlur, Echo, EchoOperator};
 pub use key::{KeyOutput, MatteChannel, ULTRA_KEY_REACH};
 pub use options::{
     ClipNameSource, ColorChange, ColorMatch, EffectCategory, LensType, MagnifyShape,
@@ -458,4 +460,11 @@ pub enum VideoEffect {
     DustAndScratches(Median),
     EdgeFeather(EdgeFeather),
     NoiseHls(NoiseHls),
+    ChannelBlur(ChannelBlur),
+    /// Blurs the picture as an out-of-focus lens does, by half a pixel of blurriness
+    /// per percent.
+    CameraBlur {
+        percent: Param,
+    },
+    Echo(Echo),
 }

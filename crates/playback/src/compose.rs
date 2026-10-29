@@ -7,6 +7,7 @@ use timeline::{
 };
 
 use crate::clip_decoders::ClipDecoders;
+use crate::echo::{echo_of, echoed_frame_at};
 use crate::generated::{caption_frame, scrolled};
 use crate::grades::grade_for;
 use crate::layer_look::{interpreted, layer_look};
@@ -172,9 +173,16 @@ fn clip_picture(
             let effects = &plan.clip.look.effects;
             let time = posterized(effects, plan.source_time, sequence.timebase);
             let resolution = decoding.resolution;
-            let frame = match plan.clip.interpolation {
-                TimeInterpolation::FrameSampling => decoder.frame_at(media, time, size, resolution),
-                interpolation => {
+            let echo = echo_of(effects);
+            decoder.keep_history(0);
+            let frame = match (echo, plan.clip.interpolation) {
+                (Some(echo), _) => {
+                    echoed_frame_at(decoder, sequence, media, (time, echo), size, resolution)
+                }
+                (None, TimeInterpolation::FrameSampling) => {
+                    decoder.frame_at(media, time, size, resolution)
+                }
+                (None, interpolation) => {
                     decoder.interpolated_frame_at(media, time, size, resolution, interpolation)
                 }
             };

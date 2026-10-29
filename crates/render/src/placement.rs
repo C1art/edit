@@ -25,8 +25,9 @@ pub struct LayerLook {
     pub opacity: f32,
     /// What of the picture the opacity applies to; none keeps all of it.
     pub opacity_masks: [Option<LayerMask>; MAX_MASKS],
-    /// Gaussian blur standard deviation in canvas pixels.
-    pub blur: f32,
+    /// Gaussian blur standard deviations of the red, green, blue and alpha channels, in
+    /// canvas pixels.
+    pub blur: [f32; 4],
     pub color: ColorAdjust,
     /// What of the canvas transitions show the layer in, whatever its placement.
     pub wipes: [Option<LayerWipe>; 2],
@@ -98,7 +99,7 @@ impl LayerLook {
         crop: [0.0; 4],
         opacity: 1.0,
         opacity_masks: [None; MAX_MASKS],
-        blur: 0.0,
+        blur: [0.0; 4],
         color: ColorAdjust::IDENTITY,
         wipes: [None; 2],
         wash: 0.0,
