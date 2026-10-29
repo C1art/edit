@@ -25,7 +25,9 @@ pub struct Peaks {
 }
 
 impl Peaks {
-    fn from_buckets(buckets: Vec<u8>) -> Self {
+    /// Peaks from the loudest sample of every millisecond, as [`buckets`](Self::buckets)
+    /// gives them.
+    pub fn from_buckets(buckets: Vec<u8>) -> Self {
         let mut levels = vec![buckets];
         while let Some(finer) = levels.last().filter(|level| level.len() > 1) {
             let coarser = finer
@@ -35,6 +37,11 @@ impl Peaks {
             levels.push(coarser);
         }
         Self { levels }
+    }
+
+    /// The loudest sample of every millisecond, from 0 for silence to 255 for full scale.
+    pub fn buckets(&self) -> &[u8] {
+        self.levels.first().map_or(&[], Vec::as_slice)
     }
 
     /// The loudest absolute sample, from 0 to 1, in media time `start..end`; spans
