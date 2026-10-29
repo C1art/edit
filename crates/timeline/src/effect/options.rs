@@ -194,11 +194,12 @@ pub enum EffectCategory {
     Time,
     Transform,
     Transition,
+    Utility,
     Video,
 }
 
 impl EffectCategory {
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 15] = [
         Self::Adjust,
         Self::BlurAndSharpen,
         Self::ColorCorrection,
@@ -212,6 +213,7 @@ impl EffectCategory {
         Self::Time,
         Self::Transform,
         Self::Transition,
+        Self::Utility,
         Self::Video,
     ];
 
@@ -230,6 +232,7 @@ impl EffectCategory {
             Self::Time => "Time",
             Self::Transform => "Transform",
             Self::Transition => "Transition",
+            Self::Utility => "Utility",
             Self::Video => "Video",
         }
     }

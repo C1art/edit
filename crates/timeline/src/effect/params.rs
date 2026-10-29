@@ -1,9 +1,9 @@
 use super::{
-    AlphaGlow, AscCdl, Bevel, CellPattern, ChangeColor, ChannelBlur, Checkerboard, Circle,
-    ColorBalance, ColorReplace, ConvolutionKernel, Echo, EdgeFeather, Ellipse, Extract,
-    FourColorGradient, Grid, Light, LightingEffects, Lightning, Median, NoiseAlpha, NoiseHls,
-    NoiseHlsAuto, RadialShadow, RoughenEdges, ShadowHighlight, SimpleText, UnsharpMask,
-    VideoEffect, VideoLimiter,
+    AlphaGlow, AscCdl, Bevel, CellPattern, ChangeColor, ChannelBlur, Checkerboard, CineonConverter,
+    Circle, ColorBalance, ColorPass, ColorReplace, ConvolutionKernel, Echo, EdgeFeather, Ellipse,
+    Extract, FourColorGradient, Grid, Light, LightingEffects, Lightning, Median, NoiseAlpha,
+    NoiseHls, NoiseHlsAuto, RadialShadow, ReduceInterlaceFlicker, RoughenEdges, ShadowHighlight,
+    SimpleText, UnsharpMask, VideoEffect, VideoLimiter,
 };
 use crate::{AutoReframe, Param};
 
@@ -373,6 +373,26 @@ macro_rules! effect_params {
                 grain_size,
                 animation_speed,
             }) => vec![hue, lightness, saturation, grain_size, animation_speed],
+            VideoEffect::ColorPass(ColorPass { similarity, .. }) => vec![similarity],
+            VideoEffect::ReduceInterlaceFlicker(ReduceInterlaceFlicker { softness }) => {
+                vec![softness]
+            }
+            VideoEffect::CineonConverter(CineonConverter {
+                black_point_10_bit,
+                internal_black_point,
+                white_point_10_bit,
+                internal_white_point,
+                gamma,
+                highlight_rolloff,
+                ..
+            }) => vec![
+                black_point_10_bit,
+                internal_black_point,
+                white_point_10_bit,
+                internal_white_point,
+                gamma,
+                highlight_rolloff,
+            ],
             VideoEffect::NoiseAlpha(NoiseAlpha {
                 amount,
                 noise_phase,

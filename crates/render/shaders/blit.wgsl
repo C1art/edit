@@ -215,6 +215,10 @@ struct Placement {
     // kind: 0 off, 1 still, 2 animated.
     noise_alpha: vec4<f32>,
     noise_alpha_timing: vec4<f32>,
+    // Cineon Converter's black and white codes, internal black and white, then gamma,
+    // highlight rolloff and kind: 0 off, 1 log to linear, 2 linear to log, 3 log to log.
+    cineon: vec4<f32>,
+    cineon_shape: vec4<f32>,
 };
 
 const OUTLINE_VEC4S: u32 = 32u;
@@ -451,7 +455,7 @@ fn layer_color(in: VertexOutput) -> vec4<f32> {
     let matte = key_alpha(color.rgb, uv);
     let keyed = key_shown(matte);
     let sharp = unsharp(sharpen(median_filtered(convolved(despill(color.rgb, matte), uv), uv), uv), uv);
-    var rgb = noise_hls(adjusted(restyle(stylize(secondary(creative_grade(correct(color_balance(change_color(change_to_color(mix_channels(leave_color(toned(sharp, uv))))))))), pinned), uv)), pinned);
+    var rgb = noise_hls(adjusted(restyle(stylize(secondary(creative_grade(correct(color_balance(change_color(change_to_color(mix_channels(leave_color(toned(cineon(sharp), uv))))))))), pinned), uv)), pinned);
     let rough = roughened(pinned);
     rgb = roughen_colored(edge_lit(lighting_effects(rgb, uv), pinned, uv), rough.y);
     rgb = page_side(key_view(limited(rgb), matte), page);

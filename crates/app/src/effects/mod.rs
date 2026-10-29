@@ -8,6 +8,7 @@ mod edges;
 mod generate;
 mod generated;
 mod hue_curves;
+mod image;
 mod key_selection;
 mod keying;
 mod lane;

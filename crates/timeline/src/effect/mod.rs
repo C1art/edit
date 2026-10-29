@@ -8,6 +8,7 @@ mod echo;
 mod edges;
 mod garbage;
 mod generate;
+mod image;
 mod key;
 mod lighting;
 mod names;
@@ -25,6 +26,7 @@ pub use echo::{ChannelBlur, Echo, EchoOperator};
 pub use edges::{AlphaGlow, Bevel, RoughenEdgeType, RoughenEdges};
 pub use garbage::GarbageMatte;
 pub use generate::{Checkerboard, Circle, FourColorGradient, Grid};
+pub use image::{CineonConversion, CineonConverter, ColorPass, ReduceInterlaceFlicker};
 pub use key::{KeyOutput, MatteChannel, ULTRA_KEY_REACH};
 pub use lighting::{Light, LightKind, LightingEffects, MAX_LIGHTS};
 pub use noise::{AlphaNoise, AlphaOverflow, NoiseAlpha, NoiseHlsAuto, OriginalAlpha};
@@ -486,4 +488,7 @@ pub enum VideoEffect {
     RadialShadow(RadialShadow),
     NoiseHlsAuto(NoiseHlsAuto),
     NoiseAlpha(NoiseAlpha),
+    ColorPass(ColorPass),
+    ReduceInterlaceFlicker(ReduceInterlaceFlicker),
+    CineonConverter(CineonConverter),
 }

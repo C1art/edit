@@ -2,6 +2,7 @@ mod adjust;
 mod backdrop;
 mod blit;
 mod blur;
+mod cineon;
 mod clip_wipes;
 mod compositor;
 mod creative;
@@ -33,6 +34,7 @@ mod wipe;
 
 pub use adjust::{Adjust, AlphaAdjust, Levels, LumaKey, ProcAmp};
 pub use blit::DISPLAY_FORMAT;
+pub use cineon::{Cineon, CineonKind};
 pub use clip_wipes::{
     BlockDissolve, ClipWipes, LinearWipe, RadialSweep, RadialWipe, VenetianBlinds,
 };

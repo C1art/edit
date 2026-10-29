@@ -1,6 +1,7 @@
 use timeline::{AlphaInterpretation, KeyOutput};
 
 use crate::adjust::Adjust;
+use crate::cineon::Cineon;
 use crate::clip_wipes::ClipWipes;
 use crate::detail::Detail;
 use crate::edges::Edges;
@@ -46,6 +47,7 @@ pub struct PixelEffects {
     pub lighting: Option<Lighting>,
     pub point_shadow: Option<PointShadow>,
     pub noise_alpha: Option<NoisyAlpha>,
+    pub cineon: Option<Cineon>,
     /// How the source's alpha channel is read.
     pub alpha: AlphaInterpretation,
 }
@@ -124,6 +126,7 @@ impl PixelEffects {
         lighting: Lighting::NONE,
         point_shadow: PointShadow::NONE,
         noise_alpha: NoisyAlpha::NONE,
+        cineon: Cineon::NONE,
         alpha: AlphaInterpretation::Straight,
     };
 

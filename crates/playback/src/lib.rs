@@ -22,6 +22,7 @@ mod frame_probe;
 mod generate_effects;
 mod generated;
 mod grades;
+mod image_effects;
 mod layer_look;
 mod lighting_effects;
 mod lightning;

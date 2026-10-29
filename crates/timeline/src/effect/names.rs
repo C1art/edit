@@ -92,6 +92,9 @@ impl VideoEffect {
             Self::RadialShadow(_) => "Radial Shadow",
             Self::NoiseHlsAuto(_) => "Noise HLS Auto",
             Self::NoiseAlpha(_) => "Noise Alpha",
+            Self::ColorPass(_) => "Color Pass",
+            Self::ReduceInterlaceFlicker(_) => "Reduce Interlace Flicker",
+            Self::CineonConverter(_) => "Cineon Converter",
         }
     }
 }

@@ -11,6 +11,7 @@ use crate::clip_wipes::set_clip_wipe;
 use crate::detail_effects::set_detail_effect;
 use crate::edge_effects::set_edge_effect;
 use crate::generate_effects::set_generate_effect;
+use crate::image_effects::set_image_effect;
 use crate::lighting_effects::{lighting, set_radial_shadow};
 use crate::noise_effects::set_noise_effect;
 use crate::optics_effects::set_optics_effect;
@@ -140,6 +141,7 @@ pub(crate) fn pixel_effects(
                     tolerance: unit(tolerance).clamp(0.0, 1.0),
                     softness: unit(softness).clamp(0.0, 1.0),
                     by_hue: *matching == ColorMatch::Hue,
+                    reverse: false,
                 });
             }
             VideoEffect::GradientRamp {
@@ -380,6 +382,9 @@ pub(crate) fn pixel_effects(
             | VideoEffect::CellPattern(_) => set_generate_effect(&mut pixel, effect, time),
             VideoEffect::LightingEffects(effect) => pixel.lighting = Some(lighting(effect, time)),
             VideoEffect::RadialShadow(shadow) => set_radial_shadow(&mut pixel, shadow, time),
+            VideoEffect::ColorPass(_)
+            | VideoEffect::ReduceInterlaceFlicker(_)
+            | VideoEffect::CineonConverter(_) => set_image_effect(&mut pixel, effect, time),
             VideoEffect::NoiseHlsAuto(_) | VideoEffect::NoiseAlpha(_) => {
                 set_noise_effect(&mut pixel, effect, time, timebase);
             }

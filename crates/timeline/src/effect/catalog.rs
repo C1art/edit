@@ -9,7 +9,7 @@ use crate::{AutoReframe, Param, Stabilizer};
 
 impl VideoEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 91] {
+    pub fn catalog() -> [Self; 94] {
         [
             Self::GaussianBlur {
                 blurriness: Param::from_value(10.0),
@@ -346,6 +346,9 @@ impl VideoEffect {
             Self::RadialShadow(Default::default()),
             Self::NoiseHlsAuto(Default::default()),
             Self::NoiseAlpha(Default::default()),
+            Self::ColorPass(Default::default()),
+            Self::ReduceInterlaceFlicker(Default::default()),
+            Self::CineonConverter(Default::default()),
         ]
     }
 
@@ -416,9 +419,10 @@ impl VideoEffect {
             | Self::AlphaGlow(_)
             | Self::ColorEmboss { .. } => EffectCategory::Stylize,
             Self::PosterizeTime { .. } | Self::Echo(_) => EffectCategory::Time,
-            Self::Timecode { .. } | Self::ClipName { .. } | Self::SimpleText(_) => {
-                EffectCategory::Video
-            }
+            Self::Timecode { .. }
+            | Self::ClipName { .. }
+            | Self::SimpleText(_)
+            | Self::ReduceInterlaceFlicker(_) => EffectCategory::Video,
             Self::HorizontalFlip
             | Self::VerticalFlip
             | Self::EdgeFeather(_)
@@ -433,7 +437,8 @@ impl VideoEffect {
             | Self::AscCdl(_)
             | Self::ChangeColor(_)
             | Self::ColorBalance(_) => EffectCategory::ColorCorrection,
-            Self::ColorReplace(_) => EffectCategory::ImageControl,
+            Self::ColorReplace(_) | Self::ColorPass(_) => EffectCategory::ImageControl,
+            Self::CineonConverter(_) => EffectCategory::Utility,
             Self::LinearWipe { .. }
             | Self::RadialWipe { .. }
             | Self::VenetianBlinds { .. }

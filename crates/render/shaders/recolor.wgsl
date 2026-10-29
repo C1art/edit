@@ -41,7 +41,9 @@ fn leave_color(rgb: vec3<f32>) -> vec3<f32> {
         distance = hue_distance(rgb, leave.rgb);
     }
     let kept = 1.0 - smoothstep(leave.w, leave.w + max(amounts.y, 1e-4), distance);
-    return mix(rgb, vec3<f32>(dot(rgb, LUMA)), amounts.x * (1.0 - kept));
+    // A negative amount greys the matching color instead of the others.
+    let greyed = select(1.0 - kept, kept, amounts.x < 0.0);
+    return mix(rgb, vec3<f32>(dot(rgb, LUMA)), abs(amounts.x) * greyed);
 }
 
 // Covers the picture at `uv` with the ramp, which fills it even where it was clear.
