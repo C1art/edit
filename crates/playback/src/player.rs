@@ -227,12 +227,9 @@ impl Player {
     }
 
     /// Whether the UI must keep repainting to pick up output that is still arriving.
+    /// Frames queued for later times wait on a clock that only runs while playing.
     pub fn is_busy(&self) -> bool {
-        self.is_playing()
-            || self.awaiting_seek
-            || (!self.picker.is_settled() && !self.video_ended)
-            || self.picker.has_pending()
-            || !self.frames.is_empty()
+        self.is_playing() || self.awaiting_seek || (!self.picker.is_settled() && !self.video_ended)
     }
 
     pub fn position(&self) -> Ticks {

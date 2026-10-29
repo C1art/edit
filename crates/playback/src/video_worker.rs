@@ -1,17 +1,13 @@
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
 
-use crossbeam::channel::{Receiver, RecvTimeoutError, Sender, TrySendError};
+use crossbeam::channel::{Receiver, Select, Sender};
 use timeline::{Sequence, SourceId, Ticks};
 
 use crate::command::{coalesce, Coalesced, Command, Event};
 use crate::frame_picker::TaggedFrame;
 use crate::previews::PreviewPictures;
 use crate::{compose, ComposedFrame, Layer, Resolution};
-
-/// How long the worker waits for room in the frame queue before checking commands again.
-const BACKOFF: Duration = Duration::from_millis(4);
 
 pub(crate) struct VideoChannels {
     pub(crate) commands: Receiver<Command>,
@@ -67,19 +63,26 @@ impl VideoWorker {
     fn run(mut self) {
         loop {
             let command = if let Some(frame) = self.pending.take() {
-                let tagged = TaggedFrame {
-                    generation: self.generation,
-                    frame,
-                };
-                match self.channels.frames.try_send(tagged) {
-                    Ok(()) => continue,
-                    Err(TrySendError::Full(tagged)) => self.pending = Some(tagged.frame),
-                    Err(TrySendError::Disconnected(_)) => return,
+                // Waits for room in the frame queue or a command, whichever comes first;
+                // a paused player leaves the queue full for as long as it stays paused.
+                let mut select = Select::new();
+                let room = select.send(&self.channels.frames);
+                select.recv(&self.channels.commands);
+                let ready = select.select();
+                if ready.index() == room {
+                    let tagged = TaggedFrame {
+                        generation: self.generation,
+                        frame,
+                    };
+                    if ready.send(&self.channels.frames, tagged).is_err() {
+                        return;
+                    }
+                    continue;
                 }
-                match self.channels.commands.recv_timeout(BACKOFF) {
+                self.pending = Some(frame);
+                match ready.recv(&self.channels.commands) {
                     Ok(command) => command,
-                    Err(RecvTimeoutError::Timeout) => continue,
-                    Err(RecvTimeoutError::Disconnected) => return,
+                    Err(_) => return,
                 }
             } else if !self.finished {
                 match self.channels.commands.try_recv() {
