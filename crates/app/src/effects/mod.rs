@@ -1,6 +1,7 @@
 mod blur_echo;
 mod clip_wipes;
 mod color;
+mod controls;
 mod curves;
 mod detail;
 mod edges;
