@@ -95,6 +95,9 @@ impl VideoEffect {
             Self::ColorPass(_) => "Color Pass",
             Self::ReduceInterlaceFlicker(_) => "Reduce Interlace Flicker",
             Self::CineonConverter(_) => "Cineon Converter",
+            Self::BrushStrokes(_) => "Brush Strokes",
+            Self::EyedropperFill(_) => "Eyedropper Fill",
+            Self::SdrConform(_) => "SDR Conform",
         }
     }
 }

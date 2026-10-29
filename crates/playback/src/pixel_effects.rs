@@ -384,7 +384,10 @@ pub(crate) fn pixel_effects(
             VideoEffect::RadialShadow(shadow) => set_radial_shadow(&mut pixel, shadow, time),
             VideoEffect::ColorPass(_)
             | VideoEffect::ReduceInterlaceFlicker(_)
-            | VideoEffect::CineonConverter(_) => set_image_effect(&mut pixel, effect, time),
+            | VideoEffect::CineonConverter(_)
+            | VideoEffect::BrushStrokes(_)
+            | VideoEffect::EyedropperFill(_)
+            | VideoEffect::SdrConform(_) => set_image_effect(&mut pixel, effect, time),
             VideoEffect::NoiseHlsAuto(_) | VideoEffect::NoiseAlpha(_) => {
                 set_noise_effect(&mut pixel, effect, time, timebase);
             }
@@ -409,7 +412,7 @@ pub(crate) fn pixel_effects(
             | VideoEffect::BevelEdges(_)
             | VideoEffect::BevelAlpha(_)
             | VideoEffect::AlphaGlow(_)
-            | VideoEffect::ColorEmboss { .. } => set_edge_effect(&mut pixel.edges, effect, time),
+            | VideoEffect::ColorEmboss(_) => set_edge_effect(&mut pixel.edges, effect, time),
             VideoEffect::ConvolutionKernel(_)
             | VideoEffect::Extract(_)
             | VideoEffect::ShadowHighlight(_)

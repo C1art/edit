@@ -47,12 +47,12 @@ pub(crate) fn set_edge_effect(edges: &mut Edges, effect: &VideoEffect, time: Tic
                 fade_out: glow.fade_out,
             });
         }
-        VideoEffect::ColorEmboss {
+        VideoEffect::ColorEmboss(timeline::ColorEmboss {
             direction,
             relief,
             contrast,
             blend,
-        } => {
+        }) => {
             edges.color_emboss = Some(ColorEmboss {
                 direction: value(direction).to_radians(),
                 relief: value(relief),

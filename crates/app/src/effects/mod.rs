@@ -20,6 +20,7 @@ mod masks;
 mod matte_overlay;
 mod motion_overlay;
 mod optics;
+mod paint;
 mod picture_frame;
 mod reframe;
 mod remap;

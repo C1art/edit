@@ -1,9 +1,10 @@
 use super::{
-    AlphaGlow, AscCdl, Bevel, CellPattern, ChangeColor, ChannelBlur, Checkerboard, CineonConverter,
-    Circle, ColorBalance, ColorPass, ColorReplace, ConvolutionKernel, Echo, EdgeFeather, Ellipse,
-    Extract, FourColorGradient, Grid, Light, LightingEffects, Lightning, Median, NoiseAlpha,
-    NoiseHls, NoiseHlsAuto, RadialShadow, ReduceInterlaceFlicker, RoughenEdges, ShadowHighlight,
-    SimpleText, UnsharpMask, VideoEffect, VideoLimiter,
+    AlphaGlow, AscCdl, Bevel, BrushStrokes, CellPattern, ChangeColor, ChannelBlur, Checkerboard,
+    CineonConverter, Circle, ColorBalance, ColorEmboss, ColorPass, ColorReplace, ConvolutionKernel,
+    Echo, EdgeFeather, Ellipse, Extract, EyedropperFill, FourColorGradient, Grid, Light,
+    LightingEffects, Lightning, Median, NoiseAlpha, NoiseHls, NoiseHlsAuto, RadialShadow,
+    ReduceInterlaceFlicker, RoughenEdges, SdrConform, ShadowHighlight, SimpleText, UnsharpMask,
+    VideoEffect, VideoLimiter,
 };
 use crate::{AutoReframe, Param};
 
@@ -373,161 +374,31 @@ macro_rules! effect_params {
                 grain_size,
                 animation_speed,
             }) => vec![hue, lightness, saturation, grain_size, animation_speed],
-            VideoEffect::ColorPass(ColorPass { similarity, .. }) => vec![similarity],
-            VideoEffect::ReduceInterlaceFlicker(ReduceInterlaceFlicker { softness }) => {
-                vec![softness]
-            }
-            VideoEffect::CineonConverter(CineonConverter {
-                black_point_10_bit,
-                internal_black_point,
-                white_point_10_bit,
-                internal_white_point,
-                gamma,
-                highlight_rolloff,
-                ..
-            }) => vec![
-                black_point_10_bit,
-                internal_black_point,
-                white_point_10_bit,
-                internal_white_point,
-                gamma,
-                highlight_rolloff,
-            ],
-            VideoEffect::NoiseAlpha(NoiseAlpha {
-                amount,
-                noise_phase,
-                cycle,
-                ..
-            }) => vec![amount, noise_phase, cycle],
-            VideoEffect::ChannelBlur(ChannelBlur {
-                red,
-                green,
-                blue,
-                alpha,
-            }) => vec![red, green, blue, alpha],
-            VideoEffect::CameraBlur { percent } => vec![percent],
-            VideoEffect::Echo(Echo {
-                echo_time,
-                echoes,
-                starting_intensity,
-                decay,
-                operator: _,
-            }) => vec![echo_time, echoes, starting_intensity, decay],
-            VideoEffect::GarbageMatte(matte) => matte.points.$iter().flatten().collect(),
-            VideoEffect::AutoReframe(AutoReframe {
-                offset: [x, y],
-                scale,
-                ..
-            }) => vec![x, y, scale],
-            VideoEffect::RoughenEdges(RoughenEdges {
-                border,
-                edge_sharpness,
-                fractal_influence,
-                scale,
-                offset: [x, y],
-                complexity,
-                evolution,
-                ..
-            }) => vec![
-                border,
-                edge_sharpness,
-                fractal_influence,
-                scale,
-                x,
-                y,
-                complexity,
-                evolution,
-            ],
-            VideoEffect::BevelEdges(Bevel {
-                edge_thickness,
-                light_angle,
-                light_intensity,
-                ..
-            })
-            | VideoEffect::BevelAlpha(Bevel {
-                edge_thickness,
-                light_angle,
-                light_intensity,
-                ..
-            }) => vec![edge_thickness, light_angle, light_intensity],
-            VideoEffect::AlphaGlow(AlphaGlow {
-                glow, brightness, ..
-            }) => vec![glow, brightness],
-            VideoEffect::ColorEmboss {
-                direction,
-                relief,
-                contrast,
-                blend,
-            } => vec![direction, relief, contrast, blend],
-            VideoEffect::ConvolutionKernel(ConvolutionKernel {
-                kernel,
-                offset,
-                scale,
-            }) => kernel.$iter().chain([offset, scale]).collect(),
-            VideoEffect::Extract(Extract {
-                black_input_level,
-                white_input_level,
-                softness,
-                invert: _,
-            }) => vec![black_input_level, white_input_level, softness],
-            VideoEffect::ShadowHighlight(ShadowHighlight {
-                shadow_amount,
-                highlight_amount,
-                shadow_tonal_width,
-                highlight_tonal_width,
-                radius,
-                midtone_contrast,
-                blend_with_original,
-            }) => vec![
-                shadow_amount,
-                highlight_amount,
-                shadow_tonal_width,
-                highlight_tonal_width,
-                radius,
-                midtone_contrast,
-                blend_with_original,
-            ],
-            VideoEffect::VideoLimiter(VideoLimiter {
-                clip_level,
-                compression_before_clipping,
-                ..
-            }) => vec![clip_level, compression_before_clipping],
-            VideoEffect::AscCdl(AscCdl {
-                slope,
-                offset,
-                power,
-                saturation,
-            }) => slope
-                .$iter()
-                .chain(offset.$iter())
-                .chain(power.$iter())
-                .chain([saturation])
-                .collect(),
-            VideoEffect::ColorReplace(ColorReplace { similarity, .. }) => vec![similarity],
-            VideoEffect::ChangeColor(ChangeColor {
-                hue_transform,
-                lightness_transform,
-                saturation_transform,
-                matching_tolerance,
-                matching_softness,
-                ..
-            }) => vec![
-                hue_transform,
-                lightness_transform,
-                saturation_transform,
-                matching_tolerance,
-                matching_softness,
-            ],
-            VideoEffect::ColorBalance(ColorBalance {
-                shadows,
-                midtones,
-                highlights,
-                preserve_luminosity: _,
-            }) => shadows
-                .$iter()
-                .chain(midtones.$iter())
-                .chain(highlights.$iter())
-                .collect(),
+            other @ (VideoEffect::AlphaGlow(_)
+            | VideoEffect::AscCdl(_)
+            | VideoEffect::AutoReframe(_)
+            | VideoEffect::BevelAlpha(_)
+            | VideoEffect::BevelEdges(_)
+            | VideoEffect::BrushStrokes(_)
+            | VideoEffect::CameraBlur { .. }
+            | VideoEffect::ChangeColor(_)
+            | VideoEffect::ChannelBlur(_)
+            | VideoEffect::CineonConverter(_)
+            | VideoEffect::ColorBalance(_)
+            | VideoEffect::ColorEmboss(_)
+            | VideoEffect::ColorPass(_)
+            | VideoEffect::ColorReplace(_)
+            | VideoEffect::ConvolutionKernel(_)
+            | VideoEffect::Echo(_)
+            | VideoEffect::Extract(_)
+            | VideoEffect::EyedropperFill(_)
+            | VideoEffect::GarbageMatte(_)
+            | VideoEffect::NoiseAlpha(_)
+            | VideoEffect::ReduceInterlaceFlicker(_)
+            | VideoEffect::RoughenEdges(_)
+            | VideoEffect::SdrConform(_)
+            | VideoEffect::ShadowHighlight(_)
+            | VideoEffect::VideoLimiter(_)) => more_effect_params!(other, $iter),
         }
     };
 }

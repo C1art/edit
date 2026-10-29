@@ -111,3 +111,23 @@ impl Default for AlphaGlow {
         }
     }
 }
+
+/// Emboss's relief, lighting the picture's colors rather than grey.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ColorEmboss {
+    pub direction: Param,
+    pub relief: Param,
+    pub contrast: Param,
+    pub blend: Param,
+}
+
+impl Default for ColorEmboss {
+    fn default() -> Self {
+        Self {
+            direction: Param::from_value(45.0),
+            relief: Param::from_value(1.0),
+            contrast: Param::from_value(100.0),
+            blend: Param::default(),
+        }
+    }
+}

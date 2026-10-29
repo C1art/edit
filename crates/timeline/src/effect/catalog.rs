@@ -1,15 +1,15 @@
 use super::{
     AlphaGlow, AscCdl, Bevel, ChannelBlur, Checkerboard, Circle, ClipNameSource, ColorChange,
-    ColorMatch, ColorReplace, ConvolutionKernel, Echo, EdgeFeather, EffectCategory, Extract,
-    FourColorGradient, GarbageMatte, Grid, KeyOutput, LensType, MagnifyShape, MatteChannel, Median,
-    NoiseHls, RadialWipeDirection, RampShape, Rgb, RoughenEdges, ShadowHighlight, TimecodeSource,
-    UnsharpMask, VideoEffect, VideoLimiter,
+    ColorEmboss, ColorMatch, ColorReplace, ConvolutionKernel, Echo, EdgeFeather, EffectCategory,
+    Extract, FourColorGradient, GarbageMatte, Grid, KeyOutput, LensType, MagnifyShape,
+    MatteChannel, Median, NoiseHls, RadialWipeDirection, RampShape, Rgb, RoughenEdges,
+    ShadowHighlight, TimecodeSource, UnsharpMask, VideoEffect, VideoLimiter,
 };
 use crate::{AutoReframe, Param, Stabilizer};
 
 impl VideoEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 94] {
+    pub fn catalog() -> [Self; 97] {
         [
             Self::GaussianBlur {
                 blurriness: Param::from_value(10.0),
@@ -324,12 +324,7 @@ impl VideoEffect {
             Self::BevelEdges(Bevel::edges()),
             Self::BevelAlpha(Bevel::alpha()),
             Self::AlphaGlow(AlphaGlow::default()),
-            Self::ColorEmboss {
-                direction: Param::from_value(45.0),
-                relief: Param::from_value(1.0),
-                contrast: Param::from_value(100.0),
-                blend: Param::default(),
-            },
+            Self::ColorEmboss(ColorEmboss::default()),
             Self::ConvolutionKernel(ConvolutionKernel::default()),
             Self::Extract(Extract::default()),
             Self::ShadowHighlight(ShadowHighlight::default()),
@@ -349,6 +344,9 @@ impl VideoEffect {
             Self::ColorPass(Default::default()),
             Self::ReduceInterlaceFlicker(Default::default()),
             Self::CineonConverter(Default::default()),
+            Self::BrushStrokes(Default::default()),
+            Self::EyedropperFill(Default::default()),
+            Self::SdrConform(Default::default()),
         ]
     }
 
@@ -417,7 +415,7 @@ impl VideoEffect {
             | Self::Replicate { .. }
             | Self::RoughenEdges(_)
             | Self::AlphaGlow(_)
-            | Self::ColorEmboss { .. } => EffectCategory::Stylize,
+            | Self::ColorEmboss(_) => EffectCategory::Stylize,
             Self::PosterizeTime { .. } | Self::Echo(_) => EffectCategory::Time,
             Self::Timecode { .. }
             | Self::ClipName { .. }
@@ -438,7 +436,9 @@ impl VideoEffect {
             | Self::ChangeColor(_)
             | Self::ColorBalance(_) => EffectCategory::ColorCorrection,
             Self::ColorReplace(_) | Self::ColorPass(_) => EffectCategory::ImageControl,
-            Self::CineonConverter(_) => EffectCategory::Utility,
+            Self::CineonConverter(_) | Self::SdrConform(_) => EffectCategory::Utility,
+            Self::BrushStrokes(_) => EffectCategory::Stylize,
+            Self::EyedropperFill(_) => EffectCategory::Generate,
             Self::LinearWipe { .. }
             | Self::RadialWipe { .. }
             | Self::VenetianBlinds { .. }

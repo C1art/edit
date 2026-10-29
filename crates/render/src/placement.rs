@@ -276,6 +276,7 @@ impl Placement {
                     .into_iter()
                     .flatten(),
             )
+            .chain(self.effects.paint.uniform().into_iter().flatten())
             .flat_map(f32::to_le_bytes)
             .collect()
     }
@@ -329,7 +330,7 @@ mod tests {
         // Transition effects' five, the detail effects' three, the edge effects' eleven
         // the tone effects' thirteen, Change Color and Color Balance's six, Ellipse
         // and Cell Pattern's seven, Lighting Effects' eighteen, Radial Shadow's two,
-        // Noise Alpha's two and Cineon Converter's two.
+        // Noise Alpha's two, Cineon Converter's two and the paint effects' five.
         let outlines = MAX_MASKS * MAX_OUTLINE_POINTS / 2;
         assert_eq!(
             bytes.len(),
@@ -353,7 +354,8 @@ mod tests {
                 + 18
                 + 2
                 + 2
-                + 2)
+                + 2
+                + 5)
                 * 16
         );
         assert!(bytes.len() as u64 <= crate::blit::UNIFORM_BYTES);

@@ -219,6 +219,15 @@ struct Placement {
     // highlight rolloff and kind: 0 off, 1 log to linear, 2 linear to log, 3 log to log.
     cineon: vec4<f32>,
     cineon_shape: vec4<f32>,
+    // Brush Strokes' angle, size, length and randomness, then its surface (0 off,
+    // 1 original, 2 transparent, 3 white, 4 black) and blend; Eyedropper Fill's point,
+    // radius and flag, then its blend and whether it keeps alpha; SDR Conform's
+    // brightness, contrast, knee and flag.
+    paint_brush: vec4<f32>,
+    paint_brush_look: vec4<f32>,
+    paint_fill: vec4<f32>,
+    paint_fill_look: vec4<f32>,
+    paint_conform: vec4<f32>,
 };
 
 const OUTLINE_VEC4S: u32 = 32u;
@@ -455,12 +464,12 @@ fn layer_color(in: VertexOutput) -> vec4<f32> {
     let matte = key_alpha(color.rgb, uv);
     let keyed = key_shown(matte);
     let sharp = unsharp(sharpen(median_filtered(convolved(despill(color.rgb, matte), uv), uv), uv), uv);
-    var rgb = noise_hls(adjusted(restyle(stylize(secondary(creative_grade(correct(color_balance(change_color(change_to_color(mix_channels(leave_color(toned(cineon(sharp), uv))))))))), pinned), uv)), pinned);
+    var rgb = noise_hls(adjusted(restyle(stylize(secondary(creative_grade(correct(color_balance(change_color(change_to_color(mix_channels(leave_color(toned(cineon(brushed(eyedropper_filled(sharp), uv)), uv))))))))), pinned), uv)), pinned);
     let rough = roughened(pinned);
     rgb = roughen_colored(edge_lit(lighting_effects(rgb, uv), pinned, uv), rough.y);
-    rgb = page_side(key_view(limited(rgb), matte), page);
+    rgb = page_side(key_view(limited(sdr_conformed(rgb)), matte), page);
     rgb = mix(rgb, vec3<f32>(1.0), placement.balance.w);
-    let viewed = alpha_view(rgb, noise_alpha(adjusted_alpha(color.a), uv) * keyed * luma_matte(color.rgb) * f32(in_crop(pinned)) * rough.x);
+    let viewed = alpha_view(rgb, noise_alpha(adjusted_alpha(painted_alpha(color.a, pinned)), uv) * keyed * luma_matte(color.rgb) * f32(in_crop(pinned)) * rough.x);
     rgb = viewed.rgb;
     let picture = viewed.a * (1.0 - placement.point_shadow_look.x);
     let shadow = shadow_alpha(pinned);

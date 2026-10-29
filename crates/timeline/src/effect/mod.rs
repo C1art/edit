@@ -11,9 +11,12 @@ mod generate;
 mod image;
 mod key;
 mod lighting;
+#[macro_use]
+mod more_params;
 mod names;
 mod noise;
 mod options;
+mod paint;
 mod params;
 mod pattern;
 mod shadow;
@@ -23,7 +26,7 @@ mod tone;
 
 pub use detail::{EdgeFeather, Median, NoiseHls, UnsharpMask};
 pub use echo::{ChannelBlur, Echo, EchoOperator};
-pub use edges::{AlphaGlow, Bevel, RoughenEdgeType, RoughenEdges};
+pub use edges::{AlphaGlow, Bevel, ColorEmboss, RoughenEdgeType, RoughenEdges};
 pub use garbage::GarbageMatte;
 pub use generate::{Checkerboard, Circle, FourColorGradient, Grid};
 pub use image::{CineonConversion, CineonConverter, ColorPass, ReduceInterlaceFlicker};
@@ -34,6 +37,7 @@ pub use options::{
     ClipNameSource, ColorChange, ColorMatch, EffectCategory, LensType, MagnifyShape,
     RadialWipeDirection, RampShape, Rgb, TimecodeSource,
 };
+pub use paint::{BrushStrokes, EyedropperFill, PaintSurface, SdrConform};
 pub use pattern::{CellKind, CellPattern, Ellipse, Lightning};
 pub use shadow::{RadialShadow, ShadowRender};
 pub use shift::{ChangeColor, ChangeColorView, ColorBalance, MatchColors};
@@ -465,13 +469,7 @@ pub enum VideoEffect {
     BevelEdges(Bevel),
     BevelAlpha(Bevel),
     AlphaGlow(AlphaGlow),
-    /// Emboss's relief, lighting the picture's colors rather than grey.
-    ColorEmboss {
-        direction: Param,
-        relief: Param,
-        contrast: Param,
-        blend: Param,
-    },
+    ColorEmboss(ColorEmboss),
     ConvolutionKernel(ConvolutionKernel),
     Extract(Extract),
     ShadowHighlight(ShadowHighlight),
@@ -491,4 +489,7 @@ pub enum VideoEffect {
     ColorPass(ColorPass),
     ReduceInterlaceFlicker(ReduceInterlaceFlicker),
     CineonConverter(CineonConverter),
+    BrushStrokes(BrushStrokes),
+    EyedropperFill(EyedropperFill),
+    SdrConform(SdrConform),
 }

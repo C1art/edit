@@ -1,7 +1,9 @@
 mod common;
 
 use common::{compositor, layer, solid};
-use render::{Cineon, CineonKind, LeaveColor, PixelEffects, Recolor, RenderError};
+use render::{
+    Cineon, CineonKind, Eyedropper, LeaveColor, Paint, PixelEffects, Recolor, RenderError,
+};
 use timeline::BlendMode;
 
 fn first_pixel(pixels: &[u8], effects: PixelEffects) -> Result<[u8; 4], RenderError> {
@@ -55,5 +57,32 @@ fn cineon_log_to_linear_brings_the_white_code_to_white() -> Result<(), RenderErr
     // 171 of 255 is code 686, a hair over white.
     let [r, ..] = first_pixel(&solid([171; 3]), effects)?;
     assert!(r > 245, "{r}");
+    Ok(())
+}
+
+#[test]
+#[ignore = "needs a GPU"]
+fn eyedropper_fill_paints_everything_the_sampled_color() -> Result<(), RenderError> {
+    // Red on the left half, blue on the right.
+    let pixels: Vec<u8> = (0..common::SIZE * common::SIZE)
+        .flat_map(|index| match index % common::SIZE < common::SIZE / 2 {
+            true => [255, 0, 0, 255],
+            false => [0, 0, 255, 255],
+        })
+        .collect();
+    let effects = PixelEffects {
+        paint: Paint {
+            eyedropper: Some(Eyedropper {
+                point: [0.8, 0.5],
+                radius: 0.0,
+                keep_alpha: true,
+                blend: 0.0,
+            }),
+            ..Paint::NONE
+        },
+        ..PixelEffects::NONE
+    };
+    let [r, _, b, _] = first_pixel(&pixels, effects)?;
+    assert!(r < 10 && b > 245, "{r} {b}");
     Ok(())
 }

@@ -307,6 +307,9 @@ impl Rows {
             VideoEffect::ColorPass(_)
             | VideoEffect::ReduceInterlaceFlicker(_)
             | VideoEffect::CineonConverter(_) => self.image(ui, effect),
+            VideoEffect::BrushStrokes(_)
+            | VideoEffect::EyedropperFill(_)
+            | VideoEffect::SdrConform(_) => self.paint(ui, effect),
             VideoEffect::LensFlare { .. } | VideoEffect::Magnify { .. } => self.optics(ui, effect),
             VideoEffect::LinearWipe { .. }
             | VideoEffect::RadialWipe { .. }
@@ -323,7 +326,7 @@ impl Rows {
             | VideoEffect::BevelEdges(_)
             | VideoEffect::BevelAlpha(_)
             | VideoEffect::AlphaGlow(_)
-            | VideoEffect::ColorEmboss { .. } => self.edges(ui, effect),
+            | VideoEffect::ColorEmboss(_) => self.edges(ui, effect),
             VideoEffect::ConvolutionKernel(_)
             | VideoEffect::Extract(_)
             | VideoEffect::ShadowHighlight(_)

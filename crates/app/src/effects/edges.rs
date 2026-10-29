@@ -55,12 +55,12 @@ impl Rows {
                 let fade = &mut glow.fade_out;
                 self.choice(ui, "Fade Out", |ui| ui.checkbox(fade, "").changed());
             }
-            VideoEffect::ColorEmboss {
+            VideoEffect::ColorEmboss(timeline::ColorEmboss {
                 direction,
                 relief,
                 contrast,
                 blend,
-            } => {
+            }) => {
                 self.param(ui, "Direction", direction, ANGLE, "°");
                 self.param(ui, "Relief", relief, 1.0..=10.0, "");
                 self.param(ui, "Contrast", contrast, 0.0..=500.0, "%");

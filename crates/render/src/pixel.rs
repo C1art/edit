@@ -9,6 +9,7 @@ use crate::generate::Generate;
 use crate::lighting::Lighting;
 use crate::noise_alpha::NoisyAlpha;
 use crate::optics::Optics;
+use crate::paint::Paint;
 use crate::pattern::Pattern;
 use crate::point_shadow::PointShadow;
 use crate::recolor::Recolor;
@@ -48,6 +49,7 @@ pub struct PixelEffects {
     pub point_shadow: Option<PointShadow>,
     pub noise_alpha: Option<NoisyAlpha>,
     pub cineon: Option<Cineon>,
+    pub paint: Paint,
     /// How the source's alpha channel is read.
     pub alpha: AlphaInterpretation,
 }
@@ -127,6 +129,7 @@ impl PixelEffects {
         point_shadow: PointShadow::NONE,
         noise_alpha: NoisyAlpha::NONE,
         cineon: Cineon::NONE,
+        paint: Paint::NONE,
         alpha: AlphaInterpretation::Straight,
     };
 
