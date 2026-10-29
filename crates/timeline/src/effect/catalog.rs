@@ -1,13 +1,13 @@
 use super::{
     ChannelBlur, ClipNameSource, ColorChange, ColorMatch, Echo, EdgeFeather, EffectCategory,
-    KeyOutput, LensType, MagnifyShape, MatteChannel, Median, NoiseHls, RadialWipeDirection,
-    RampShape, Rgb, TimecodeSource, UnsharpMask, VideoEffect,
+    GarbageMatte, KeyOutput, LensType, MagnifyShape, MatteChannel, Median, NoiseHls,
+    RadialWipeDirection, RampShape, Rgb, TimecodeSource, UnsharpMask, VideoEffect,
 };
 use crate::{Param, Stabilizer};
 
 impl VideoEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 65] {
+    pub fn catalog() -> [Self; 68] {
         [
             Self::GaussianBlur {
                 blurriness: Param::from_value(10.0),
@@ -309,6 +309,9 @@ impl VideoEffect {
                 percent: Param::default(),
             },
             Self::Echo(Echo::default()),
+            Self::GarbageMatte(GarbageMatte::new(4)),
+            Self::GarbageMatte(GarbageMatte::new(8)),
+            Self::GarbageMatte(GarbageMatte::new(16)),
         ]
     }
 
@@ -353,7 +356,8 @@ impl VideoEffect {
             | Self::TrackMatteKey { .. }
             | Self::ColorKey { .. }
             | Self::LumaKey { .. }
-            | Self::AlphaAdjust { .. } => EffectCategory::Keying,
+            | Self::AlphaAdjust { .. }
+            | Self::GarbageMatte(_) => EffectCategory::Keying,
             Self::Invert { .. }
             | Self::Vignette { .. }
             | Self::Posterize { .. }
@@ -444,6 +448,7 @@ impl VideoEffect {
             Self::ChannelBlur(_) => "Channel Blur",
             Self::CameraBlur { .. } => "Camera Blur",
             Self::Echo(_) => "Echo",
+            Self::GarbageMatte(matte) => matte.name(),
         }
     }
 }

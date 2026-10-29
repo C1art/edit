@@ -287,6 +287,7 @@ macro_rules! effect_params {
                 decay,
                 operator: _,
             }) => vec![echo_time, echoes, starting_intensity, decay],
+            VideoEffect::GarbageMatte(matte) => matte.points.$iter().flatten().collect(),
         }
     };
 }

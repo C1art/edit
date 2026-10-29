@@ -48,7 +48,8 @@ fn path_distance(uv: vec2<f32>, mask: u32, count: u32, picture: vec2<f32>) -> f3
 }
 
 // How much of the picture at `uv` the masks keep. Masks add: each covers what the
-// others leave by its own opacity.
+// others leave by its own opacity. Intersecting masks then cut away what lies outside
+// them.
 fn mask_coverage(uv: vec2<f32>) -> f32 {
     let count = u32(placement.mask_space.z);
     if count == 0u {
@@ -56,6 +57,8 @@ fn mask_coverage(uv: vec2<f32>) -> f32 {
     }
     let picture = placement.mask_space.xy;
     var uncovered = 1.0;
+    var adding = false;
+    var kept = 1.0;
     for (var i = 0u; i < count; i++) {
         let shape = placement.masks[i * 3u];
         let edge = placement.masks[i * 3u + 1u];
@@ -80,7 +83,12 @@ fn mask_coverage(uv: vec2<f32>) -> f32 {
         if kind.y > 0.5 {
             inside = 1.0 - inside;
         }
-        uncovered *= 1.0 - inside * edge.w;
+        if kind.w > 0.5 {
+            kept *= 1.0 - (1.0 - inside) * edge.w;
+        } else {
+            uncovered *= 1.0 - inside * edge.w;
+            adding = true;
+        }
     }
-    return 1.0 - uncovered;
+    return select(1.0, 1.0 - uncovered, adding) * kept;
 }

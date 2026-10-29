@@ -282,6 +282,7 @@ mod tests {
             expansion: 0.0,
             opacity: 1.0,
             inverted: true,
+            intersect: false,
             outline: Outline::NONE,
         };
         let look = LayerLook {

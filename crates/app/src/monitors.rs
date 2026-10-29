@@ -264,6 +264,7 @@ fn program_overlays(
         if !crate::graphics_tools::overlay(editor, ui, picture) {
             crate::effects::motion_overlay(editor, ui, picture);
             crate::effects::mask_overlay(editor, ui, picture);
+            crate::effects::matte_overlay(editor, ui, picture);
         }
     }
 }

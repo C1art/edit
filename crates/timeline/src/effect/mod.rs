@@ -5,12 +5,14 @@ use crate::{Param, Stabilizer};
 mod catalog;
 mod detail;
 mod echo;
+mod garbage;
 mod key;
 mod options;
 mod params;
 
 pub use detail::{EdgeFeather, Median, NoiseHls, UnsharpMask};
 pub use echo::{ChannelBlur, Echo, EchoOperator};
+pub use garbage::GarbageMatte;
 pub use key::{KeyOutput, MatteChannel, ULTRA_KEY_REACH};
 pub use options::{
     ClipNameSource, ColorChange, ColorMatch, EffectCategory, LensType, MagnifyShape,
@@ -467,4 +469,5 @@ pub enum VideoEffect {
         percent: Param,
     },
     Echo(Echo),
+    GarbageMatte(GarbageMatte),
 }

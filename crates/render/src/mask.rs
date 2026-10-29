@@ -47,6 +47,9 @@ pub struct LayerMask {
     pub expansion: f32,
     pub opacity: f32,
     pub inverted: bool,
+    /// Cuts away what the other masks keep outside it, as a garbage matte does,
+    /// instead of adding to it.
+    pub intersect: bool,
     /// A path mask's shape, in place of the center, size and rotation.
     pub outline: Outline,
 }
@@ -74,7 +77,7 @@ pub(crate) fn uniform(masks: &[Option<LayerMask>; MAX_MASKS], picture: [f32; 2])
             code(mask.shape),
             flag(mask.inverted),
             mask.outline.len as f32,
-            0.0,
+            flag(mask.intersect),
         ]
     });
     let outlines = (0..MAX_MASKS).flat_map(|slot| {

@@ -97,6 +97,12 @@ impl Rows {
                 });
                 self.choice(ui, "Mask Only", |ui| ui.checkbox(mask_only, "").changed());
             }
+            VideoEffect::GarbageMatte(matte) => {
+                for (number, [x, y]) in (1..).zip(&mut matte.points) {
+                    self.param(ui, &format!("Point {number} X"), x, -100.0..=200.0, "%");
+                    self.param(ui, &format!("Point {number} Y"), y, -100.0..=200.0, "%");
+                }
+            }
             _ => {}
         }
     }

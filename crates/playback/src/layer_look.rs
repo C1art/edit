@@ -3,7 +3,8 @@ use render::{
     PixelEffects, SecondaryAdjust, Warp, MAX_MASKS, MAX_OUTLINE_POINTS,
 };
 use timeline::{
-    ColorCorrection, HslSecondary, Look, Mask, MaskShape, MediaItem, Param, Reveal, Ticks, Timebase,
+    ColorCorrection, HslSecondary, Look, Mask, MaskShape, MediaItem, Param, Reveal, Ticks,
+    Timebase, VideoEffect,
 };
 
 use crate::pixel_effects::{linear, pixel_effects, transform_opacity};
@@ -50,7 +51,7 @@ pub(crate) fn layer_look(
         rotation_degrees: value(&look.motion.rotation),
         crop: [&crop.left, &crop.top, &crop.right, &crop.bottom].map(percent),
         opacity: percent(&look.opacity) * transform_opacity(&look.effects, time) * reveal.fade,
-        opacity_masks: opacity_masks(&look.masks, time),
+        opacity_masks: opacity_masks(&look.masks, &look.effects, time),
         blur: look
             .blurriness_at(time)
             .map(|blurriness| blurriness / BLURRINESS_PER_SIGMA),
@@ -180,27 +181,48 @@ fn secondary_adjust(secondary: &HslSecondary, time: Ticks) -> Option<SecondaryAd
     })
 }
 
-/// The first [`MAX_MASKS`] masks; the effect controls offer no more. A path still being
-/// drawn masks nothing yet.
-fn opacity_masks(masks: &[Mask], time: Ticks) -> [Option<LayerMask>; MAX_MASKS] {
+/// The garbage mattes, then the masks, as many as fit; the effect controls offer no
+/// more masks. A path still being drawn masks nothing yet.
+fn opacity_masks(
+    masks: &[Mask],
+    effects: &[VideoEffect],
+    time: Ticks,
+) -> [Option<LayerMask>; MAX_MASKS] {
     let fraction = |param: &Param| param.value_at(time) / 100.0;
-    let mut layer_masks = [None; MAX_MASKS];
+    let mattes = effects.iter().filter_map(|effect| match effect {
+        VideoEffect::GarbageMatte(matte) => Some(LayerMask {
+            shape: MaskShape::Path,
+            center: [0.5; 2],
+            size: [1.0; 2],
+            rotation_degrees: 0.0,
+            feather: 0.0,
+            expansion: 0.0,
+            opacity: 1.0,
+            inverted: false,
+            intersect: true,
+            outline: Outline::new(&matte.outline_at(time)),
+        }),
+        _ => None,
+    });
     let shaped = masks.iter().filter_map(|mask| {
         let outline = Outline::new(&mask.outline_at(time, MAX_OUTLINE_POINTS));
         (mask.shape != MaskShape::Path || !outline.is_empty()).then_some((mask, outline))
     });
-    for (slot, (mask, outline)) in layer_masks.iter_mut().zip(shaped) {
-        *slot = Some(LayerMask {
-            shape: mask.shape,
-            center: mask.center.each_ref().map(fraction),
-            size: mask.size.each_ref().map(fraction),
-            rotation_degrees: mask.rotation.value_at(time),
-            feather: mask.feather.value_at(time),
-            expansion: mask.expansion.value_at(time),
-            opacity: fraction(&mask.opacity),
-            inverted: mask.inverted,
-            outline,
-        });
+    let mut layer_masks = [None; MAX_MASKS];
+    let masks = shaped.map(|(mask, outline)| LayerMask {
+        shape: mask.shape,
+        center: mask.center.each_ref().map(fraction),
+        size: mask.size.each_ref().map(fraction),
+        rotation_degrees: mask.rotation.value_at(time),
+        feather: mask.feather.value_at(time),
+        expansion: mask.expansion.value_at(time),
+        opacity: fraction(&mask.opacity),
+        inverted: mask.inverted,
+        intersect: false,
+        outline,
+    });
+    for (slot, mask) in layer_masks.iter_mut().zip(mattes.chain(masks)) {
+        *slot = Some(mask);
     }
     layer_masks
 }

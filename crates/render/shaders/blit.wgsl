@@ -47,7 +47,8 @@ struct Placement {
     mask_space: vec4<f32>,
     // Three for each mask: center and size as fractions of the picture; rotation in
     // radians, feather and expansion in pixels, opacity; then its shape (0 ellipse,
-    // 1 rectangle, 2 path), 1 when inverted and a path's point count.
+    // 1 rectangle, 2 path), 1 when inverted, a path's point count and 1 when it
+    // intersects.
     masks: array<vec4<f32>, 12>,
     // Each mask's path outline as fractions of the picture, two points to a vec4.
     outlines: array<vec4<f32>, 128>,

@@ -290,7 +290,8 @@ impl Rows {
             | VideoEffect::TrackMatteKey { .. }
             | VideoEffect::ColorKey { .. }
             | VideoEffect::LumaKey { .. }
-            | VideoEffect::AlphaAdjust { .. } => self.keying(ui, effect, video_tracks),
+            | VideoEffect::AlphaAdjust { .. }
+            | VideoEffect::GarbageMatte(_) => self.keying(ui, effect, video_tracks),
             VideoEffect::Checkerboard { .. }
             | VideoEffect::Grid { .. }
             | VideoEffect::Circle { .. }
