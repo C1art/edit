@@ -41,6 +41,7 @@ macro_rules! effect_params {
             | VideoEffect::VerticalFlip
             | VideoEffect::BlackAndWhite
             | VideoEffect::TrackMatteKey { .. }
+            | VideoEffect::SetMatte { .. }
             | VideoEffect::WarpStabilizer(_) => Vec::new(),
             VideoEffect::Tint { amount, .. }
             | VideoEffect::Invert { amount }

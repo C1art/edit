@@ -24,7 +24,7 @@ fn encode(linear: f32) -> f32 {
 
 #[test]
 #[ignore = "needs a GPU"]
-fn track_mattes_keep_the_fill_by_alpha_or_luma_over_black() {
+fn track_mattes_keep_the_fill_by_the_chosen_channel_of_the_matte() {
     let mut compositor = compositor();
     let fill = solid([200, 100, 50]);
     // Opaque, so its alpha keeps all of the fill, and dark grey, so its luma a little.
@@ -35,6 +35,10 @@ fn track_mattes_keep_the_fill_by_alpha_or_luma_over_black() {
         (MatteChannel::Alpha, true, 0.0),
         (MatteChannel::Luma, false, luma),
         (MatteChannel::Luma, true, 1.0 - luma),
+        // Grey has no saturation, and every channel and the lightness equal its level.
+        (MatteChannel::Red, false, luma),
+        (MatteChannel::Saturation, false, 0.0),
+        (MatteChannel::Lightness, true, 1.0 - luma),
     ];
     for (channel, reverse, kept) in cases {
         let matted = LayerImage {

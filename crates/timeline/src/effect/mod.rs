@@ -87,6 +87,13 @@ pub enum VideoEffect {
         channel: MatteChannel,
         reverse: bool,
     },
+    /// Track Matte Key with any channel of the matte track for the matte, as Premiere's
+    /// Set Matte takes one from another layer.
+    SetMatte {
+        matte: Option<usize>,
+        channel: MatteChannel,
+        reverse: bool,
+    },
     /// Both -100 to 100, on the encoded picture as a display shows it.
     BrightnessContrast {
         brightness: Param,

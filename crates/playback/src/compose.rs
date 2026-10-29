@@ -204,7 +204,8 @@ fn clip_picture(
     }
 }
 
-/// The track matte a clip's effects ask for; the last Track Matte Key with one wins.
+/// The track matte a clip's effects ask for; the last Track Matte Key or Set Matte with
+/// one wins.
 #[derive(Debug, Clone, Copy)]
 struct TrackMatte {
     track: usize,
@@ -215,6 +216,11 @@ struct TrackMatte {
 fn track_matte(effects: &[VideoEffect]) -> Option<TrackMatte> {
     effects.iter().rev().find_map(|effect| match *effect {
         VideoEffect::TrackMatteKey {
+            matte: Some(track),
+            channel,
+            reverse,
+        }
+        | VideoEffect::SetMatte {
             matte: Some(track),
             channel,
             reverse,

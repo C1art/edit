@@ -13,6 +13,7 @@ impl VideoEffect {
             Self::Vignette { .. } => "Vignette",
             Self::UltraKey { .. } => "Ultra Key",
             Self::TrackMatteKey { .. } => "Track Matte Key",
+            Self::SetMatte { .. } => "Set Matte",
             Self::BrightnessContrast { .. } => "Brightness & Contrast",
             Self::GammaCorrection { .. } => "Gamma Correction",
             Self::Posterize { .. } => "Posterize",

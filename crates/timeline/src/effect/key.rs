@@ -40,15 +40,36 @@ pub enum MatteChannel {
     Alpha,
     /// The brightness of the matte over black.
     Luma,
+    Red,
+    Green,
+    Blue,
+    Saturation,
+    /// The average of the brightest and darkest channel.
+    Lightness,
 }
 
 impl MatteChannel {
-    pub const ALL: [Self; 2] = [Self::Alpha, Self::Luma];
+    pub const ALL: [Self; 7] = [
+        Self::Alpha,
+        Self::Luma,
+        Self::Red,
+        Self::Green,
+        Self::Blue,
+        Self::Saturation,
+        Self::Lightness,
+    ];
+    /// The two Track Matte Key offers; Set Matte offers them all.
+    pub const TRACK_MATTE: [Self; 2] = [Self::Alpha, Self::Luma];
 
     pub fn name(self) -> &'static str {
         match self {
             Self::Alpha => "Matte Alpha",
             Self::Luma => "Matte Luma",
+            Self::Red => "Red Channel",
+            Self::Green => "Green Channel",
+            Self::Blue => "Blue Channel",
+            Self::Saturation => "Saturation",
+            Self::Lightness => "Lightness",
         }
     }
 }

@@ -9,7 +9,7 @@ use crate::{AutoReframe, Param, Stabilizer};
 
 impl VideoEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 80] {
+    pub fn catalog() -> [Self; 81] {
         [
             Self::GaussianBlur {
                 blurriness: Param::from_value(10.0),
@@ -45,6 +45,11 @@ impl VideoEffect {
                 spill: Param::from_value(50.0),
             },
             Self::TrackMatteKey {
+                matte: None,
+                channel: MatteChannel::Alpha,
+                reverse: false,
+            },
+            Self::SetMatte {
                 matte: None,
                 channel: MatteChannel::Alpha,
                 reverse: false,
@@ -376,6 +381,7 @@ impl VideoEffect {
             }
             Self::UltraKey { .. }
             | Self::TrackMatteKey { .. }
+            | Self::SetMatte { .. }
             | Self::ColorKey { .. }
             | Self::LumaKey { .. }
             | Self::AlphaAdjust { .. }

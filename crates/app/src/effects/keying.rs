@@ -10,6 +10,7 @@ impl Rows {
         effect: &mut VideoEffect,
         video_tracks: usize,
     ) {
+        let set_matte = matches!(effect, VideoEffect::SetMatte { .. });
         match effect {
             VideoEffect::UltraKey {
                 color,
@@ -43,7 +44,16 @@ impl Rows {
                 matte,
                 channel,
                 reverse,
+            }
+            | VideoEffect::SetMatte {
+                matte,
+                channel,
+                reverse,
             } => {
+                let (channels, reverse_label) = match set_matte {
+                    true => (MatteChannel::ALL.as_slice(), "Invert Matte"),
+                    false => (MatteChannel::TRACK_MATTE.as_slice(), "Reverse"),
+                };
                 self.choice(ui, "Matte", |ui| {
                     let name = |track: Option<usize>| {
                         track.map_or("None".to_owned(), |index| format!("Video {}", index + 1))
@@ -64,10 +74,10 @@ impl Rows {
                     "Composite Using",
                     "matte_channel",
                     channel,
-                    MatteChannel::ALL,
+                    channels.iter().copied(),
                     MatteChannel::name,
                 );
-                self.choice(ui, "Reverse", |ui| ui.checkbox(reverse, "").changed());
+                self.choice(ui, reverse_label, |ui| ui.checkbox(reverse, "").changed());
             }
             VideoEffect::ColorKey {
                 color,

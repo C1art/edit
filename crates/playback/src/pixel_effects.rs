@@ -31,7 +31,8 @@ pub(crate) fn pixel_effects(
             | VideoEffect::Echo(_)
             | VideoEffect::GarbageMatte(_)
             | VideoEffect::AutoReframe(_)
-            | VideoEffect::TrackMatteKey { .. } => {}
+            | VideoEffect::TrackMatteKey { .. }
+            | VideoEffect::SetMatte { .. } => {}
             VideoEffect::BrightnessContrast {
                 brightness,
                 contrast,

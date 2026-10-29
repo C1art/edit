@@ -291,6 +291,7 @@ impl Rows {
             VideoEffect::AutoReframe(reframe) => self.auto_reframe(ui, reframe),
             VideoEffect::UltraKey { .. }
             | VideoEffect::TrackMatteKey { .. }
+            | VideoEffect::SetMatte { .. }
             | VideoEffect::ColorKey { .. }
             | VideoEffect::LumaKey { .. }
             | VideoEffect::AlphaAdjust { .. }
