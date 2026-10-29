@@ -145,10 +145,14 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             }
             let paste_attributes = Button::new("Paste Attributes…")
                 .shortcut_text(editor.keymap.label(Command::PasteAttributes));
-            if ui.add_enabled(can_paste, paste_attributes).clicked() {
+            if ui
+                .add_enabled(can_paste && selected, paste_attributes)
+                .clicked()
+            {
                 editor.paste_attributes();
             }
-            if ui.button("Remove Attributes…").clicked() {
+            let remove_attributes = Button::new("Remove Attributes…");
+            if ui.add_enabled(selected, remove_attributes).clicked() {
                 editor.remove_attributes();
             }
             ui.separator();
