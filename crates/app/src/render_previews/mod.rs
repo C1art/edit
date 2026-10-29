@@ -146,18 +146,23 @@ impl Editor {
             self.notice("Render previews are unavailable");
             return;
         };
-        let queue: VecDeque<Range<Ticks>> = previews
+        let in_range: Vec<_> = previews
             .segments
             .iter()
-            .filter(|(segment, fingerprint)| {
-                segment.start < range.end
-                    && range.start < segment.end
-                    && !previews.rendered.contains(fingerprint)
-            })
+            .filter(|(segment, _)| segment.start < range.end && range.start < segment.end)
+            .collect();
+        let queue: VecDeque<Range<Ticks>> = in_range
+            .iter()
+            .filter(|(_, fingerprint)| !previews.rendered.contains(fingerprint))
             .map(|(segment, _)| segment.clone())
             .collect();
+        let any_costly = !in_range.is_empty();
         if queue.is_empty() {
-            self.notice("Nothing to render: every costly segment in range has a preview");
+            self.notice(if !any_costly {
+                "Nothing to render: this part of the sequence already plays in real time"
+            } else {
+                "Nothing to render: its previews are up to date"
+            });
             return;
         }
         previews.job = Some(RenderJob {
