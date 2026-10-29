@@ -130,7 +130,7 @@ fn transition_row(
     (chosen != current).then_some(chosen)
 }
 
-/// Reverse, border width and border color, which only wipes have.
+/// Reverse, border width and color, and softness, which only wipes have.
 fn wipe_row(ui: &mut egui::Ui, label: &str, transition: &mut Transition) {
     ui.horizontal(|ui| {
         ui.add_space(38.0);
@@ -160,6 +160,12 @@ fn wipe_row(ui: &mut egui::Ui, label: &str, transition: &mut Transition) {
         if picked.changed() {
             let [r, g, b] = color;
             border.color = Rgb::new(r, g, b);
+        }
+        ui.label("Softness");
+        let mut softness = (transition.softness() * 100.0).round() as u8;
+        let soften = DragValue::new(&mut softness).range(0..=100).suffix("%");
+        if ui.add(soften).changed() {
+            transition.softness = Some(softness);
         }
     });
 }
