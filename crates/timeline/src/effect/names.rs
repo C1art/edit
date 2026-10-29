@@ -82,6 +82,9 @@ impl VideoEffect {
             Self::VideoLimiter(_) => "Video Limiter",
             Self::AscCdl(_) => "ASC CDL",
             Self::ColorReplace(_) => "Color Replace",
+            Self::ChangeColor(_) => "Change Color",
+            Self::ColorBalance(_) => "Color Balance",
+            Self::SimpleText(_) => "Simple Text",
         }
     }
 }

@@ -11,6 +11,7 @@ use crate::clip_wipes::set_clip_wipe;
 use crate::detail_effects::set_detail_effect;
 use crate::edge_effects::set_edge_effect;
 use crate::optics_effects::set_optics_effect;
+use crate::shift_effects::set_shift_effect;
 use crate::tone_effects::set_tone_effect;
 
 /// The per-pixel part of an effect stack at source time `time`. The shader runs each
@@ -280,7 +281,8 @@ pub(crate) fn pixel_effects(
             }
             VideoEffect::PosterizeTime { .. }
             | VideoEffect::Timecode { .. }
-            | VideoEffect::ClipName { .. } => {}
+            | VideoEffect::ClipName { .. }
+            | VideoEffect::SimpleText(_) => {}
             VideoEffect::HorizontalFlip => pixel.flip[0] = !pixel.flip[0],
             VideoEffect::VerticalFlip => pixel.flip[1] = !pixel.flip[1],
             VideoEffect::BlackAndWhite => {
@@ -454,6 +456,9 @@ pub(crate) fn pixel_effects(
             | VideoEffect::VideoLimiter(_)
             | VideoEffect::AscCdl(_)
             | VideoEffect::ColorReplace(_) => set_tone_effect(&mut pixel.tone, effect, time),
+            VideoEffect::ChangeColor(_) | VideoEffect::ColorBalance(_) => {
+                set_shift_effect(&mut pixel.shift, effect, time)
+            }
         }
     }
     pixel

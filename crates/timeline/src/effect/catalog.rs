@@ -9,7 +9,7 @@ use crate::{AutoReframe, Param, Stabilizer};
 
 impl VideoEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 81] {
+    pub fn catalog() -> [Self; 84] {
         [
             Self::GaussianBlur {
                 blurriness: Param::from_value(10.0),
@@ -336,6 +336,9 @@ impl VideoEffect {
             Self::VideoLimiter(VideoLimiter::default()),
             Self::AscCdl(AscCdl::default()),
             Self::ColorReplace(ColorReplace::default()),
+            Self::ChangeColor(Default::default()),
+            Self::ColorBalance(Default::default()),
+            Self::SimpleText(Default::default()),
         ]
     }
 
@@ -400,7 +403,9 @@ impl VideoEffect {
             | Self::AlphaGlow(_)
             | Self::ColorEmboss { .. } => EffectCategory::Stylize,
             Self::PosterizeTime { .. } | Self::Echo(_) => EffectCategory::Time,
-            Self::Timecode { .. } | Self::ClipName { .. } => EffectCategory::Video,
+            Self::Timecode { .. } | Self::ClipName { .. } | Self::SimpleText(_) => {
+                EffectCategory::Video
+            }
             Self::HorizontalFlip
             | Self::VerticalFlip
             | Self::EdgeFeather(_)
@@ -410,7 +415,10 @@ impl VideoEffect {
             | Self::ConvolutionKernel(_)
             | Self::Extract(_)
             | Self::ShadowHighlight(_) => EffectCategory::Adjust,
-            Self::VideoLimiter(_) | Self::AscCdl(_) => EffectCategory::ColorCorrection,
+            Self::VideoLimiter(_)
+            | Self::AscCdl(_)
+            | Self::ChangeColor(_)
+            | Self::ColorBalance(_) => EffectCategory::ColorCorrection,
             Self::ColorReplace(_) => EffectCategory::ImageControl,
             Self::LinearWipe { .. }
             | Self::RadialWipe { .. }

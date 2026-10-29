@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use media::VideoFrame;
 use timeline::{
-    Clip, ClipNameSource, FrameRate, MediaItem, Sequence, Ticks, Timebase, Timecode,
-    TimecodeSource, VideoEffect,
+    Clip, ClipNameSource, FrameRate, MediaItem, Param, Sequence, SimpleText, Ticks, Timebase,
+    Timecode, TimecodeSource, VideoEffect,
 };
 
-use crate::generated::timecode_box;
+use crate::generated::{text_box, timecode_box};
 
 /// The source time a clip's picture is taken from, held on the frame grid of its last
 /// Posterize Time, if it has one.
@@ -23,8 +23,8 @@ pub(crate) fn posterized(effects: &[VideoEffect], time: Ticks, timebase: Timebas
     Ticks(time.0.div_euclid(step) * step)
 }
 
-/// `frame` with the text of the clip's Timecode and Clip Name effects burnt in, in
-/// list order.
+/// `frame` with the text of the clip's Timecode, Clip Name and Simple Text effects burnt
+/// in, in list order.
 pub(crate) fn with_burn_ins(
     frame: Arc<VideoFrame>,
     sequence: &Sequence,
@@ -56,7 +56,7 @@ pub(crate) fn with_burn_ins(
                         sequence.format.frame_rate,
                     ),
                 };
-                Some((text, position, size, opacity))
+                Some((text, position, size, opacity, None))
             }
             VideoEffect::ClipName {
                 position,
@@ -75,8 +75,15 @@ pub(crate) fn with_burn_ins(
                         .map(|name| name.to_string_lossy().into_owned())
                         .unwrap_or_default(),
                 };
-                Some((text, position, size, opacity))
+                Some((text, position, size, opacity, None))
             }
+            VideoEffect::SimpleText(SimpleText {
+                text,
+                position,
+                alignment,
+                size,
+                opacity,
+            }) => Some((text.clone(), position, size, opacity, Some(*alignment))),
             _ => None,
         })
         .collect();
@@ -84,10 +91,15 @@ pub(crate) fn with_burn_ins(
         return frame;
     }
     let mut stamped = (*frame).clone();
-    for (text, position, size, opacity) in burn_ins {
-        let percent = |param: &timeline::Param| param.value_at(time) / 100.0;
+    for (text, position, size, opacity, align) in burn_ins {
+        let percent = |param: &Param| param.value_at(time) / 100.0;
         let height = (percent(size) * frame.height as f32).round().max(4.0) as u32;
-        let label = timecode_box(&text, height, percent(opacity).clamp(0.0, 1.0));
+        let opacity = percent(opacity).clamp(0.0, 1.0);
+        // Timecode and names keep the monospace box; typed text sets in the sans.
+        let label = match align {
+            Some(align) => text_box(&text, height, opacity, align),
+            None => timecode_box(&text, height, opacity),
+        };
         let center = [
             percent(&position[0]) * frame.width as f32,
             percent(&position[1]) * frame.height as f32,
@@ -139,7 +151,6 @@ fn blend_over(below: &mut VideoFrame, top: &VideoFrame, left: i64, top_edge: i64
 #[cfg(test)]
 mod tests {
     use super::*;
-    use timeline::Param;
 
     #[test]
     fn posterize_time_holds_each_picture_for_its_frame() {

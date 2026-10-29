@@ -1,7 +1,7 @@
 use super::{
-    AlphaGlow, AscCdl, Bevel, ChannelBlur, Checkerboard, Circle, ColorReplace, ConvolutionKernel,
-    Echo, EdgeFeather, Extract, FourColorGradient, Grid, Median, NoiseHls, RoughenEdges,
-    ShadowHighlight, UnsharpMask, VideoEffect, VideoLimiter,
+    AlphaGlow, AscCdl, Bevel, ChangeColor, ChannelBlur, Checkerboard, Circle, ColorBalance,
+    ColorReplace, ConvolutionKernel, Echo, EdgeFeather, Extract, FourColorGradient, Grid, Median,
+    NoiseHls, RoughenEdges, ShadowHighlight, SimpleText, UnsharpMask, VideoEffect, VideoLimiter,
 };
 use crate::{AutoReframe, Param};
 
@@ -117,7 +117,13 @@ macro_rules! effect_params {
                 size,
                 opacity,
                 ..
-            } => vec![x, y, size, opacity],
+            }
+            | VideoEffect::SimpleText(SimpleText {
+                position: [x, y],
+                size,
+                opacity,
+                ..
+            }) => vec![x, y, size, opacity],
             VideoEffect::Transform {
                 anchor: [anchor_x, anchor_y],
                 position: [x, y],
@@ -383,6 +389,30 @@ macro_rules! effect_params {
                 .chain([saturation])
                 .collect(),
             VideoEffect::ColorReplace(ColorReplace { similarity, .. }) => vec![similarity],
+            VideoEffect::ChangeColor(ChangeColor {
+                hue_transform,
+                lightness_transform,
+                saturation_transform,
+                matching_tolerance,
+                matching_softness,
+                ..
+            }) => vec![
+                hue_transform,
+                lightness_transform,
+                saturation_transform,
+                matching_tolerance,
+                matching_softness,
+            ],
+            VideoEffect::ColorBalance(ColorBalance {
+                shadows,
+                midtones,
+                highlights,
+                preserve_luminosity: _,
+            }) => shadows
+                .$iter()
+                .chain(midtones.$iter())
+                .chain(highlights.$iter())
+                .collect(),
         }
     };
 }

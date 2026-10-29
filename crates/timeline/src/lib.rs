@@ -95,12 +95,12 @@ pub use edit::{
 };
 pub use edl::to_edl;
 pub use effect::{
-    AlphaGlow, AscCdl, Bevel, ChannelBlur, Checkerboard, Circle, ClipNameSource, ColorChange,
-    ColorMatch, ColorReplace, ConvolutionKernel, Echo, EchoOperator, EdgeFeather, EffectCategory,
-    Extract, FourColorGradient, GarbageMatte, Grid, KeyOutput, LensType, LimiterMethod,
-    MagnifyShape, MatteChannel, Median, NoiseHls, RadialWipeDirection, RampShape, Rgb,
-    RoughenEdgeType, RoughenEdges, ShadowHighlight, TimecodeSource, UnsharpMask, VideoEffect,
-    VideoLimiter, ULTRA_KEY_REACH,
+    AlphaGlow, AscCdl, Bevel, ChangeColor, ChangeColorView, ChannelBlur, Checkerboard, Circle,
+    ClipNameSource, ColorBalance, ColorChange, ColorMatch, ColorReplace, ConvolutionKernel, Echo,
+    EchoOperator, EdgeFeather, EffectCategory, Extract, FourColorGradient, GarbageMatte, Grid,
+    KeyOutput, LensType, LimiterMethod, MagnifyShape, MatchColors, MatteChannel, Median, NoiseHls,
+    RadialWipeDirection, RampShape, Rgb, RoughenEdgeType, RoughenEdges, ShadowHighlight,
+    SimpleText, TimecodeSource, UnsharpMask, VideoEffect, VideoLimiter, ULTRA_KEY_REACH,
 };
 pub use error::TimelineError;
 pub use find::{next_found, FindOperator, FindQuery, Found};

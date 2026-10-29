@@ -321,6 +321,8 @@ impl Rows {
             | VideoEffect::VideoLimiter(_)
             | VideoEffect::AscCdl(_)
             | VideoEffect::ColorReplace(_) => self.tone(ui, effect),
+            VideoEffect::ChangeColor(_) | VideoEffect::ColorBalance(_) => self.shift(ui, effect),
+            VideoEffect::SimpleText(_) => self.simple_text(ui, effect),
             VideoEffect::ChannelBlur(_) | VideoEffect::CameraBlur { .. } | VideoEffect::Echo(_) => {
                 self.blur_echo(ui, effect)
             }

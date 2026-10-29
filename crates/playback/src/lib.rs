@@ -32,6 +32,7 @@ mod player;
 mod previews;
 mod resolution;
 mod sequence_mix;
+mod shift_effects;
 mod shuttle;
 mod still;
 mod stretch;

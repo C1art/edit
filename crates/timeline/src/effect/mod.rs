@@ -12,6 +12,8 @@ mod key;
 mod names;
 mod options;
 mod params;
+mod shift;
+mod text;
 mod tone;
 
 pub use detail::{EdgeFeather, Median, NoiseHls, UnsharpMask};
@@ -24,6 +26,8 @@ pub use options::{
     ClipNameSource, ColorChange, ColorMatch, EffectCategory, LensType, MagnifyShape,
     RadialWipeDirection, RampShape, Rgb, TimecodeSource,
 };
+pub use shift::{ChangeColor, ChangeColorView, ColorBalance, MatchColors};
+pub use text::SimpleText;
 pub use tone::{
     AscCdl, ColorReplace, ConvolutionKernel, Extract, LimiterMethod, ShadowHighlight, VideoLimiter,
 };
@@ -464,4 +468,7 @@ pub enum VideoEffect {
     VideoLimiter(VideoLimiter),
     AscCdl(AscCdl),
     ColorReplace(ColorReplace),
+    ChangeColor(ChangeColor),
+    ColorBalance(ColorBalance),
+    SimpleText(SimpleText),
 }

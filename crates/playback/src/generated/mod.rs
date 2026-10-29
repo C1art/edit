@@ -22,7 +22,6 @@ use shape::shape_coverage;
 /// Faux bold thickens the strokes of the built-in light face by this fraction of the size
 /// each way.
 const BOLD_GROWTH: f32 = 1.0 / 40.0;
-/// Premiere's red, so a missing file can't pass for a dark shot.
 /// The width of a monospace character in the built-in face, in sizes, with room to
 /// spare so the line never wraps.
 const TIMECODE_ADVANCE: f32 = 0.7;
@@ -117,20 +116,48 @@ pub(crate) fn offline_frame(width: u32, height: u32) -> Arc<VideoFrame> {
 /// Timecode effect draws it.
 pub(crate) fn timecode_box(text: &str, size: u32, opacity: f32) -> VideoFrame {
     let characters = text.chars().count() as f32;
+    // Measured by character count rather than ink, so the box holds still as digits change.
     let width = (size as f32 * (TIMECODE_ADVANCE * characters + 1.0)).ceil() as u32;
     let height = (size as f32 * 1.5).ceil() as u32;
-    let title = Title {
+    boxed_text(
+        &box_title(text, size, TitleFont::Mono, TextAlign::Center),
+        (width, height),
+        opacity,
+    )
+}
+
+/// `text` in white sans on a black box of `opacity` that fits it, lines aligned by
+/// `align`.
+pub(crate) fn text_box(text: &str, size: u32, opacity: f32, align: TextAlign) -> VideoFrame {
+    let title = box_title(text, size, TitleFont::Sans, align);
+    let characters = text
+        .lines()
+        .map(|line| line.chars().count())
+        .max()
+        .unwrap_or(0) as f32;
+    let room = (size as f32 * (TIMECODE_ADVANCE * characters + 1.0)).ceil() as u32;
+    let extent = Coverage::title_extent(&title, room).unwrap_or_default();
+    let width = (extent.x + size as f32).ceil() as u32;
+    let height = (extent.y + size as f32 * 0.5).ceil() as u32;
+    boxed_text(&title, (width, height), opacity)
+}
+
+fn box_title(text: &str, size: u32, font: TitleFont, align: TextAlign) -> Title {
+    Title {
         text: text.to_owned(),
         size,
         color: Rgb::WHITE,
-        align: TextAlign::Center,
-        font: TitleFont::Mono,
+        align,
+        font,
         shadow: false,
         ..Title::default()
-    };
+    }
+}
+
+fn boxed_text(title: &Title, (width, height): (u32, u32), opacity: f32) -> VideoFrame {
     let mut canvas = Canvas::new(width, height);
     canvas.pixels.fill([0.0, 0.0, 0.0, opacity]);
-    draw_title(&mut canvas, &title, Anchor::Center);
+    draw_title(&mut canvas, title, Anchor::Center);
     VideoFrame {
         pts: Ticks::ZERO,
         width,

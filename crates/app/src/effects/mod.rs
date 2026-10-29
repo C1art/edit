@@ -20,6 +20,8 @@ mod picture_frame;
 mod reframe;
 mod remap;
 mod secondary;
+mod shift;
+mod simple_text;
 mod sound;
 mod sound_more;
 mod stabilizer;

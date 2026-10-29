@@ -8,6 +8,7 @@ use crate::generate::Generate;
 use crate::optics::Optics;
 use crate::recolor::Recolor;
 use crate::reshape::Reshape;
+use crate::shift::ColorShift;
 use crate::style::PictureStyle;
 use crate::tone::Tone;
 
@@ -36,6 +37,7 @@ pub struct PixelEffects {
     pub detail: Detail,
     pub edges: Edges,
     pub tone: Tone,
+    pub shift: ColorShift,
     /// How the source's alpha channel is read.
     pub alpha: AlphaInterpretation,
 }
@@ -109,6 +111,7 @@ impl PixelEffects {
         detail: Detail::NONE,
         edges: Edges::NONE,
         tone: Tone::NONE,
+        shift: ColorShift::NONE,
         alpha: AlphaInterpretation::Straight,
     };
 
