@@ -4,6 +4,7 @@ use timeline::{
 };
 
 use crate::editor::Editor;
+use crate::icons::{self, Icon, Look};
 use crate::keymap::{Command, Keymap};
 use crate::placing;
 use crate::project_files::{AfterDiscard, Interchange, PathPurpose};
@@ -233,6 +234,8 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
     });
 }
 
+const TOOL: egui::Vec2 = egui::vec2(26.0, 22.0);
+
 /// One button for a group of tools, showing the one last picked from it, with an arrow
 /// that lists the whole group.
 fn tool_group(ui: &mut egui::Ui, current: &mut Tool, group: &'static [Tool], keymap: &Keymap) {
@@ -246,11 +249,8 @@ fn tool_group(ui: &mut egui::Ui, current: &mut Tool, group: &'static [Tool], key
     } else {
         ui.data(|data| data.get_temp(id)).unwrap_or(first)
     };
-    if ui
-        .selectable_label(*current == shown, shown.label())
-        .on_hover_text(tool_tip(keymap, shown))
-        .clicked()
-    {
+    let button = icons::sized_toggle(ui, *current == shown, Icon::Tool(shown), Look::Filled, TOOL);
+    if button.on_hover_text(tool_tip(keymap, shown)).clicked() {
         *current = shown;
     }
     if group.len() < 2 {
@@ -275,11 +275,18 @@ fn tool_group(ui: &mut egui::Ui, current: &mut Tool, group: &'static [Tool], key
     ));
     egui::Popup::menu(&arrow).show(|ui| {
         for &tool in group {
-            if ui
-                .selectable_label(*current == tool, tool.label())
-                .on_hover_text(tool_tip(keymap, tool))
-                .clicked()
-            {
+            let row = ui.horizontal(|ui| {
+                let (glyph, _) =
+                    ui.allocate_exact_size(egui::vec2(14.0, 14.0), egui::Sense::hover());
+                icons::paint(
+                    ui.painter(),
+                    glyph,
+                    Icon::Tool(tool),
+                    ui.visuals().text_color(),
+                );
+                ui.selectable_label(*current == tool, tool.label())
+            });
+            if row.inner.on_hover_text(tool_tip(keymap, tool)).clicked() {
                 *current = tool;
                 ui.close();
             }
@@ -288,9 +295,10 @@ fn tool_group(ui: &mut egui::Ui, current: &mut Tool, group: &'static [Tool], key
 }
 
 fn tool_tip(keymap: &Keymap, tool: Tool) -> String {
+    let text = format!("{}: {}", tool.label(), tool.hint());
     match Command::for_tool(tool) {
-        Some(command) => keymap.tip(tool.hint(), command),
-        None => tool.hint().to_owned(),
+        Some(command) => keymap.tip(&text, command),
+        None => text,
     }
 }
 
@@ -304,32 +312,39 @@ pub fn timeline_toolbar(editor: &mut Editor, ui: &mut egui::Ui) {
             }
         });
         theme::segmented(ui, |ui| {
-            ui.toggle_value(&mut editor.view.snapping, "Snap")
+            let snapping = editor.view.snapping;
+            let snap = icons::sized_toggle(ui, snapping, Icon::Magnet, Look::Filled, TOOL)
                 .on_hover_text(editor.keymap.tip(
                     "Snap to clip edges and the playhead",
                     Command::ToggleSnapping,
                 ));
+            if snap.clicked() {
+                editor.view.snapping = !snapping;
+            }
             let linked = editor.timeline.sequence().linked_selection == LinkedSelection::Together;
-            if ui
-                .selectable_label(linked, "Linked")
-                .on_hover_text("Pick linked picture and sound together")
-                .clicked()
-            {
+            let link = icons::sized_toggle(ui, linked, Icon::Link, Look::Filled, TOOL)
+                .on_hover_text(editor.keymap.tip(
+                    "Linked Selection: pick linked picture and sound together",
+                    Command::ToggleLinkedSelection,
+                ));
+            if link.clicked() {
                 editor.toggle_linked_selection();
             }
         });
         theme::segmented(ui, |ui| {
-            if ui.button("−").on_hover_text("Zoom out (-)").clicked() {
+            let keymap = &editor.keymap;
+            let (zoom_out, fit, zoom_in) = (
+                keymap.tip("Zoom out", Command::ZoomOut),
+                keymap.tip("Zoom to the whole sequence", Command::ZoomToFit),
+                keymap.tip("Zoom in", Command::ZoomIn),
+            );
+            if ui.button("−").on_hover_text(zoom_out).clicked() {
                 editor.view.zoom(0.5, None);
             }
-            if ui
-                .button("Fit")
-                .on_hover_text("Zoom to sequence (\\)")
-                .clicked()
-            {
+            if ui.button("Fit").on_hover_text(fit).clicked() {
                 editor.view.zoom_to_fit(editor.timeline.sequence());
             }
-            if ui.button("+").on_hover_text("Zoom in (=)").clicked() {
+            if ui.button("+").on_hover_text(zoom_in).clicked() {
                 editor.view.zoom(2.0, None);
             }
         });

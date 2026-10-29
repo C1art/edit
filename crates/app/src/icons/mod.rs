@@ -1,6 +1,8 @@
 //! Small line icons painted as shapes, so they stay crisp at any scale and don't
 //! depend on which symbols the fonts happen to have.
 
+mod tools;
+
 use std::f32::consts::PI;
 
 use egui::{pos2, vec2, Color32, Painter, Pos2, Rect, Response, Sense, Shape, Stroke};
@@ -43,6 +45,8 @@ pub(crate) enum Icon {
     Tiles,
     Sort,
     NewBin,
+    Magnet,
+    Tool(crate::timeline_view::Tool),
 }
 
 const BUTTON: egui::Vec2 = vec2(22.0, 20.0);
@@ -387,6 +391,23 @@ pub(crate) fn paint(painter: &Painter, rect: Rect, icon: Icon, color: Color32) {
             painter.line_segment([at(0.5, 0.38), at(0.5, 0.78)], plus);
             painter.line_segment([at(0.3, 0.58), at(0.7, 0.58)], plus);
         }
+        Icon::Magnet => {
+            let arc: Vec<Pos2> = (0..=12)
+                .map(|step| {
+                    let angle = step as f32 / 12.0 * PI;
+                    at(0.5, 0.48) + rect.width() * 0.34 * vec2(angle.cos(), angle.sin())
+                })
+                .collect();
+            let mut horseshoe = vec![at(0.84, 0.04)];
+            horseshoe.extend(arc);
+            horseshoe.push(at(0.16, 0.04));
+            painter.add(Shape::line(horseshoe, Stroke::new(3.0, color)));
+            // Gaps across the arms mark off the poles.
+            let gap = Stroke::new(1.2, Color32::BLACK);
+            painter.line_segment([at(0.0, 0.26), at(0.32, 0.26)], gap);
+            painter.line_segment([at(0.68, 0.26), at(1.0, 0.26)], gap);
+        }
+        Icon::Tool(tool) => tools::paint(painter, rect, tool, color),
         Icon::Settings => {
             let center = rect.center();
             for tooth in 0..8 {
