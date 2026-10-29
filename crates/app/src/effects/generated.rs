@@ -56,6 +56,7 @@ fn title_controls(ui: &mut egui::Ui, title: &mut Title) -> Option<Change> {
 /// A title's look, without its motion.
 pub(super) fn text_controls(ui: &mut egui::Ui, title: &mut Title) -> Option<Change> {
     let mut change = None;
+    // Effect Controls is often narrow, so rows here wrap rather than run off its edge.
     let text = ui.add(
         egui::TextEdit::multiline(&mut title.text)
             .desired_rows(3)
@@ -67,39 +68,47 @@ pub(super) fn text_controls(ui: &mut egui::Ui, title: &mut Title) -> Option<Chan
     if text.lost_focus() {
         change = Some(Change::Commit);
     }
-    ui.horizontal(|ui| {
-        ui.label("Size");
-        let size = ui.add(
-            egui::DragValue::new(&mut title.size)
-                .range(4..=1000)
-                .suffix(" px"),
-        );
-        change = response_state(&size, change);
-        if font_picker(ui, &mut title.font) {
-            change = Some(Change::Commit);
-        }
-        for (on, label) in [
-            (&mut title.bold, egui::RichText::new("B").strong()),
-            (&mut title.italic, egui::RichText::new("I").italics()),
-        ] {
-            if ui.toggle_value(on, label).changed() {
+    pairs(ui, 245.0, |ui| {
+        ui.horizontal(|ui| {
+            ui.label("Size");
+            let size = ui.add(
+                egui::DragValue::new(&mut title.size)
+                    .range(4..=1000)
+                    .suffix(" px"),
+            );
+            change = response_state(&size, change);
+        });
+        ui.horizontal(|ui| {
+            if font_picker(ui, &mut title.font) {
                 change = Some(Change::Commit);
             }
-        }
+            for (on, label) in [
+                (&mut title.bold, egui::RichText::new("B").strong()),
+                (&mut title.italic, egui::RichText::new("I").italics()),
+            ] {
+                if ui.toggle_value(on, label).changed() {
+                    change = Some(Change::Commit);
+                }
+            }
+        });
     });
-    ui.horizontal(|ui| {
-        ui.label("Tracking");
-        let tracking = ui.add(egui::DragValue::new(&mut title.tracking).range(-200..=1000));
-        change = response_state(&tracking, change);
-        ui.label("Leading");
-        let leading = ui.add(
-            egui::DragValue::new(&mut title.leading)
-                .range(-500..=500)
-                .suffix(" px"),
-        );
-        change = response_state(&leading, change);
+    pairs(ui, 200.0, |ui| {
+        ui.horizontal(|ui| {
+            ui.label("Tracking");
+            let tracking = ui.add(egui::DragValue::new(&mut title.tracking).range(-200..=1000));
+            change = response_state(&tracking, change);
+        });
+        ui.horizontal(|ui| {
+            ui.label("Leading");
+            let leading = ui.add(
+                egui::DragValue::new(&mut title.leading)
+                    .range(-500..=500)
+                    .suffix(" px"),
+            );
+            change = response_state(&leading, change);
+        });
     });
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         ui.label("Align");
         for (align, label) in [
             (TextAlign::Left, "Left"),
@@ -118,7 +127,7 @@ pub(super) fn text_controls(ui: &mut egui::Ui, title: &mut Title) -> Option<Chan
     change = stroke_row(ui, &mut title.stroke).or(change);
     let usual = title.usual_shadow();
     change = shadow_rows(ui, &mut title.shadow, &mut title.shadow_style, usual).or(change);
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         let mut boxed = title.background.is_some();
         if ui.checkbox(&mut boxed, "Background").changed() {
             title.background = boxed.then_some(Rgb::BLACK);
@@ -135,7 +144,7 @@ pub(super) fn text_controls(ui: &mut egui::Ui, title: &mut Title) -> Option<Chan
 fn motion_controls(ui: &mut egui::Ui, motion: &mut TitleMotion) -> Option<Change> {
     let mut change = None;
     let scroll = motion.scroll().unwrap_or_default();
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         ui.label("Motion");
         egui::ComboBox::from_id_salt("title_motion")
             .selected_text(motion.name())
@@ -155,7 +164,7 @@ fn motion_controls(ui: &mut egui::Ui, motion: &mut TitleMotion) -> Option<Change
     let Some(mut scroll) = motion.scroll() else {
         return change;
     };
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         for (on, label) in [
             (&mut scroll.start_off_screen, "Start Off Screen"),
             (&mut scroll.end_off_screen, "End Off Screen"),
@@ -200,7 +209,7 @@ fn motion_controls(ui: &mut egui::Ui, motion: &mut TitleMotion) -> Option<Change
 
 pub(super) fn shape_controls(ui: &mut egui::Ui, shape: &mut Shape, height: u32) -> Option<Change> {
     let mut change = None;
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         for kind in ShapeKind::ALL {
             if ui
                 .selectable_value(&mut shape.kind, kind, kind.name())
@@ -210,7 +219,7 @@ pub(super) fn shape_controls(ui: &mut egui::Ui, shape: &mut Shape, height: u32) 
             }
         }
     });
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         for (label, length) in [("Width", &mut shape.width), ("Height", &mut shape.height)] {
             ui.label(label);
             let drag = ui.add(egui::DragValue::new(length).range(1..=8000).suffix(" px"));
@@ -218,7 +227,7 @@ pub(super) fn shape_controls(ui: &mut egui::Ui, shape: &mut Shape, height: u32) 
         }
     });
     if shape.kind == ShapeKind::Rectangle {
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.label("Corner radius");
             let limit = shape.width.min(shape.height) / 2;
             let radius = ui.add(
@@ -229,7 +238,7 @@ pub(super) fn shape_controls(ui: &mut egui::Ui, shape: &mut Shape, height: u32) 
             change = response_state(&radius, change);
         });
     }
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         let mut filled = shape.fill.is_some();
         if ui.checkbox(&mut filled, "Fill").changed() {
             shape.fill = filled.then_some(Rgb::WHITE);
@@ -247,7 +256,7 @@ pub(super) fn shape_controls(ui: &mut egui::Ui, shape: &mut Shape, height: u32) 
 
 fn stroke_row(ui: &mut egui::Ui, stroke: &mut Option<TextStroke>) -> Option<Change> {
     let mut change = None;
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         let mut stroked = stroke.is_some();
         if ui.checkbox(&mut stroked, "Stroke").changed() {
             *stroke = stroked.then(TextStroke::default);
@@ -276,7 +285,7 @@ fn shadow_rows(
 ) -> Option<Change> {
     let mut change = None;
     let mut edited = style.unwrap_or(usual);
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         if ui.checkbox(shadow, "Drop shadow").changed() {
             change = Some(Change::Commit);
         }
@@ -293,15 +302,17 @@ fn shadow_rows(
         }
     });
     if *shadow {
-        ui.horizontal(|ui| {
+        pairs(ui, 255.0, |ui| {
             for (value, name) in [
                 (&mut edited.distance, "Distance"),
                 (&mut edited.size, "Size"),
                 (&mut edited.blur, "Blur"),
             ] {
-                ui.label(name);
-                let drag = egui::DragValue::new(value).range(0..=200).suffix(" px");
-                change = response_state(&ui.add(drag), change);
+                ui.horizontal(|ui| {
+                    ui.label(name);
+                    let drag = egui::DragValue::new(value).range(0..=200).suffix(" px");
+                    change = response_state(&ui.add(drag), change);
+                });
             }
         });
     }
@@ -309,6 +320,16 @@ fn shadow_rows(
         *style = Some(edited);
     }
     change
+}
+
+/// Lays out groups of controls side by side, or one under another when the panel is
+/// narrower than `wide`; a wrapping row would part a label from its value.
+fn pairs(ui: &mut egui::Ui, wide: f32, add: impl FnOnce(&mut egui::Ui)) {
+    if ui.available_width() >= wide {
+        ui.horizontal(add);
+    } else {
+        ui.vertical(add);
+    }
 }
 
 fn leader_controls(ui: &mut egui::Ui, leader: &mut CountingLeader) -> Option<Change> {
@@ -337,7 +358,7 @@ fn leader_controls(ui: &mut egui::Ui, leader: &mut CountingLeader) -> Option<Cha
 }
 
 fn color_row(ui: &mut egui::Ui, label: &str, color: &mut Rgb) -> Option<Change> {
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         ui.label(label);
         color_button(ui, color)
     })
