@@ -420,18 +420,6 @@ impl Editor {
 impl eframe::App for Editor {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
-        let dropped: Vec<PathBuf> = ctx.input(|input| {
-            input
-                .raw
-                .dropped_files
-                .iter()
-                .map(|file| file.path().to_owned())
-                .filter(|path| !path.as_os_str().is_empty())
-                .collect()
-        });
-        for path in dropped {
-            self.open_path(path);
-        }
         self.poll_store();
         self.autosave_tick();
         self.keep_preferences();
@@ -489,5 +477,6 @@ impl eframe::App for Editor {
         crate::render_replace::window(self, &ctx);
         crate::project_manager::window(self, &ctx);
         crate::notifications::ui(self, &ctx);
+        crate::file_drop::ui(self, &ctx);
     }
 }
