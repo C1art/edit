@@ -68,7 +68,9 @@ pub(crate) fn sequence_menu(editor: &mut Editor, ui: &mut egui::Ui) {
         editor.ripple_delete();
     }
     ui.separator();
-    if ui.button("Measure Loudness…").clicked() {
+    // Both measure the program first; normalizing is then one click in the window.
+    let measuring = ui.button("Measure Loudness…").clicked();
+    if ui.button("Normalize Master Track…").clicked() || measuring {
         crate::loudness_window::measure(editor);
     }
     ui.separator();
