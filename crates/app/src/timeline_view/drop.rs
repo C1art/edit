@@ -6,12 +6,32 @@ use super::scale::{self, TimeScale};
 use super::{paint, TimelineOutput, TrackHeights, SNAP_POINTS};
 use crate::effects_panel::{EffectDrop, EffectItem};
 
-/// Media dropped from the pool onto a track.
+/// Media dropped from the pool or the source monitor onto a track.
 #[derive(Debug, Clone, Copy)]
 pub struct MediaDrop {
     pub source: SourceId,
+    /// The part of the media as `(source_in, duration)`, when dragged from the source
+    /// monitor; else the item's marked or whole range.
+    pub range: Option<(Ticks, Ticks)>,
+    pub take: Take,
     pub track: TrackRef,
     pub at: Ticks,
+}
+
+/// The source monitor's marked part of its media, dragged out to the timeline.
+#[derive(Debug, Clone, Copy)]
+pub struct SourceDrag {
+    pub source: SourceId,
+    pub range: (Ticks, Ticks),
+    pub take: Take,
+}
+
+/// Which of a dragged item's picture and sound to place.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Take {
+    Both,
+    VideoOnly,
+    AudioOnly,
 }
 
 /// Where something dragged over the tracks would land.
@@ -40,15 +60,25 @@ pub(super) fn handle_drop(
     let time = scale.time(pos.x).max(Ticks::ZERO);
     let rows = layout::rows(sequence, heights, top);
     let row = layout::row_at(&rows, pos.y);
-    if response.dnd_hover_payload::<SourceId>().is_some() {
+    let from_pool = response.dnd_hover_payload::<SourceId>().is_some();
+    if from_pool || response.dnd_hover_payload::<SourceDrag>().is_some() {
         let mut at = scale::nearest_frame(time, sequence.format.frame_rate, sequence.timebase);
         if let Some(playhead) = snapping_with {
             let targets = scale::snap_targets(sequence, &[], playhead);
             at = at + scale::snap(Ticks::ZERO, &[at], &targets, scale.span(SNAP_POINTS));
         }
-        if let (Some(source), Some(row)) = (response.dnd_release_payload::<SourceId>(), row) {
+        // Releasing takes the payload whatever its type, so only the hovered one may try.
+        let released = if from_pool {
+            (response.dnd_release_payload::<SourceId>()).map(|source| (*source, None, Take::Both))
+        } else {
+            (response.dnd_release_payload::<SourceDrag>())
+                .map(|drag| (drag.source, Some(drag.range), drag.take))
+        };
+        if let (Some((source, range, take)), Some(row)) = (released, row) {
             output.drop = Some(MediaDrop {
-                source: *source,
+                source,
+                range,
+                take,
                 track: row.track,
                 at,
             });

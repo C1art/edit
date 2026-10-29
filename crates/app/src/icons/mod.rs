@@ -40,6 +40,8 @@ pub(crate) enum Icon {
     Extract,
     Subclip,
     Camera,
+    FilmStrip,
+    Waveform,
     Settings,
     List,
     Tiles,
@@ -363,6 +365,25 @@ pub(crate) fn paint(painter: &Painter, rect: Rect, icon: Icon, color: Color32) {
                 rect.width() * 0.2,
                 Stroke::new(1.6, Color32::BLACK),
             );
+        }
+        Icon::FilmStrip => {
+            let strip = Rect::from_min_max(at(0.08, 0.1), at(0.92, 0.9));
+            painter.rect_filled(strip, 1.0, color);
+            for x in [0.2, 0.42, 0.64] {
+                for y in [0.16, 0.74] {
+                    let hole = Rect::from_min_max(at(x, y), at(x + 0.14, y + 0.1));
+                    painter.rect_filled(hole, 0.0, Color32::BLACK);
+                }
+            }
+        }
+        Icon::Waveform => {
+            for (index, height) in [0.2, 0.5, 0.8, 0.4, 0.65, 0.25].into_iter().enumerate() {
+                let x = 0.1 + index as f32 * 0.16;
+                painter.line_segment(
+                    [at(x, 0.5 - height / 2.0), at(x, 0.5 + height / 2.0)],
+                    stroke,
+                );
+            }
         }
         Icon::List => {
             for y in [0.2, 0.5, 0.8] {

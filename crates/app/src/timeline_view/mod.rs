@@ -34,7 +34,7 @@ use timeline::{
 use crate::clip_art::ClipArt;
 use crate::effects_panel::EffectDrop;
 use drop::handle_drop;
-pub use drop::MediaDrop;
+pub use drop::{MediaDrop, SourceDrag, Take};
 pub use edit_point::{EditPoint, TrimType};
 use gesture::{Gesture, PendingEdit};
 use header::HeaderAction;

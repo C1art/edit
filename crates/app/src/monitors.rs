@@ -8,6 +8,7 @@ use crate::keymap::{Command, Keymap};
 use crate::placing;
 use crate::program_zoom::MonitorZoom;
 use crate::project_files::PathPurpose;
+use crate::source_drag;
 use crate::theme;
 use crate::transport::{self, Buttons, Extra};
 use crate::trim_monitor::TrimMonitor;
@@ -105,8 +106,19 @@ fn source(editor: &mut Editor, ui: &mut egui::Ui) {
         );
         return;
     };
-    title(ui, &format!("Source: {}", source.name), focused);
-    source.viewer.picture(ui, picture_size(ui));
+    let has_both = editor
+        .timeline
+        .sequence()
+        .media_item(source.source)
+        .is_some_and(|item| item.video.is_some() && item.has_audio);
+    ui.horizontal(|ui| {
+        title(ui, &format!("Source: {}", source.name), focused);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            source_drag::handles(ui, source, has_both);
+        });
+    });
+    let picture = source.viewer.picture(ui, picture_size(ui));
+    source_drag::picture(ui, source, &picture);
     let marks = source.marks;
     let keymap = &editor.keymap;
     let before = mark_buttons(keymap);

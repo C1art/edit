@@ -4,7 +4,7 @@ use timeline::{
 };
 
 use crate::editor::Editor;
-use crate::timeline_view::MediaDrop;
+use crate::timeline_view::{MediaDrop, Take};
 
 /// Edits the source monitor's marked range into the sequence on the targeted tracks,
 /// placed by three-point editing, then parks the playhead after it. Marks on both
@@ -61,24 +61,36 @@ pub(crate) fn place_from_source(editor: &mut Editor, mode: PlaceMode, fit: Optio
     }
 }
 
-/// Overwrites a whole media item dropped from the pool, keeping its video and audio
-/// together on the hovered track and the first track of the other kind.
+/// Overwrites a media item dropped onto the timeline, keeping its video and audio
+/// together on the hovered track and the first track of the other kind. An item from
+/// the pool that the source monitor shows with marks brings only the marked part, as
+/// in Premiere.
 pub fn drop_media(editor: &mut Editor, drop: MediaDrop) {
     let sequence = editor.timeline.sequence();
     let Some(item) = sequence.media_item(drop.source) else {
         return;
     };
-    let range = item.default_range(sequence.timebase);
+    let marked = editor
+        .source
+        .as_ref()
+        .filter(|source| source.source == drop.source && source.marks.is_set())
+        .map(|source| source.range());
+    let (source_in, duration) = drop.range.or(marked).unwrap_or_else(|| {
+        let range = item.default_range(sequence.timebase);
+        (range.start, range.end - range.start)
+    });
     let first = |count: usize| (count > 0).then_some(0);
     let (video_track, audio_track) = match drop.track.kind {
         TrackKind::Video => (Some(drop.track.index), first(sequence.audio.len())),
         TrackKind::Audio => (first(sequence.video.len()), Some(drop.track.index)),
     };
+    let video_track = video_track.filter(|_| drop.take != Take::AudioOnly);
+    let audio_track = audio_track.filter(|_| drop.take != Take::VideoOnly);
     editor.match_format(drop.source);
     editor.apply(PlaceClip {
         source: drop.source,
-        source_in: range.start,
-        duration: range.end - range.start,
+        source_in,
+        duration,
         at: drop.at,
         video_track,
         audio_track,

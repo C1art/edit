@@ -73,6 +73,7 @@ mod sequence_settings;
 mod sequence_tabs;
 mod shortcuts;
 mod source;
+mod source_drag;
 mod speed_dialog;
 mod theme;
 mod timecode_field;
