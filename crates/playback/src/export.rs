@@ -1,12 +1,15 @@
 use std::ops::Range;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
 
 use audio::SampleRate;
 use crossbeam::channel::{Receiver, Sender};
-use media::{AudioSettings, EncodeProfile, MediaWriter, RateControl, VideoCodec, VideoSettings};
+use media::{
+    AudioSettings, EncodeProfile, MediaWriter, RateControl, RgbaResizer, StillFormat, VideoCodec,
+    VideoSettings,
+};
 use render::{Background, Compositor, LayerImage};
 use timeline::{Sequence, Ticks};
 
@@ -27,10 +30,16 @@ pub struct ExportSettings {
 /// Pictures at the sequence's frame rate, scaled from its frame size to `size`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct VideoExport {
-    pub codec: VideoCodec,
-    pub rate_control: RateControl,
+    pub encoding: VideoEncoding,
     /// Both even.
     pub size: (u32, u32),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VideoEncoding {
+    Movie(VideoCodec, RateControl),
+    /// Each frame as its own image, numbered after the export's path, without sound.
+    Stills(StillFormat),
 }
 
 #[derive(Debug)]
@@ -67,7 +76,10 @@ impl ExportJob {
         let keeps_alpha = settings
             .video
             .as_ref()
-            .is_some_and(|video| video.codec.keeps_alpha());
+            .is_some_and(|video| match video.encoding {
+                VideoEncoding::Movie(codec, _) => codec.keeps_alpha(),
+                VideoEncoding::Stills(_) => false,
+            });
         if keeps_alpha {
             compositor.set_background(Background::Transparent);
         }
@@ -77,6 +89,7 @@ impl ExportJob {
             settings,
             events: sender,
             cancel: Arc::clone(&cancel),
+            stills_written: Vec::new(),
         };
         thread::Builder::new()
             .name("export".into())
@@ -107,6 +120,8 @@ struct Worker {
     compositor: Compositor,
     events: Sender<ExportEvent>,
     cancel: Arc<AtomicBool>,
+    /// Every image a still sequence export has written, removed if it fails.
+    stills_written: Vec<PathBuf>,
 }
 
 enum Outcome {
@@ -119,37 +134,64 @@ impl Worker {
         let event = match self.render() {
             Ok(Outcome::Finished) => ExportEvent::Finished,
             Ok(Outcome::Cancelled) => {
-                let _ = std::fs::remove_file(&self.settings.path);
+                self.remove_partial();
                 ExportEvent::Cancelled
             }
             Err(error) => {
-                let _ = std::fs::remove_file(&self.settings.path);
+                self.remove_partial();
                 ExportEvent::Failed(error)
             }
         };
         let _ = self.events.send(event);
     }
 
+    fn remove_partial(&self) {
+        let _ = std::fs::remove_file(&self.settings.path);
+        for still in &self.stills_written {
+            let _ = std::fs::remove_file(still);
+        }
+    }
+
     fn render(&mut self) -> Result<Outcome, PlaybackError> {
         let sequence = Arc::clone(&self.sequence);
         let format = sequence.format;
         let (rate, timebase) = (format.frame_rate, sequence.timebase);
-        let video = self.settings.video.map(|video| VideoSettings {
-            input_size: (format.width, format.height),
-            width: video.size.0,
-            height: video.size.1,
-            frame_rate: rate,
-            codec: video.codec,
-            rate_control: video.rate_control,
-            profile: EncodeProfile::Delivery,
-        });
-        let audio = self.settings.audio;
+        let input_size = (format.width, format.height);
+        let (video, stills) = match self.settings.video {
+            Some(VideoExport {
+                encoding: VideoEncoding::Movie(codec, rate_control),
+                size,
+            }) => {
+                let settings = VideoSettings {
+                    input_size,
+                    width: size.0,
+                    height: size.1,
+                    frame_rate: rate,
+                    codec,
+                    rate_control,
+                    profile: EncodeProfile::Delivery,
+                };
+                (Some(settings), None)
+            }
+            Some(VideoExport {
+                encoding: VideoEncoding::Stills(still),
+                size,
+            }) => (None, Some((still, size))),
+            None => (None, None),
+        };
+        let audio = self.settings.audio.filter(|_| stills.is_none());
         let frames = frame_span(&sequence, self.settings.range.clone());
         let exported =
             rate.frame_start(frames.start, timebase)..rate.frame_start(frames.end, timebase);
         let chapters = timeline::chapters(&sequence.markers, exported);
-        let path = &self.settings.path;
-        let mut writer = MediaWriter::with_chapters(path, video, audio, &chapters, timebase)?;
+        let path = self.settings.path.clone();
+        let mut writer = match stills {
+            Some(_) => None,
+            None => Some(MediaWriter::with_chapters(
+                &path, video, audio, &chapters, timebase,
+            )?),
+        };
+        let mut resizer = RgbaResizer::default();
 
         let frames_total = frames.end - frames.start;
         // A silent export never mixes, so its rate doesn't matter.
@@ -167,7 +209,7 @@ impl Worker {
             if self.cancel.load(Ordering::Relaxed) {
                 return Ok(Outcome::Cancelled);
             }
-            if video.is_some() {
+            if video.is_some() || stills.is_some() {
                 let pts = rate.frame_start(frame, timebase);
                 let layers = compose::layers_at(
                     &sequence,
@@ -178,19 +220,34 @@ impl Worker {
                     Resolution::Full,
                 );
                 let images: Vec<LayerImage<'_>> = layers.iter().map(Layer::image).collect();
-                self.compositor
-                    .composite((format.width, format.height), &images)?;
-                writer.write_video(&self.compositor.read_output()?)?;
+                self.compositor.composite(input_size, &images)?;
+                let picture = self.compositor.read_output()?;
+                match (&mut writer, stills) {
+                    (Some(writer), _) => writer.write_video(&picture)?,
+                    (None, Some((still, size))) => {
+                        let picture = if size == input_size {
+                            picture
+                        } else {
+                            resizer.resize(input_size, size, &picture)?
+                        };
+                        let file = still_path(&path, frame - frames.start, frames_total, still);
+                        media::write_still(&file, still, size, &picture)?;
+                        self.stills_written.push(file);
+                    }
+                    (None, None) => {}
+                }
             }
 
             // Audio keeps pace with the pictures so the muxer can interleave them.
             let audio_end = to_audio(rate.frame_start(frame + 1, timebase)).min(audio_total);
-            while audio.is_some() && audio_written < audio_end {
-                mix.mix_chunk(&sequence, audio_written, &mut warnings);
-                let frames = (audio_total - audio_written).min(CHUNK_FRAMES as i64);
-                let samples = usize::try_from(frames).unwrap_or(0) * 2;
-                writer.write_audio(&mix.mix[..samples])?;
-                audio_written += frames;
+            if let (Some(writer), Some(_)) = (&mut writer, audio) {
+                while audio_written < audio_end {
+                    mix.mix_chunk(&sequence, audio_written, &mut warnings);
+                    let frames = (audio_total - audio_written).min(CHUNK_FRAMES as i64);
+                    let samples = usize::try_from(frames).unwrap_or(0) * 2;
+                    writer.write_audio(&mix.mix[..samples])?;
+                    audio_written += frames;
+                }
             }
 
             for warning in warnings.drain(..) {
@@ -201,9 +258,22 @@ impl Worker {
                 frames_total,
             });
         }
-        writer.finish()?;
+        if let Some(writer) = writer {
+            writer.finish()?;
+        }
         Ok(Outcome::Finished)
     }
+}
+
+/// The image file of the `index`th of `count` frames: the export's path with the
+/// index, padded to the same width for every frame, before the extension, so the
+/// images sort and import back as one sequence.
+fn still_path(path: &Path, index: i64, count: i64, format: StillFormat) -> PathBuf {
+    let digits = (count - 1).max(0).to_string().len().max(4);
+    let stem = path
+        .file_stem()
+        .map_or_else(String::new, |stem| stem.to_string_lossy().into_owned());
+    path.with_file_name(format!("{stem}{index:0digits$}.{}", format.extension()))
 }
 
 /// Every frame that overlaps `range`, or the sequence up to the end of its last clip.
@@ -248,5 +318,14 @@ mod tests {
             frame_span(&sequence, Some(Ticks(7_300)..Ticks(10_900))),
             2..4
         );
+    }
+
+    #[test]
+    fn stills_are_numbered_to_one_width_after_the_export_path() {
+        let path = Path::new("renders/shot.png");
+        let still = |index, count| still_path(path, index, count, StillFormat::Tiff);
+        assert_eq!(still(7, 240), Path::new("renders/shot0007.tif"));
+        assert_eq!(still(7, 12_001), Path::new("renders/shot00007.tif"));
+        assert_eq!(still(12_000, 12_001), Path::new("renders/shot12000.tif"));
     }
 }

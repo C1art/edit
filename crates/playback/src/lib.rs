@@ -61,7 +61,7 @@ mod write_on;
 pub use composed::{ComposedFrame, Layer, LayerPicture, Levels};
 pub use envelope::{EnvelopeEvent, EnvelopeJob};
 pub use error::PlaybackError;
-pub use export::{ExportEvent, ExportJob, ExportSettings, VideoExport};
+pub use export::{ExportEvent, ExportJob, ExportSettings, VideoEncoding, VideoExport};
 pub use frame_probe::FrameProbe;
 pub use generated::generated_frame;
 pub use loudness::{clip_alone, Loudness, LoudnessEvent, LoudnessJob, Piece};

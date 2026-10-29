@@ -6,7 +6,7 @@ use std::thread;
 use crossbeam::channel::{self, Receiver};
 use egui::{ProgressBar, RichText};
 use media::{AudioCodec, AudioSettings, MediaError, RateControl, VideoCodec};
-use playback::{ExportEvent, ExportJob, ExportSettings, VideoExport};
+use playback::{ExportEvent, ExportJob, ExportSettings, VideoEncoding, VideoExport};
 use timeline::{
     ClipId, FrameRate, ImportMedia, RenderAndReplace, RestoreUnrendered, SourceId, Ticks, Timebase,
     TrackKind,
@@ -242,8 +242,7 @@ impl Editor {
         let settings = ExportSettings {
             path,
             video: Some(VideoExport {
-                codec: VideoCodec::ProRes4444,
-                rate_control: RateControl::Quality(18),
+                encoding: VideoEncoding::Movie(VideoCodec::ProRes4444, RateControl::Quality(18)),
                 size: (format.width, format.height),
             }),
             audio: has_audio.then_some(AudioSettings {

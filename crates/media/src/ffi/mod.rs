@@ -7,6 +7,7 @@ mod frame;
 mod hardware;
 mod output;
 mod packet;
+mod resize;
 mod sample_format;
 mod scale;
 mod still;
@@ -22,6 +23,7 @@ pub(crate) use hardware::{
 };
 pub(crate) use output::OutputContext;
 pub(crate) use packet::Packet;
+pub use resize::RgbaResizer;
 pub(crate) use sample_format::{SampleConverter, OUTPUT_CHANNELS};
 pub(crate) use scale::Scaler;
 pub(crate) use still::encode_rgba;

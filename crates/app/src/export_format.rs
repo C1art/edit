@@ -1,5 +1,5 @@
-use media::{AudioCodec, AudioSettings, DnxhrQuality, RateControl, VideoCodec};
-use playback::VideoExport;
+use media::{AudioCodec, AudioSettings, DnxhrQuality, RateControl, StillFormat, VideoCodec};
+use playback::{VideoEncoding, VideoExport};
 
 /// What kind of file an export makes: its codecs and container.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -11,6 +11,8 @@ pub enum Format {
     ProRes4444,
     Dnxhr(DnxhrQuality),
     AnimatedGif,
+    /// Each frame as a numbered image.
+    Stills(StillFormat),
     Aac,
     Mp3,
     Wav,
@@ -18,7 +20,7 @@ pub enum Format {
 }
 
 impl Format {
-    pub const ALL: [Self; 15] = [
+    pub const ALL: [Self; 18] = [
         Self::H264,
         Self::Hevc,
         Self::ProRes422,
@@ -30,6 +32,9 @@ impl Format {
         Self::Dnxhr(DnxhrQuality::Hqx),
         Self::Dnxhr(DnxhrQuality::Dnx444),
         Self::AnimatedGif,
+        Self::Stills(StillFormat::Png),
+        Self::Stills(StillFormat::Tiff),
+        Self::Stills(StillFormat::Dpx),
         Self::Aac,
         Self::Mp3,
         Self::Wav,
@@ -49,6 +54,9 @@ impl Format {
             Self::Dnxhr(DnxhrQuality::Hqx) => "Avid DNxHR HQX 10-bit",
             Self::Dnxhr(DnxhrQuality::Dnx444) => "Avid DNxHR 444 10-bit",
             Self::AnimatedGif => "Animated GIF",
+            Self::Stills(StillFormat::Png) => "PNG Sequence",
+            Self::Stills(StillFormat::Tiff) => "TIFF Sequence",
+            Self::Stills(StillFormat::Dpx) => "DPX Sequence",
             Self::Aac => "AAC Audio",
             Self::Mp3 => "MP3",
             Self::Wav => "Waveform Audio",
@@ -61,6 +69,7 @@ impl Format {
             Self::H264 | Self::Hevc => "mp4",
             Self::ProRes422 | Self::ProRes422Hq | Self::ProRes4444 | Self::Dnxhr(_) => "mov",
             Self::AnimatedGif => "gif",
+            Self::Stills(still) => still.extension(),
             Self::Aac => "m4a",
             Self::Mp3 => "mp3",
             Self::Wav => "wav",
@@ -77,8 +86,12 @@ impl Format {
             Self::ProRes4444 => Some(VideoCodec::ProRes4444),
             Self::Dnxhr(quality) => Some(VideoCodec::Dnxhr(quality)),
             Self::AnimatedGif => Some(VideoCodec::Gif),
-            Self::Aac | Self::Mp3 | Self::Wav | Self::Flac => None,
+            Self::Stills(_) | Self::Aac | Self::Mp3 | Self::Wav | Self::Flac => None,
         }
+    }
+
+    pub fn has_video(self) -> bool {
+        self.video_codec().is_some() || matches!(self, Self::Stills(_))
     }
 
     /// `None` for formats that can't carry sound.
@@ -89,7 +102,7 @@ impl Format {
             Self::ProRes422 | Self::ProRes422Hq | Self::ProRes4444 | Self::Dnxhr(_) => {
                 Some(AudioCodec::Pcm24)
             }
-            Self::AnimatedGif => None,
+            Self::AnimatedGif | Self::Stills(_) => None,
             Self::Mp3 => Some(AudioCodec::Mp3),
             Self::Wav => Some(AudioCodec::Pcm16),
             Self::Flac => Some(AudioCodec::Flac),
@@ -203,7 +216,7 @@ impl ExportFormat {
         let codec = self.format.video_codec();
         let rate_controlled = codec.is_some_and(VideoCodec::is_rate_controlled);
         Self {
-            height: if codec.is_some() {
+            height: if self.format.has_video() {
                 self.height
             } else {
                 unused.height
@@ -213,7 +226,7 @@ impl ExportFormat {
             } else {
                 unused.rate_control
             },
-            with_audio: codec.is_none() || self.with_audio,
+            with_audio: !self.format.has_video() || self.with_audio,
             audio_kbps: if self.has_audio() && self.audio_is_lossy() {
                 self.audio_kbps
             } else {
@@ -229,7 +242,7 @@ impl ExportFormat {
     }
 
     pub fn has_audio(&self) -> bool {
-        let wanted = self.with_audio || self.format.video_codec().is_none();
+        let wanted = self.with_audio || !self.format.has_video();
         wanted && self.format.audio_codec().is_some()
     }
 
@@ -238,9 +251,12 @@ impl ExportFormat {
     }
 
     pub fn video(&self, sequence_size: (u32, u32)) -> Option<VideoExport> {
+        let encoding = match self.format {
+            Format::Stills(still) => VideoEncoding::Stills(still),
+            format => VideoEncoding::Movie(format.video_codec()?, self.rate_control),
+        };
         Some(VideoExport {
-            codec: self.format.video_codec()?,
-            rate_control: self.rate_control,
+            encoding,
             size: self.size(sequence_size),
         })
     }

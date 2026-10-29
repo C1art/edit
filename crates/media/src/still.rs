@@ -9,15 +9,18 @@ use crate::{ffi, MediaError};
 pub enum StillFormat {
     Png,
     Tiff,
+    /// Digital Picture Exchange, the film scanning and finishing format.
+    Dpx,
 }
 
 impl StillFormat {
-    pub const ALL: [Self; 2] = [Self::Png, Self::Tiff];
+    pub const ALL: [Self; 3] = [Self::Png, Self::Tiff, Self::Dpx];
 
     pub fn extension(self) -> &'static str {
         match self {
             Self::Png => "png",
             Self::Tiff => "tif",
+            Self::Dpx => "dpx",
         }
     }
 
@@ -25,6 +28,7 @@ impl StillFormat {
         match self {
             Self::Png => "PNG",
             Self::Tiff => "TIFF",
+            Self::Dpx => "DPX",
         }
     }
 
@@ -33,6 +37,7 @@ impl StillFormat {
         match extension.as_str() {
             "png" => Some(Self::Png),
             "tif" | "tiff" => Some(Self::Tiff),
+            "dpx" => Some(Self::Dpx),
             _ => None,
         }
     }
@@ -41,6 +46,7 @@ impl StillFormat {
         match self {
             Self::Png => sys::AVCodecID::AV_CODEC_ID_PNG,
             Self::Tiff => sys::AVCodecID::AV_CODEC_ID_TIFF,
+            Self::Dpx => sys::AVCodecID::AV_CODEC_ID_DPX,
         }
     }
 }

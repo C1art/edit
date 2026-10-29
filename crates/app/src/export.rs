@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use egui::{ComboBox, DragValue, Key, ProgressBar, Slider};
-use media::{AudioCodec, RateControl};
+use media::{AudioCodec, RateControl, VideoCodec};
 use playback::{ExportEvent, ExportJob, ExportSettings};
 use timeline::Sequence;
 
@@ -151,7 +151,7 @@ fn prepare(editor: &mut Editor) -> Option<(Arc<Sequence>, ExportSettings)> {
         Some("Choose an output file first".to_owned())
     } else if sequence.duration() == timeline::Ticks::ZERO {
         Some("The sequence is empty".to_owned())
-    } else if dialog.format.format.video_codec().is_some()
+    } else if dialog.format.format.has_video()
         && !(width.is_multiple_of(2) && height.is_multiple_of(2))
     {
         Some(format!("The frame size must be even, not {width}×{height}"))
@@ -250,8 +250,10 @@ fn settings(ui: &mut egui::Ui, format: &mut ExportFormat, sequence_size: (u32, u
                     }
                 });
             ui.end_row();
-            if let Some(codec) = format.format.video_codec() {
-                video_rows(ui, format, sequence_size, codec.is_rate_controlled());
+            if format.format.has_video() {
+                let codec = format.format.video_codec();
+                let rate_controlled = codec.is_some_and(VideoCodec::is_rate_controlled);
+                video_rows(ui, format, sequence_size, rate_controlled);
             }
             if format.has_audio() {
                 ui.label("Sample rate:");

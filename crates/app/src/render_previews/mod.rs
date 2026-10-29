@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use egui::{ProgressBar, RichText};
 use media::{RateControl, VideoCodec};
-use playback::{ExportEvent, ExportJob, ExportSettings, Preview, VideoExport};
+use playback::{ExportEvent, ExportJob, ExportSettings, Preview, VideoEncoding, VideoExport};
 use timeline::{render_segments, segment_content, Sequence, Ticks};
 
 use crate::editor::Editor;
@@ -200,8 +200,7 @@ impl Editor {
             let settings = ExportSettings {
                 path: previews.files.partial_path(fingerprint),
                 video: Some(VideoExport {
-                    codec: VideoCodec::ProRes422,
-                    rate_control: RateControl::Quality(18),
+                    encoding: VideoEncoding::Movie(VideoCodec::ProRes422, RateControl::Quality(18)),
                     size: (format.width, format.height),
                 }),
                 audio: None,
