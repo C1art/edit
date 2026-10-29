@@ -13,9 +13,12 @@ pub(crate) fn sequence_menu(editor: &mut Editor, ui: &mut egui::Ui) {
     if ui.button("Auto Reframe Sequence…").clicked() {
         editor.open_reframe_dialog();
     }
+    let marked = editor.timeline.sequence().marks.is_set();
+    let selected = !editor.view.selection.is_empty();
     if ui
-        .button("Make Subsequence")
+        .add_enabled(selected || marked, Button::new("Make Subsequence"))
         .on_hover_text("A new sequence of the selected clips, or of In to Out")
+        .on_disabled_hover_text("Select clips or mark In and Out first")
         .clicked()
     {
         editor.make_subsequence();
@@ -84,19 +87,14 @@ pub(crate) fn sequence_menu(editor: &mut Editor, ui: &mut egui::Ui) {
         editor.prompt_path(PathPurpose::ExportCaptions);
     }
     ui.separator();
-    if ui
-        .add(Button::new("Lift In to Out").shortcut_text(editor.keymap.label(Command::LiftMarked)))
-        .clicked()
-    {
+    let lift =
+        Button::new("Lift In to Out").shortcut_text(editor.keymap.label(Command::LiftMarked));
+    if ui.add_enabled(marked, lift).clicked() {
         editor.lift_marked();
     }
-    if ui
-        .add(
-            Button::new("Extract In to Out")
-                .shortcut_text(editor.keymap.label(Command::ExtractMarked)),
-        )
-        .clicked()
-    {
+    let extract =
+        Button::new("Extract In to Out").shortcut_text(editor.keymap.label(Command::ExtractMarked));
+    if ui.add_enabled(marked, extract).clicked() {
         editor.extract_marked();
     }
     let previous = Button::new("Ripple Trim Previous Edit to Playhead")

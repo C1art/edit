@@ -1,5 +1,7 @@
 use egui::{Button, MenuBar, ViewportCommand};
-use timeline::{Generator, LinkedSelection, PlaceMode, Rgb, Shape, ShapeKind, Title, TrackKind};
+use timeline::{
+    Generator, LinkedSelection, PlaceMode, Rgb, Shape, ShapeKind, Ticks, Title, TrackKind,
+};
 
 use crate::editor::Editor;
 use crate::icons::{self, Icon, Look};
@@ -24,7 +26,7 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             }
             crate::recent_projects::menu(editor, ui);
             let save = Button::new("Save").shortcut_text(editor.keymap.label(Command::Save));
-            if ui.add(save).clicked() {
+            if ui.add_enabled(editor.is_dirty(), save).clicked() {
                 editor.save_project();
             }
             let save_as =
@@ -71,9 +73,10 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                     }
                 }
             });
+            let has_program = editor.timeline.sequence().duration() > Ticks::ZERO;
             let export = Button::new("Export Media…")
                 .shortcut_text(editor.keymap.label(Command::ExportMedia));
-            if ui.add(export).clicked() {
+            if ui.add_enabled(has_program, export).clicked() {
                 crate::export::open(editor);
             }
             if ui.button("Export Queue…").clicked() {
@@ -81,13 +84,19 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             }
             let frame = Button::new("Export Frame…")
                 .shortcut_text(editor.keymap.label(Command::ExportFrame));
-            if ui.add(frame).clicked() {
+            if ui.add_enabled(has_program, frame).clicked() {
                 editor.prompt_path(PathPurpose::ExportFrame);
             }
-            if ui.button("Export EDL…").clicked() {
+            if ui
+                .add_enabled(has_program, Button::new("Export EDL…"))
+                .clicked()
+            {
                 editor.prompt_path(PathPurpose::Export(Interchange::Edl));
             }
-            if ui.button("Export Final Cut Pro XML…").clicked() {
+            if ui
+                .add_enabled(has_program, Button::new("Export Final Cut Pro XML…"))
+                .clicked()
+            {
                 editor.prompt_path(PathPurpose::Export(Interchange::FinalCutXml));
             }
             ui.separator();
