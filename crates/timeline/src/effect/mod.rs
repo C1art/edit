@@ -14,6 +14,7 @@ mod names;
 mod options;
 mod params;
 mod pattern;
+mod shadow;
 mod shift;
 mod text;
 mod tone;
@@ -30,6 +31,7 @@ pub use options::{
     RadialWipeDirection, RampShape, Rgb, TimecodeSource,
 };
 pub use pattern::{CellKind, CellPattern, Ellipse, Lightning};
+pub use shadow::{RadialShadow, ShadowRender};
 pub use shift::{ChangeColor, ChangeColorView, ColorBalance, MatchColors};
 pub use text::SimpleText;
 pub use tone::{
@@ -479,4 +481,5 @@ pub enum VideoEffect {
     CellPattern(CellPattern),
     Lightning(Lightning),
     LightingEffects(LightingEffects),
+    RadialShadow(RadialShadow),
 }

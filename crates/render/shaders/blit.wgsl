@@ -207,6 +207,10 @@ struct Placement {
     lighting_ambience: vec4<f32>,
     lighting_surface: vec4<f32>,
     lighting_flags: vec4<f32>,
+    // Radial Shadow's light, as a fraction of the picture, and scale, then whether it
+    // hides the picture and tints by it.
+    point_shadow: vec4<f32>,
+    point_shadow_look: vec4<f32>,
 };
 
 const OUTLINE_VEC4S: u32 = 32u;
@@ -262,6 +266,12 @@ fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
     let folding = f32(placement.reshape_fold.w > 0.5);
     low -= folding;
     high += folding;
+    let radial = placement.point_shadow;
+    if radial.w > 0.5 {
+        let spread = vec2<f32>(placement.style_shadow.z) / picture_size();
+        low = min(low, radial.xy * (1.0 - radial.z) - spread);
+        high = max(high, radial.xy + (vec2<f32>(1.0) - radial.xy) * radial.z + spread);
+    }
     let uv = mix(low, high, corners[index]);
     let center = placement.center_axis_x.xy;
     let axis_x = placement.center_axis_x.zw;
@@ -444,11 +454,11 @@ fn layer_color(in: VertexOutput) -> vec4<f32> {
     rgb = mix(rgb, vec3<f32>(1.0), placement.balance.w);
     let viewed = alpha_view(rgb, adjusted_alpha(color.a) * keyed * luma_matte(color.rgb) * f32(in_crop(pinned)) * rough.x);
     rgb = viewed.rgb;
-    let picture = viewed.a;
+    let picture = viewed.a * (1.0 - placement.point_shadow_look.x);
     let shadow = shadow_alpha(pinned);
     let glow = alpha_glow(pinned);
     let backing = glow.a + shadow * (1.0 - glow.a);
-    let backing_rgb = mix(placement.style_shadow_color.rgb, glow.rgb, glow.a / max(backing, 1e-6));
+    let backing_rgb = mix(shadow_tint(pinned), glow.rgb, glow.a / max(backing, 1e-6));
     let covered = picture + backing * (1.0 - picture);
     rgb = mix(backing_rgb, rgb, picture / max(covered, 1e-6));
     let opacity = placement.axis_y_opacity.z * mask_coverage(page.uv) * clip_wipes_shown(page.uv)

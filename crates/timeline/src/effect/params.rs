@@ -1,8 +1,8 @@
 use super::{
     AlphaGlow, AscCdl, Bevel, CellPattern, ChangeColor, ChannelBlur, Checkerboard, Circle,
     ColorBalance, ColorReplace, ConvolutionKernel, Echo, EdgeFeather, Ellipse, Extract,
-    FourColorGradient, Grid, Light, LightingEffects, Lightning, Median, NoiseHls, RoughenEdges,
-    ShadowHighlight, SimpleText, UnsharpMask, VideoEffect, VideoLimiter,
+    FourColorGradient, Grid, Light, LightingEffects, Lightning, Median, NoiseHls, RadialShadow,
+    RoughenEdges, ShadowHighlight, SimpleText, UnsharpMask, VideoEffect, VideoLimiter,
 };
 use crate::{AutoReframe, Param};
 
@@ -263,6 +263,17 @@ macro_rules! effect_params {
                     exposure,
                     bump_height,
                 ])
+                .collect(),
+            VideoEffect::RadialShadow(RadialShadow {
+                opacity,
+                light_source,
+                projection_distance,
+                softness,
+                color_influence,
+                ..
+            }) => light_source
+                .$iter()
+                .chain([opacity, projection_distance, softness, color_influence])
                 .collect(),
             VideoEffect::Lightning(Lightning {
                 start_point,

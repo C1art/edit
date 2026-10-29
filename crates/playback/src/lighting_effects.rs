@@ -1,5 +1,5 @@
-use render::{Lamp, LampKind, Lighting};
-use timeline::{Light, LightKind, LightingEffects, Ticks};
+use render::{Lamp, LampKind, Lighting, PixelEffects, PointShadow};
+use timeline::{Light, LightKind, LightingEffects, RadialShadow, ShadowRender, Ticks};
 
 use crate::pixel_effects::linear;
 
@@ -21,6 +21,22 @@ pub(crate) fn lighting(effect: &LightingEffects, time: Ticks) -> Lighting {
         bump: percent(&effect.bump_height) * 10.0,
         white_is_high: effect.white_is_high,
     }
+}
+
+/// Radial Shadow at `time`, which takes over the picture's drop shadow.
+pub(crate) fn set_radial_shadow(pixel: &mut PixelEffects, shadow: &RadialShadow, time: Ticks) {
+    let percent = |param: &timeline::Param| param.value_at(time) / 100.0;
+    pixel.style.shadow_offset = [0.0; 2];
+    pixel.style.shadow_softness = shadow.softness.value_at(time).max(0.0);
+    pixel.style.shadow_opacity = percent(&shadow.opacity).clamp(0.0, 1.0);
+    pixel.style.shadow_color = linear(shadow.shadow_color);
+    pixel.point_shadow = Some(PointShadow {
+        light: shadow.light_source.each_ref().map(percent),
+        scale: 1.0 + percent(&shadow.projection_distance).max(0.0),
+        shadow_only: shadow.shadow_only,
+        glass_influence: (shadow.render == ShadowRender::GlassEdge)
+            .then(|| percent(&shadow.color_influence)),
+    });
 }
 
 fn lamp(light: &Light, time: Ticks) -> Option<Lamp> {

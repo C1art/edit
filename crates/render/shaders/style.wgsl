@@ -252,7 +252,7 @@ fn shadow_alpha(uv: vec2<f32>) -> f32 {
         return 0.0;
     }
     let picture = picture_size();
-    let caster = uv - shadow.xy / picture;
+    let caster = shadow_caster(uv) - shadow.xy / picture;
     if shadow.z < 0.5 {
         return cast_alpha(caster) * shadow.w;
     }
@@ -263,6 +263,27 @@ fn shadow_alpha(uv: vec2<f32>) -> f32 {
         sum += cast_alpha(caster + vec2<f32>(cos(angle), sin(angle)) * radius / picture);
     }
     return sum / f32(SHADOW_TAPS) * shadow.w;
+}
+
+// Where on the picture the shadow at `uv` comes from: under it, or nearer a radial
+// shadow's light by its scale.
+fn shadow_caster(uv: vec2<f32>) -> vec2<f32> {
+    let radial = placement.point_shadow;
+    if radial.w < 0.5 {
+        return uv;
+    }
+    return radial.xy + (uv - radial.xy) / radial.z;
+}
+
+// The shadow's color, which a glass edge radial shadow takes partly from the picture.
+fn shadow_tint(uv: vec2<f32>) -> vec3<f32> {
+    let color = placement.style_shadow_color.rgb;
+    let look = placement.point_shadow_look;
+    if look.y < 0.5 {
+        return color;
+    }
+    let caster = source_color(warp(replicated(shadow_caster(uv))));
+    return mix(color, caster.rgb, look.z);
 }
 
 // Unsharp masking against the four neighbors. Sampling at level 0 is allowed off

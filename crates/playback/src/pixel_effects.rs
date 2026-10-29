@@ -11,7 +11,7 @@ use crate::clip_wipes::set_clip_wipe;
 use crate::detail_effects::set_detail_effect;
 use crate::edge_effects::set_edge_effect;
 use crate::generate_effects::set_generate_effect;
-use crate::lighting_effects::lighting;
+use crate::lighting_effects::{lighting, set_radial_shadow};
 use crate::optics_effects::set_optics_effect;
 use crate::shift_effects::set_shift_effect;
 use crate::tone_effects::set_tone_effect;
@@ -378,6 +378,7 @@ pub(crate) fn pixel_effects(
             | VideoEffect::Ellipse(_)
             | VideoEffect::CellPattern(_) => set_generate_effect(&mut pixel, effect, time),
             VideoEffect::LightingEffects(effect) => pixel.lighting = Some(lighting(effect, time)),
+            VideoEffect::RadialShadow(shadow) => set_radial_shadow(&mut pixel, shadow, time),
             VideoEffect::LensFlare { .. } | VideoEffect::Magnify { .. } => {
                 set_optics_effect(&mut pixel.optics, effect, time);
             }

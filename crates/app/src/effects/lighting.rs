@@ -1,4 +1,4 @@
-use timeline::{LightKind, LightingEffects};
+use timeline::{LightKind, LightingEffects, RadialShadow, ShadowRender};
 
 use super::look::Rows;
 
@@ -84,5 +84,30 @@ impl Rows {
         self.choice(ui, "White is High", |ui| {
             ui.checkbox(white_is_high, "").changed()
         });
+    }
+
+    pub(super) fn radial_shadow(&mut self, ui: &mut egui::Ui, shadow: &mut RadialShadow) {
+        self.color(ui, "Shadow Color", &mut shadow.shadow_color);
+        self.param(ui, "Opacity", &mut shadow.opacity, 0.0..=100.0, "%");
+        let [x, y] = &mut shadow.light_source;
+        self.param(ui, "Light Source X", x, POINT, "%");
+        self.param(ui, "Light Source Y", y, POINT, "%");
+        let distance = &mut shadow.projection_distance;
+        self.param(ui, "Projection Distance", distance, 0.0..=200.0, "%");
+        self.param(ui, "Softness", &mut shadow.softness, 0.0..=200.0, "px");
+        self.options(
+            ui,
+            "Render",
+            "radial_shadow_render",
+            &mut shadow.render,
+            ShadowRender::ALL,
+            ShadowRender::name,
+        );
+        if shadow.render == ShadowRender::GlassEdge {
+            let influence = &mut shadow.color_influence;
+            self.param(ui, "Color Influence", influence, 0.0..=100.0, "%");
+        }
+        let only = &mut shadow.shadow_only;
+        self.choice(ui, "Shadow Only", |ui| ui.checkbox(only, "").changed());
     }
 }

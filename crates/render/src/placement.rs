@@ -6,6 +6,7 @@ use crate::mask::{self, LayerMask, MAX_MASKS};
 #[cfg(test)]
 use crate::mask::{Outline, MAX_OUTLINE_POINTS};
 use crate::pixel::PixelEffects;
+use crate::point_shadow::PointShadow;
 use crate::reframe::Reframe;
 use crate::secondary::SecondaryAdjust;
 use crate::wipe::{self, LayerWipe};
@@ -258,6 +259,11 @@ impl Placement {
                     .into_iter()
                     .flatten(),
             )
+            .chain(
+                PointShadow::uniform(self.effects.point_shadow.as_ref())
+                    .into_iter()
+                    .flatten(),
+            )
             .flat_map(f32::to_le_bytes)
             .collect()
     }
@@ -310,7 +316,7 @@ mod tests {
         // the Generate effects' thirteen, Lens Flare and Magnify's three and the
         // Transition effects' five, the detail effects' three, the edge effects' eleven
         // the tone effects' thirteen, Change Color and Color Balance's six, Ellipse
-        // and Cell Pattern's seven and Lighting Effects' eighteen.
+        // and Cell Pattern's seven, Lighting Effects' eighteen and Radial Shadow's two.
         let outlines = MAX_MASKS * MAX_OUTLINE_POINTS / 2;
         assert_eq!(
             bytes.len(),
@@ -331,7 +337,8 @@ mod tests {
                 + 13
                 + 6
                 + 7
-                + 18)
+                + 18
+                + 2)
                 * 16
         );
         assert!(bytes.len() as u64 <= crate::blit::UNIFORM_BYTES);

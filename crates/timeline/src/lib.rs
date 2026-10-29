@@ -100,9 +100,9 @@ pub use effect::{
     ConvolutionKernel, Echo, EchoOperator, EdgeFeather, EffectCategory, Ellipse, Extract,
     FourColorGradient, GarbageMatte, Grid, KeyOutput, LensType, Light, LightKind, LightingEffects,
     Lightning, LimiterMethod, MagnifyShape, MatchColors, MatteChannel, Median, NoiseHls,
-    RadialWipeDirection, RampShape, Rgb, RoughenEdgeType, RoughenEdges, ShadowHighlight,
-    SimpleText, TimecodeSource, UnsharpMask, VideoEffect, VideoLimiter, MAX_LIGHTS,
-    ULTRA_KEY_REACH,
+    RadialShadow, RadialWipeDirection, RampShape, Rgb, RoughenEdgeType, RoughenEdges,
+    ShadowHighlight, ShadowRender, SimpleText, TimecodeSource, UnsharpMask, VideoEffect,
+    VideoLimiter, MAX_LIGHTS, ULTRA_KEY_REACH,
 };
 pub use error::TimelineError;
 pub use find::{next_found, FindOperator, FindQuery, Found};
