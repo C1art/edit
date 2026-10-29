@@ -29,6 +29,10 @@ pub fn preview(sequence: &Sequence, edit: &impl Edit) -> Result<Sequence, Timeli
     Ok(working)
 }
 
+/// Edits kept for undo. Each holds the whole sequence as it was before it, so a long
+/// session on a big project would otherwise hold gigabytes.
+pub(crate) const UNDO_LEVELS: usize = 100;
+
 #[derive(Debug)]
 struct Snapshot<E> {
     edit: E,
@@ -139,6 +143,9 @@ impl Timeline {
     pub fn execute(&mut self, mut command: Box<dyn EditCommand>) -> Result<(), TimelineError> {
         command.apply(&mut self.sequence)?;
         self.undo_stack.push(command);
+        if self.undo_stack.len() > UNDO_LEVELS {
+            self.undo_stack.remove(0);
+        }
         self.redo_stack.clear();
         self.changed();
         Ok(())

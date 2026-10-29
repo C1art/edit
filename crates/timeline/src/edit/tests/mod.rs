@@ -283,6 +283,22 @@ fn undo_and_redo_restore_each_state_exactly() {
 }
 
 #[test]
+fn only_the_latest_edits_can_be_undone() {
+    let (mut timeline, source) = timeline();
+    let mut first = None;
+    for step in 0..=crate::history::UNDO_LEVELS {
+        let at = i64::try_from(step).unwrap() * 10;
+        timeline
+            .apply(place(source, at, 0, 5, PlaceMode::Overwrite))
+            .unwrap();
+        first.get_or_insert_with(|| timeline.sequence().clone());
+    }
+    assert_eq!(timeline.done().count(), crate::history::UNDO_LEVELS);
+    while timeline.undo() {}
+    assert_eq!(Some(timeline.sequence()), first.as_ref());
+}
+
+#[test]
 fn going_to_a_step_undoes_or_redoes_everything_between() {
     let (mut timeline, source) = timeline();
     let opened = timeline.sequence().clone();
