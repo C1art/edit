@@ -12,10 +12,12 @@ pub struct LayerWipe {
     pub border: f32,
     /// Linear.
     pub border_color: [f32; 3],
+    /// How much of the pattern's order the edge blurs across, from 0 to 1.
+    pub softness: f32,
 }
 
 impl LayerWipe {
-    fn uniform(&self) -> [f32; 8] {
+    fn uniform(&self) -> [f32; 12] {
         // The shader numbers patterns in declaration order, and sides left, top, right,
         // bottom.
         let side = match self.from {
@@ -39,12 +41,16 @@ impl LayerWipe {
             r,
             g,
             b,
+            self.softness.clamp(0.0, 1.0),
+            0.0,
+            0.0,
+            0.0,
         ]
     }
 }
 
 pub(crate) fn uniform(wipes: &[Option<LayerWipe>; 2]) -> impl Iterator<Item = f32> + '_ {
-    const UNUSED: [f32; 8] = [-1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+    const UNUSED: [f32; 12] = [-1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
     wipes
         .iter()
         .flat_map(|wipe| wipe.as_ref().map_or(UNUSED, LayerWipe::uniform))

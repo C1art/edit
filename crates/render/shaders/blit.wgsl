@@ -15,8 +15,8 @@ struct Placement {
     balance: vec4<f32>,
     // Two transition wipes (see wipe.wgsl): each pattern's number (negative when unused),
     // the side it enters from, its progress and 1 when reversed; then its border's
-    // width as a share of the canvas height and its color, linear.
-    wipes: array<vec4<f32>, 4>,
+    // width as a share of the canvas height and its color, linear; then its softness.
+    wipes: array<vec4<f32>, 6>,
     // Key color (linear), then tolerance; keying is off when the tolerance is negative.
     key: vec4<f32>,
     // Key softness, sharpen amount, invert amount, tint amount.

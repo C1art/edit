@@ -11,6 +11,10 @@ const WIPE_ZIGZAG_DOWN: f32 = 8.0;
 const WIPE_SCATTER: f32 = 0.35;
 // Splatter blotches across the canvas height.
 const WIPE_SPLATTER_SCALE: f32 = 4.0;
+// Gradient wipe clouds across the canvas height, and how much they outweigh the drift
+// from the entry side.
+const WIPE_GRADIENT_SCALE: f32 = 1.6;
+const WIPE_GRADIENT_CLOUD: f32 = 0.65;
 // Order steps across one pixel beyond this are a pattern's seams, not its edge.
 const WIPE_MAX_STEP: f32 = 0.02;
 
@@ -74,12 +78,18 @@ fn wipe_order(pattern: u32, pixel: vec2<f32>, size: vec2<f32>) -> f32 {
             let index = floor(pixel / block);
             return mix(index.x * block / size.x, wipe_hash(index), WIPE_SCATTER);
         }
-        default: {
+        case 19u: {
             let point = pixel / size.y * WIPE_SPLATTER_SCALE;
             let noise = 0.6 * wipe_noise(point) + 0.3 * wipe_noise(point * 2.3 + 17.0)
                 + 0.1 * wipe_noise(point * 5.1 + 41.0);
             // Value noise gathers around the middle; spread it out to fill the sweep.
             return clamp((noise - 0.25) * 2.0, 0.0, 1.0);
+        }
+        default: {
+            let point = pixel / size.y * WIPE_GRADIENT_SCALE;
+            let cloud = 0.7 * wipe_noise(point + 5.0) + 0.3 * wipe_noise(point * 2.7 + 29.0);
+            let spread = clamp((cloud - 0.2) * 1.65, 0.0, 1.0);
+            return mix(pixel.x / size.x, spread, WIPE_GRADIENT_CLOUD);
         }
     }
 }
@@ -142,8 +152,9 @@ fn wipe_cover(canvas: vec2<f32>) -> WipeCover {
     let size = 1.0 / max(abs(vec2<f32>(dpdx(canvas.x), dpdy(canvas.y))), vec2<f32>(1e-6));
     var cover = WipeCover(1.0, 1.0, vec3<f32>(0.0));
     for (var i = 0u; i < 2u; i++) {
-        let shape = placement.wipes[i * 2u];
-        let border = placement.wipes[i * 2u + 1u];
+        let shape = placement.wipes[i * 3u];
+        let border = placement.wipes[i * 3u + 1u];
+        let softness = placement.wipes[i * 3u + 2u].x;
         let turned = wipe_turn(u32(shape.y), canvas * size, size);
         var order = wipe_order(u32(max(shape.x, 0.0)), turned[0], turned[1]);
         if shape.w > 0.5 {
@@ -153,11 +164,14 @@ fn wipe_cover(canvas: vec2<f32>) -> WipeCover {
         if shape.x < 0.0 || shape.z >= 1.0 {
             continue;
         }
-        let progress = shape.z;
+        // A soft edge starts wholly before the pattern and ends wholly past it, so the
+        // wipe still runs from nothing to everything.
+        let progress = shape.z * (1.0 + softness) - 0.5 * softness;
+        let width = max(step, softness);
         let edge = progress + border.x * size.y * step;
-        let inside = 1.0 - smoothstep(progress - 0.5 * step, progress + 0.5 * step, order);
-        let shown = (1.0 - smoothstep(edge - 0.5 * step, edge + 0.5 * step, order))
-            * f32(progress > 0.0);
+        let inside = 1.0 - smoothstep(progress - 0.5 * width, progress + 0.5 * width, order);
+        let shown = (1.0 - smoothstep(edge - 0.5 * width, edge + 0.5 * width, order))
+            * f32(shape.z > 0.0);
         let picture = inside / max(shown, 1e-6);
         if 1.0 - picture > 1.0 - cover.picture {
             cover.border = border.yzw;

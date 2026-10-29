@@ -19,7 +19,7 @@ pub(crate) fn ui_view(texture: &wgpu::Texture) -> wgpu::TextureView {
 }
 
 /// Room for the placement, color and masks of a blit, or the parameters of a blur.
-pub(crate) const UNIFORM_BYTES: u64 = 3_504;
+pub(crate) const UNIFORM_BYTES: u64 = 3_536;
 
 /// The textured-rectangle pipelines and the layout their bindings share.
 pub(crate) struct Blit {

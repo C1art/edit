@@ -61,6 +61,7 @@ pub(crate) fn layer_look(
                 sweep: wipe.sweep,
                 border: f32::from(wipe.border.width) / canvas[1],
                 border_color: linear(wipe.border.color),
+                softness: wipe.softness,
             })
         }),
         wash: reveal.wash,
