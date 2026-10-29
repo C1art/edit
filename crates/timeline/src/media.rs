@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::generator::placed_length;
 use crate::{
-    AlphaInterpretation, BinId, ColorSpace, FrameRate, Generator, Nest, PixelAspect, Speed, Ticks,
-    Timebase, VideoFormat,
+    AlphaInterpretation, BinId, ColorSpace, FieldOrder, FrameRate, Generator, Nest, PixelAspect,
+    Speed, Ticks, Timebase, VideoFormat,
 };
 
 /// Identifies a media item in the sequence's media pool.
@@ -53,6 +53,9 @@ pub struct MediaItem {
     /// as for footage that is flagged wrongly or not at all.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub interpreted_color: Option<ColorSpace>,
+    /// The field order the pictures are read with instead of the one the file declares.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interpreted_fields: Option<FieldOrder>,
     #[serde(default, skip_serializing_if = "MediaLog::is_empty")]
     pub log: MediaLog,
     /// Set by Make Offline: the file is left alone but no longer read, until relinked.
@@ -141,6 +144,14 @@ impl MediaItem {
             || self.interpreted_aspect.is_some()
             || !self.alpha.is_straight()
             || self.interpreted_color.is_some()
+            || self.interpreted_fields.is_some()
+    }
+
+    /// The field order the pictures are read with: the interpreted one or the file's.
+    pub fn field_order(&self) -> FieldOrder {
+        self.interpreted_fields
+            .or(self.video.map(|video| video.field_order))
+            .unwrap_or_default()
     }
 
     /// The color space the pictures are read in: the interpreted one or the file's.

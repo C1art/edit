@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use timeline::{ChannelMap, ColorSpace, FrameRate, PixelAspect, Ticks, Timebase};
+use timeline::{ChannelMap, ColorSpace, FieldOrder, FrameRate, PixelAspect, Ticks, Timebase};
 
 use crate::channel_map::mapped;
 use crate::ffi::{
@@ -35,6 +35,7 @@ pub struct VideoInfo {
     pub frame_rate: Option<FrameRate>,
     pub pixel_aspect: PixelAspect,
     pub color_space: ColorSpace,
+    pub field_order: FieldOrder,
 }
 
 /// Which of a file's streams a reader decodes. Timeline playback opens one reader per
@@ -119,6 +120,14 @@ impl MediaReader {
             return Err(MediaError::NoPlayableStream);
         }
         let to_ticks = |micros: i64| Ticks(micros).rescale(MICROSECONDS, timebase);
+        let mut video = video;
+        if let Some(video) = &mut video {
+            // Sequences are progressive, so interlaced footage is deinterlaced unless
+            // the caller interprets it otherwise.
+            video
+                .converter
+                .set_field_order(input.field_order(video.index));
+        }
         let info = SourceInfo {
             duration: input.duration().map(to_ticks),
             video: video.as_ref().map(|video| {
@@ -134,6 +143,7 @@ impl MediaReader {
                         .and_then(|(num, den)| PixelAspect::new(num, den))
                         .unwrap_or_default(),
                     color_space: input.color_space(video.index),
+                    field_order: input.field_order(video.index),
                 }
             }),
             has_audio: audio.is_some(),
@@ -165,6 +175,14 @@ impl MediaReader {
         match &mut self.video {
             Some(video) => video.converter.set_output_size(size),
             None => Ok(()),
+        }
+    }
+
+    /// Rebuilds interlaced pictures from their first field from the next decoded frame
+    /// on; [`FieldOrder::Progressive`] shows them as decoded.
+    pub fn set_field_order(&mut self, fields: FieldOrder) {
+        if let Some(video) = &mut self.video {
+            video.converter.set_field_order(fields);
         }
     }
 

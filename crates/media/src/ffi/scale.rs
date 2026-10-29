@@ -1,8 +1,10 @@
 use std::ptr::{self, NonNull};
 
 use ffmpeg_sys_next as sys;
+use timeline::FieldOrder;
 
 use super::{Decoder, Frame};
+use crate::deinterlace::deinterlace;
 use crate::MediaError;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -23,6 +25,11 @@ pub(crate) struct Scaler {
     context: Option<(NonNull<sys::SwsContext>, ScalerKey)>,
     /// Pictures are resized to this; `None` keeps the decoded size.
     output_size: Option<(i32, i32)>,
+    /// Interlaced pictures are rebuilt from their first field at the decoded size,
+    /// before any resizing mixes the fields' rows.
+    fields: FieldOrder,
+    /// Resizes deinterlaced RGBA, keyed by its input and output sizes.
+    resize: Option<(NonNull<sys::SwsContext>, [i32; 4])>,
 }
 
 // SAFETY: the swscale context is exclusively owned and only used through `&mut self`.
@@ -44,13 +51,36 @@ impl Scaler {
         Ok(())
     }
 
+    pub(crate) fn set_field_order(&mut self, fields: FieldOrder) {
+        self.fields = fields;
+    }
+
     pub(crate) fn convert(
         &mut self,
         decoder: &Decoder,
         frame: &Frame,
     ) -> Result<(u32, u32, Vec<u8>), MediaError> {
         let raw = frame.raw();
-        let (output_width, output_height) = self.output_size.unwrap_or((raw.width, raw.height));
+        let decoded = (raw.width, raw.height);
+        let wanted = self.output_size.unwrap_or(decoded);
+        if self.fields.is_progressive() {
+            return self.convert_to(decoder, frame, wanted);
+        }
+        let (width, height, mut pixels) = self.convert_to(decoder, frame, decoded)?;
+        deinterlace(&mut pixels, width as usize, height as usize, self.fields);
+        if wanted == decoded {
+            return Ok((width, height, pixels));
+        }
+        self.resize_rgba(decoded, wanted, &pixels)
+    }
+
+    fn convert_to(
+        &mut self,
+        decoder: &Decoder,
+        frame: &Frame,
+        (output_width, output_height): (i32, i32),
+    ) -> Result<(u32, u32, Vec<u8>), MediaError> {
+        let raw = frame.raw();
         let key = ScalerKey {
             width: raw.width,
             height: raw.height,
@@ -93,6 +123,79 @@ impl Scaler {
             return Err(MediaError::InvalidFrame);
         }
         Ok((width, height, pixels))
+    }
+
+    fn resize_rgba(
+        &mut self,
+        (width, height): (i32, i32),
+        (output_width, output_height): (i32, i32),
+        pixels: &[u8],
+    ) -> Result<(u32, u32, Vec<u8>), MediaError> {
+        let key = [width, height, output_width, output_height];
+        let context = match self.resize {
+            Some((context, current)) if current == key => context,
+            _ => {
+                self.free_resize();
+                // SAFETY: plain constructor call with sizes from decoded frames and a
+                // validated output size; null means the sizes are unsupported.
+                let context = NonNull::new(unsafe {
+                    sys::sws_getContext(
+                        width,
+                        height,
+                        sys::AVPixelFormat::AV_PIX_FMT_RGBA,
+                        output_width,
+                        output_height,
+                        sys::AVPixelFormat::AV_PIX_FMT_RGBA,
+                        sys::SWS_BILINEAR | sys::SWS_ACCURATE_RND,
+                        ptr::null_mut(),
+                        ptr::null_mut(),
+                        ptr::null(),
+                    )
+                })
+                .ok_or(MediaError::InvalidFrame)?;
+                self.resize = Some((context, key));
+                context
+            }
+        };
+        let out_width = u32::try_from(output_width).map_err(|_| MediaError::InvalidFrame)?;
+        let out_height = u32::try_from(output_height).map_err(|_| MediaError::InvalidFrame)?;
+        let stride = output_width
+            .checked_mul(4)
+            .ok_or(MediaError::InvalidFrame)?;
+        let source_stride = width.checked_mul(4).ok_or(MediaError::InvalidFrame)?;
+        let mut resized = vec![0u8; out_width as usize * out_height as usize * 4];
+        let source = [pixels.as_ptr(), ptr::null(), ptr::null(), ptr::null()];
+        let destination = [
+            resized.as_mut_ptr(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+        ];
+        // SAFETY: `pixels` holds `height` rows of `source_stride` bytes, as converted at
+        // the decoded size, and `resized` holds `output_height` rows of `stride` bytes;
+        // both are single RGBA planes matching the context's formats and sizes.
+        let rows = unsafe {
+            sys::sws_scale(
+                context.as_ptr(),
+                source.as_ptr(),
+                [source_stride, 0, 0, 0].as_ptr(),
+                0,
+                height,
+                destination.as_ptr(),
+                [stride, 0, 0, 0].as_ptr(),
+            )
+        };
+        if rows != output_height {
+            return Err(MediaError::InvalidFrame);
+        }
+        Ok((out_width, out_height, resized))
+    }
+
+    fn free_resize(&mut self) {
+        if let Some((context, _)) = self.resize.take() {
+            // SAFETY: the context came from sws_getContext and is freed exactly once here.
+            unsafe { sys::sws_freeContext(context.as_ptr()) };
+        }
     }
 
     fn context_for(&mut self, key: ScalerKey) -> Result<NonNull<sys::SwsContext>, MediaError> {
@@ -147,6 +250,7 @@ impl Scaler {
 impl Drop for Scaler {
     fn drop(&mut self) {
         self.free();
+        self.free_resize();
     }
 }
 

@@ -127,6 +127,7 @@ impl TrackVideo {
                 .video
                 .and_then(|video| resolution.shrink(video.width, video.height));
             reader.set_video_size(size)?;
+            reader.set_field_order(media.field_order());
             self.resolution = resolution;
             // Pictures decoded at the old size would otherwise keep showing.
             self.current = None;

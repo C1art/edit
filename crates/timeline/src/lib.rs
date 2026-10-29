@@ -120,7 +120,9 @@ pub use graphic::{Graphic, GraphicContent, GraphicLayer};
 pub use group::GroupId;
 pub use history::{preview, Edit, EditCommand, Timeline};
 pub use hue_curves::{HueCurve, HueCurves, HUE_CURVE_NEUTRAL};
-pub use interpretation::{AlphaInterpretation, ColorSpace, PixelAspect, Primaries, Transfer};
+pub use interpretation::{
+    AlphaInterpretation, ColorSpace, FieldOrder, PixelAspect, Primaries, Transfer,
+};
 pub use keyframe::{HandleSide, Handles, Interpolation, Keyframe};
 pub use label::Label;
 pub use leader::{CountingLeader, LeaderPicture, LEADER_SECONDS};

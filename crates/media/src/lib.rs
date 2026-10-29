@@ -1,6 +1,7 @@
 mod block_match;
 mod channel_map;
 mod codec;
+mod deinterlace;
 mod error;
 mod ffi;
 mod fit;

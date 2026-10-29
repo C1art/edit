@@ -1,13 +1,14 @@
 use crate::{
-    AlphaInterpretation, Clip, ColorSpace, Edit, FrameRate, PixelAspect, Sequence, SourceId, Speed,
-    Ticks, TimelineError, Track,
+    AlphaInterpretation, Clip, ColorSpace, Edit, FieldOrder, FrameRate, PixelAspect, Sequence,
+    SourceId, Speed, Ticks, TimelineError, Track,
 };
 
 /// Plays a file's pictures at `rate` instead of the rate it was recorded at, or at its
 /// own again for `None`. Its clips keep the frames they show, so they grow or shrink,
 /// stopping at the next clip on their track. The pictures are drawn with `aspect`
 /// pixels, or the file's own for `None`, their alpha read as `alpha` says and their
-/// colors in `color`, or the file's own space for `None`.
+/// colors in `color`, or the file's own space for `None`, and their fields in the
+/// order `fields` says, or the file's for `None`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InterpretFootage {
     pub source: SourceId,
@@ -15,6 +16,7 @@ pub struct InterpretFootage {
     pub aspect: Option<PixelAspect>,
     pub alpha: AlphaInterpretation,
     pub color: Option<ColorSpace>,
+    pub fields: Option<FieldOrder>,
 }
 
 impl Edit for InterpretFootage {
@@ -34,17 +36,20 @@ impl Edit for InterpretFootage {
         let rate = self.rate.filter(|&rate| rate != native.frame_rate);
         let aspect = self.aspect.filter(|&aspect| aspect != native.pixel_aspect);
         let color = self.color.filter(|&color| color != native.color_space);
+        let fields = self.fields.filter(|&fields| fields != native.field_order);
         let interpreted = (
             item.interpreted_rate,
             item.interpreted_aspect,
             item.alpha,
             item.interpreted_color,
+            item.interpreted_fields,
         );
-        if interpreted == (rate, aspect, self.alpha, color) {
+        if interpreted == (rate, aspect, self.alpha, color, fields) {
             return Err(TimelineError::NothingToEdit);
         }
         item.interpreted_aspect = aspect;
         item.interpreted_color = color;
+        item.interpreted_fields = fields;
         item.alpha = self.alpha;
         if item.interpreted_rate == rate {
             return Ok(());

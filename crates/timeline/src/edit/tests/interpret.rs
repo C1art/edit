@@ -1,5 +1,5 @@
 use super::*;
-use crate::{AlphaInterpretation, ColorSpace, PixelAspect};
+use crate::{AlphaInterpretation, ColorSpace, FieldOrder, PixelAspect};
 
 fn interpret(timeline: &mut Timeline, source: SourceId, rate: Option<FrameRate>) {
     timeline
@@ -9,6 +9,7 @@ fn interpret(timeline: &mut Timeline, source: SourceId, rate: Option<FrameRate>)
             aspect: None,
             alpha: AlphaInterpretation::Straight,
             color: None,
+            fields: None,
         })
         .unwrap();
 }
@@ -62,6 +63,7 @@ fn reinterpreting_pixels_keeps_clip_lengths_and_the_files_own_shape_clears_it() 
         aspect,
         alpha,
         color: Some(ColorSpace::Rec2100Hlg),
+        fields: Some(FieldOrder::UpperFirst),
     };
     timeline
         .apply(interpret(anamorphic, AlphaInterpretation::Ignore))
@@ -69,6 +71,7 @@ fn reinterpreting_pixels_keeps_clip_lengths_and_the_files_own_shape_clears_it() 
     let item = &timeline.sequence().media[0];
     assert_eq!(item.pixel_aspect(), anamorphic.unwrap());
     assert_eq!(item.color_space(), ColorSpace::Rec2100Hlg);
+    assert_eq!(item.field_order(), FieldOrder::UpperFirst);
     assert_eq!(item.alpha, AlphaInterpretation::Ignore);
     assert_eq!(spans(&timeline, V1), vec![(0, 200, 0)]);
 
@@ -76,15 +79,18 @@ fn reinterpreting_pixels_keeps_clip_lengths_and_the_files_own_shape_clears_it() 
     timeline
         .apply(InterpretFootage {
             color: Some(ColorSpace::Rec709),
+            fields: Some(FieldOrder::Progressive),
             ..interpret(own, AlphaInterpretation::Ignore)
         })
         .unwrap();
     let item = &timeline.sequence().media[0];
     assert_eq!(item.interpreted_aspect, None);
     assert_eq!(item.interpreted_color, None);
+    assert_eq!(item.interpreted_fields, None);
     assert_eq!(
         timeline.apply(InterpretFootage {
             color: None,
+            fields: None,
             ..interpret(None, AlphaInterpretation::Ignore)
         }),
         Err(TimelineError::NothingToEdit)

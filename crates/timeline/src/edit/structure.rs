@@ -159,6 +159,7 @@ impl Edit for ImportMedia {
             interpreted_rate: self.interpreted_rate,
             interpreted_aspect: None,
             interpreted_color: None,
+            interpreted_fields: None,
             alpha: Default::default(),
             log: Default::default(),
             offline: false,

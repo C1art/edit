@@ -185,6 +185,34 @@ impl ColorSpace {
     }
 }
 
+/// Which of the two fields of an interlaced picture was recorded first, as
+/// Premiere's Field Order names them.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum FieldOrder {
+    /// Whole frames, with no fields.
+    #[default]
+    Progressive,
+    /// The field of even rows, counting from 0 at the top, is first.
+    UpperFirst,
+    LowerFirst,
+}
+
+impl FieldOrder {
+    pub const ALL: [Self; 3] = [Self::Progressive, Self::UpperFirst, Self::LowerFirst];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Progressive => "No Fields (Progressive Scan)",
+            Self::UpperFirst => "Upper Field First",
+            Self::LowerFirst => "Lower Field First",
+        }
+    }
+
+    pub fn is_progressive(&self) -> bool {
+        *self == Self::Progressive
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

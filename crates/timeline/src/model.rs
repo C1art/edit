@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AudioEffect, AudioType, Bin, Captions, ColorSpace, FrameRate, Gain, GroupId, Label,
+    AudioEffect, AudioType, Bin, Captions, ColorSpace, FieldOrder, FrameRate, Gain, GroupId, Label,
     LinkedSelection, Look, Marker, Marks, MediaItem, Param, PixelAspect, SourceId, Speed, Submix,
     Ticks, TimeInterpolation, TimeRemap, Timebase, Transition,
 };
@@ -287,6 +287,8 @@ pub struct VideoFormat {
     /// The color space the file's pictures were encoded in.
     #[serde(default, skip_serializing_if = "ColorSpace::is_rec709")]
     pub color_space: ColorSpace,
+    #[serde(default, skip_serializing_if = "FieldOrder::is_progressive")]
+    pub field_order: FieldOrder,
 }
 
 impl Default for VideoFormat {
@@ -297,6 +299,7 @@ impl Default for VideoFormat {
             frame_rate: FrameRate::FPS_25,
             pixel_aspect: PixelAspect::SQUARE,
             color_space: ColorSpace::Rec709,
+            field_order: FieldOrder::Progressive,
         }
     }
 }
@@ -436,6 +439,8 @@ impl Sequence {
         for item in &mut sequence.media {
             if let Some(proxy) = item.proxy.take() {
                 item.path = proxy;
+                // Proxies are made from deinterlaced pictures.
+                item.interpreted_fields = Some(FieldOrder::Progressive);
             }
         }
         sequence

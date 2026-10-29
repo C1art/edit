@@ -32,6 +32,7 @@ fn sample() -> ProjectFile {
         interpreted_aspect: PixelAspect::new(40, 33),
         alpha: AlphaInterpretation::Invert,
         interpreted_color: Some(ColorSpace::P3D65Pq),
+        interpreted_fields: None,
         log: MediaLog {
             description: "Wide, \"take 3\"".to_owned(),
             scene: "12A".to_owned(),
@@ -86,6 +87,7 @@ fn sample() -> ProjectFile {
         interpreted_rate: None,
         interpreted_aspect: None,
         interpreted_color: None,
+        interpreted_fields: None,
         alpha: Default::default(),
         log: Default::default(),
         offline: false,
@@ -141,6 +143,7 @@ fn sample() -> ProjectFile {
         interpreted_rate: None,
         interpreted_aspect: None,
         interpreted_color: None,
+        interpreted_fields: None,
         alpha: Default::default(),
         log: Default::default(),
         offline: false,

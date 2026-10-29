@@ -3,7 +3,7 @@ use std::path::Path;
 use std::ptr::{self, NonNull};
 
 use ffmpeg_sys_next as sys;
-use timeline::{ColorSpace, Ticks, Timebase};
+use timeline::{ColorSpace, FieldOrder, Ticks, Timebase};
 
 use super::error::check;
 use super::Packet;
@@ -132,6 +132,24 @@ impl InputContext {
             _ if wide => ColorSpace::Rec2020,
             _ if p3 => ColorSpace::P3D65,
             _ => ColorSpace::Rec709,
+        }
+    }
+
+    /// The order the stream's fields are shown in, as the codec parameters declare it;
+    /// undeclared counts as progressive.
+    pub(crate) fn field_order(&self, index: usize) -> FieldOrder {
+        use sys::AVFieldOrder::*;
+        let Some(stream) = self.stream(index) else {
+            return FieldOrder::Progressive;
+        };
+        // SAFETY: `stream` returns valid stream pointers owned by the open context, and
+        // every stream has non-null `codecpar`.
+        let codecpar = unsafe { &*(*stream).codecpar };
+        // The second letter is the field shown first; the first is the one coded first.
+        match codecpar.field_order {
+            AV_FIELD_TT | AV_FIELD_BT => FieldOrder::UpperFirst,
+            AV_FIELD_BB | AV_FIELD_TB => FieldOrder::LowerFirst,
+            _ => FieldOrder::Progressive,
         }
     }
 

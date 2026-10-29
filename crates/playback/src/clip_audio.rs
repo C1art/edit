@@ -262,6 +262,7 @@ mod tests {
             interpreted_rate: None,
             interpreted_aspect: None,
             interpreted_color: None,
+            interpreted_fields: None,
             alpha: Default::default(),
             log: Default::default(),
             offline: false,

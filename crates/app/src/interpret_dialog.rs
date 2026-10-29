@@ -1,6 +1,6 @@
 use egui::{ComboBox, DragValue, Key};
 use timeline::{
-    AlphaInterpretation, ColorSpace, FrameRate, InterpretFootage, PixelAspect, SourceId,
+    AlphaInterpretation, ColorSpace, FieldOrder, FrameRate, InterpretFootage, PixelAspect, SourceId,
 };
 
 use crate::editor::Editor;
@@ -31,6 +31,9 @@ pub(crate) struct InterpretDialog {
     native_aspect: PixelAspect,
     conform: bool,
     aspect: PixelAspect,
+    native_fields: FieldOrder,
+    conform_fields: bool,
+    fields: FieldOrder,
     alpha: AlphaInterpretation,
     native_color: ColorSpace,
     override_color: bool,
@@ -55,6 +58,9 @@ impl Editor {
             native_aspect: video.pixel_aspect,
             conform: item.interpreted_aspect.is_some(),
             aspect: item.pixel_aspect(),
+            native_fields: video.field_order,
+            conform_fields: item.interpreted_fields.is_some(),
+            fields: item.field_order(),
             alpha: item.alpha,
             native_color: video.color_space,
             override_color: item.interpreted_color.is_some(),
@@ -98,6 +104,23 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                 ui.add_enabled_ui(dialog.conform, |ui| aspect_picker(ui, &mut dialog.aspect));
             });
             ui.separator();
+            ui.label("Field Order");
+            let native = format!("Use field order from file: {}", dialog.native_fields.name());
+            ui.radio_value(&mut dialog.conform_fields, false, native);
+            ui.horizontal(|ui| {
+                ui.radio_value(&mut dialog.conform_fields, true, "Conform to:");
+                ui.add_enabled_ui(dialog.conform_fields, |ui| {
+                    ComboBox::from_id_salt("conformed field order")
+                        .selected_text(dialog.fields.name())
+                        .show_ui(ui, |ui| {
+                            for order in FieldOrder::ALL {
+                                ui.selectable_value(&mut dialog.fields, order, order.name());
+                            }
+                        });
+                });
+            });
+            ui.weak("Interlaced pictures are rebuilt from their first field.");
+            ui.separator();
             ui.label("Alpha Channel");
             for alpha in AlphaInterpretation::ALL {
                 ui.radio_value(&mut dialog.alpha, alpha, alpha.name());
@@ -137,6 +160,7 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
             source: dialog.source,
             rate: dialog.assume.then_some(dialog.rate),
             aspect: dialog.conform.then_some(dialog.aspect),
+            fields: dialog.conform_fields.then_some(dialog.fields),
             alpha: dialog.alpha,
             color: dialog.override_color.then_some(dialog.color),
         });
