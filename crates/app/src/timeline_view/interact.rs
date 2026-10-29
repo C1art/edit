@@ -195,7 +195,7 @@ impl TimelineView {
     /// The volume line the pointer is on, what it grabs there and the band the line
     /// moves in: a shown track's automation anywhere along its row, else an audio
     /// clip's own line.
-    fn band_hit(
+    pub(super) fn band_hit(
         &self,
         sequence: &Sequence,
         rows: &[Row],

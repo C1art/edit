@@ -1,4 +1,5 @@
 mod clip_art;
+mod cursor;
 mod drop;
 mod edit_point;
 mod gesture;
@@ -265,6 +266,7 @@ impl TimelineView {
         let top = tracks.top() - self.scroll_y;
         if !self.navigate(&response, tracks, timeline.sequence()) {
             self.handle_gestures(&response, timeline, scale, top, playhead, &mut output);
+            self.show_cursor(&response, timeline.sequence(), &scale, top);
         }
         output.clip_menu = self.context_clip.then(|| response.clone());
         output.gap_menu = self.context_gap.then(|| response.clone());
