@@ -9,6 +9,7 @@ use crossbeam::channel::{self, Receiver, Sender};
 use timeline::{FrameRate, Sequence, Ticks, Timebase};
 
 mod moves;
+mod output;
 
 use crate::clock::{PlaybackClock, SharedPosition};
 use crate::command::{Command, Event, Seek};
@@ -56,6 +57,7 @@ pub struct Player {
     /// Whether the video worker decodes media items' proxies instead of their files.
     proxies: bool,
     resolution: Resolution,
+    previews: Arc<Vec<Preview>>,
     shuttle: Option<Shuttle>,
     /// While set, playing wraps from this range's end back to its start.
     looping: Option<Range<Ticks>>,
@@ -140,6 +142,7 @@ impl Player {
             levels: None,
             proxies: false,
             resolution: Resolution::Full,
+            previews: Arc::new(Vec::new()),
             shuttle: None,
             looping: None,
             stop: None,
@@ -186,9 +189,10 @@ impl Player {
     /// Plays these rendered files in place of the pictures they cover, from the next
     /// frame composed.
     pub fn set_previews(&mut self, previews: Vec<Preview>) {
+        self.previews = Arc::new(previews);
         let _ = self
             .video_commands
-            .send(Command::Previews(Arc::new(previews)));
+            .send(Command::Previews(Arc::clone(&self.previews)));
     }
 
     /// Plays `sequence` without seeking, for edits that change only levels, so faders
