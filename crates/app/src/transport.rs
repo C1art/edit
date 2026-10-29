@@ -1,9 +1,13 @@
-use egui::{Button, Color32, Rect, Sense, Stroke};
+use egui::{Rect, RichText, Sense, Stroke};
 use playback::Player;
 use timeline::{Marks, Ticks, Timebase, Timecode};
 
+use crate::icons::{self, Icon, Look};
+use crate::theme;
+
 /// Height of the scrub bar under each monitor.
 const SCRUB_HEIGHT: f32 = 18.0;
+const BUTTON: egui::Vec2 = egui::vec2(30.0, 24.0);
 
 /// How long Play Around plays before the playhead, and after it.
 const PREROLL_SECONDS: u32 = 2;
@@ -19,52 +23,61 @@ pub fn ui(ui: &mut egui::Ui, player: &mut Player, marks: Option<Marks>) {
     let sequence = player.sequence();
     let (timebase, rate) = (sequence.timebase, sequence.format.frame_rate);
     let position = player.position();
-    ui.horizontal_wrapped(|ui| {
-        let label = if player.is_playing() { "Pause" } else { "Play" };
-        if ui
-            .add(Button::new(label).min_size([56.0, 0.0].into()))
-            .on_hover_text("Play/pause (Space)")
-            .clicked()
-        {
-            player.toggle();
-        }
-        if ui
-            .button("< Frame")
+    ui.horizontal(|ui| {
+        let row = ui.available_rect_before_wrap();
+        let timecode = Timecode::new(position, timebase, rate).to_string();
+        ui.label(
+            RichText::new(timecode)
+                .monospace()
+                .size(14.0)
+                .color(theme::ACCENT),
+        );
+        // The buttons sit in the middle, when there is room left of them.
+        let buttons = 4.0 * BUTTON.x + 3.0 * ui.spacing().item_spacing.x;
+        let gap = row.center().x - buttons / 2.0 - ui.cursor().left();
+        ui.add_space(gap.max(0.0));
+        if icons::button(ui, Icon::StepBack, BUTTON)
             .on_hover_text("Previous frame (←)")
             .clicked()
         {
             player.step(-1);
         }
-        if ui
-            .button("Frame >")
+        let play = if player.is_playing() {
+            Icon::Pause
+        } else {
+            Icon::Play
+        };
+        if icons::button(ui, play, BUTTON)
+            .on_hover_text("Play/pause (Space)")
+            .clicked()
+        {
+            player.toggle();
+        }
+        if icons::button(ui, Icon::StepForward, BUTTON)
             .on_hover_text("Next frame (→)")
             .clicked()
         {
             player.step(1);
         }
-        let looping = player.is_looping();
-        if ui
-            .add(Button::new("Loop").selected(looping))
+        if icons::sized_toggle(ui, player.is_looping(), Icon::Loop, Look::Filled, BUTTON)
             .on_hover_text("Loop playback of the marked range, or all of it (Ctrl+Shift+L)")
             .clicked()
         {
             handle_key(player, TransportKey::ToggleLoop, marks);
         }
-        ui.monospace(format!(
-            "{} / {}",
-            Timecode::new(position, timebase, rate),
-            Timecode::new(player.duration(), timebase, rate)
-        ));
-        if let Marks {
-            mark_in: Some(mark_in),
-            mark_out: Some(mark_out),
-        } = marks
-        {
-            ui.monospace(format!(
-                "In-Out {}",
-                Timecode::new(mark_out - mark_in, timebase, rate)
-            ));
-        }
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let duration = Timecode::new(player.duration(), timebase, rate).to_string();
+            ui.label(RichText::new(duration).monospace().color(theme::WEAK_TEXT));
+            if let Marks {
+                mark_in: Some(mark_in),
+                mark_out: Some(mark_out),
+            } = marks
+            {
+                let marked = Timecode::new(mark_out - mark_in, timebase, rate);
+                ui.label(RichText::new(format!("In-Out {marked}")).monospace().weak())
+                    .on_hover_text("Duration of the marked range");
+            }
+        });
     });
 }
 
@@ -82,7 +95,8 @@ fn scrub_bar(ui: &mut egui::Ui, player: &mut Player, marks: Marks) {
     let (rect, response) = ui.allocate_exact_size(size, Sense::click_and_drag());
     let painter = ui.painter_at(rect);
     let visuals = ui.visuals();
-    painter.rect_filled(rect, 2.0, visuals.extreme_bg_color);
+    let track = Rect::from_center_size(rect.center(), egui::vec2(rect.width(), 4.0));
+    painter.rect_filled(track, 2.0, visuals.widgets.inactive.bg_fill);
     let duration = player.duration();
     if duration <= Ticks::ZERO {
         return;
@@ -91,17 +105,20 @@ fn scrub_bar(ui: &mut egui::Ui, player: &mut Player, marks: Marks) {
         |time: Ticks| rect.left() + rect.width() * (time.0 as f64 / duration.0 as f64) as f32;
     if marks.is_set() {
         let marked = marks.range(duration);
-        let range = Rect::from_x_y_ranges(to_x(marked.start)..=to_x(marked.end), rect.y_range());
-        painter.rect_filled(range, 0.0, visuals.selection.bg_fill.gamma_multiply(0.6));
+        let range = Rect::from_x_y_ranges(to_x(marked.start)..=to_x(marked.end), track.y_range());
+        painter.rect_filled(range, 2.0, visuals.selection.bg_fill);
     }
     let playhead = to_x(player.position());
+    let played = Rect::from_x_y_ranges(track.left()..=playhead, track.y_range());
+    painter.rect_filled(played, 2.0, theme::ACCENT.gamma_multiply(0.5));
     painter.line_segment(
         [
-            egui::pos2(playhead, rect.top()),
-            egui::pos2(playhead, rect.bottom()),
+            egui::pos2(playhead, rect.top() + 2.0),
+            egui::pos2(playhead, rect.bottom() - 2.0),
         ],
-        Stroke::new(2.0, Color32::from_rgb(80, 160, 255)),
+        Stroke::new(2.0, theme::ACCENT),
     );
+    painter.circle_filled(egui::pos2(playhead, rect.center().y), 4.5, theme::ACCENT);
     if let Some(pointer) = response.interact_pointer_pos() {
         let fraction = f64::from((pointer.x - rect.left()) / rect.width()).clamp(0.0, 1.0);
         player.seek(Ticks((fraction * duration.0 as f64).round() as i64));

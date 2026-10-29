@@ -13,6 +13,8 @@ use crate::clip_art::ClipArt;
 pub const PLAYHEAD: Color32 = Color32::from_rgb(230, 70, 60);
 const VIDEO_CLIP: Color32 = Color32::from_rgb(64, 104, 160);
 const AUDIO_CLIP: Color32 = Color32::from_rgb(58, 128, 92);
+const CLIP_RADIUS: f32 = 4.0;
+const NAME_STRIP: f32 = 17.0;
 const OFFLINE_CLIP: Color32 = Color32::from_rgb(170, 40, 40);
 const OUT_OF_SYNC: Color32 = Color32::from_rgb(200, 30, 30);
 const MIN_LABEL_SPACING: f32 = 90.0;
@@ -164,10 +166,23 @@ pub fn clips(
         if dimmed {
             fill = fill.gamma_multiply(0.4);
         }
-        painter.rect_filled(rect, 3.0, fill);
+        // A hair of space between neighbours keeps back-to-back clips apart.
+        let body = rect.shrink2(egui::vec2(0.5, 0.0));
+        painter.rect_filled(body, CLIP_RADIUS, fill);
+        let strip = Rect::from_min_max(
+            body.left_top(),
+            egui::pos2(body.right(), (body.top() + NAME_STRIP).min(body.bottom())),
+        );
         if let Some(item) = sequence.media_item(clip.source).filter(|_| !offline) {
+            // Thumbnails sit under the name strip when the row is tall enough for both.
+            let art_rect = match row.track.kind {
+                TrackKind::Video if body.height() > 2.0 * NAME_STRIP => {
+                    body.shrink(1.0).with_min_y(strip.bottom())
+                }
+                _ => body.shrink(1.0),
+            };
             let area = ClipArea {
-                rect: rect.shrink(1.0),
+                rect: art_rect,
                 clip,
                 item,
                 timebase: sequence.timebase,
@@ -181,13 +196,15 @@ pub fn clips(
                     };
                     clip_art::thumbnails(painter, &area, scale, art, tint);
                     if selected {
-                        painter.rect_filled(rect, 3.0, Color32::from_white_alpha(40));
+                        painter.rect_filled(art_rect, 0.0, Color32::from_white_alpha(40));
                     }
-                    let label = Rect::from_min_max(
-                        rect.left_top(),
-                        egui::pos2(rect.right(), rect.top() + 16.0),
-                    );
-                    painter.rect_filled(label, 3.0, fill.gamma_multiply(0.85));
+                    let corners = egui::CornerRadius {
+                        nw: CLIP_RADIUS as u8,
+                        ne: CLIP_RADIUS as u8,
+                        sw: 0,
+                        se: 0,
+                    };
+                    painter.rect_filled(strip, corners, fill);
                 }
                 TrackKind::Audio if art.show_waveforms => {
                     // Selection lightens the clip, so its bars go dark to stay visible.
@@ -202,11 +219,11 @@ pub fn clips(
             }
         }
         let stroke = if selected {
-            Stroke::new(2.0, Color32::WHITE)
+            Stroke::new(1.5, Color32::WHITE)
         } else {
-            Stroke::new(1.0, Color32::from_black_alpha(120))
+            Stroke::new(1.0, fill.lerp_to_gamma(Color32::WHITE, 0.18))
         };
-        painter.rect_stroke(rect, 3.0, stroke, StrokeKind::Inside);
+        painter.rect_stroke(body, CLIP_RADIUS, stroke, StrokeKind::Inside);
         transition_marks(painter, row, scale, track, clip);
         super::markers::paint_on_clip(painter, rect, scale, clip);
         match row.track.kind {
@@ -259,9 +276,9 @@ pub fn clips(
             _ => String::new(),
         };
         let badge = sync_badge(painter, rect, sequence, clip);
-        painter.with_clip_rect(rect.shrink(2.0)).text(
-            rect.left_top() + egui::vec2(5.0 + badge, 4.0),
-            Align2::LEFT_TOP,
+        painter.with_clip_rect(strip.shrink(1.0)).text(
+            egui::pos2(strip.left() + 5.0 + badge, strip.center().y),
+            Align2::LEFT_CENTER,
             format!("{camera}{name}{speed}{link}{gain}"),
             FontId::proportional(11.0),
             Color32::WHITE,

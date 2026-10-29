@@ -5,6 +5,7 @@ use crate::editor::Editor;
 use crate::effects::SideTab;
 use crate::keymap::{Command, WORKSPACE_SLOTS};
 use crate::panels::MediaTab;
+use crate::theme;
 
 /// The Save as New Workspace dialog.
 pub(crate) struct NamingWorkspace {
@@ -87,12 +88,10 @@ pub(crate) fn workspace_bar(editor: &mut Editor, ui: &mut egui::Ui) {
     let active = editor.workspaces.active();
     let mut chosen = None;
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        ui.spacing_mut().item_spacing.x = 16.0;
         let list = editor.workspaces.list().iter().enumerate().rev();
         for (index, workspace) in list {
-            if ui
-                .selectable_label(index == active, &workspace.name)
-                .clicked()
-            {
+            if theme::tab(ui, index == active, &workspace.name).clicked() {
                 chosen = Some(index);
             }
         }

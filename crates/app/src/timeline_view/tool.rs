@@ -29,21 +29,22 @@ pub enum Tool {
 }
 
 impl Tool {
-    pub const ALL: [Self; 14] = [
-        Self::Selection,
-        Self::TrackSelect(Direction::Forward),
-        Self::TrackSelect(Direction::Backward),
-        Self::Ripple,
-        Self::Roll,
-        Self::RateStretch,
-        Self::Razor,
-        Self::Slip,
-        Self::Slide,
-        Self::Hand,
-        Self::Zoom,
-        Self::Type,
-        Self::Shape(ShapeKind::Rectangle),
-        Self::Shape(ShapeKind::Ellipse),
+    /// Every tool, grouped as the toolbar shows them: one button per group.
+    pub const GROUPS: [&'static [Self]; 7] = [
+        &[Self::Selection],
+        &[
+            Self::TrackSelect(Direction::Forward),
+            Self::TrackSelect(Direction::Backward),
+        ],
+        &[Self::Ripple, Self::Roll, Self::RateStretch],
+        &[Self::Razor],
+        &[Self::Slip, Self::Slide],
+        &[Self::Hand, Self::Zoom],
+        &[
+            Self::Type,
+            Self::Shape(ShapeKind::Rectangle),
+            Self::Shape(ShapeKind::Ellipse),
+        ],
     ];
 
     pub fn label(self) -> &'static str {

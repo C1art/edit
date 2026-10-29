@@ -7,6 +7,7 @@ use crate::editor::Editor;
 use crate::keymap::Command;
 use crate::placing;
 use crate::project_files::{AfterDiscard, Interchange, PathPurpose};
+use crate::theme;
 use crate::timeline_view::Tool;
 
 pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
@@ -387,50 +388,103 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
     });
 }
 
+/// One button for a group of tools, showing the one last picked from it, with an arrow
+/// that lists the whole group.
+fn tool_group(ui: &mut egui::Ui, current: &mut Tool, group: &'static [Tool]) {
+    let Some(&first) = group.first() else {
+        return;
+    };
+    let id = ui.scope_id().with(("tool_group", first.label()));
+    let shown = if group.contains(current) {
+        ui.data_mut(|data| data.insert_temp(id, *current));
+        *current
+    } else {
+        ui.data(|data| data.get_temp(id)).unwrap_or(first)
+    };
+    if ui
+        .selectable_label(*current == shown, shown.label())
+        .on_hover_text(shown.hint())
+        .clicked()
+    {
+        *current = shown;
+    }
+    if group.len() < 2 {
+        return;
+    }
+    let (rect, arrow) = ui.allocate_exact_size(egui::vec2(10.0, 20.0), egui::Sense::click());
+    let color = if arrow.hovered() {
+        egui::Color32::WHITE
+    } else {
+        theme::WEAK_TEXT
+    };
+    let center = rect.center() + egui::vec2(-1.0, 1.0);
+    let triangle = vec![
+        center + egui::vec2(-3.0, -2.0),
+        center + egui::vec2(3.0, -2.0),
+        center + egui::vec2(0.0, 2.0),
+    ];
+    ui.painter().add(egui::Shape::convex_polygon(
+        triangle,
+        color,
+        egui::Stroke::NONE,
+    ));
+    egui::Popup::menu(&arrow).show(|ui| {
+        for &tool in group {
+            if ui
+                .selectable_label(*current == tool, tool.label())
+                .on_hover_text(tool.hint())
+                .clicked()
+            {
+                *current = tool;
+                ui.close();
+            }
+        }
+    });
+}
+
 pub fn timeline_toolbar(editor: &mut Editor, ui: &mut egui::Ui) {
     crate::sequence_tabs::tabs(editor, ui);
     crate::nesting::breadcrumbs(editor, ui);
     ui.horizontal_wrapped(|ui| {
-        for tool in Tool::ALL {
+        theme::segmented(ui, |ui| {
+            for group in Tool::GROUPS {
+                tool_group(ui, &mut editor.view.tool, group);
+            }
+        });
+        theme::segmented(ui, |ui| {
+            ui.toggle_value(&mut editor.view.snapping, "Snap")
+                .on_hover_text("Snap to clip edges and the playhead (S)");
+            let linked = editor.timeline.sequence().linked_selection == LinkedSelection::Together;
             if ui
-                .selectable_label(editor.view.tool == tool, tool.label())
-                .on_hover_text(tool.hint())
+                .selectable_label(linked, "Linked")
+                .on_hover_text("Pick linked picture and sound together")
                 .clicked()
             {
-                editor.view.tool = tool;
+                editor.toggle_linked_selection();
             }
-        }
-        ui.separator();
-        ui.toggle_value(&mut editor.view.snapping, "Snap")
-            .on_hover_text("Snap to clip edges and the playhead (S)");
-        let linked = editor.timeline.sequence().linked_selection == LinkedSelection::Together;
-        if ui
-            .selectable_label(linked, "Linked")
-            .on_hover_text("Pick linked picture and sound together")
-            .clicked()
-        {
-            editor.toggle_linked_selection();
-        }
-        ui.separator();
-        if ui.button("−").on_hover_text("Zoom out (-)").clicked() {
-            editor.view.zoom(0.5, None);
-        }
-        if ui.button("+").on_hover_text("Zoom in (=)").clicked() {
-            editor.view.zoom(2.0, None);
-        }
-        if ui
-            .button("Fit")
-            .on_hover_text("Zoom to sequence (\\)")
-            .clicked()
-        {
-            editor.view.zoom_to_fit(editor.timeline.sequence());
-        }
-        ui.separator();
-        if ui.button("+ Video").clicked() {
-            editor.add_track(TrackKind::Video);
-        }
-        if ui.button("+ Audio").clicked() {
-            editor.add_track(TrackKind::Audio);
-        }
+        });
+        theme::segmented(ui, |ui| {
+            if ui.button("−").on_hover_text("Zoom out (-)").clicked() {
+                editor.view.zoom(0.5, None);
+            }
+            if ui
+                .button("Fit")
+                .on_hover_text("Zoom to sequence (\\)")
+                .clicked()
+            {
+                editor.view.zoom_to_fit(editor.timeline.sequence());
+            }
+            if ui.button("+").on_hover_text("Zoom in (=)").clicked() {
+                editor.view.zoom(2.0, None);
+            }
+        });
+        ui.menu_button("Add Track", |ui| {
+            if ui.button("Video Track").clicked() {
+                editor.add_track(TrackKind::Video);
+            }
+            if ui.button("Audio Track").clicked() {
+                editor.add_track(TrackKind::Audio);
+            }
+        });
     });
 }

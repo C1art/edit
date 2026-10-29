@@ -1,13 +1,14 @@
 mod file;
 mod menu;
 
-use egui::{CentralPanel, Panel};
+use egui::{CentralPanel, Frame, Margin, Panel};
 
 use crate::editor::Editor;
 use crate::effects::SideTab;
 use crate::monitors;
 use crate::panels::MediaTab;
 use crate::project_store::Setting;
+use crate::theme;
 
 pub(crate) use menu::{dialog, window_menu, workspace_bar, NamingWorkspace};
 
@@ -223,22 +224,36 @@ impl Editor {
     /// they are dragged to.
     pub(crate) fn lay_out_panels(&mut self, ui: &mut egui::Ui) {
         // First, as its menus can switch workspaces.
-        Panel::top("menu_bar").show(ui, |ui| crate::menus::menu_bar(self, ui));
+        let menu_bar = Frame::new()
+            .fill(theme::GUTTER)
+            .inner_margin(Margin::symmetric(8, 4));
+        Panel::top("menu_bar")
+            .frame(menu_bar)
+            .show_separator_line(false)
+            .show(ui, |ui| crate::menus::menu_bar(self, ui));
         let layout = self.workspaces.current();
         let generation = self.workspaces.generation;
         let media = Panel::left(("media_pool", generation))
             .resizable(true)
             .default_size(layout.media_width)
-            .show(ui, |ui| self.media_panel(ui));
+            .frame(theme::dock())
+            .show_separator_line(false)
+            .show(ui, |ui| theme::card(ui, |ui| self.media_panel(ui)));
         let side = Panel::right(("side_panel", generation))
             .resizable(true)
             .default_size(layout.side_width)
-            .show(ui, |ui| self.side_panel(ui));
+            .frame(theme::dock())
+            .show_separator_line(false)
+            .show(ui, |ui| theme::card(ui, |ui| self.side_panel(ui)));
         let timeline = Panel::bottom(("timeline", generation))
             .resizable(true)
             .default_size(layout.timeline_height)
-            .show(ui, |ui| self.timeline_panel(ui));
-        CentralPanel::default().show(ui, |ui| monitors::ui(self, ui));
+            .frame(theme::dock())
+            .show_separator_line(false)
+            .show(ui, |ui| theme::card(ui, |ui| self.timeline_panel(ui)));
+        CentralPanel::default()
+            .frame(theme::dock())
+            .show(ui, |ui| monitors::ui(self, ui));
 
         let measured = Layout {
             media_width: media.response.rect.width().round(),

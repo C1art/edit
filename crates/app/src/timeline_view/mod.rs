@@ -37,7 +37,7 @@ pub use tool::{Direction, Tool};
 pub use track_heights::TrackHeights;
 pub use trim_view::TrimView;
 
-const HEADER_WIDTH: f32 = 290.0;
+const HEADER_WIDTH: f32 = 200.0;
 const RULER_HEIGHT: f32 = 26.0;
 /// Snapping reach in points, so it feels the same at every zoom level.
 const SNAP_POINTS: f32 = 8.0;

@@ -50,7 +50,7 @@ pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, masks: &mut Vec<Mask>
         masks.remove(index);
         rows.commit();
     }
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         for shape in MaskShape::ALL {
             let add = egui::Button::new(format!("Add {} Mask", shape.name())).small();
             if ui.add_enabled(masks.len() < MAX_MASKS, add).clicked() {

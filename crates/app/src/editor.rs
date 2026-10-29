@@ -124,6 +124,7 @@ pub struct Editor {
 
 impl Editor {
     pub fn new(creation_context: &eframe::CreationContext<'_>, initial: Vec<PathBuf>) -> Self {
+        crate::theme::apply(&creation_context.egui_ctx);
         let mut notices = Vec::new();
         let audio = AudioOutput::open_default()
             .map_err(|error| notices.push(format!("Audio disabled: {error}")))

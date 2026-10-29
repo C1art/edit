@@ -1,4 +1,4 @@
-use egui::{Color32, Rect, Sense, Stroke, StrokeKind, UiBuilder};
+use egui::{Color32, Rect, Sense, UiBuilder};
 use playback::Resolution;
 use timeline::PlaceMode;
 
@@ -6,6 +6,7 @@ use crate::editor::Editor;
 use crate::placing;
 use crate::program_zoom::MonitorZoom;
 use crate::project_files::PathPurpose;
+use crate::theme;
 use crate::transport;
 use crate::trim_monitor::TrimMonitor;
 
@@ -23,9 +24,14 @@ pub enum Focus {
 
 /// The source monitor on the left and the program monitor on the right.
 pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
+    let focus = editor.focus;
     ui.columns(2, |columns| {
-        fitted(&mut columns[0], |ui| source(editor, ui));
-        fitted(&mut columns[1], |ui| program(editor, ui));
+        theme::focus_card(&mut columns[0], focus == Focus::Source, |ui| {
+            fitted(ui, |ui| source(editor, ui));
+        });
+        theme::focus_card(&mut columns[1], focus == Focus::Program, |ui| {
+            fitted(ui, |ui| program(editor, ui));
+        });
     });
 }
 
@@ -67,17 +73,6 @@ fn picture_size(ui: &egui::Ui) -> egui::Vec2 {
     )
 }
 
-fn outline(ui: &egui::Ui, response: &egui::Response, focused: bool) {
-    if focused {
-        ui.painter().rect_stroke(
-            response.rect,
-            0.0,
-            Stroke::new(1.5, Color32::from_rgb(80, 160, 255)),
-            StrokeKind::Outside,
-        );
-    }
-}
-
 fn source(editor: &mut Editor, ui: &mut egui::Ui) {
     let focused = editor.focus == Focus::Source;
     let Some(source) = &mut editor.source else {
@@ -94,8 +89,7 @@ fn source(editor: &mut Editor, ui: &mut egui::Ui) {
         return;
     };
     title(ui, &format!("Source: {}", source.name), focused);
-    let response = source.viewer.picture(ui, picture_size(ui));
-    outline(ui, &response, focused);
+    source.viewer.picture(ui, picture_size(ui));
     let marks = source.marks;
     transport::ui(ui, &mut source.viewer.player, Some(marks));
     let mut place = None;
@@ -144,12 +138,10 @@ fn program(editor: &mut Editor, ui: &mut egui::Ui) {
     if editor.program.is_none() {
         return;
     }
-    if let Some(response) = trim_picture(editor, ui) {
-        outline(ui, &response, focused);
-    } else if let Some(response) = crate::comparison::ui(editor, ui, picture_size(ui)) {
-        outline(ui, &response, focused);
-    } else {
-        zoomed_program(editor, ui, focused);
+    if trim_picture(editor, ui).is_none()
+        && crate::comparison::ui(editor, ui, picture_size(ui)).is_none()
+    {
+        zoomed_program(editor, ui);
     }
     let Some(program) = &mut editor.program else {
         return;
@@ -227,7 +219,7 @@ fn program(editor: &mut Editor, ui: &mut egui::Ui) {
 }
 
 /// The program picture at the chosen zoom, clipped to the monitor.
-fn zoomed_program(editor: &mut Editor, ui: &mut egui::Ui, focused: bool) {
+fn zoomed_program(editor: &mut Editor, ui: &mut egui::Ui) {
     let Some(program) = &editor.program else {
         return;
     };
@@ -243,7 +235,6 @@ fn zoomed_program(editor: &mut Editor, ui: &mut egui::Ui, focused: bool) {
     let painter = ui.painter_at(area);
     painter.rect_filled(area, 0.0, Color32::BLACK);
     program.paint(&painter, picture);
-    outline(ui, &response, focused);
     // Handles past the monitor's edge neither show nor take the pointer.
     let mut clipped = ui.new_child(UiBuilder::new().id_salt("program_overlays").max_rect(area));
     clipped.set_clip_rect(area.intersect(ui.clip_rect()));

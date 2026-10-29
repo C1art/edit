@@ -1,11 +1,10 @@
-use egui::RichText;
-
 use crate::editor::Editor;
 use crate::effects::{self, SideTab};
 use crate::import::Importer;
 use crate::media_pool;
 use crate::mixer;
 use crate::monitors::Focus;
+use crate::theme;
 
 /// What the left panel shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,12 +62,7 @@ impl SideTab {
 
 impl Editor {
     pub(crate) fn media_panel(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal_wrapped(|ui| {
-            for tab in MediaTab::ALL {
-                let title = RichText::new(tab.words().1).heading();
-                ui.selectable_value(&mut self.media_tab, tab, title);
-            }
-        });
+        theme::tab_bar(ui, &mut self.media_tab, MediaTab::ALL, |tab| tab.words().1);
         ui.separator();
         match self.media_tab {
             MediaTab::Project => {
@@ -99,12 +93,7 @@ impl Editor {
     }
 
     pub(crate) fn side_panel(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal_wrapped(|ui| {
-            for tab in SideTab::ALL {
-                let title = RichText::new(tab.words().1).heading();
-                ui.selectable_value(&mut self.side_tab, tab, title);
-            }
-        });
+        theme::tab_bar(ui, &mut self.side_tab, SideTab::ALL, |tab| tab.words().1);
         ui.separator();
         // Measuring costs GPU time, so only while someone is looking.
         if let (Some(program), false) = (&mut self.program, self.side_tab == SideTab::Scopes) {
