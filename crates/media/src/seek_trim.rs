@@ -39,6 +39,24 @@ impl<P> SeekTrim<P> {
         self.ready.clear();
     }
 
+    /// Moves on to a later target without a seek, for decoding on to it. Frames decoded
+    /// but not yet taken are trimmed as if they had come after a seek.
+    pub(crate) fn advance(&mut self, target: Ticks) {
+        let held = self.held_video.take();
+        let ready = std::mem::take(&mut self.ready);
+        self.video_target = Some(target);
+        self.audio_target = Some(target);
+        if let Some((pts, picture)) = held {
+            self.push_video(pts, picture);
+        }
+        for frame in ready {
+            match frame {
+                Trimmed::Video(pts, picture) => self.push_video(pts, picture),
+                Trimmed::Audio(buffer) => self.push_audio(buffer),
+            }
+        }
+    }
+
     pub(crate) fn push_video(&mut self, pts: Ticks, picture: P) {
         let Some(target) = self.video_target else {
             self.ready.push_back(Trimmed::Video(pts, picture));
@@ -134,6 +152,28 @@ mod tests {
             trim.push_video(Ticks(pts), ());
         }
         assert_eq!(video_pts(&drain(&mut trim)), [80, 120]);
+    }
+
+    #[test]
+    fn advancing_trims_frames_already_decoded_and_keeps_the_one_on_screen() {
+        let mut trim = SeekTrim::<()>::new(tb());
+        trim.reset(Ticks(0));
+        for pts in [0, 40, 80] {
+            trim.push_video(Ticks(pts), ());
+        }
+        trim.push_audio(audio(0, 120));
+        trim.advance(Ticks(100));
+        trim.push_video(Ticks(120), ());
+        let frames = drain(&mut trim);
+        assert_eq!(video_pts(&frames), [80, 120]);
+        let audio_starts: Vec<i64> = frames
+            .iter()
+            .filter_map(|frame| match frame {
+                Trimmed::Audio(buffer) => Some(buffer.pts.0),
+                Trimmed::Video(..) => None,
+            })
+            .collect();
+        assert_eq!(audio_starts, [100]);
     }
 
     #[test]

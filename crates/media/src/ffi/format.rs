@@ -1,4 +1,4 @@
-use std::ffi::{c_char, CStr, CString};
+use std::ffi::{c_char, c_int, CStr, CString};
 use std::path::Path;
 use std::ptr::{self, NonNull};
 
@@ -221,6 +221,19 @@ impl InputContext {
             sys::avformat_seek_file(self.0.as_ptr(), -1, i64::MIN, timestamp, timestamp, 0)
         })
         .map(drop)
+    }
+
+    /// The timestamp of the last keyframe at or before `timestamp` in stream `index`, both
+    /// in the stream's timebase, when the container indexes its keyframes.
+    pub(crate) fn keyframe_before(&self, index: usize, timestamp: i64) -> Option<i64> {
+        let stream = self.stream(index)?;
+        let backward = sys::AVSEEK_FLAG_BACKWARD as c_int;
+        // SAFETY: `stream` is a valid stream of the open context; a non-null entry points
+        // into its index, which nothing changes before it is read here.
+        unsafe {
+            let entry = sys::avformat_index_get_entry_from_timestamp(stream, timestamp, backward);
+            entry.as_ref().map(|entry| entry.timestamp)
+        }
     }
 
     pub(crate) fn streams(&self) -> Vec<StreamInfo> {

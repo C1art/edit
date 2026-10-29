@@ -99,6 +99,8 @@ pub struct MediaReader {
     /// Container start time in `timebase`, subtracted so that media time starts at zero.
     start: Ticks,
     trim: SeekTrim<Picture>,
+    /// The latest picture the decoder has put out since the last seek.
+    decoded: Option<Ticks>,
     state: ReadState,
     info: SourceInfo,
     channel_map: Option<ChannelMap>,
@@ -167,6 +169,7 @@ impl MediaReader {
             frame: Frame::new()?,
             timebase,
             trim: SeekTrim::new(timebase),
+            decoded: None,
             state: ReadState::Reading,
             info,
             channel_map: None,
@@ -231,8 +234,43 @@ impl MediaReader {
             audio.decoder.flush();
         }
         self.trim.reset(position);
+        self.decoded = None;
         self.state = ReadState::Reading;
         Ok(())
+    }
+
+    /// Like [`Self::seek`], but when `position` lies ahead within reach, decodes on to it
+    /// rather than going back to a keyframe: stepping through a long group of pictures
+    /// then decodes each frame once instead of once per step.
+    pub fn advance(&mut self, position: Ticks) -> Result<(), MediaError> {
+        if self.reaches_without_seek(position) {
+            self.trim.advance(position);
+            Ok(())
+        } else {
+            self.seek(position)
+        }
+    }
+
+    /// Whether decoding on reaches `position` no later than a seek would: the keyframe a
+    /// seek lands on is already behind, and the picture on screen there is still to come.
+    pub fn reaches_without_seek(&self, position: Ticks) -> bool {
+        let (Some(video), Some(decoded)) = (&self.video, self.decoded) else {
+            return false;
+        };
+        let Some(rate) = self.info.video.as_ref().and_then(|info| info.frame_rate) else {
+            return false;
+        };
+        if self.state != ReadState::Reading
+            || rate.frame_at(decoded, self.timebase) >= rate.frame_at(position, self.timebase)
+        {
+            return false;
+        }
+        let target = (position + self.start).rescale(self.timebase, video.timebase);
+        self.input
+            .keyframe_before(video.index, target.0)
+            .is_some_and(|keyframe| {
+                Ticks(keyframe).rescale(video.timebase, self.timebase) - self.start <= decoded
+            })
     }
 
     /// Returns frames in decode order, interleaving video and audio; `None` at end of media.
@@ -321,6 +359,7 @@ impl MediaReader {
                 let pts = clock.pts(&self.frame, video.timebase, video.next_pts);
                 let picture = Picture::take(&mut self.frame, video.decoder.picture_format())?;
                 video.next_pts = pts;
+                self.decoded = Some(pts);
                 self.trim.push_video(pts, picture);
             }
         }
