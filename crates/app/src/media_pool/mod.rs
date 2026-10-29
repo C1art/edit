@@ -82,11 +82,11 @@ pub fn ui(
     ui: &mut egui::Ui,
     view: &mut PoolView,
     sequence: &Sequence,
-    importing: bool,
+    importing: u64,
     proxies: Option<&ProxyMaker>,
     art: &mut ClipArt,
 ) -> Option<PoolAction> {
-    if sequence.media.is_empty() && sequence.bins.is_empty() && !importing {
+    if sequence.media.is_empty() && sequence.bins.is_empty() && importing == 0 {
         ui.label("Drop files here or use File → Import (Ctrl+I).");
     }
     let mut pool = Pool {
@@ -107,10 +107,13 @@ pub fn ui(
         });
     });
     pool.search_row(ui);
-    if importing {
+    if importing > 0 {
         ui.horizontal(|ui| {
             ui.spinner();
-            ui.label("Importing…");
+            ui.label(match importing {
+                1 => "Importing 1 file…".to_owned(),
+                count => format!("Importing {count} files…"),
+            });
         });
     }
     let wanted = pool.view.search.to_lowercase();

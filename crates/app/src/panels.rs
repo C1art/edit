@@ -68,7 +68,7 @@ impl Editor {
         ui.separator();
         match self.media_tab {
             MediaTab::Project => {
-                let importing = self.importer.as_ref().is_some_and(Importer::is_busy);
+                let importing = self.importer.as_ref().map_or(0, Importer::remaining);
                 let sequence = self.timeline.project();
                 let proxies = self.proxies.as_ref();
                 let art = &mut self.clip_art;

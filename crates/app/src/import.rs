@@ -84,6 +84,11 @@ impl Importer {
         self.handed_out < self.requested
     }
 
+    /// Files asked for that haven't joined the pool yet.
+    pub fn remaining(&self) -> u64 {
+        self.requested - self.handed_out
+    }
+
     pub fn poll(&mut self) -> Vec<Probed> {
         self.early.extend(self.results.try_iter());
         let mut ready = Vec::new();
