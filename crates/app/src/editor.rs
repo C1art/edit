@@ -112,6 +112,8 @@ pub struct Editor {
     pub(crate) recent_projects: RecentProjects,
     pub(crate) window: WindowState,
     pub(crate) store: Option<ProjectStore>,
+    /// What was last read or written, or nothing before the first frame.
+    pub(crate) saved_preferences: Option<crate::preferences::Preferences>,
     /// Where the project was last saved or opened from.
     pub(crate) project_path: Option<PathBuf>,
     /// The timeline revision on disk; any other means unsaved changes.
@@ -260,6 +262,7 @@ impl Editor {
             recent_projects: RecentProjects::default(),
             window,
             store,
+            saved_preferences: None,
             project_path: None,
             confirm_discard: None,
             after_save: None,
@@ -429,6 +432,7 @@ impl eframe::App for Editor {
         }
         self.poll_store();
         self.autosave_tick();
+        self.keep_preferences();
         self.poll_imports();
         self.poll_offline();
         self.poll_render_previews(&ctx);

@@ -55,6 +55,7 @@ mod offline;
 mod panels;
 mod path_dialog;
 mod placing;
+mod preferences;
 mod program_zoom;
 mod project_files;
 mod project_manager;

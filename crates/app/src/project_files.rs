@@ -323,6 +323,9 @@ impl Editor {
                 StoreEvent::SettingRead(Setting::Folders, Ok(Some(text))) => {
                     self.browse_folders = crate::path_dialog::folders_from_text(&text);
                 }
+                StoreEvent::SettingRead(Setting::Preferences, Ok(Some(text))) => {
+                    self.load_preferences(&text);
+                }
                 StoreEvent::SettingRead(Setting::Window, Ok(Some(_))) => {}
                 StoreEvent::SettingRead(_, Ok(None)) => {}
                 StoreEvent::SettingRead(setting, Err(error)) => {

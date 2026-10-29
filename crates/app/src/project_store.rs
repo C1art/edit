@@ -55,16 +55,18 @@ pub enum Setting {
     Folders,
     RecentProjects,
     Window,
+    Preferences,
 }
 
 impl Setting {
     /// Those the editor reads once it starts; the window's is needed before then.
-    pub const READ_AT_START: [Self; 5] = [
+    pub const READ_AT_START: [Self; 6] = [
         Self::Keymap,
         Self::Presets,
         Self::Workspaces,
         Self::Folders,
         Self::RecentProjects,
+        Self::Preferences,
     ];
 
     pub fn path(self) -> PathBuf {
@@ -75,6 +77,7 @@ impl Setting {
             Self::Folders => "Recent Folders.txt",
             Self::RecentProjects => "Recent Projects.txt",
             Self::Window => "Window.txt",
+            Self::Preferences => "Preferences.txt",
         })
     }
 
@@ -87,6 +90,7 @@ impl Setting {
             Self::Folders => "recent folders",
             Self::RecentProjects => "recent projects",
             Self::Window => "window size",
+            Self::Preferences => "preferences",
         }
     }
 }
