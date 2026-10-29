@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::thread;
 
@@ -7,6 +8,8 @@ use timeline::{held_length, FrameRate, ImportMedia, SourceId, Timebase, VideoFor
 
 /// Rate assumed for video whose container declares none.
 const FALLBACK_RATE: FrameRate = FrameRate::FPS_25;
+/// Files probed at once; probing mostly waits on the disk.
+const PROBES_AT_ONCE: usize = 4;
 
 /// A probed file, and the media item it is to replace rather than join the pool.
 pub struct Probed {
@@ -17,32 +20,51 @@ pub struct Probed {
 /// A file to probe, the item it replaces, and the rate an image sequence plays at.
 type Request = (PathBuf, Option<SourceId>, FrameRate);
 
-/// Probes files on a worker thread so the UI never touches the disk.
+/// Probes files on worker threads so the UI never touches the disk.
 pub struct Importer {
-    requests: Sender<Request>,
-    results: Receiver<Probed>,
-    pending: usize,
+    requests: Sender<(u64, Request)>,
+    results: Receiver<(u64, Probed)>,
+    /// Results that came in ahead of earlier requests, held back so files join the pool
+    /// in the order they were asked for.
+    early: BTreeMap<u64, Probed>,
+    requested: u64,
+    handed_out: u64,
 }
 
 impl Importer {
     pub fn new(timebase: Timebase) -> std::io::Result<Self> {
-        let (request_tx, request_rx) = channel::unbounded::<Request>();
+        let (request_tx, request_rx) = channel::unbounded::<(u64, Request)>();
         let (result_tx, result_rx) = channel::unbounded();
-        thread::Builder::new()
-            .name("import".to_owned())
-            .spawn(move || {
-                for (path, replacing, sequence_rate) in request_rx {
-                    let result =
-                        probe(&path, timebase, sequence_rate).map_err(|error| (path, error));
-                    if result_tx.send(Probed { replacing, result }).is_err() {
-                        break;
+        for index in 0..PROBES_AT_ONCE {
+            let (requests, results) = (request_rx.clone(), result_tx.clone());
+            let spawned = thread::Builder::new()
+                .name(format!("import {index}"))
+                .spawn(move || {
+                    for (number, (path, replacing, sequence_rate)) in requests {
+                        let result =
+                            probe(&path, timebase, sequence_rate).map_err(|error| (path, error));
+                        if results
+                            .send((number, Probed { replacing, result }))
+                            .is_err()
+                        {
+                            break;
+                        }
                     }
+                });
+            // One worker is enough to import; more only make it quicker.
+            if let Err(error) = spawned {
+                if index == 0 {
+                    return Err(error);
                 }
-            })?;
+                break;
+            }
+        }
         Ok(Self {
             requests: request_tx,
             results: result_rx,
-            pending: 0,
+            early: BTreeMap::new(),
+            requested: 0,
+            handed_out: 0,
         })
     }
 
@@ -52,19 +74,24 @@ impl Importer {
         replacing: Option<SourceId>,
         sequence_rate: FrameRate,
     ) {
-        if self.requests.send((path, replacing, sequence_rate)).is_ok() {
-            self.pending += 1;
+        let request = (path, replacing, sequence_rate);
+        if self.requests.send((self.requested, request)).is_ok() {
+            self.requested += 1;
         }
     }
 
     pub fn is_busy(&self) -> bool {
-        self.pending > 0
+        self.handed_out < self.requested
     }
 
     pub fn poll(&mut self) -> Vec<Probed> {
-        let results: Vec<_> = self.results.try_iter().collect();
-        self.pending = self.pending.saturating_sub(results.len());
-        results
+        self.early.extend(self.results.try_iter());
+        let mut ready = Vec::new();
+        while let Some(probed) = self.early.remove(&self.handed_out) {
+            ready.push(probed);
+            self.handed_out += 1;
+        }
+        ready
     }
 }
 
