@@ -244,7 +244,8 @@ impl TrackVideo {
             let back = media.video.map_or(Ticks::ZERO, |video| {
                 video.frame_rate.frame_start(keep as i64, self.timebase)
             });
-            reader.seek((time - back).max(Ticks::ZERO))?;
+            // Forward jumps within a long group of pictures decode on instead.
+            reader.advance((time - back).max(Ticks::ZERO))?;
             self.sought = Some(time);
             self.current = None;
             self.next = None;
