@@ -239,6 +239,19 @@ pub enum AudioEffect {
         gain: Param,
         q: Param,
     },
+    /// Finishes a mix in one go: low, mid and high bands in decibels, then reverb,
+    /// exciter, width (100 leaves it as it is) and loudness maximizer in percent, then
+    /// `output` decibels.
+    Mastering {
+        low: Param,
+        mid: Param,
+        high: Param,
+        reverb: Param,
+        exciter: Param,
+        width: Param,
+        maximizer: Param,
+        output: Param,
+    },
     /// Plays the right side on both.
     FillLeftWithRight,
     /// Plays the left side on both.
@@ -347,6 +360,16 @@ impl AudioEffect {
                 warmth,
             } => vec![threshold, ratio, attack, release, makeup, warmth],
             Self::DeReverb { amount, gain } => vec![amount, gain],
+            Self::Mastering {
+                low,
+                mid,
+                high,
+                reverb,
+                exciter,
+                width,
+                maximizer,
+                output,
+            } => vec![low, mid, high, reverb, exciter, width, maximizer, output],
             Self::SpeechVolumeLeveler {
                 target,
                 amount,

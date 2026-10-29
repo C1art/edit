@@ -3,7 +3,7 @@ use crate::Param;
 
 impl AudioEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 41] {
+    pub fn catalog() -> [Self; 42] {
         [
             Self::Amplify {
                 gain: Param::default(),
@@ -157,6 +157,16 @@ impl AudioEffect {
                 makeup: Param::default(),
                 warmth: Param::from_value(40.0),
             },
+            Self::Mastering {
+                low: Param::default(),
+                mid: Param::default(),
+                high: Param::default(),
+                reverb: Param::default(),
+                exciter: Param::default(),
+                width: Param::from_value(100.0),
+                maximizer: Param::default(),
+                output: Param::default(),
+            },
             Self::DeReverb {
                 amount: Param::from_value(40.0),
                 gain: Param::default(),
@@ -219,6 +229,7 @@ impl AudioEffect {
             Self::VocalEnhancer { .. } => "Vocal Enhancer",
             Self::TubeCompressor { .. } => "Tube-modeled Compressor",
             Self::DeReverb { .. } => "DeReverb",
+            Self::Mastering { .. } => "Mastering",
             Self::SpeechVolumeLeveler { .. } => "Speech Volume Leveler",
             Self::SimpleParametricEq { .. } => "Simple Parametric EQ",
         }

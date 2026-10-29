@@ -105,6 +105,25 @@ pub(super) fn effect_rows(ui: &mut egui::Ui, rows: &mut Rows, effect: &mut Audio
             rows.param(ui, "Makeup", makeup, 0.0..=24.0, " dB");
             rows.param(ui, "Warmth", warmth, 0.0..=100.0, "%");
         }
+        AudioEffect::Mastering {
+            low,
+            mid,
+            high,
+            reverb,
+            exciter,
+            width,
+            maximizer,
+            output,
+        } => {
+            rows.param(ui, "Low", low, -12.0..=12.0, " dB");
+            rows.param(ui, "Mid", mid, -12.0..=12.0, " dB");
+            rows.param(ui, "High", high, -12.0..=12.0, " dB");
+            rows.param(ui, "Reverb", reverb, 0.0..=100.0, "%");
+            rows.param(ui, "Exciter", exciter, 0.0..=100.0, "%");
+            rows.param(ui, "Widener", width, 0.0..=300.0, "%");
+            rows.param(ui, "Loudness Maximizer", maximizer, 0.0..=100.0, "%");
+            rows.param(ui, "Output Gain", output, -24.0..=12.0, " dB");
+        }
         AudioEffect::DeReverb { amount, gain } => {
             rows.param(ui, "Amount", amount, 0.0..=100.0, "%");
             rows.param(ui, "Gain", gain, -12.0..=12.0, " dB");

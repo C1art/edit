@@ -61,7 +61,9 @@ pub(crate) fn category(effect: &AudioEffect) -> &'static str {
         | AudioEffect::DeHum { .. }
         | AudioEffect::AutomaticClickRemover { .. }
         | AudioEffect::DeReverb { .. } => CATEGORIES[7],
-        AudioEffect::Distortion { .. } | AudioEffect::VocalEnhancer { .. } => CATEGORIES[8],
+        AudioEffect::Distortion { .. }
+        | AudioEffect::VocalEnhancer { .. }
+        | AudioEffect::Mastering { .. } => CATEGORIES[8],
         AudioEffect::StereoExpander { .. } => CATEGORIES[9],
     }
 }

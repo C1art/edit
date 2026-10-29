@@ -6,6 +6,7 @@ use audio::{
 use timeline::{AudioEffect, Param, Ticks};
 
 use crate::audio_dynamics::{DynamicsChain, VocalChain};
+use crate::audio_mastering::{MasteringChain, MasteringSettings};
 
 /// How far each way, in octaves, a phaser's full depth sweeps.
 const PHASER_OCTAVES: f32 = 2.0;
@@ -19,7 +20,7 @@ const CLICK_SENSITIVITY_PER_PERCENT: f32 = 0.25;
 /// The running state of the effects added after the first set: bandpass, phaser,
 /// distortion, stereo expander, the multitap and analog delays, Dynamics, Automatic Click
 /// Remover, Vocal Enhancer, the Tube-modeled Compressor, DeReverb, Speech Volume Leveler
-/// Simple Parametric EQ and the 20- and 30-band Graphic Equalizers.
+/// Simple Parametric EQ, the 20- and 30-band Graphic Equalizers and Mastering.
 pub(crate) enum MoreUnit {
     Filter(Biquad),
     Phaser(Box<Phaser>),
@@ -33,6 +34,7 @@ pub(crate) enum MoreUnit {
     Leveler(SpeechLeveler),
     Graphic20(Box<GraphicEqualizer20>),
     Graphic30(Box<GraphicEqualizer30>),
+    Mastering(Box<MasteringChain>),
     Stateless,
 }
 
@@ -47,6 +49,7 @@ impl MoreUnit {
             AudioEffect::SpeechVolumeLeveler { .. } => Self::Leveler(SpeechLeveler::default()),
             AudioEffect::GraphicEqualizer20 { .. } => Self::Graphic20(Box::default()),
             AudioEffect::GraphicEqualizer30 { .. } => Self::Graphic30(Box::default()),
+            AudioEffect::Mastering { .. } => Self::Mastering(Box::new(MasteringChain::new(rate))),
             AudioEffect::Phaser { .. } => Self::Phaser(Box::new(Phaser::new(rate))),
             AudioEffect::MultitapDelay { .. } => Self::Multitap(Box::new(MultitapDelay::new(rate))),
             AudioEffect::AnalogDelay { .. } => Self::Analog(Box::new(AnalogDelay::new(rate))),
@@ -73,6 +76,7 @@ impl MoreUnit {
             Self::Leveler(leveler) => leveler.reset(),
             Self::Graphic20(equalizer) => equalizer.reset(),
             Self::Graphic30(equalizer) => equalizer.reset(),
+            Self::Mastering(chain) => chain.reset(),
             Self::Stateless => {}
         }
     }
@@ -200,6 +204,31 @@ impl MoreUnit {
             }
             (AudioEffect::GraphicEqualizer30 { bands }, Self::Graphic30(equalizer)) => {
                 equalizer.process(bands.each_ref().map(value), rate, samples);
+            }
+            (
+                AudioEffect::Mastering {
+                    low,
+                    mid,
+                    high,
+                    reverb,
+                    exciter,
+                    width,
+                    maximizer,
+                    output,
+                },
+                Self::Mastering(chain),
+            ) => {
+                let settings = MasteringSettings {
+                    low_db: value(low),
+                    mid_db: value(mid),
+                    high_db: value(high),
+                    reverb: fraction(reverb),
+                    exciter: fraction(exciter),
+                    width: fraction(width),
+                    maximizer: fraction(maximizer),
+                    output_db: value(output),
+                };
+                chain.process(&settings, rate, samples);
             }
             (AudioEffect::SimpleParametricEq { frequency, gain, q }, Self::Filter(filter)) => {
                 let q = value(q).max(0.1);
