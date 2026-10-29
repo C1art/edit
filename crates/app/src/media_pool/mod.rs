@@ -272,8 +272,14 @@ impl Pool<'_> {
         if plain_row {
             self.view.row_height = Some(response.rect.height());
         }
+        let selected = &mut self.view.selected;
         if response.drag_started() {
             response.dnd_set_drag_payload(item.id);
+            // Dragging an item outside the selection carries it alone, so it's selected
+            // alone to show that.
+            if !selected.contains(&item.id) {
+                *selected = vec![item.id];
+            }
         }
         self.drop_target(ui, &response, item.bin);
         let selected = &mut self.view.selected;
