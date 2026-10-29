@@ -3,7 +3,7 @@
 use super::slots::SlotKind;
 use super::{Compositor, LayerImage, Picture, Step};
 use crate::pixel::PixelEffects;
-use crate::placement::LayerLook;
+use crate::placement::{fit_scale, LayerLook};
 use crate::{yuv, RenderError};
 
 impl Compositor {
@@ -96,7 +96,8 @@ impl Compositor {
                     source,
                 } => {
                     let kind = SlotKind::Planes(chroma.layout(), *format, (*width, *height));
-                    let index = self.claim(next, *output, kind);
+                    let output = converted_size(*output, canvas, &layer.look);
+                    let index = self.claim(next, output, kind);
                     if self.upload_planes(index, (*luma, chroma), *color, source.as_ref()) {
                         steps.push(Step::Convert(index));
                     }
@@ -184,5 +185,63 @@ impl Compositor {
             return Err(RenderError::FrameTooLarge { width, height, max });
         }
         Ok(())
+    }
+}
+
+/// How many times smaller than the picture planes may be turned into RGB at.
+const MAX_SHRINK: u32 = 8;
+
+/// The size to turn planes meant for `output` into RGB at: halved for as long as the
+/// layer keeps a pixel for every canvas pixel it covers, since conversion costs by the
+/// pixel and detail finer than the canvas never shows. Effects that work in the
+/// layer's own pixels, such as sharpening, keep it whole so they look the same.
+fn converted_size(output: (u32, u32), canvas: (u32, u32), look: &LayerLook) -> (u32, u32) {
+    let plain = PixelEffects {
+        alpha: PixelEffects::NONE.alpha,
+        color_space: PixelEffects::NONE.color_space,
+        ..look.effects
+    } == PixelEffects::NONE;
+    if !plain {
+        return output;
+    }
+    let shown = look.shown_size(output);
+    let look = look.reframed(shown, canvas);
+    let [across, down] = look.scale.map(f32::abs);
+    // Canvas pixels per picture pixel, along the side stretched the most.
+    let magnified = fit_scale(shown, canvas) * (across * look.pixel_aspect).max(down);
+    let mut divisor = 1;
+    while divisor < MAX_SHRINK && magnified * (divisor * 2) as f32 <= 1.0 {
+        divisor *= 2;
+    }
+    let shrink = |side: u32| side.div_ceil(divisor).max(2);
+    (shrink(output.0), shrink(output.1))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn planes_convert_at_no_less_than_the_size_they_show_at() {
+        let hd = (1920, 1080);
+        let look = LayerLook::IDENTITY;
+        assert_eq!(converted_size(hd, (1920, 1080), &look), hd);
+        assert_eq!(converted_size(hd, (1280, 720), &look), hd);
+        assert_eq!(converted_size(hd, (960, 540), &look), (960, 540));
+        assert_eq!(converted_size(hd, (320, 240), &look), (480, 270));
+        assert_eq!(converted_size((3840, 2160), (16, 9), &look), (480, 270));
+        let zoomed = LayerLook {
+            scale: [2.0, 2.0],
+            ..look
+        };
+        assert_eq!(converted_size(hd, (960, 540), &zoomed), hd);
+        let sharpened = LayerLook {
+            effects: PixelEffects {
+                sharpen: 1.0,
+                ..PixelEffects::NONE
+            },
+            ..look
+        };
+        assert_eq!(converted_size(hd, (960, 540), &sharpened), hd);
     }
 }
