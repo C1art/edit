@@ -132,6 +132,7 @@ impl Command {
                 .map(|&key| vec![alt_shift(key)])
                 .unwrap_or_default(),
             Self::ResetWorkspace => vec![alt_shift(Key::Num0)],
+            Self::MaximizePanel => vec![plain(Key::Backtick)],
         }
     }
 }

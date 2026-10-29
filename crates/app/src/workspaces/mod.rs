@@ -1,7 +1,8 @@
 mod file;
+mod maximize;
 mod menu;
 
-use egui::{CentralPanel, Frame, Margin, Panel, Vec2};
+use egui::{CentralPanel, Frame, Margin, Panel, Rect, Vec2};
 
 use crate::editor::Editor;
 use crate::effects::SideTab;
@@ -9,6 +10,7 @@ use crate::monitors;
 use crate::panels::MediaTab;
 use crate::project_store::Setting;
 use crate::theme;
+use maximize::Pane;
 
 pub(crate) use menu::{dialog, window_menu, workspace_bar, NamingWorkspace};
 
@@ -110,6 +112,10 @@ pub(crate) struct Workspaces {
     unsaved: bool,
     /// The room the panels had last frame; when it changes they are fitted to it again.
     room: Vec2,
+    /// Where each panel was last frame, to know which one the pointer is over.
+    panes: [(Pane, Rect); 4],
+    maximized: Option<Pane>,
+    maximize_requested: bool,
 }
 
 impl Default for Workspaces {
@@ -125,6 +131,10 @@ impl Default for Workspaces {
             generation: 0,
             unsaved: false,
             room: Vec2::ZERO,
+            panes: [Pane::Media, Pane::Side, Pane::Timeline, Pane::Monitors]
+                .map(|pane| (pane, Rect::NOTHING)),
+            maximized: None,
+            maximize_requested: false,
         }
     }
 }
@@ -217,6 +227,7 @@ impl Editor {
     fn apply_layout(&mut self, layout: Layout) {
         self.media_tab = layout.media_tab;
         self.side_tab = layout.side_tab;
+        self.workspaces.maximized = None;
         *self.workspaces.current_mut() = layout;
         self.workspaces.generation += 1;
     }
@@ -239,6 +250,14 @@ impl Editor {
             .frame(menu_bar)
             .show_separator_line(false)
             .show(ui, |ui| crate::menus::menu_bar(self, ui));
+        if std::mem::take(&mut self.workspaces.maximize_requested) {
+            let pointer = ui.input(|input| input.pointer.latest_pos());
+            self.workspaces.toggle_maximized(pointer);
+        }
+        if let Some(pane) = self.workspaces.maximized {
+            self.show_maximized(ui, pane);
+            return;
+        }
         let layout = self.workspaces.current();
         let generation = self.workspaces.generation;
         let room = ui.available_rect_before_wrap().size();
@@ -272,9 +291,15 @@ impl Editor {
             layout.timeline_share * room.y,
         )
         .show(ui, |ui| theme::card(ui, |ui| self.timeline_panel(ui)));
-        CentralPanel::default()
+        let monitors = CentralPanel::default()
             .frame(theme::dock())
             .show(ui, |ui| monitors::ui(self, ui));
+        self.workspaces.record_panes([
+            (Pane::Media, media.response.rect),
+            (Pane::Side, side.response.rect),
+            (Pane::Timeline, timeline.response.rect),
+            (Pane::Monitors, monitors.response.rect),
+        ]);
 
         // Rounded so that a size that hasn't moved doesn't count as a change.
         let share = |size: f32, of: f32| (size / of.max(1.0) * 1e4).round() / 1e4;

@@ -1,5 +1,6 @@
 mod actions;
 mod command;
+mod command_words;
 mod defaults;
 mod window;
 

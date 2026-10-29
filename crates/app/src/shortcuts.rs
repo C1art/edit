@@ -163,6 +163,7 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         Command::ComparisonView => editor.toggle_comparison_view(),
         Command::Workspace(slot) => editor.switch_workspace(usize::from(slot)),
         Command::ResetWorkspace => editor.reset_workspace(),
+        Command::MaximizePanel => editor.toggle_maximized_panel(),
         Command::RenderInToOut => editor.render_in_to_out(),
         Command::DeleteRenderFiles => editor.delete_render_files(),
         Command::MarkIn
