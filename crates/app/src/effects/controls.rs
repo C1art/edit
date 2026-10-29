@@ -6,10 +6,13 @@ use timeline::Rgb;
 use super::look::Rows;
 use crate::mixer::response_state;
 
+const LABEL_INDENT: f32 = 20.0;
+const LABEL_WIDTH: f32 = 72.0;
+
 /// A row's name, where every row's name goes so their values line up.
 pub(super) fn label_column(ui: &mut egui::Ui, label: &str) {
-    ui.add_space(20.0);
-    ui.add_sized([72.0, 18.0], egui::Label::new(label));
+    ui.add_space(LABEL_INDENT);
+    ui.add_sized([LABEL_WIDTH, 18.0], egui::Label::new(label));
 }
 
 impl Rows {
@@ -30,11 +33,36 @@ impl Rows {
 
     /// A checkbox lined up with the values, returning whether it was ticked or cleared.
     pub(super) fn checkbox(&mut self, ui: &mut egui::Ui, value: &mut bool, text: &str) -> bool {
-        let mut changed = false;
-        self.choice(ui, "", |ui| {
-            changed = ui.checkbox(value, text).changed();
-            changed
-        });
+        let text_width = egui::WidgetText::from(text)
+            .into_galley(
+                ui,
+                Some(egui::TextWrapMode::Extend),
+                f32::INFINITY,
+                egui::TextStyle::Button,
+            )
+            .size()
+            .x;
+        let spacing = ui.spacing();
+        let width = LABEL_INDENT
+            + LABEL_WIDTH
+            + spacing.item_spacing.x * 2.0
+            + spacing.icon_width
+            + spacing.icon_spacing
+            + text_width;
+        let changed = ui
+            .horizontal(|ui| {
+                // A narrow panel can't fit the box in the value column, so it moves to the label column.
+                if ui.available_width() >= width {
+                    label_column(ui, "");
+                } else {
+                    ui.add_space(LABEL_INDENT);
+                }
+                ui.checkbox(value, text).changed()
+            })
+            .inner;
+        if changed {
+            self.commit();
+        }
         changed
     }
 
