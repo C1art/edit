@@ -3,6 +3,7 @@ use timeline::{Gain, Pan, SendTap, SetTrackSends, TrackRef, TrackSend};
 
 use super::{inserts, response_state, Change, FADER_RANGE};
 use crate::editor::Editor;
+use crate::icons;
 
 /// The track whose sends are open below the strips, and their settings while a
 /// control is being dragged.
@@ -137,7 +138,8 @@ pub(super) fn panel(editor: &mut Editor, ui: &mut egui::Ui) {
                     send.muted = !send.muted;
                     change = Some(Change::Commit);
                 }
-                if ui.small_button("✕").on_hover_text("Remove send").clicked() {
+                let remove = icons::button(ui, icons::Icon::Close, egui::vec2(18.0, 18.0));
+                if remove.on_hover_text("Remove send").clicked() {
                     removed = Some(index);
                 }
                 ui.end_row();

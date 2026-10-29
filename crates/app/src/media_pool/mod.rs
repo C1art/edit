@@ -8,8 +8,10 @@ use egui::{CollapsingHeader, DragAndDrop, Response, RichText, Sense, StrokeKind}
 use timeline::{Bin, BinId, BinSearch, MediaItem, Sequence, SourceId};
 
 use crate::clip_art::ClipArt;
+use crate::icons::{self, Icon};
 use crate::multicam_sync::MulticamSync;
 use crate::proxies::ProxyMaker;
+use crate::theme;
 use rows::{item_row, rename_field, Field};
 use tiles::{tile, PoolLayout, PoolSort};
 
@@ -189,12 +191,18 @@ impl Pool<'_> {
             .filter(|child| child.parent == inside)
             .count()
             + sequence.bin_items(inside).count();
-        let icon = if bin.search.is_some() { "🔍 " } else { "" };
-        let title = RichText::new(format!("{icon}{} ({count})", bin.name)).strong();
+        let title = RichText::new(format!("{} ({count})", bin.name)).strong();
         let shown = CollapsingHeader::new(title)
             .id_salt(("bin", bin.id.0))
             .show(ui, |ui| self.contents(ui, inside));
         let header = shown.header_response.interact(Sense::click_and_drag());
+        if bin.search.is_some() {
+            let mark = egui::Rect::from_center_size(
+                header.rect.right_center() + egui::vec2(10.0, 0.0),
+                egui::vec2(11.0, 11.0),
+            );
+            icons::paint(ui.painter(), mark, Icon::Search, theme::WEAK_TEXT);
+        }
         if header.drag_started() {
             header.dnd_set_drag_payload(bin.id);
         }

@@ -27,6 +27,8 @@ pub(crate) enum Icon {
     Ellipse,
     Rectangle,
     Pen,
+    Search,
+    Close,
 }
 
 const BUTTON: egui::Vec2 = vec2(22.0, 20.0);
@@ -256,6 +258,17 @@ pub(crate) fn paint(painter: &Painter, rect: Rect, icon: Icon, color: Color32) {
             painter.add(Shape::convex_polygon(nib, color, Stroke::NONE));
             let slit = [at(0.5, 0.22), at(0.5, 0.6)];
             painter.line_segment(slit, Stroke::new(1.3, Color32::BLACK));
+        }
+        Icon::Search => {
+            let radius = rect.width() * 0.3;
+            let lens = at(0.4, 0.4);
+            painter.circle_stroke(lens, radius, stroke);
+            let rim = lens + vec2(radius, radius) * std::f32::consts::FRAC_1_SQRT_2;
+            painter.line_segment([rim, at(0.94, 0.94)], Stroke::new(2.0, color));
+        }
+        Icon::Close => {
+            painter.line_segment([at(0.18, 0.18), at(0.82, 0.82)], stroke);
+            painter.line_segment([at(0.82, 0.18), at(0.18, 0.82)], stroke);
         }
     }
 }

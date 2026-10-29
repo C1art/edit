@@ -2,16 +2,18 @@ use egui::TextEdit;
 use timeline::{BinId, BinSearch, SearchField};
 
 use super::{Pool, PoolAction};
+use crate::icons;
 
 impl Pool<'_> {
     /// The panel's search field, with the button that keeps its search as a search bin.
     pub(super) fn search_row(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
+            let searching = !self.view.search.trim().is_empty();
             let keep = ui
-                .add_enabled(
-                    !self.view.search.trim().is_empty(),
-                    egui::Button::new("🔍+"),
-                )
+                .add_enabled_ui(searching, |ui| {
+                    icons::button(ui, icons::Icon::Search, egui::vec2(22.0, 20.0))
+                })
+                .inner
                 .on_hover_text("New Search Bin: keep this search as a bin that stays up to date")
                 .on_disabled_hover_text("Type a search to keep it as a search bin");
             if keep.clicked() {
@@ -20,6 +22,8 @@ impl Pool<'_> {
                     field: SearchField::All,
                 };
                 self.action = Some(PoolAction::NewSearchBin(search));
+                // The bin now keeps the search; left typed, it would hide the bin it made.
+                self.view.search.clear();
             }
             ui.add(
                 TextEdit::singleline(&mut self.view.search)
