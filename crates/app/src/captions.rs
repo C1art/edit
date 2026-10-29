@@ -29,7 +29,8 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
     };
     let playhead = editor.playhead();
     let mut change = None;
-    ui.horizontal(|ui| {
+    // The panel is often narrow; rows wrap rather than run off its edge.
+    ui.horizontal_wrapped(|ui| {
         let mut shown = !captions.hidden;
         if ui.checkbox(&mut shown, "Show captions").changed() {
             captions.hidden = !shown;
@@ -144,7 +145,7 @@ fn caption_row(
     playhead: Ticks,
     timecode: impl Fn(Ticks) -> String,
 ) -> Option<RowAction> {
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         let mut action = None;
         let start = ui.link(RichText::new(timecode(caption.start)).monospace());
         if start.on_hover_text("Go to the caption's start").clicked() {
@@ -175,7 +176,7 @@ fn caption_row(
 
 fn style_controls(ui: &mut egui::Ui, captions: &mut Captions) -> Option<Change> {
     let style = &mut captions.style;
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         ui.label("Size");
         let size = ui.add(
             egui::DragValue::new(&mut style.size)
