@@ -59,6 +59,10 @@ fn with_linked_selection_off_a_clip_moves_alone_and_slips_out_of_sync() {
         (offset(video), offset(audio)),
         (Some(Ticks(10)), Some(Ticks(-10)))
     );
+    assert_eq!(
+        timeline.sequence().sync_offsets(),
+        [(video, Ticks(10)), (audio, Ticks(-10))].into()
+    );
 }
 
 #[test]

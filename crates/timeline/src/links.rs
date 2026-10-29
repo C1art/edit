@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
-use crate::{Clip, ClipId, LinkId, Sequence, Ticks};
+use crate::{Clip, ClipId, LinkId, Sequence, SourceId, Ticks};
 
 /// Whether picking a clip picks the clips linked to it as well, as Premiere's Linked
 /// Selection. Apart, each is moved, trimmed and deleted alone, and may slip out of sync.
@@ -42,6 +44,30 @@ impl Sequence {
     /// media; `None` while they are in sync.
     pub fn sync_offset(&self, clip: &Clip) -> Option<Ticks> {
         self.out_of_sync_with(clip).map(|(_, offset)| offset)
+    }
+
+    /// Every out-of-sync clip's [`Sequence::sync_offset`], found in one pass rather than
+    /// by searching the whole sequence for each clip's partners.
+    pub fn sync_offsets(&self) -> HashMap<ClipId, Ticks> {
+        let mut partners: HashMap<(LinkId, SourceId), Vec<&Clip>> = HashMap::new();
+        for clip in self.tracks().flat_map(|(_, track)| &track.clips) {
+            if let Some(link) = clip.link {
+                partners.entry((link, clip.source)).or_default().push(clip);
+            }
+        }
+        partners
+            .values()
+            .flat_map(|group| {
+                group.iter().filter_map(move |clip| {
+                    group
+                        .iter()
+                        .filter(|other| other.id != clip.id)
+                        .map(|other| clip.start - other.position_of(clip.source_in))
+                        .find(|&offset| offset != Ticks::ZERO)
+                        .map(|offset| (clip.id, offset))
+                })
+            })
+            .collect()
     }
 
     /// The linked clip `clip` is out of sync with, and by how much.
