@@ -1,8 +1,9 @@
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::thread;
+use std::time::Duration;
 
-use crossbeam::channel::{self, Receiver, Sender, TryRecvError};
+use crossbeam::channel::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
 use media::{DecodedFrame, MediaReader, Streams, VideoFrame};
 use timeline::{Ticks, Timebase};
 
@@ -10,6 +11,9 @@ use timeline::{Ticks, Timebase};
 const THUMBNAIL_HEIGHT: u32 = 72;
 /// Open files kept for further requests; most timelines show a handful of sources.
 const OPEN_READERS: usize = 6;
+/// Open files are closed after this long without requests, as each decoder holds tens
+/// of megabytes of frames and threads.
+const IDLE_CLOSE: Duration = Duration::from_secs(3);
 /// Requests beyond this are the oldest, so they're likely scrolled away; they're handed
 /// back unserved and asked for again if still in view.
 const MAX_QUEUED: usize = 96;
@@ -61,9 +65,18 @@ fn run(requests: &Receiver<Request>, replies: &Sender<Reply>) {
     let mut readers: HashMap<PathBuf, MediaReader> = HashMap::new();
     loop {
         if queue.is_empty() {
-            match requests.recv() {
+            let request = if readers.is_empty() {
+                requests.recv().map_err(|_| RecvTimeoutError::Disconnected)
+            } else {
+                requests.recv_timeout(IDLE_CLOSE)
+            };
+            match request {
                 Ok(request) => queue.push_back(request),
-                Err(_) => return,
+                Err(RecvTimeoutError::Timeout) => {
+                    readers.clear();
+                    continue;
+                }
+                Err(RecvTimeoutError::Disconnected) => return,
             }
         }
         loop {
