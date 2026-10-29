@@ -18,6 +18,7 @@ mod essential_sound;
 mod export;
 mod export_format;
 mod export_frame;
+mod export_progress;
 mod export_queue;
 mod file_browser;
 mod find_dialog;

@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
-use egui::{Key, ProgressBar, RichText};
+use egui::{Key, RichText};
 use playback::{ExportEvent, ExportJob, ExportSettings};
 use timeline::Sequence;
 
 use crate::editor::Editor;
+use crate::export_progress::{self, ExportProgress};
 
 /// Exports set up earlier, run one after another while editing carries on.
 #[derive(Default)]
@@ -28,7 +29,7 @@ struct Queued {
 
 enum Status {
     Waiting,
-    Exporting { done: i64, total: i64 },
+    Exporting(ExportProgress),
     Done,
     Cancelled,
     Failed(String),
@@ -81,8 +82,10 @@ impl Editor {
                 }
             }
             if let Some(item) = queue.item_mut(id) {
-                if let Some((done, total)) = progress {
-                    item.status = Status::Exporting { done, total };
+                if let (Some((done, total)), Status::Exporting(running)) =
+                    (progress, &mut item.status)
+                {
+                    running.update(done, total);
                 }
                 if let Some(status) = ended {
                     if matches!(status, Status::Done) {
@@ -92,7 +95,7 @@ impl Editor {
                     queue.running = None;
                 }
             }
-            ctx.request_repaint();
+            ctx.request_repaint_after(export_progress::REFRESH);
         }
         for notice in notices {
             self.notice(notice);
@@ -126,7 +129,7 @@ impl Editor {
         );
         match started {
             Ok(job) => {
-                item.status = Status::Exporting { done: 0, total: 0 };
+                item.status = Status::Exporting(ExportProgress::new());
                 queue.running = Some((item.id, job));
             }
             Err(error) => item.status = Status::Failed(error.to_string()),
@@ -165,7 +168,7 @@ pub fn window(editor: &mut Editor, ctx: &egui::Context) {
                                 ui.label(RichText::new(&item.summary).weak());
                                 status_row(ui, &item.status);
                             });
-                            let exporting = matches!(item.status, Status::Exporting { .. });
+                            let exporting = matches!(item.status, Status::Exporting(_));
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
@@ -205,7 +208,7 @@ pub fn window(editor: &mut Editor, ctx: &egui::Context) {
                 }
                 if ui.button("Clear Finished").clicked() {
                     queue.items.retain(|item| {
-                        matches!(item.status, Status::Waiting | Status::Exporting { .. })
+                        matches!(item.status, Status::Waiting | Status::Exporting(_))
                     });
                 }
             });
@@ -224,17 +227,8 @@ fn status_row(ui: &mut egui::Ui, status: &Status) {
         Status::Waiting => {
             ui.label("Waiting");
         }
-        Status::Exporting { done, total } => {
-            let fraction = if *total > 0 {
-                *done as f32 / *total as f32
-            } else {
-                0.0
-            };
-            ui.add(
-                ProgressBar::new(fraction)
-                    .desired_width(300.0)
-                    .text(format!("frame {done} of {total}")),
-            );
+        Status::Exporting(progress) => {
+            ui.add(progress.bar(300.0));
         }
         Status::Done => {
             ui.label("Done");

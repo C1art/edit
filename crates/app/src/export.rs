@@ -1,13 +1,14 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use egui::{ComboBox, DragValue, Key, ProgressBar, Slider};
+use egui::{ComboBox, DragValue, Key, Slider};
 use media::{AudioCodec, RateControl, VideoCodec};
 use playback::{ExportEvent, ExportJob, ExportSettings};
 use timeline::Sequence;
 
 use crate::editor::Editor;
 use crate::export_format::{ExportFormat, Format, PRESETS};
+use crate::export_progress::{self, ExportProgress};
 use crate::path_dialog::FolderUse;
 use crate::project_files::PathPurpose;
 
@@ -19,8 +20,7 @@ const AUDIO_KBPS: [u32; 4] = [128, 192, 256, 320];
 struct Running {
     job: ExportJob,
     path: PathBuf,
-    frames_done: i64,
-    frames_total: i64,
+    progress: ExportProgress,
 }
 
 /// What part of the sequence to export.
@@ -99,25 +99,13 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     crate::dialog::window(ctx, "Export Media").show(ctx, |ui| match &dialog.running {
         Some(running) => {
             ui.label(format!("Exporting to {}", running.path.display()));
-            let fraction = if running.frames_total > 0 {
-                running.frames_done as f32 / running.frames_total as f32
-            } else {
-                0.0
-            };
-            ui.add(
-                ProgressBar::new(fraction)
-                    .desired_width(420.0)
-                    .text(format!(
-                        "frame {} of {}",
-                        running.frames_done, running.frames_total
-                    )),
-            );
+            ui.add(running.progress.bar(420.0));
             crate::dialog::footer(ui, |ui| {
                 if ui.button("Cancel").clicked() {
                     running.job.cancel();
                 }
             });
-            ctx.request_repaint();
+            ctx.request_repaint_after(export_progress::REFRESH);
         }
         None => {
             let kind = dialog.format.format;
@@ -218,8 +206,7 @@ fn start_job(editor: &mut Editor) {
                 dialog.running = Some(Running {
                     job,
                     path,
-                    frames_done: 0,
-                    frames_total: 0,
+                    progress: ExportProgress::new(),
                 });
             }
         }
@@ -419,8 +406,7 @@ fn poll(editor: &mut Editor) {
                 frames_done,
                 frames_total,
             } => {
-                running.frames_done = frames_done;
-                running.frames_total = frames_total;
+                running.progress.update(frames_done, frames_total);
             }
             ExportEvent::Warning(error) => notices.push(format!("Export: {error}")),
             ExportEvent::Finished => {
