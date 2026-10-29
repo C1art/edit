@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use media::MediaError;
 use timeline::{
     AddBin, BinSearch, CreateMulticam, DuplicateMedia, Edit, InterpretFootage, MakeOffline,
     MakeSubclip, MergeClips, MoveToBin, RelinkMedia, RemoveBin, RenameBin, RenameMedia,
@@ -97,9 +98,11 @@ impl Editor {
         let Some(importer) = &mut self.importer else {
             return;
         };
-        for Probed { replacing, result } in importer.poll() {
-            match (result, replacing) {
-                (Ok(media), Some(source)) => {
+        let probed = importer.poll();
+        let failures = importer.take_failures();
+        for Probed { replacing, media } in probed {
+            match replacing {
+                Some(source) => {
                     let folder = media.path.parent().map(Path::to_owned);
                     if self.apply_to_pool(RelinkMedia { source, media }) {
                         self.relinked(source, folder);
@@ -108,22 +111,18 @@ impl Editor {
                         }
                     }
                 }
-                (Ok(import), None) => {
-                    if self.apply(import) {
+                None => {
+                    if self.apply(media) {
                         if let Some(id) = self.timeline.sequence().media.last().map(|item| item.id)
                         {
                             self.open_source(id);
                         }
                     }
                 }
-                (Err((path, error)), _) => {
-                    let name = path.file_name().unwrap_or(path.as_os_str());
-                    self.notice(format!(
-                        "Cannot import “{}”: {error}",
-                        name.to_string_lossy()
-                    ));
-                }
             }
+        }
+        if let Some(notice) = failures_notice(&failures) {
+            self.notice(notice);
         }
     }
 
@@ -234,4 +233,25 @@ impl Editor {
             }
         }
     }
+}
+
+/// One message for a batch of files that couldn't be imported, naming the first few.
+fn failures_notice(failures: &[(PathBuf, MediaError)]) -> Option<String> {
+    const NAMED: usize = 3;
+    let ((_, error), rest) = failures.split_first()?;
+    let more = match failures.len().saturating_sub(NAMED) {
+        0 => String::new(),
+        hidden => format!(" and {hidden} more"),
+    };
+    let named = failures.iter().take(NAMED);
+    let text = if rest.iter().all(|(_, other)| other == error) {
+        let names: Vec<String> = named.map(|(path, _)| quoted_name(path)).collect();
+        format!("{}{more}: {error}", names.join(", "))
+    } else {
+        let reasons: Vec<String> = named
+            .map(|(path, error)| format!("{}: {error}", quoted_name(path)))
+            .collect();
+        format!("{}{more}", reasons.join("; "))
+    };
+    Some(format!("Cannot import {text}"))
 }

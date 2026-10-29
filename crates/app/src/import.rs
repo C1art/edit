@@ -14,8 +14,10 @@ const PROBES_AT_ONCE: usize = 4;
 /// A probed file, and the media item it is to replace rather than join the pool.
 pub struct Probed {
     pub replacing: Option<SourceId>,
-    pub result: Result<ImportMedia, (PathBuf, MediaError)>,
+    pub media: ImportMedia,
 }
+
+type Outcome = (Option<SourceId>, Result<ImportMedia, (PathBuf, MediaError)>);
 
 /// A file to probe, the item it replaces, and the rate an image sequence plays at.
 type Request = (PathBuf, Option<SourceId>, FrameRate);
@@ -23,10 +25,13 @@ type Request = (PathBuf, Option<SourceId>, FrameRate);
 /// Probes files on worker threads so the UI never touches the disk.
 pub struct Importer {
     requests: Sender<(u64, Request)>,
-    results: Receiver<(u64, Probed)>,
+    results: Receiver<(u64, Outcome)>,
     /// Results that came in ahead of earlier requests, held back so files join the pool
     /// in the order they were asked for.
-    early: BTreeMap<u64, Probed>,
+    early: BTreeMap<u64, Outcome>,
+    /// Files that couldn't be read, held until the rest of their batch is in so that
+    /// they're reported together.
+    failed: Vec<(PathBuf, MediaError)>,
     requested: u64,
     handed_out: u64,
 }
@@ -43,10 +48,7 @@ impl Importer {
                     for (number, (path, replacing, sequence_rate)) in requests {
                         let result =
                             probe(&path, timebase, sequence_rate).map_err(|error| (path, error));
-                        if results
-                            .send((number, Probed { replacing, result }))
-                            .is_err()
-                        {
+                        if results.send((number, (replacing, result))).is_err() {
                             break;
                         }
                     }
@@ -63,6 +65,7 @@ impl Importer {
             requests: request_tx,
             results: result_rx,
             early: BTreeMap::new(),
+            failed: Vec::new(),
             requested: 0,
             handed_out: 0,
         })
@@ -92,11 +95,22 @@ impl Importer {
     pub fn poll(&mut self) -> Vec<Probed> {
         self.early.extend(self.results.try_iter());
         let mut ready = Vec::new();
-        while let Some(probed) = self.early.remove(&self.handed_out) {
-            ready.push(probed);
+        while let Some((replacing, result)) = self.early.remove(&self.handed_out) {
+            match result {
+                Ok(media) => ready.push(Probed { replacing, media }),
+                Err(failure) => self.failed.push(failure),
+            }
             self.handed_out += 1;
         }
         ready
+    }
+
+    /// The files that couldn't be read, once nothing more is being imported.
+    pub fn take_failures(&mut self) -> Vec<(PathBuf, MediaError)> {
+        if self.is_busy() {
+            return Vec::new();
+        }
+        std::mem::take(&mut self.failed)
     }
 }
 
