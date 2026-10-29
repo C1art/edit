@@ -5,40 +5,25 @@
 //! its length, its levels, where a one-frame flash and a one-frame beep land, and
 //! that both still land together.
 
-use std::future::Future;
+mod common;
+
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::task::{Context, Poll, Waker};
-use std::time::{Duration, Instant};
 
-use media::{
-    AudioCodec, AudioSettings, DecodedFrame, DnxhrQuality, MediaReader, RateControl, StillFormat,
-    VideoCodec,
-};
-use playback::{ExportEvent, ExportJob, ExportSettings, VideoEncoding, VideoExport};
+use common::{decode, export, gpu, Decoded, Gpu, TB};
+use media::{AudioCodec, AudioSettings, DnxhrQuality, RateControl, StillFormat, VideoCodec};
+use playback::{ExportSettings, VideoEncoding, VideoExport};
 use timeline::{
-    AddGenerated, FrameRate, Generator, PlaceClip, PlaceMode, Rgb, Sequence, Ticks, Timebase,
-    Timeline, VideoFormat,
+    AddGenerated, FrameRate, Generator, PlaceClip, PlaceMode, Rgb, Sequence, Ticks, Timeline,
+    VideoFormat,
 };
 
-const TB: Timebase = Timebase::HZ_90K;
 const FRAME: i64 = 90_000 / 25;
 const FRAMES: i64 = 100;
 const FLASH: i64 = 50;
 const SIZE: (u32, u32) = (256, 144);
 const SAMPLE_RATE: u32 = 48_000;
-
-fn block_on<F: Future>(future: F) -> F::Output {
-    let mut future = std::pin::pin!(future);
-    let mut context = Context::from_waker(Waker::noop());
-    loop {
-        if let Poll::Ready(output) = future.as_mut().poll(&mut context) {
-            return output;
-        }
-        std::thread::yield_now();
-    }
-}
 
 /// Four seconds of black with one white frame and one frame of tone, both at frame 50.
 fn sequence() -> Arc<Sequence> {
@@ -81,79 +66,6 @@ fn sequence() -> Arc<Sequence> {
     Arc::new(timeline.sequence().clone())
 }
 
-fn export(
-    sequence: &Arc<Sequence>,
-    gpu: &(wgpu::Device, wgpu::Queue),
-    settings: ExportSettings,
-) -> Result<(), String> {
-    let job = ExportJob::start(Arc::clone(sequence), gpu.0.clone(), gpu.1.clone(), settings)
-        .map_err(|error| error.to_string())?;
-    let deadline = Instant::now() + Duration::from_secs(120);
-    while Instant::now() < deadline {
-        for event in job.poll() {
-            match event {
-                ExportEvent::Finished => return Ok(()),
-                ExportEvent::Failed(error) => return Err(error.to_string()),
-                ExportEvent::Warning(error) => return Err(format!("warning: {error}")),
-                _ => {}
-            }
-        }
-        std::thread::sleep(Duration::from_millis(5));
-    }
-    Err("timed out".into())
-}
-
-#[derive(Debug, Default)]
-struct Decoded {
-    /// Start and mean brightness of each picture.
-    pictures: Vec<(Ticks, f64)>,
-    /// Mono, at the file's sample rate, from the first audio timestamp on.
-    sound: Vec<f32>,
-    sound_start: Option<Ticks>,
-    sample_rate: u32,
-    /// What the container declares.
-    duration: Option<Ticks>,
-}
-
-fn decode(path: &Path) -> Result<Decoded, String> {
-    let mut reader = MediaReader::open(path, TB).map_err(|error| error.to_string())?;
-    let mut decoded = Decoded {
-        duration: reader.info().duration,
-        ..Decoded::default()
-    };
-    while let Some(frame) = reader.next_frame().map_err(|error| error.to_string())? {
-        match frame {
-            DecodedFrame::Video(picture) => {
-                let total: u64 = picture
-                    .pixels
-                    .as_chunks::<4>()
-                    .0
-                    .iter()
-                    .flat_map(|pixel| &pixel[..3])
-                    .map(|&value| u64::from(value))
-                    .sum();
-                let count = picture.pixels.len() / 4 * 3;
-                decoded
-                    .pictures
-                    .push((picture.pts, total as f64 / count.max(1) as f64));
-            }
-            DecodedFrame::Audio(buffer) => {
-                decoded.sound_start.get_or_insert(buffer.pts);
-                decoded.sample_rate = buffer.sample_rate;
-                let channels = usize::from(buffer.channels.max(1));
-                decoded.sound.extend(
-                    buffer
-                        .samples
-                        .chunks_exact(channels)
-                        .map(|frame| frame.iter().sum::<f32>() / channels as f32),
-                );
-            }
-            DecodedFrame::Planar(_) => return Err("planar frame from a packed reader".into()),
-        }
-    }
-    Ok(decoded)
-}
-
 /// Where the content of `range` should put the flash, in frames from the file's start.
 fn expected_flash(range: &Range<i64>) -> i64 {
     FLASH - range.start
@@ -174,13 +86,7 @@ fn check_pictures(decoded: &Decoded, range: &Range<i64>, lossy_levels: bool) -> 
             break;
         }
     }
-    let flashes: Vec<usize> = decoded
-        .pictures
-        .iter()
-        .enumerate()
-        .filter(|(_, &(_, level))| level > 128.0)
-        .map(|(index, _)| index)
-        .collect();
+    let flashes = decoded.flashes();
     if flashes != [expected_flash(range) as usize] {
         problems.push(format!(
             "white on pictures {flashes:?}, expected [{}]",
@@ -234,11 +140,7 @@ fn check_sound(decoded: &Decoded, range: &Range<i64>, codec: AudioCodec) -> Vec<
     if off && codec != AudioCodec::Mp3 {
         problems.push(format!("declares {declared:?} s, expected {expected:.4}"));
     }
-    let beep = decoded
-        .sound
-        .iter()
-        .position(|sample| sample.abs() > 0.01)
-        .map(|index| start + index as f64 / rate);
+    let beep = decoded.first_sound();
     let flash = expected_flash(range) as f64 * seconds_per_frame;
     match beep {
         Some(beep) if (beep - flash).abs() > 0.0015 => problems.push(format!(
@@ -351,7 +253,7 @@ fn cases() -> Vec<Case> {
 fn run_case(
     case: &Case,
     sequence: &Arc<Sequence>,
-    gpu: &(wgpu::Device, wgpu::Queue),
+    gpu: &Gpu,
     range: &Range<i64>,
     directory: &Path,
 ) -> Vec<String> {
@@ -398,11 +300,7 @@ fn run_case(
     problems
 }
 
-fn still_frames(
-    sequence: &Arc<Sequence>,
-    gpu: &(wgpu::Device, wgpu::Queue),
-    directory: &Path,
-) -> Vec<String> {
+fn still_frames(sequence: &Arc<Sequence>, gpu: &Gpu, directory: &Path) -> Vec<String> {
     let stills = directory.join("stills");
     std::fs::create_dir_all(&stills).unwrap();
     let mut problems = Vec::new();
@@ -452,12 +350,7 @@ fn still_frames(
 #[test]
 #[ignore = "needs a GPU and encodes real files with FFmpeg"]
 fn every_export_format_keeps_length_levels_and_sync() {
-    let instance =
-        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-    let adapter = block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
-        .expect("a GPU adapter");
-    let gpu =
-        block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).expect("a GPU device");
+    let gpu = gpu();
     let directory = std::env::temp_dir().join(format!("export-checks-{}", std::process::id()));
     std::fs::create_dir_all(&directory).unwrap();
     let sequence = sequence();
