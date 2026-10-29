@@ -8,6 +8,7 @@ mod clock;
 mod command;
 mod compose;
 mod composed;
+mod detail_effects;
 mod envelope;
 mod error;
 mod export;

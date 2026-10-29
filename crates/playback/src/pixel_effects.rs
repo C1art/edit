@@ -10,6 +10,7 @@ use timeline::{
 
 use crate::adjust_effects::set_adjust_effect;
 use crate::clip_wipes::set_clip_wipe;
+use crate::detail_effects::set_detail_effect;
 
 /// The per-pixel part of an effect stack at source time `time`. The shader runs each
 /// kind of effect once, so repeats of a kind combine, the last one's colors winning.
@@ -459,6 +460,11 @@ pub(crate) fn pixel_effects(
             VideoEffect::Levels { .. } | VideoEffect::ProcAmp { .. } => {
                 set_adjust_effect(&mut pixel.adjust, effect, time);
             }
+            VideoEffect::UnsharpMask(_)
+            | VideoEffect::Median(_)
+            | VideoEffect::DustAndScratches(_)
+            | VideoEffect::EdgeFeather(_)
+            | VideoEffect::NoiseHls(_) => set_detail_effect(&mut pixel.detail, effect, time),
         }
     }
     pixel
