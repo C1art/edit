@@ -85,6 +85,7 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
         return;
     };
     let mut choice = None;
+    let mut writing_comment = false;
     crate::dialog::window(ctx, "Marker").show(ctx, |ui| {
         egui::Grid::new("marker_fields")
             .num_columns(2)
@@ -121,7 +122,9 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                 color_picker(ui, &mut marker.color);
                 ui.end_row();
                 ui.label("Comments");
-                ui.add(egui::TextEdit::multiline(&mut marker.comment).desired_rows(3));
+                let comment =
+                    ui.add(egui::TextEdit::multiline(&mut marker.comment).desired_rows(3));
+                writing_comment = comment.has_focus();
                 ui.end_row();
             });
         crate::dialog::footer(ui, |ui| {
@@ -131,7 +134,9 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
             if ui.button("Delete").clicked() {
                 choice = Some(Choice::Delete);
             }
-            if ui.add(crate::dialog::primary("OK")).clicked() {
+            // Enter starts a new line of comments rather than closing the dialog.
+            let enter = !writing_comment && ui.input(|input| input.key_pressed(Key::Enter));
+            if ui.add(crate::dialog::primary("OK")).clicked() || enter {
                 choice = Some(Choice::Apply);
             }
         });
