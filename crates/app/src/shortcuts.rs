@@ -12,14 +12,15 @@ use crate::transport;
 /// Switch to cameras one to nine in the multi-camera view.
 const ANGLE_KEYS: [Key; crate::multicam::KEYED_ANGLES] = DIGIT_KEYS;
 
-/// Editor-wide keys. Skipped while a text field has focus so typing isn't hijacked, and
-/// while a key is being recorded for a shortcut.
+/// Editor-wide keys. Skipped while a text field has focus so typing isn't hijacked,
+/// while a key is being recorded for a shortcut, and while the file browser is open,
+/// whose Enter and arrow keys are its own.
 pub fn handle(editor: &mut Editor, ctx: &egui::Context) {
     let recording = editor
         .keymap_window
         .as_ref()
         .is_some_and(|window| window.recording.is_some());
-    if ctx.egui_wants_keyboard_input() || recording {
+    if ctx.egui_wants_keyboard_input() || recording || editor.path_prompt.is_some() {
         return;
     }
     if editor.multicam_layout.is_some() {

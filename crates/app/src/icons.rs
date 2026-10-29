@@ -20,6 +20,10 @@ pub(crate) enum Icon {
     StepBack,
     StepForward,
     Loop,
+    Back,
+    Up,
+    Folder,
+    File,
 }
 
 const BUTTON: egui::Vec2 = vec2(22.0, 20.0);
@@ -203,6 +207,29 @@ pub(crate) fn paint(painter: &Painter, rect: Rect, icon: Icon, color: Color32) {
                 ];
                 painter.add(Shape::convex_polygon(diamond, color, Stroke::NONE));
             }
+        }
+        Icon::Back | Icon::Up => {
+            // Drawn pointing left, then turned for up.
+            let turn = |x: f32, y: f32| if icon == Icon::Up { at(y, x) } else { at(x, y) };
+            painter.line_segment([turn(0.92, 0.5), turn(0.12, 0.5)], stroke);
+            let head = vec![turn(0.48, 0.14), turn(0.12, 0.5), turn(0.48, 0.86)];
+            painter.add(Shape::line(head, stroke));
+        }
+        Icon::Folder => {
+            let tab = Rect::from_min_max(at(0.04, 0.1), at(0.46, 0.34));
+            painter.rect_filled(tab, 1.5, color);
+            let body = Rect::from_min_max(at(0.04, 0.22), at(0.96, 0.9));
+            painter.rect_filled(body, 1.5, color);
+        }
+        Icon::File => {
+            let page = vec![
+                at(0.16, 0.04),
+                at(0.6, 0.04),
+                at(0.86, 0.3),
+                at(0.86, 0.96),
+                at(0.16, 0.96),
+            ];
+            painter.add(Shape::convex_polygon(page, color, Stroke::NONE));
         }
     }
 }

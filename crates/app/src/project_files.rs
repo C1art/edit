@@ -7,9 +7,10 @@ use timeline::{
 
 use crate::editor::Editor;
 use crate::effects::LutSlot;
+use crate::file_browser::FileBrowser;
 use crate::project_store::{Setting, StoreEvent};
 
-/// What a typed path is for.
+/// What a picked path is for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PathPurpose {
     Import,
@@ -32,7 +33,7 @@ pub enum PathPurpose {
 
 pub struct PathPrompt {
     pub purpose: PathPurpose,
-    pub text: String,
+    pub browser: FileBrowser,
     /// Whether an import takes the numbered pictures that follow the file as one clip.
     pub image_sequence: bool,
 }
@@ -89,34 +90,27 @@ impl Editor {
     }
 
     pub(crate) fn prompt_path(&mut self, purpose: PathPurpose) {
-        let text = match purpose {
-            PathPurpose::SaveProject => self
-                .project_path
+        let project_with = |extension: &str| {
+            self.project_path
                 .as_ref()
-                .map(|path| path.display().to_string())
-                .unwrap_or_default(),
+                .map(|path| path.with_extension(extension))
+        };
+        let start = match purpose {
+            PathPurpose::SaveProject => self.project_path.clone(),
             PathPurpose::Replace(id) => self
                 .timeline
                 .project()
                 .media_item(id)
-                .map(|item| item.path.display().to_string())
-                .unwrap_or_default(),
-            PathPurpose::ExportCaptions => self
-                .project_path
-                .as_ref()
-                .map(|path| path.with_extension(SUBRIP).display().to_string())
-                .unwrap_or_default(),
-            PathPurpose::Export(kind) => self
-                .project_path
-                .as_ref()
-                .map(|path| path.with_extension(kind.extension()).display().to_string())
-                .unwrap_or_default(),
-            PathPurpose::ExportFrame => self.default_frame_path().display().to_string(),
-            _ => String::new(),
+                .map(|item| item.path.clone()),
+            PathPurpose::ExportCaptions => project_with(SUBRIP),
+            PathPurpose::Export(kind) => project_with(kind.extension()),
+            PathPurpose::ExportFrame => Some(self.default_frame_path()),
+            _ => None,
         };
+        let browser = crate::path_dialog::browser_for(self, purpose, start.as_deref());
         self.path_prompt = Some(PathPrompt {
             purpose,
-            text,
+            browser,
             image_sequence: false,
         });
     }

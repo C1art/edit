@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -19,6 +20,7 @@ use crate::mixer::Mixer;
 use crate::monitors::Focus;
 use crate::nesting::Level;
 use crate::panels::MediaTab;
+use crate::path_dialog::FolderUse;
 use crate::project_files::{is_project, is_subrip, is_xml, AfterDiscard, PathPrompt};
 use crate::project_store::{ProjectStore, Setting};
 use crate::proxies::ProxyMaker;
@@ -98,6 +100,7 @@ pub struct Editor {
     /// A copy of the marker being edited, while the marker dialog is showing.
     pub(crate) marker_dialog: Option<(timeline::MarkerOwner, Marker)>,
     pub(crate) path_prompt: Option<PathPrompt>,
+    pub(crate) browse_folders: HashMap<FolderUse, PathBuf>,
     pub(crate) store: Option<ProjectStore>,
     /// Where the project was last saved or opened from.
     pub(crate) project_path: Option<PathBuf>,
@@ -235,6 +238,7 @@ impl Editor {
             clipboard: None,
             marker_dialog: None,
             path_prompt: None,
+            browse_folders: HashMap::new(),
             store,
             project_path: None,
             confirm_discard: None,

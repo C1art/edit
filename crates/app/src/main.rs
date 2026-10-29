@@ -18,6 +18,7 @@ mod export;
 mod export_format;
 mod export_frame;
 mod export_queue;
+mod file_browser;
 mod find_dialog;
 mod fit_clip;
 mod gain_dialog;

@@ -327,7 +327,7 @@ fn yes_no(yes: bool) -> String {
     if yes { "Yes" } else { "No" }.to_owned()
 }
 
-fn size(bytes: u64) -> String {
+pub(crate) fn size(bytes: u64) -> String {
     const UNITS: [&str; 4] = ["KB", "MB", "GB", "TB"];
     let mut value = bytes as f64;
     let mut unit = "bytes";
