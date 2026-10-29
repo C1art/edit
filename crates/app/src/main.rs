@@ -50,6 +50,7 @@ mod project_files;
 mod project_manager;
 mod project_store;
 mod proxies;
+mod rename_clip;
 mod render_previews;
 mod render_replace;
 mod replace_clip;

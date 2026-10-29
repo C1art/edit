@@ -89,6 +89,7 @@ pub struct Editor {
     pub(crate) attributes_dialog: Option<crate::attributes_dialog::AttributesDialog>,
     pub(crate) loudness: Option<crate::loudness_window::LoudnessWindow>,
     pub(crate) speed_prompt: Option<crate::speed_dialog::SpeedPrompt>,
+    pub(crate) clip_rename: Option<crate::rename_clip::ClipRename>,
     pub(crate) clipboard: Option<Clipboard>,
     /// A copy of the marker being edited, while the marker dialog is showing.
     pub(crate) marker_dialog: Option<(timeline::MarkerOwner, Marker)>,
@@ -221,6 +222,7 @@ impl Editor {
             attributes_dialog: None,
             loudness: None,
             speed_prompt: None,
+            clip_rename: None,
             clipboard: None,
             marker_dialog: None,
             path_prompt: None,
@@ -462,6 +464,7 @@ impl eframe::App for Editor {
         crate::attributes_dialog::dialog(self, &ctx);
         crate::loudness_window::window(self, &ctx);
         crate::speed_dialog::dialog(self, &ctx);
+        crate::rename_clip::dialog(self, &ctx);
         crate::export::dialog(self, &ctx);
         crate::export_queue::window(self, &ctx);
         crate::keymap::window(self, &ctx);

@@ -329,8 +329,10 @@ fn hear_live(editor: &mut Editor, edit: &impl Edit) {
     }
 }
 
-fn clip_name<'a>(sequence: &'a Sequence, clip: &Clip) -> &'a str {
-    sequence
-        .media_item(clip.source)
-        .map_or("Missing media", |item| item.name.as_str())
+fn clip_name<'a>(sequence: &'a Sequence, clip: &'a Clip) -> &'a str {
+    let item = sequence.media_item(clip.source);
+    clip.name
+        .as_deref()
+        .or(item.map(|item| item.name.as_str()))
+        .unwrap_or("Missing media")
 }

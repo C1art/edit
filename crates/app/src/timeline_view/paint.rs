@@ -221,7 +221,11 @@ pub fn clips(
             TrackKind::Audio => {}
         }
         let item = sequence.media_item(clip.source);
-        let name = item.map_or("Missing media", |item| item.name.as_str());
+        let name = clip
+            .name
+            .as_deref()
+            .or(item.map(|item| item.name.as_str()))
+            .unwrap_or("Missing media");
         let name = if offline {
             format!("{name} [offline]")
         } else {

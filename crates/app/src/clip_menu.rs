@@ -79,6 +79,9 @@ pub(crate) fn items(editor: &mut Editor, ui: &mut Ui) {
     if ui.add(speed).clicked() {
         editor.speed_duration();
     }
+    if ui.button("Rename…").clicked() {
+        editor.rename_clips();
+    }
     let enable = Button::new("Enable").shortcut_text(editor.keymap.label(Command::ToggleEnabled));
     if ui.add(enable).clicked() {
         editor.toggle_enabled();
