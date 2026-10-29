@@ -83,15 +83,6 @@ impl Editor {
             MediaTab::Effects => crate::effects_panel::ui(self, ui),
             MediaTab::Metadata => crate::metadata_panel::ui(self, ui),
         }
-        if !self.notices.is_empty() {
-            ui.separator();
-            for notice in &self.notices {
-                ui.colored_label(ui.visuals().warn_fg_color, notice);
-            }
-            if ui.small_button("Clear messages").clicked() {
-                self.notices.clear();
-            }
-        }
     }
 
     pub(crate) fn side_panel(&mut self, ui: &mut egui::Ui) {

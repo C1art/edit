@@ -30,6 +30,11 @@ pub(crate) fn window_menu(editor: &mut Editor, ui: &mut egui::Ui) {
                 editor.side_tab = tab;
             }
         }
+        ui.separator();
+        let messages = &mut editor.notifications.history_open;
+        if ui.selectable_label(*messages, "Messages").clicked() {
+            *messages = !*messages;
+        }
     });
 }
 

@@ -132,7 +132,9 @@ pub struct Editor {
     /// The sequences left to reach the open nest, outermost first.
     pub(crate) nest_trail: Vec<Level>,
     pub(crate) sequence_tabs: Vec<crate::sequence_tabs::SequenceTab>,
+    /// Messages not yet handed to `notifications`.
     pub(crate) notices: Vec<String>,
+    pub(crate) notifications: crate::notifications::Notifications,
     pub(crate) keymap: crate::keymap::Keymap,
     pub(crate) keymap_window: Option<crate::keymap::KeymapWindow>,
     pub(crate) presets: Vec<timeline::EffectPreset>,
@@ -274,6 +276,7 @@ impl Editor {
             nest_trail: Vec::new(),
             sequence_tabs: Vec::new(),
             notices,
+            notifications: Default::default(),
             keymap: Default::default(),
             keymap_window: None,
             presets: Vec::new(),
@@ -485,5 +488,6 @@ impl eframe::App for Editor {
         crate::render_previews::window(self, &ctx);
         crate::render_replace::window(self, &ctx);
         crate::project_manager::window(self, &ctx);
+        crate::notifications::ui(self, &ctx);
     }
 }

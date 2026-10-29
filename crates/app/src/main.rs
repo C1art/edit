@@ -52,6 +52,7 @@ mod motion_analysis;
 mod multicam;
 mod multicam_sync;
 mod nesting;
+mod notifications;
 mod offline;
 mod panels;
 mod path_dialog;
