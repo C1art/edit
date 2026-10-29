@@ -23,6 +23,7 @@ mod loudness;
 mod mixdown;
 mod morph_cut;
 mod optical_flow;
+mod optics_effects;
 mod pixel_effects;
 mod player;
 mod previews;

@@ -1,16 +1,15 @@
 use render::{
-    ChangeToColor, ChannelMixer, Checkerboard, ChromaKey, Circle, ColorKey, FlareLens,
-    FourColorGradient, Grid, LeaveColor, LensFlare, LumaKey, Magnify, Mirror, PixelEffects,
-    PlaneTransform, Ramp, Warp,
+    ChangeToColor, ChannelMixer, Checkerboard, ChromaKey, Circle, ColorKey, FourColorGradient,
+    Grid, LeaveColor, LumaKey, Mirror, PixelEffects, PlaneTransform, Ramp, Warp,
 };
 use timeline::{
-    ColorChange, ColorMatch, LensType, MagnifyShape, RampShape, Rgb, Ticks, Timebase, VideoEffect,
-    ULTRA_KEY_REACH,
+    ColorChange, ColorMatch, RampShape, Rgb, Ticks, Timebase, VideoEffect, ULTRA_KEY_REACH,
 };
 
 use crate::adjust_effects::set_adjust_effect;
 use crate::clip_wipes::set_clip_wipe;
 use crate::detail_effects::set_detail_effect;
+use crate::optics_effects::set_optics_effect;
 
 /// The per-pixel part of an effect stack at source time `time`. The shader runs each
 /// kind of effect once, so repeats of a kind combine, the last one's colors winning.
@@ -424,39 +423,8 @@ pub(crate) fn pixel_effects(
                     opacity: unit(opacity).clamp(0.0, 1.0),
                 });
             }
-            VideoEffect::LensFlare {
-                center,
-                brightness,
-                lens,
-                blend,
-            } => {
-                pixel.optics.lens_flare = Some(LensFlare {
-                    center: center.each_ref().map(unit),
-                    brightness: unit(brightness),
-                    lens: match lens {
-                        LensType::Zoom50To300 => FlareLens::Zoom,
-                        LensType::Prime35 => FlareLens::Prime35,
-                        LensType::Prime105 => FlareLens::Prime105,
-                    },
-                    blend: unit(blend),
-                });
-            }
-            VideoEffect::Magnify {
-                shape,
-                center,
-                magnification,
-                size,
-                feather,
-                opacity,
-            } => {
-                pixel.optics.magnify = Some(Magnify {
-                    center: center.each_ref().map(unit),
-                    magnification: unit(magnification),
-                    size: size.value_at(time),
-                    feather: feather.value_at(time),
-                    opacity: unit(opacity),
-                    square: *shape == MagnifyShape::Square,
-                });
+            VideoEffect::LensFlare { .. } | VideoEffect::Magnify { .. } => {
+                set_optics_effect(&mut pixel.optics, effect, time);
             }
             VideoEffect::LinearWipe { .. }
             | VideoEffect::RadialWipe { .. }
