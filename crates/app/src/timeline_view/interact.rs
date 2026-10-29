@@ -157,18 +157,7 @@ impl TimelineView {
                 let mut delta = frame_time(pos.x) - drag.origin;
                 if self.snapping {
                     let moving = drag.gesture.moving_clips(sequence);
-                    let mut targets: Vec<Ticks> = sequence
-                        .tracks()
-                        .flat_map(|(_, track)| &track.clips)
-                        .filter(|clip| !moving.contains(&clip.id))
-                        .flat_map(|clip| {
-                            let marks = clip.shown_markers().map(|(position, _)| position);
-                            [clip.start, clip.end()].into_iter().chain(marks)
-                        })
-                        .collect();
-                    targets.extend(sequence.markers.iter().map(|marker| marker.at));
-                    targets.push(playhead);
-                    targets.push(Ticks::ZERO);
+                    let targets = scale::snap_targets(sequence, &moving, playhead);
                     let edges = drag.gesture.moving_edges(sequence);
                     delta = scale::snap(delta, &edges, &targets, scale.span(SNAP_POINTS));
                 }

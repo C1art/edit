@@ -3,7 +3,7 @@ use timeline::{nearest_transition_edge, ClipId, Edge, Sequence, SourceId, Ticks,
 
 use super::layout::{self, Row};
 use super::scale::{self, TimeScale};
-use super::{paint, TimelineOutput, TrackHeights};
+use super::{paint, TimelineOutput, TrackHeights, SNAP_POINTS};
 use crate::effects_panel::{EffectDrop, EffectItem};
 
 /// Media dropped from the pool onto a track.
@@ -22,13 +22,14 @@ pub(super) enum DropHint {
 }
 
 /// Reports a pool item or effect released over a track, and returns where a hovered one
-/// would land.
+/// would land. Media snaps by its head when given the playhead to snap with too.
 pub(super) fn handle_drop(
     response: &egui::Response,
     sequence: &Sequence,
     heights: &TrackHeights,
     scale: TimeScale,
     top: f32,
+    snapping_with: Option<Ticks>,
     output: &mut TimelineOutput,
 ) -> Option<DropHint> {
     // `hover_pos` is unset while the drag that brings a payload holds the pointer.
@@ -40,7 +41,11 @@ pub(super) fn handle_drop(
     let rows = layout::rows(sequence, heights, top);
     let row = layout::row_at(&rows, pos.y);
     if response.dnd_hover_payload::<SourceId>().is_some() {
-        let at = scale::nearest_frame(time, sequence.format.frame_rate, sequence.timebase);
+        let mut at = scale::nearest_frame(time, sequence.format.frame_rate, sequence.timebase);
+        if let Some(playhead) = snapping_with {
+            let targets = scale::snap_targets(sequence, &[], playhead);
+            at = at + scale::snap(Ticks::ZERO, &[at], &targets, scale.span(SNAP_POINTS));
+        }
         if let (Some(source), Some(row)) = (response.dnd_release_payload::<SourceId>(), row) {
             output.drop = Some(MediaDrop {
                 source: *source,

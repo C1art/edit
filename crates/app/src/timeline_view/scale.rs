@@ -1,4 +1,4 @@
-use timeline::{FrameRate, Ticks, Timebase};
+use timeline::{ClipId, FrameRate, Sequence, Ticks, Timebase};
 
 /// Maps sequence time to horizontal screen position. Floating point appears only here,
 /// at the display boundary.
@@ -68,6 +68,24 @@ pub fn snap(delta: Ticks, edges: &[Ticks], targets: &[Ticks], threshold: Ticks) 
         .filter(|offset| offset.0.abs() <= threshold.0)
         .min_by_key(|offset| offset.0.abs())
         .map_or(delta, |offset| delta + offset)
+}
+
+/// Where moved or dropped clips snap to: the edges and markers of every clip but
+/// `moving`, the sequence's markers, the playhead and the start.
+pub fn snap_targets(sequence: &Sequence, moving: &[ClipId], playhead: Ticks) -> Vec<Ticks> {
+    let mut targets: Vec<Ticks> = sequence
+        .tracks()
+        .flat_map(|(_, track)| &track.clips)
+        .filter(|clip| !moving.contains(&clip.id))
+        .flat_map(|clip| {
+            let marks = clip.shown_markers().map(|(position, _)| position);
+            [clip.start, clip.end()].into_iter().chain(marks)
+        })
+        .collect();
+    targets.extend(sequence.markers.iter().map(|marker| marker.at));
+    targets.push(playhead);
+    targets.push(Ticks::ZERO);
+    targets
 }
 
 #[cfg(test)]

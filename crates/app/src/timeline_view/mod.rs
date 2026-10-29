@@ -268,6 +268,7 @@ impl TimelineView {
             &self.heights,
             scale,
             top,
+            self.snapping.then_some(playhead),
             &mut output,
         );
 
