@@ -51,7 +51,7 @@ pub(crate) fn category(effect: &AudioEffect) -> &'static str {
         AudioEffect::Delay { .. }
         | AudioEffect::MultitapDelay { .. }
         | AudioEffect::AnalogDelay { .. } => CATEGORIES[3],
-        AudioEffect::Reverb { .. } => CATEGORIES[4],
+        AudioEffect::Reverb { .. } | AudioEffect::ConvolutionReverb { .. } => CATEGORIES[4],
         AudioEffect::PitchShifter { .. } => CATEGORIES[5],
         AudioEffect::Balance { .. }
         | AudioEffect::FillLeftWithRight

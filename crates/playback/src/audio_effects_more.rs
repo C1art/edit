@@ -6,7 +6,9 @@ use audio::{
 };
 use timeline::{AudioEffect, FilterMode, FilterType, Param, Ticks};
 
+use crate::audio_convolution::{ConvolutionReverb, ReverbLevels, SpaceSettings};
 use crate::audio_dynamics::{DynamicsChain, VocalChain};
+use crate::audio_effects::db_to_amplitude;
 use crate::audio_guitar::{GuitarChain, GuitarSettings};
 use crate::audio_mastering::{MasteringChain, MasteringSettings};
 
@@ -23,7 +25,7 @@ const CLICK_SENSITIVITY_PER_PERCENT: f32 = 0.25;
 /// distortion, stereo expander, the multitap and analog delays, Dynamics, Automatic Click
 /// Remover, Vocal Enhancer, the Tube-modeled Compressor, DeReverb, Speech Volume Leveler
 /// Simple Parametric EQ, the 20- and 30-band Graphic Equalizers, Mastering, the
-/// Scientific Filter and the Guitar Suite.
+/// Scientific Filter, the Guitar Suite and the Convolution Reverb.
 pub(crate) enum MoreUnit {
     Filter(Biquad),
     Phaser(Box<Phaser>),
@@ -40,6 +42,7 @@ pub(crate) enum MoreUnit {
     Mastering(Box<MasteringChain>),
     Scientific(Box<ScientificFilter>),
     Guitar(Box<GuitarChain>),
+    Convolution(Box<ConvolutionReverb>),
     Stateless,
 }
 
@@ -61,6 +64,10 @@ impl MoreUnit {
             AudioEffect::Dynamics(_) => Self::Dynamics(Box::default()),
             AudioEffect::ScientificFilter { .. } => Self::Scientific(Box::default()),
             AudioEffect::GuitarSuite { .. } => Self::Guitar(Box::default()),
+            AudioEffect::ConvolutionReverb { .. } => {
+                let settings = space(effect)?;
+                Self::Convolution(Box::new(ConvolutionReverb::new(settings, rate)))
+            }
             AudioEffect::AutomaticClickRemover { .. } => Self::Clicks(ClickRemover::default()),
             AudioEffect::VocalEnhancer { .. } => Self::Vocal(Box::default()),
             AudioEffect::TubeCompressor { .. } => Self::Compressor(Compressor::default()),
@@ -86,6 +93,7 @@ impl MoreUnit {
             Self::Mastering(chain) => chain.reset(),
             Self::Scientific(filter) => filter.reset(),
             Self::Guitar(chain) => chain.reset(),
+            Self::Convolution(reverb) => reverb.reset(),
             Self::Stateless => {}
         }
     }
@@ -295,8 +303,41 @@ impl MoreUnit {
                 };
                 chain.process(&settings, rate, samples);
             }
+            (
+                AudioEffect::ConvolutionReverb {
+                    width, gain, mix, ..
+                },
+                Self::Convolution(reverb),
+            ) => {
+                let levels = ReverbLevels {
+                    width: fraction(width),
+                    gain: db_to_amplitude(value(gain)),
+                    mix: fraction(mix),
+                };
+                if let Some(settings) = space(effect) {
+                    reverb.process(settings, &levels, rate, samples);
+                }
+            }
             _ => {}
         }
+    }
+}
+
+fn space(effect: &AudioEffect) -> Option<SpaceSettings> {
+    match *effect {
+        AudioEffect::ConvolutionReverb {
+            space,
+            room_size,
+            damping,
+            pre_delay,
+            ..
+        } => Some(SpaceSettings {
+            space,
+            room_size,
+            damping,
+            pre_delay,
+        }),
+        _ => None,
     }
 }
 

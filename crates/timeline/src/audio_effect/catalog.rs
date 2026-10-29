@@ -1,9 +1,11 @@
-use super::{AmpModel, AudioEffect, Dynamics, FilterMode, FilterType, GuitarFilter, VocalMode};
+use super::{
+    AmpModel, AudioEffect, Dynamics, FilterMode, FilterType, GuitarFilter, ReverbSpace, VocalMode,
+};
 use crate::Param;
 
 impl AudioEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 44] {
+    pub fn catalog() -> [Self; 45] {
         [
             Self::Amplify {
                 gain: Param::default(),
@@ -190,6 +192,15 @@ impl AudioEffect {
                 ripple: Param::from_value(1.0),
                 gain: Param::default(),
             },
+            Self::ConvolutionReverb {
+                space: ReverbSpace::default(),
+                room_size: 50,
+                damping: 40,
+                pre_delay: 10,
+                width: Param::from_value(100.0),
+                gain: Param::default(),
+                mix: Param::from_value(30.0),
+            },
             Self::GuitarSuite {
                 compressor: Param::from_value(30.0),
                 distortion: Param::from_value(40.0),
@@ -252,6 +263,7 @@ impl AudioEffect {
             Self::SimpleParametricEq { .. } => "Simple Parametric EQ",
             Self::ScientificFilter { .. } => "Scientific Filter",
             Self::GuitarSuite { .. } => "Guitar Suite",
+            Self::ConvolutionReverb { .. } => "Convolution Reverb",
         }
     }
 }

@@ -1,4 +1,6 @@
-use timeline::{AmpModel, AudioEffect, FilterMode, FilterType, GuitarFilter, VocalMode};
+use timeline::{
+    AmpModel, AudioEffect, FilterMode, FilterType, GuitarFilter, ReverbSpace, VocalMode,
+};
 
 use super::look::Rows;
 
@@ -167,6 +169,24 @@ pub(super) fn effect_rows(ui: &mut egui::Ui, rows: &mut Rows, effect: &mut Audio
                 rows.param(ui, "Passband Ripple", ripple, 0.01..=6.0, " dB");
             }
             rows.param(ui, "Gain", gain, -24.0..=24.0, " dB");
+        }
+        AudioEffect::ConvolutionReverb {
+            space,
+            room_size,
+            damping,
+            pre_delay,
+            width,
+            gain,
+            mix,
+        } => {
+            let (all, name) = (ReverbSpace::ALL, ReverbSpace::name);
+            rows.options(ui, "Impulse", "convolution_space", space, all, name);
+            rows.whole(ui, "Room Size", room_size, 0..=100, "%");
+            rows.whole(ui, "Damping", damping, 0..=100, "%");
+            rows.whole(ui, "Pre-Delay", pre_delay, 0..=200, " ms");
+            rows.param(ui, "Width", width, 0.0..=300.0, "%");
+            rows.param(ui, "Gain", gain, -24.0..=12.0, " dB");
+            rows.param(ui, "Mix", mix, 0.0..=100.0, "%");
         }
         AudioEffect::GuitarSuite {
             compressor,

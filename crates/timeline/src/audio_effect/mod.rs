@@ -3,11 +3,13 @@ use serde::{Deserialize, Serialize};
 use crate::Param;
 
 mod catalog;
+mod convolution;
 mod dynamics;
 mod guitar;
 mod scientific;
 mod vocal;
 
+pub use convolution::ReverbSpace;
 pub use dynamics::{CompressorSection, Dynamics, ExpanderSection, GateSection, LimiterSection};
 pub use guitar::{AmpModel, GuitarFilter};
 pub use scientific::{FilterMode, FilterType};
@@ -255,6 +257,19 @@ pub enum AudioEffect {
         ripple: Param,
         gain: Param,
     },
+    /// Plays the sound through a space's recorded response: `room_size` and `damping`
+    /// (of the high end) in percent and `pre_delay` in milliseconds reshape the space, then
+    /// `width` percent spreads it, `gain` decibels sets its level and `mix` percent of it
+    /// goes over the dry sound.
+    ConvolutionReverb {
+        space: ReverbSpace,
+        room_size: u32,
+        damping: u32,
+        pre_delay: u32,
+        width: Param,
+        gain: Param,
+        mix: Param,
+    },
     /// A guitar rig: `compressor` and `distortion` amounts in percent, an amp and its
     /// cabinet, then a filter at `frequency` hertz that rings more as `resonance` (percent)
     /// rises, with `mix` percent of the result over the dry sound.
@@ -404,6 +419,9 @@ impl AudioEffect {
                 noise_threshold,
             } => vec![target, amount, noise_threshold],
             Self::SimpleParametricEq { frequency, gain, q } => vec![frequency, gain, q],
+            Self::ConvolutionReverb {
+                width, gain, mix, ..
+            } => vec![width, gain, mix],
             Self::GuitarSuite {
                 compressor,
                 distortion,

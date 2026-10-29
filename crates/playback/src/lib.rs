@@ -1,4 +1,5 @@
 mod adjust_effects;
+mod audio_convolution;
 mod audio_dynamics;
 mod audio_effects;
 mod audio_effects_more;

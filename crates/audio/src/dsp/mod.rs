@@ -1,6 +1,7 @@
 mod biquad;
 mod click;
 mod compressor;
+mod convolution;
 mod deesser;
 mod dehum;
 mod delay;
@@ -10,6 +11,7 @@ mod dynamics;
 mod expander;
 mod fft;
 mod graphic_eq;
+mod impulse;
 mod leveler;
 mod loudness;
 mod modulation;
@@ -25,6 +27,7 @@ mod taps;
 pub use biquad::{Biquad, Coefficients};
 pub use click::ClickRemover;
 pub use compressor::{Compressor, CompressorSettings};
+pub use convolution::Convolver;
 pub use deesser::DeEsser;
 pub use dehum::{DeHum, MAX_HARMONICS};
 pub use delay::Delay;
@@ -36,6 +39,7 @@ pub use graphic_eq::{
     GraphicEqualizer, GraphicEqualizer10, GraphicEqualizer20, GraphicEqualizer30,
     GRAPHIC_BANDS_20_HZ, GRAPHIC_BANDS_30_HZ, GRAPHIC_BANDS_HZ,
 };
+pub use impulse::{synthesize_impulse, ImpulseShape};
 pub use leveler::{LevelerSettings, SpeechLeveler};
 pub use loudness::LoudnessMeter;
 pub use modulation::{ModulatedDelay, Sweep};

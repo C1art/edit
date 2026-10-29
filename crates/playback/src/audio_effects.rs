@@ -418,6 +418,6 @@ impl EffectChain {
     }
 }
 
-fn db_to_amplitude(db: f32) -> f32 {
+pub(crate) fn db_to_amplitude(db: f32) -> f32 {
     10.0_f32.powf(db / 20.0)
 }
