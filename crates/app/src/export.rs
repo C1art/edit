@@ -2,13 +2,14 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use egui::{ComboBox, DragValue, Key, Slider};
-use media::{AudioCodec, RateControl, VideoCodec};
+use media::{RateControl, VideoCodec};
 use playback::{ExportEvent, ExportJob, ExportSettings};
 use timeline::Sequence;
 
 use crate::editor::Editor;
 use crate::export_format::{ExportFormat, Format, PRESETS};
 use crate::export_progress::{self, ExportProgress};
+use crate::export_summary::{length_text, span_length, summary};
 use crate::path_dialog::FolderUse;
 use crate::project_files::PathPurpose;
 
@@ -86,6 +87,8 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     poll(editor);
     let sequence = editor.timeline.sequence();
     let marked = sequence.marks.is_set();
+    let (marks, duration) = (sequence.marks, sequence.duration());
+    let timing = (sequence.timebase, sequence.format.frame_rate);
     let sequence_size = (sequence.format.width, sequence.format.height);
     // Escape in the file browser closes only that.
     let browsing = editor.path_prompt.is_some();
@@ -109,23 +112,34 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
         }
         None => {
             let kind = dialog.format.format;
-            settings(ui, &mut dialog.format, sequence_size);
+            let format = &mut dialog.format;
+            settings(ui, format, sequence_size, |ui, format| {
+                ui.label("Output file:");
+                ui.horizontal(|ui| {
+                    ui.add(egui::TextEdit::singleline(&mut dialog.path).desired_width(300.0));
+                    browse = ui.button("Browse…").clicked();
+                });
+                ui.end_row();
+                ui.label("Source range:");
+                ui.horizontal(|ui| {
+                    ui.radio_value(&mut dialog.span, Span::Sequence, "Entire sequence");
+                    ui.add_enabled_ui(marked, |ui| {
+                        ui.radio_value(&mut dialog.span, Span::InToOut, "Sequence in/out")
+                            .on_disabled_hover_text("Mark in or out on the program first");
+                    });
+                });
+                ui.end_row();
+                let length = match dialog.span {
+                    Span::InToOut if marked => span_length(marks.range(duration)),
+                    _ => duration,
+                };
+                ui.label("Duration:");
+                ui.label(length_text(format, length, timing));
+                ui.end_row();
+            });
             if dialog.format.format != kind {
                 dialog.set_output(&dialog.output());
             }
-            ui.label("Output file:");
-            ui.horizontal(|ui| {
-                ui.add(egui::TextEdit::singleline(&mut dialog.path).desired_width(340.0));
-                browse = ui.button("Browse…").clicked();
-            });
-            ui.horizontal(|ui| {
-                ui.label("Source range:");
-                ui.radio_value(&mut dialog.span, Span::Sequence, "Entire sequence");
-                ui.add_enabled_ui(marked, |ui| {
-                    ui.radio_value(&mut dialog.span, Span::InToOut, "Sequence in/out")
-                        .on_disabled_hover_text("Mark in or out on the program first");
-                });
-            });
             ui.label(summary(&dialog.format, sequence_size));
             crate::dialog::footer(ui, |ui| {
                 close = ui.button("Close").clicked()
@@ -230,7 +244,13 @@ fn queue_job(editor: &mut Editor) {
     editor.export = None;
 }
 
-fn settings(ui: &mut egui::Ui, format: &mut ExportFormat, sequence_size: (u32, u32)) {
+/// The export's settings as a grid, with `more` rows below them.
+fn settings(
+    ui: &mut egui::Ui,
+    format: &mut ExportFormat,
+    sequence_size: (u32, u32),
+    more: impl FnOnce(&mut egui::Ui, &ExportFormat),
+) {
     egui::Grid::new("export settings")
         .num_columns(2)
         .spacing([12.0, 6.0])
@@ -286,6 +306,7 @@ fn settings(ui: &mut egui::Ui, format: &mut ExportFormat, sequence_size: (u32, u
                     ui.end_row();
                 }
             }
+            more(ui, format);
         });
 }
 
@@ -350,43 +371,6 @@ fn video_rows(
         ui.label("Audio:");
         ui.checkbox(&mut format.with_audio, "Export audio");
         ui.end_row();
-    }
-}
-
-fn summary(format: &ExportFormat, sequence_size: (u32, u32)) -> String {
-    let audio = format.audio().map(|audio| {
-        let codec = audio_codec_name(audio.codec);
-        if audio.codec.is_lossy() {
-            format!("{codec} {} kbps", format.audio_kbps)
-        } else {
-            codec.to_owned()
-        }
-    });
-    match (format.video(sequence_size), audio) {
-        (Some(video), Some(audio)) => format!(
-            "{} at {}×{}, with {audio} sound.",
-            format.format.name(),
-            video.size.0,
-            video.size.1
-        ),
-        (Some(video), None) => format!(
-            "{} at {}×{}, silent.",
-            format.format.name(),
-            video.size.0,
-            video.size.1
-        ),
-        (None, Some(audio)) => format!("Sound only, {audio}."),
-        (None, None) => String::new(),
-    }
-}
-
-fn audio_codec_name(codec: AudioCodec) -> &'static str {
-    match codec {
-        AudioCodec::Aac => "AAC",
-        AudioCodec::Mp3 => "MP3",
-        AudioCodec::Flac => "FLAC",
-        AudioCodec::Pcm16 => "16-bit PCM",
-        AudioCodec::Pcm24 => "24-bit PCM",
     }
 }
 

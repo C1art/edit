@@ -20,6 +20,7 @@ mod export_format;
 mod export_frame;
 mod export_progress;
 mod export_queue;
+mod export_summary;
 mod file_browser;
 mod find_dialog;
 mod fit_clip;
