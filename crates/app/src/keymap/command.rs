@@ -95,6 +95,8 @@ pub enum Command {
     RazorTool,
     SlipTool,
     SlideTool,
+    HandTool,
+    ZoomTool,
     TypeTool,
     RectangleTool,
     EllipseTool,
@@ -134,7 +136,7 @@ const WORKSPACE_WORDS: [(&str, &str); WORKSPACE_SLOTS as usize] = [
 ];
 
 impl Command {
-    pub const ALL: [Self; 122] = [
+    pub const ALL: [Self; 124] = [
         Self::NewProject,
         Self::OpenProject,
         Self::Save,
@@ -229,6 +231,8 @@ impl Command {
         Self::RazorTool,
         Self::SlipTool,
         Self::SlideTool,
+        Self::HandTool,
+        Self::ZoomTool,
         Self::TypeTool,
         Self::RectangleTool,
         Self::EllipseTool,
@@ -374,6 +378,8 @@ impl Command {
             Self::RazorTool => ("razor_tool", "Razor Tool"),
             Self::SlipTool => ("slip_tool", "Slip Tool"),
             Self::SlideTool => ("slide_tool", "Slide Tool"),
+            Self::HandTool => ("hand_tool", "Hand Tool"),
+            Self::ZoomTool => ("zoom_tool", "Zoom Tool"),
             Self::TypeTool => ("type_tool", "Type Tool"),
             Self::RectangleTool => ("rectangle_tool", "Rectangle Tool"),
             Self::EllipseTool => ("ellipse_tool", "Ellipse Tool"),
@@ -468,6 +474,8 @@ impl Command {
             | RazorTool
             | SlipTool
             | SlideTool
+            | HandTool
+            | ZoomTool
             | TypeTool
             | RectangleTool
             | EllipseTool => "Tools",

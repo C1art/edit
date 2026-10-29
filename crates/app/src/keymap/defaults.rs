@@ -107,6 +107,8 @@ impl Command {
             Self::RazorTool => vec![plain(Key::C)],
             Self::SlipTool => vec![plain(Key::Y)],
             Self::SlideTool => vec![plain(Key::U)],
+            Self::HandTool => vec![plain(Key::H)],
+            Self::ZoomTool => vec![plain(Key::Z)],
             Self::TypeTool => vec![plain(Key::T)],
             Self::RectangleTool | Self::EllipseTool => Vec::new(),
             Self::PlayStop => vec![plain(Key::Space)],

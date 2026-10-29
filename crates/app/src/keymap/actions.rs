@@ -16,6 +16,8 @@ impl Command {
             Self::RazorTool => Tool::Razor,
             Self::SlipTool => Tool::Slip,
             Self::SlideTool => Tool::Slide,
+            Self::HandTool => Tool::Hand,
+            Self::ZoomTool => Tool::Zoom,
             Self::TypeTool => Tool::Type,
             Self::RectangleTool => Tool::Shape(ShapeKind::Rectangle),
             Self::EllipseTool => Tool::Shape(ShapeKind::Ellipse),

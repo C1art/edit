@@ -6,6 +6,7 @@ mod header;
 mod interact;
 mod layout;
 mod markers;
+mod navigate;
 mod paint;
 mod rubber_band;
 mod scale;
@@ -254,7 +255,9 @@ impl TimelineView {
             Sense::click_and_drag(),
         );
         let top = tracks.top() - self.scroll_y;
-        self.handle_gestures(&response, timeline, scale, top, playhead, &mut output);
+        if !self.navigate(&response, tracks, timeline.sequence()) {
+            self.handle_gestures(&response, timeline, scale, top, playhead, &mut output);
+        }
         output.clip_menu = self.context_clip.then(|| response.clone());
         output.gap_menu = self.context_gap.then(|| response.clone());
         let drop_hint = handle_drop(

@@ -18,6 +18,10 @@ pub enum Tool {
     Razor,
     Slip,
     Slide,
+    /// Drag to pan the view.
+    Hand,
+    /// Click to zoom in, Alt-click to zoom out.
+    Zoom,
     /// Click the program picture to type a title there.
     Type,
     /// Drag on the program picture to draw a shape.
@@ -25,7 +29,7 @@ pub enum Tool {
 }
 
 impl Tool {
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 14] = [
         Self::Selection,
         Self::TrackSelect(Direction::Forward),
         Self::TrackSelect(Direction::Backward),
@@ -35,6 +39,8 @@ impl Tool {
         Self::Razor,
         Self::Slip,
         Self::Slide,
+        Self::Hand,
+        Self::Zoom,
         Self::Type,
         Self::Shape(ShapeKind::Rectangle),
         Self::Shape(ShapeKind::Ellipse),
@@ -51,6 +57,8 @@ impl Tool {
             Self::Razor => "Razor",
             Self::Slip => "Slip",
             Self::Slide => "Slide",
+            Self::Hand => "Hand",
+            Self::Zoom => "Zoom",
             Self::Type => "Type",
             Self::Shape(kind) => kind.name(),
         }
@@ -71,6 +79,8 @@ impl Tool {
             Self::Razor => "Click a clip to cut it (C)",
             Self::Slip => "Drag a clip to change its source range (Y)",
             Self::Slide => "Drag a clip between its neighbours (U)",
+            Self::Hand => "Drag to scroll the timeline (H)",
+            Self::Zoom => "Click to zoom in, Alt+click to zoom out (Z)",
             Self::Type => "Click the program picture to type a title there (T)",
             Self::Shape(ShapeKind::Rectangle) => {
                 "Drag on the program picture to draw a rectangle; Shift for a square"
