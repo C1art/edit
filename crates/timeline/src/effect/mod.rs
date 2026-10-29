@@ -445,6 +445,23 @@ pub enum VideoEffect {
         width: Param,
         feather: Param,
     },
+    /// Maps the encoded levels from `input_black`..`input_white` onto
+    /// `output_black`..`output_white`, all from 0 to 255, bending them by `gamma`.
+    Levels {
+        input_black: Param,
+        input_white: Param,
+        output_black: Param,
+        output_white: Param,
+        gamma: Param,
+    },
+    /// Adjusts the picture as a video processing amplifier does: brightness in 8-bit
+    /// levels, contrast and saturation in percent and hue in degrees.
+    ProcAmp {
+        brightness: Param,
+        contrast: Param,
+        hue: Param,
+        saturation: Param,
+    },
     /// Blocks of the picture vanishing in a fixed random order.
     BlockDissolve {
         completion: Param,

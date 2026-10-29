@@ -178,6 +178,7 @@ impl RadialWipeDirection {
 /// The groups the effects menu lists effects in, as Premiere's Effects panel does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EffectCategory {
+    Adjust,
     BlurAndSharpen,
     ColorCorrection,
     Distort,
@@ -193,7 +194,8 @@ pub enum EffectCategory {
 }
 
 impl EffectCategory {
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 13] = [
+        Self::Adjust,
         Self::BlurAndSharpen,
         Self::ColorCorrection,
         Self::Distort,
@@ -210,6 +212,7 @@ impl EffectCategory {
 
     pub fn name(self) -> &'static str {
         match self {
+            Self::Adjust => "Adjust",
             Self::BlurAndSharpen => "Blur & Sharpen",
             Self::ColorCorrection => "Color Correction",
             Self::Distort => "Distort",

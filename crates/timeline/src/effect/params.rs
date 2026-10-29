@@ -220,6 +220,19 @@ macro_rules! effect_params {
                 angle,
                 feather,
             } => vec![completion, angle, feather],
+            VideoEffect::Levels {
+                input_black,
+                input_white,
+                output_black,
+                output_white,
+                gamma,
+            } => vec![input_black, input_white, output_black, output_white, gamma],
+            VideoEffect::ProcAmp {
+                brightness,
+                contrast,
+                hue,
+                saturation,
+            } => vec![brightness, contrast, hue, saturation],
             VideoEffect::RadialWipe {
                 completion,
                 start_angle,

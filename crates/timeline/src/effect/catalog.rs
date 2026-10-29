@@ -6,7 +6,7 @@ use crate::{Param, Stabilizer};
 
 impl VideoEffect {
     /// Each effect with its default settings, in the order the effects menu lists them.
-    pub fn catalog() -> [Self; 55] {
+    pub fn catalog() -> [Self; 57] {
         [
             Self::GaussianBlur {
                 blurriness: Param::from_value(10.0),
@@ -259,6 +259,19 @@ impl VideoEffect {
                 feather: Param::default(),
                 opacity: Param::from_value(100.0),
             },
+            Self::Levels {
+                input_black: Param::default(),
+                input_white: Param::from_value(255.0),
+                output_black: Param::default(),
+                output_white: Param::from_value(255.0),
+                gamma: Param::from_value(1.0),
+            },
+            Self::ProcAmp {
+                brightness: Param::default(),
+                contrast: Param::from_value(100.0),
+                hue: Param::default(),
+                saturation: Param::from_value(100.0),
+            },
             Self::LinearWipe {
                 completion: Param::default(),
                 angle: Param::from_value(90.0),
@@ -335,6 +348,7 @@ impl VideoEffect {
             Self::PosterizeTime { .. } => EffectCategory::Time,
             Self::Timecode { .. } | Self::ClipName { .. } => EffectCategory::Video,
             Self::HorizontalFlip | Self::VerticalFlip => EffectCategory::Transform,
+            Self::Levels { .. } | Self::ProcAmp { .. } => EffectCategory::Adjust,
             Self::LinearWipe { .. }
             | Self::RadialWipe { .. }
             | Self::VenetianBlinds { .. }
@@ -395,6 +409,8 @@ impl VideoEffect {
             Self::FourColorGradient { .. } => "4-Color Gradient",
             Self::LensFlare { .. } => "Lens Flare",
             Self::Magnify { .. } => "Magnify",
+            Self::Levels { .. } => "Levels",
+            Self::ProcAmp { .. } => "ProcAmp",
             Self::LinearWipe { .. } => "Linear Wipe",
             Self::RadialWipe { .. } => "Radial Wipe",
             Self::VenetianBlinds { .. } => "Venetian Blinds",
