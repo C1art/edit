@@ -16,20 +16,37 @@ pub enum MulticamSync {
     Audio,
 }
 
-/// A multi-camera source waiting for its cameras' sound to be read and matched.
+/// What synchronized sources are made into.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Synced {
+    Multicam,
+    /// A merged clip of the first source's picture and every source's sound.
+    Merge {
+        remove_camera_audio: bool,
+    },
+}
+
+/// Sources waiting for their sound to be read and matched.
 pub struct SyncJob {
     sources: Vec<SourceId>,
+    synced: Synced,
     matching: Option<Receiver<Vec<Option<Ticks>>>>,
 }
 
 impl Editor {
-    pub(crate) fn sync_multicam(&mut self, sources: Vec<SourceId>, sync: MulticamSync) {
+    pub(crate) fn sync_sources(
+        &mut self,
+        sources: Vec<SourceId>,
+        sync: MulticamSync,
+        synced: Synced,
+    ) {
         match sync {
-            MulticamSync::Start => self.create_multicam(sources, Vec::new()),
+            MulticamSync::Start => self.create_synced(synced, sources, Vec::new()),
             MulticamSync::Audio => {
-                self.notice("Synchronizing the cameras by their sound…");
+                self.notice("Synchronizing the clips by their sound…");
                 self.multicam_sync = Some(SyncJob {
                     sources,
+                    synced,
                     matching: None,
                 });
             }
@@ -75,7 +92,7 @@ impl Editor {
                 Ok(_) => job.matching = Some(matched),
                 Err(error) => {
                     self.multicam_sync = None;
-                    self.notice(format!("Cannot synchronize the cameras: {error}"));
+                    self.notice(format!("Cannot synchronize the clips: {error}"));
                 }
             }
             return;
@@ -93,11 +110,20 @@ impl Editor {
         };
         let unmatched = starts.iter().filter(|start| start.is_none()).count();
         let starts = starts.into_iter().map(Option::unwrap_or_default).collect();
-        self.create_multicam(job.sources, starts);
+        self.create_synced(job.synced, job.sources, starts);
         if unmatched > 0 {
             self.notice(format!(
-                "{unmatched} camera(s) had no sound matching the first and start with it"
+                "{unmatched} clip(s) had no sound matching the first and start with it"
             ));
+        }
+    }
+
+    fn create_synced(&mut self, synced: Synced, sources: Vec<SourceId>, starts: Vec<Ticks>) {
+        match synced {
+            Synced::Multicam => self.create_multicam(sources, starts),
+            Synced::Merge {
+                remove_camera_audio,
+            } => self.create_merged(sources, starts, remove_camera_audio),
         }
     }
 }

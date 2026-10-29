@@ -2,6 +2,8 @@ mod actions;
 mod rows;
 mod tiles;
 
+use std::iter;
+
 use egui::{CollapsingHeader, DragAndDrop, Response, RichText, Sense, StrokeKind, TextEdit};
 use timeline::{Bin, BinId, MediaItem, Sequence, SourceId};
 
@@ -36,6 +38,8 @@ pub enum PoolAction {
     Move(PoolEntry, Option<BinId>),
     /// Makes a multi-camera source sequence of the items, each a camera.
     CreateMulticam(Vec<SourceId>, MulticamSync),
+    /// Merges a picture item with sound items, and whether to drop the picture's sound.
+    Merge(Vec<SourceId>, MulticamSync, bool),
     /// Makes a sequence holding all of the item and opens it.
     NewSequenceFrom(SourceId),
 }
@@ -55,6 +59,7 @@ pub struct PoolView {
     renaming: Option<(PoolEntry, String)>,
     layout: PoolLayout,
     sort: PoolSort,
+    remove_camera_audio: bool,
 }
 
 /// Lists imported media in its bins. Click opens an item in the source monitor;
@@ -259,6 +264,7 @@ impl Pool<'_> {
             .filter(|item| selected.contains(&item.id) && item.is_file() && item.video.is_some())
             .map(|item| item.id)
             .collect();
+        let merge = merge_sources(self.sequence, selected, item.id);
         let to_take_offline: Vec<SourceId> = if selected.contains(&item.id) {
             self.sequence
                 .media
@@ -291,6 +297,28 @@ impl Pool<'_> {
             })
             .response
             .on_disabled_hover_text("Ctrl+click two or more video clips to use as cameras");
+            ui.add_enabled_ui(merge.is_some(), |ui| {
+                ui.menu_button("Merge Clips", |ui| {
+                    ui.checkbox(
+                        &mut self.view.remove_camera_audio,
+                        "Remove Audio from AV Clip",
+                    );
+                    for (sync, label) in [
+                        (MulticamSync::Start, "Synchronize by Start"),
+                        (MulticamSync::Audio, "Synchronize by Audio"),
+                    ] {
+                        if let Some(sources) = merge.as_ref().filter(|_| ui.button(label).clicked())
+                        {
+                            let remove = self.view.remove_camera_audio;
+                            self.action = Some(PoolAction::Merge(sources.clone(), sync, remove));
+                        }
+                    }
+                })
+            })
+            .response
+            .on_disabled_hover_text(
+                "Ctrl+click one video clip and the audio clips recorded with it",
+            );
             let playable = item.video.is_some() || item.has_audio;
             if playable && ui.button("New Sequence From Clip").clicked() {
                 self.action = Some(PoolAction::NewSequenceFrom(item.id));
@@ -418,4 +446,31 @@ impl Pool<'_> {
             self.action = Some(PoolAction::Move(entry, to));
         }
     }
+}
+
+/// The selected picture item first and then the selected sound-only items, when the
+/// selection holding `item` is one of each or more sound.
+fn merge_sources(
+    sequence: &Sequence,
+    selected: &[SourceId],
+    item: SourceId,
+) -> Option<Vec<SourceId>> {
+    if !selected.contains(&item) {
+        return None;
+    }
+    let (pictures, sounds): (Vec<&MediaItem>, Vec<&MediaItem>) = sequence
+        .media
+        .iter()
+        .filter(|item| selected.contains(&item.id) && item.is_file())
+        .partition(|item| item.video.is_some());
+    let all_sound = sounds.iter().all(|item| item.has_audio);
+    let [picture] = pictures[..] else {
+        return None;
+    };
+    (!sounds.is_empty() && all_sound).then(|| {
+        iter::once(picture)
+            .chain(sounds)
+            .map(|item| item.id)
+            .collect()
+    })
 }

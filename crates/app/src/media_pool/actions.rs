@@ -2,13 +2,14 @@ use std::path::{Path, PathBuf};
 
 use timeline::{
     AddBin, CreateMulticam, DuplicateMedia, Edit, InterpretFootage, MakeOffline, MakeSubclip,
-    MoveToBin, RelinkMedia, RemoveBin, RemoveMedia, RenameBin, RenameMedia, SetProxy, SourceId,
-    Ticks, TimelineError,
+    MergeClips, MoveToBin, RelinkMedia, RemoveBin, RemoveMedia, RenameBin, RenameMedia, SetProxy,
+    SourceId, Ticks, TimelineError,
 };
 
 use super::{PoolAction, PoolEntry};
 use crate::editor::Editor;
 use crate::import::Probed;
+use crate::multicam_sync::Synced;
 use crate::project_files::PathPurpose;
 
 impl Editor {
@@ -61,7 +62,15 @@ impl Editor {
                 };
                 self.apply_to_pool(MoveToBin { media, bins, to });
             }
-            PoolAction::CreateMulticam(sources, sync) => self.sync_multicam(sources, sync),
+            PoolAction::CreateMulticam(sources, sync) => {
+                self.sync_sources(sources, sync, Synced::Multicam)
+            }
+            PoolAction::Merge(sources, sync, remove_camera_audio) => {
+                let synced = Synced::Merge {
+                    remove_camera_audio,
+                };
+                self.sync_sources(sources, sync, synced)
+            }
             PoolAction::NewSequenceFrom(source) => self.new_sequence_from(source),
         }
     }
@@ -138,6 +147,33 @@ impl Editor {
                     "Created {}; place it in a sequence and turn on Multi-Camera in the program monitor's View menu",
                     item.name
                 ));
+            }
+        }
+    }
+
+    pub(crate) fn create_merged(
+        &mut self,
+        sources: Vec<SourceId>,
+        starts: Vec<Ticks>,
+        remove_camera_audio: bool,
+    ) {
+        let pool = self.timeline.project();
+        let camera = sources
+            .iter()
+            .filter_map(|&id| pool.media_item(id))
+            .find(|item| item.video.is_some());
+        let name = camera.map_or_else(
+            || "Merged".to_owned(),
+            |item| format!("{} Merged", item.name),
+        );
+        if self.apply_to_pool(MergeClips {
+            sources,
+            starts,
+            remove_camera_audio,
+            name,
+        }) {
+            if let Some(item) = self.timeline.project().media.last() {
+                self.pool.selected = vec![item.id];
             }
         }
     }
