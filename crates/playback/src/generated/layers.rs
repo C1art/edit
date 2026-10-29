@@ -1,5 +1,6 @@
 use timeline::{Graphic, GraphicContent, GraphicLayer};
 
+use super::image_layer::draw_image;
 use super::{draw_shape, draw_title, Anchor, Canvas};
 
 /// Draws `graphic`'s shown layers, bottom first, each placed as it says.
@@ -9,6 +10,7 @@ pub(super) fn draw_graphic(canvas: &mut Canvas, graphic: &Graphic) {
         match &layer.content {
             GraphicContent::Text(title) => draw_title(&mut drawn, title, Anchor::Center),
             GraphicContent::Shape(shape) => draw_shape(&mut drawn, shape),
+            GraphicContent::Image(path) => draw_image(&mut drawn, path),
         }
         canvas.cover(&drawn, layer);
     }

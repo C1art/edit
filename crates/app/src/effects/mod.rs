@@ -145,6 +145,9 @@ fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
     let drawing_change = drawing
         .as_mut()
         .and_then(|generator| generated::controls(ui, generator, height));
+    if graphic_layers::take_picture_request(ui) {
+        editor.prompt_path(PathPurpose::GraphicPicture(clip.source));
+    }
     let video_tracks = editor.timeline.sequence().video.len();
     let keys = std::mem::take(&mut editor.effects.keys);
     let mut rows = Rows::new(time, lane(editor, ui, clip), keys);
@@ -352,6 +355,18 @@ pub(crate) fn set_image_matte(editor: &mut Editor, clip: ClipId, effect: usize, 
         clip: clip.id,
         look,
     });
+}
+
+pub(crate) fn add_graphic_picture(editor: &mut Editor, source: SourceId, path: PathBuf) {
+    let generator = editor
+        .timeline
+        .sequence()
+        .media_item(source)
+        .and_then(|item| item.generator.as_ref())
+        .and_then(|generator| graphic_layers::with_picture(generator, path));
+    if let Some(generator) = generator {
+        editor.apply(SetGenerator { source, generator });
+    }
 }
 
 /// Shows the program as `edit` would leave it, without adding to the undo history.

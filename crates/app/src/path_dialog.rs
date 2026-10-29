@@ -58,6 +58,11 @@ pub fn path_dialog(editor: &mut Editor, ctx: &egui::Context) {
             "Path to a still image whose alpha or luma shows the clip through:",
             "Apply",
         ),
+        PathPurpose::GraphicPicture(_) => (
+            "New Layer From File",
+            "Path to a picture, such as a logo, to add over the graphic:",
+            "Add",
+        ),
         PathPurpose::Lut(_, LutSlot::Look) => (
             "Creative Look",
             "Path to a .cube LUT giving the clip its look:",
@@ -109,6 +114,9 @@ pub fn path_dialog(editor: &mut Editor, ctx: &egui::Context) {
             PathPurpose::Lut(clip, slot) => crate::effects::set_lut(editor, clip, slot, path),
             PathPurpose::ImageMatte(clip, effect) => {
                 crate::effects::set_image_matte(editor, clip, effect, path);
+            }
+            PathPurpose::GraphicPicture(source) => {
+                crate::effects::add_graphic_picture(editor, source, path);
             }
         }
     } else if cancelled {

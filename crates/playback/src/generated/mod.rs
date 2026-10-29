@@ -1,5 +1,6 @@
 mod bars;
 mod coverage;
+mod image_layer;
 mod layers;
 mod leader;
 mod scroll;

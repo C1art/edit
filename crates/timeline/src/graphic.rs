@@ -1,5 +1,7 @@
-//! Graphics with several layers, as Essential Graphics builds them: text and shapes
-//! drawn one over another in a single clip.
+//! Graphics with several layers, as Essential Graphics builds them: text, shapes and
+//! pictures drawn one over another in a single clip.
+
+use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
@@ -40,16 +42,23 @@ pub enum GraphicContent {
     /// Still text; rolls and crawls belong to a whole title.
     Text(Title),
     Shape(Shape),
+    /// A still picture from a file, such as a logo, at its own size or shrunk to fit
+    /// the frame.
+    Image(PathBuf),
 }
 
 impl GraphicLayer {
     pub fn new(content: GraphicContent) -> Self {
         let name = match &content {
-            GraphicContent::Text(title) => title.text.lines().next().unwrap_or_default(),
-            GraphicContent::Shape(shape) => shape.kind.name(),
+            GraphicContent::Text(title) => title.text.lines().next().unwrap_or_default().to_owned(),
+            GraphicContent::Shape(shape) => shape.kind.name().to_owned(),
+            GraphicContent::Image(path) => path
+                .file_stem()
+                .map(|stem| stem.to_string_lossy().into_owned())
+                .unwrap_or_default(),
         };
         Self {
-            name: name.to_owned(),
+            name,
             content,
             offset: [0, 0],
             hidden: false,

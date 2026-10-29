@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use timeline::{
     Generator, Graphic, GraphicContent, GraphicLayer, Shape, ShapeKind, Title, TitleMotion,
 };
@@ -5,40 +7,68 @@ use timeline::{
 use super::generated::{shape_controls, text_controls};
 use crate::mixer::{response_state, Change};
 
-/// A new text layer, or a shape layer of a kind.
+/// A new text layer, a shape layer of a kind, or a picture from a file still to be
+/// named.
 #[derive(Clone, Copy)]
 enum NewLayer {
     Text,
     Shape(ShapeKind),
+    FromFile,
 }
 
 impl NewLayer {
-    const ALL: [Self; 3] = [
+    const ALL: [Self; 4] = [
         Self::Text,
         Self::Shape(ShapeKind::Rectangle),
         Self::Shape(ShapeKind::Ellipse),
+        Self::FromFile,
     ];
 
     fn name(self) -> &'static str {
         match self {
             Self::Text => "Text",
             Self::Shape(kind) => kind.name(),
+            Self::FromFile => "From File…",
         }
     }
 
-    fn layer(self) -> GraphicLayer {
-        GraphicLayer::new(match self {
+    fn layer(self) -> Option<GraphicLayer> {
+        let content = match self {
             Self::Text => GraphicContent::Text(Title::default()),
             Self::Shape(kind) => GraphicContent::Shape(Shape::new(kind)),
-        })
+            Self::FromFile => return None,
+        };
+        Some(GraphicLayer::new(content))
     }
+}
+
+/// Whether "From File…" was picked this frame, which asks for the picture's path.
+pub(super) fn take_picture_request(ui: &egui::Ui) -> bool {
+    ui.data_mut(|data| data.remove_temp::<bool>(picture_request_id()))
+        .unwrap_or(false)
+}
+
+fn picture_request_id() -> egui::Id {
+    egui::Id::unique("graphic_picture_layer")
+}
+
+/// `generator` with `path`'s picture as its new top layer, turning a still title or a
+/// shape into a graphic first.
+pub(crate) fn with_picture(generator: &Generator, path: PathBuf) -> Option<Generator> {
+    let mut graphic = match generator {
+        Generator::Graphic(graphic) => graphic.clone(),
+        other => Graphic::layered(other)?,
+    };
+    let layer = GraphicLayer::new(GraphicContent::Image(path));
+    graphic.layers.insert(0, layer);
+    Some(Generator::Graphic(graphic))
 }
 
 /// Offers a new layer over a still title or a shape, which turns it into a graphic.
 pub(super) fn upgrade_row(ui: &mut egui::Ui, generator: &mut Generator) -> Option<Change> {
     let mut graphic = Graphic::layered(generator)?;
-    let added = new_layer_menu(ui)?;
-    graphic.layers.insert(0, added.layer());
+    let added = new_layer_menu(ui)?.layer()?;
+    graphic.layers.insert(0, added);
     *generator = Generator::Graphic(graphic);
     Some(Change::Commit)
 }
@@ -53,6 +83,9 @@ fn new_layer_menu(ui: &mut egui::Ui) -> Option<NewLayer> {
             }
         }
     });
+    if matches!(added, Some(NewLayer::FromFile)) {
+        ui.data_mut(|data| data.insert_temp(picture_request_id(), true));
+    }
     added
 }
 
@@ -66,8 +99,8 @@ pub(super) fn controls(ui: &mut egui::Ui, graphic: &mut Graphic, height: u32) ->
         .min(last);
     let mut change = None;
     ui.horizontal(|ui| {
-        if let Some(added) = new_layer_menu(ui) {
-            graphic.layers.insert(0, added.layer());
+        if let Some(added) = new_layer_menu(ui).and_then(NewLayer::layer) {
+            graphic.layers.insert(0, added);
             chosen = 0;
             change = Some(Change::Commit);
         }
@@ -107,6 +140,7 @@ pub(super) fn controls(ui: &mut egui::Ui, graphic: &mut Graphic, height: u32) ->
                 let kind = match layer.content {
                     GraphicContent::Text(_) => "T",
                     GraphicContent::Shape(_) => "◆",
+                    GraphicContent::Image(_) => "▣",
                 };
                 ui.weak(kind);
                 if ui.selectable_label(index == chosen, &layer.name).clicked() {
@@ -181,6 +215,9 @@ fn layer_controls(ui: &mut egui::Ui, layer: &mut GraphicLayer, height: u32) -> O
             }
         }
         GraphicContent::Shape(shape) => change = shape_controls(ui, shape, height).or(change),
+        GraphicContent::Image(path) => {
+            ui.weak(path.display().to_string());
+        }
     }
     change
 }
