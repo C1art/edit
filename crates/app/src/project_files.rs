@@ -322,6 +322,7 @@ impl Editor {
                 StoreEvent::SettingRead(Setting::Folders, Ok(Some(text))) => {
                     self.browse_folders = crate::path_dialog::folders_from_text(&text);
                 }
+                StoreEvent::SettingRead(Setting::Window, Ok(Some(_))) => {}
                 StoreEvent::SettingRead(_, Ok(None)) => {}
                 StoreEvent::SettingRead(setting, Err(error)) => {
                     self.notice(format!(
@@ -350,10 +351,12 @@ impl Editor {
     pub(crate) fn update_window(&mut self) {
         let ctx = self.ctx.clone();
         let closing = ctx.input(|input| input.viewport().close_requested());
-        if closing && !self.quitting && self.is_dirty() {
+        let closes = closing && (self.quitting || !self.is_dirty());
+        if closing && !closes {
             ctx.send_viewport_cmd(ViewportCommand::CancelClose);
             self.confirm_discard = Some(AfterDiscard::Quit);
         }
+        self.track_window(&ctx, closes);
         let name = self
             .project_path
             .as_ref()

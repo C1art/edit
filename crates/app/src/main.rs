@@ -78,24 +78,29 @@ mod timeline_view;
 mod transport;
 mod trim_monitor;
 mod viewer;
+mod window_state;
 mod workspaces;
 
 use std::path::PathBuf;
 
 use editor::Editor;
+use window_state::WindowState;
 
 fn main() -> eframe::Result {
     let initial: Vec<PathBuf> = std::env::args_os().skip(1).map(PathBuf::from).collect();
+    let window = WindowState::load();
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_title("Edit")
-            .with_inner_size([1600.0, 900.0])
-            .with_drag_and_drop(true),
+        viewport: window.open(
+            egui::ViewportBuilder::default()
+                .with_title("Edit")
+                .with_drag_and_drop(true),
+        ),
+        centered: true,
         ..Default::default()
     };
     eframe::run_native(
         "Edit",
         options,
-        Box::new(|creation_context| Ok(Box::new(Editor::new(creation_context, initial)))),
+        Box::new(|creation_context| Ok(Box::new(Editor::new(creation_context, initial, window)))),
     )
 }

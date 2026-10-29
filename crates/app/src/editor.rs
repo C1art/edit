@@ -5,8 +5,8 @@ use std::sync::Arc;
 use audio::AudioOutput;
 use eframe::egui_wgpu::RenderState;
 use timeline::{
-    Clipboard, Edit, Marker, Sequence, SetProxy, SetSequenceFormat, SourceId, Ticks, Timebase,
-    Timeline, TimelineError, VideoFormat,
+    Clipboard, Edit, Marker, Sequence, SetSequenceFormat, SourceId, Ticks, Timebase, Timeline,
+    TimelineError, VideoFormat,
 };
 
 use crate::autosave::Autosave;
@@ -29,6 +29,7 @@ use crate::source::SourceMonitor;
 use crate::timeline_view::TimelineView;
 use crate::trim_monitor::TrimMonitor;
 use crate::viewer::Viewer;
+use crate::window_state::WindowState;
 
 /// Notices kept for display; older ones are dropped.
 const MAX_NOTICES: usize = 8;
@@ -103,6 +104,7 @@ pub struct Editor {
     pub(crate) path_prompt: Option<PathPrompt>,
     pub(crate) browse_folders: HashMap<FolderUse, PathBuf>,
     pub(crate) recent_projects: RecentProjects,
+    pub(crate) window: WindowState,
     pub(crate) store: Option<ProjectStore>,
     /// Where the project was last saved or opened from.
     pub(crate) project_path: Option<PathBuf>,
@@ -132,7 +134,11 @@ pub struct Editor {
 }
 
 impl Editor {
-    pub fn new(creation_context: &eframe::CreationContext<'_>, initial: Vec<PathBuf>) -> Self {
+    pub fn new(
+        creation_context: &eframe::CreationContext<'_>,
+        initial: Vec<PathBuf>,
+        window: WindowState,
+    ) -> Self {
         crate::theme::apply(&creation_context.egui_ctx);
         let mut notices = Vec::new();
         let audio = AudioOutput::open_default()
@@ -170,7 +176,7 @@ impl Editor {
             .map_err(|error| notices.push(format!("Saving disabled: {error}")))
             .ok();
         if let Some(store) = &mut store {
-            Setting::ALL
+            Setting::READ_AT_START
                 .into_iter()
                 .for_each(|setting| store.read_setting(setting));
         }
@@ -242,6 +248,7 @@ impl Editor {
             path_prompt: None,
             browse_folders: HashMap::new(),
             recent_projects: RecentProjects::default(),
+            window,
             store,
             project_path: None,
             confirm_discard: None,
@@ -316,26 +323,6 @@ impl Editor {
         }
     }
 
-    pub(crate) fn open_source(&mut self, id: SourceId) {
-        let Some(item) = self.timeline.sequence().media_item(id).cloned() else {
-            return;
-        };
-        // Drop the old player first so its workers stop feeding the audio output.
-        self.source = None;
-        match SourceMonitor::open(
-            &item,
-            self.timeline.project(),
-            self.audio.as_ref(),
-            self.render_state.as_ref(),
-        ) {
-            Ok(source) => {
-                self.source = Some(source);
-                self.focus = Focus::Source;
-            }
-            Err(error) => self.notice(format!("Cannot open {}: {error}", item.name)),
-        }
-    }
-
     pub(crate) fn playhead(&self) -> Ticks {
         self.program
             .as_ref()
@@ -365,27 +352,6 @@ impl Editor {
         };
         if format != sequence.format {
             self.apply(SetSequenceFormat { format });
-        }
-    }
-
-    fn poll_proxies(&mut self, ctx: &egui::Context) {
-        let Some(maker) = &mut self.proxies else {
-            return;
-        };
-        let finished = maker.poll();
-        if maker.is_busy() {
-            ctx.request_repaint();
-        }
-        for (source, result) in finished {
-            match result {
-                Ok(path) => {
-                    self.apply(SetProxy {
-                        source,
-                        proxy: Some(path),
-                    });
-                }
-                Err(error) => self.notice(format!("Cannot create proxy: {error}")),
-            }
         }
     }
 

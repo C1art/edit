@@ -54,10 +54,12 @@ pub enum Setting {
     Workspaces,
     Folders,
     RecentProjects,
+    Window,
 }
 
 impl Setting {
-    pub const ALL: [Self; 5] = [
+    /// Those the editor reads once it starts; the window's is needed before then.
+    pub const READ_AT_START: [Self; 5] = [
         Self::Keymap,
         Self::Presets,
         Self::Workspaces,
@@ -72,6 +74,7 @@ impl Setting {
             Self::Workspaces => "Workspaces.txt",
             Self::Folders => "Recent Folders.txt",
             Self::RecentProjects => "Recent Projects.txt",
+            Self::Window => "Window.txt",
         })
     }
 
@@ -83,6 +86,7 @@ impl Setting {
             Self::Workspaces => "workspaces",
             Self::Folders => "recent folders",
             Self::RecentProjects => "recent projects",
+            Self::Window => "window size",
         }
     }
 }
@@ -99,13 +103,14 @@ pub struct ProjectStore {
     requests: Sender<Request>,
     events: Receiver<StoreEvent>,
     pending: usize,
+    worker: Option<thread::JoinHandle<()>>,
 }
 
 impl ProjectStore {
     pub fn new() -> std::io::Result<Self> {
         let (request_tx, request_rx) = channel::unbounded::<Request>();
         let (event_tx, event_rx) = channel::unbounded();
-        thread::Builder::new()
+        let worker = thread::Builder::new()
             .name("project".to_owned())
             .spawn(move || {
                 for request in request_rx {
@@ -118,6 +123,7 @@ impl ProjectStore {
             requests: request_tx,
             events: event_rx,
             pending: 0,
+            worker: Some(worker),
         })
     }
 
@@ -192,6 +198,18 @@ impl ProjectStore {
         let events: Vec<_> = self.events.try_iter().collect();
         self.pending = self.pending.saturating_sub(events.len());
         events
+    }
+}
+
+impl Drop for ProjectStore {
+    /// Lets writes asked for just before quitting, like settings, reach the disk before
+    /// the process ends and takes the thread with it.
+    fn drop(&mut self) {
+        let (closed, _) = channel::bounded(0);
+        drop(std::mem::replace(&mut self.requests, closed));
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
     }
 }
 

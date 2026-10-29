@@ -6,6 +6,8 @@ use eframe::egui_wgpu::RenderState;
 use playback::PlaybackError;
 use timeline::{Clip, ClipId, Marks, MediaItem, Sequence, SourceId, Speed, Ticks, Track};
 
+use crate::editor::Editor;
+use crate::monitors::Focus;
 use crate::transport;
 use crate::viewer::Viewer;
 
@@ -118,4 +120,26 @@ fn source_sequence(item: &MediaItem, pool: &Sequence) -> Sequence {
         sequence.audio.push(track(2));
     }
     sequence
+}
+
+impl Editor {
+    pub(crate) fn open_source(&mut self, id: SourceId) {
+        let Some(item) = self.timeline.sequence().media_item(id).cloned() else {
+            return;
+        };
+        // Drop the old player first so its workers stop feeding the audio output.
+        self.source = None;
+        match SourceMonitor::open(
+            &item,
+            self.timeline.project(),
+            self.audio.as_ref(),
+            self.render_state.as_ref(),
+        ) {
+            Ok(source) => {
+                self.source = Some(source);
+                self.focus = Focus::Source;
+            }
+            Err(error) => self.notice(format!("Cannot open {}: {error}", item.name)),
+        }
+    }
 }

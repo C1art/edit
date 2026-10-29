@@ -6,7 +6,9 @@ use std::sync::Arc;
 use std::thread;
 
 use crossbeam::channel::{self, Receiver, Sender};
-use timeline::SourceId;
+use timeline::{SetProxy, SourceId};
+
+use crate::editor::Editor;
 
 /// Tall enough to judge focus and framing, small enough to decode several at once.
 const PROXY_HEIGHT: u32 = 540;
@@ -94,6 +96,29 @@ impl ProxyMaker {
             }
         }
         finished
+    }
+}
+
+impl Editor {
+    pub(crate) fn poll_proxies(&mut self, ctx: &egui::Context) {
+        let Some(maker) = &mut self.proxies else {
+            return;
+        };
+        let finished = maker.poll();
+        if maker.is_busy() {
+            ctx.request_repaint();
+        }
+        for (source, result) in finished {
+            match result {
+                Ok(path) => {
+                    self.apply(SetProxy {
+                        source,
+                        proxy: Some(path),
+                    });
+                }
+                Err(error) => self.notice(format!("Cannot create proxy: {error}")),
+            }
+        }
     }
 }
 
