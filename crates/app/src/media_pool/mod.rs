@@ -1,9 +1,8 @@
 mod actions;
+mod item_menu;
 mod rows;
 mod search_bins;
 mod tiles;
-
-use std::iter;
 
 use egui::{CollapsingHeader, DragAndDrop, Response, RichText, Sense, StrokeKind};
 use timeline::{Bin, BinId, BinSearch, MediaItem, Sequence, SourceId};
@@ -11,7 +10,7 @@ use timeline::{Bin, BinId, BinSearch, MediaItem, Sequence, SourceId};
 use crate::clip_art::ClipArt;
 use crate::multicam_sync::MulticamSync;
 use crate::proxies::ProxyMaker;
-use rows::{item_row, proxy_menu, rename_field, Field};
+use rows::{item_row, rename_field, Field};
 use tiles::{tile, PoolLayout, PoolSort};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -64,6 +63,8 @@ pub struct PoolView {
     layout: PoolLayout,
     sort: PoolSort,
     remove_camera_audio: bool,
+    /// How tall a plain list row came out, the space kept for rows scrolled away.
+    row_height: Option<f32>,
 }
 
 /// Lists imported media in its bins. Click opens an item in the source monitor;
@@ -231,11 +232,24 @@ impl Pool<'_> {
         }
         let building = self.proxies.and_then(|maker| maker.progress(item.id));
         let offline = self.art.offline.contains(&item.id);
+        let plain_row =
+            matches!(self.view.layout, PoolLayout::List) && building.is_none() && !offline;
+        if let Some(height) = self.view.row_height.filter(|_| plain_row) {
+            let top = ui.cursor().top();
+            let shown = ui.clip_rect().y_range();
+            if top > shown.max || top + height < shown.min {
+                ui.allocate_space(egui::vec2(ui.available_width(), height));
+                return;
+            }
+        }
         let timebase = self.sequence.timebase;
         let response = match self.view.layout {
             PoolLayout::List => item_row(ui, item, timebase, building, offline),
             PoolLayout::Icons => tile(ui, item, timebase, self.art, offline),
         };
+        if plain_row {
+            self.view.row_height = Some(response.rect.height());
+        }
         if response.drag_started() {
             response.dnd_set_drag_payload(item.id);
         }
@@ -263,112 +277,7 @@ impl Pool<'_> {
         if response.double_clicked() && item.nest.is_some() {
             self.action = Some(PoolAction::OpenNest(item.id));
         }
-        response.context_menu(|ui| {
-            // In project order, whatever order they were picked in.
-            let cameras: Vec<SourceId> = self
-                .sequence
-                .media
-                .iter()
-                .filter(|item| {
-                    self.view.selected.contains(&item.id) && item.is_file() && item.video.is_some()
-                })
-                .map(|item| item.id)
-                .collect();
-            let merge = merge_sources(self.sequence, &self.view.selected, item.id);
-            let to_take_offline: Vec<SourceId> = if self.view.selected.contains(&item.id) {
-                self.sequence
-                    .media
-                    .iter()
-                    .filter(|item| {
-                        self.view.selected.contains(&item.id) && item.is_file() && !item.offline
-                    })
-                    .map(|item| item.id)
-                    .collect()
-            } else {
-                vec![item.id]
-            };
-            if ui.button("Open in Source Monitor").clicked() {
-                self.action = Some(PoolAction::Open(item.id));
-            }
-            let can_sync = cameras.len() >= 2 && cameras.contains(&item.id);
-            ui.add_enabled_ui(can_sync, |ui| {
-                ui.menu_button("Create Multi-Camera Source Sequence", |ui| {
-                    for (sync, label) in [
-                        (MulticamSync::Start, "Synchronize by Start"),
-                        (MulticamSync::Audio, "Synchronize by Audio"),
-                    ] {
-                        if ui.button(label).clicked() {
-                            self.action = Some(PoolAction::CreateMulticam(cameras.clone(), sync));
-                        }
-                    }
-                })
-            })
-            .response
-            .on_disabled_hover_text("Ctrl+click two or more video clips to use as cameras");
-            ui.add_enabled_ui(merge.is_some(), |ui| {
-                ui.menu_button("Merge Clips", |ui| {
-                    ui.checkbox(
-                        &mut self.view.remove_camera_audio,
-                        "Remove Audio from AV Clip",
-                    );
-                    for (sync, label) in [
-                        (MulticamSync::Start, "Synchronize by Start"),
-                        (MulticamSync::Audio, "Synchronize by Audio"),
-                    ] {
-                        if let Some(sources) = merge.as_ref().filter(|_| ui.button(label).clicked())
-                        {
-                            let remove = self.view.remove_camera_audio;
-                            self.action = Some(PoolAction::Merge(sources.clone(), sync, remove));
-                        }
-                    }
-                })
-            })
-            .response
-            .on_disabled_hover_text(
-                "Ctrl+click one video clip and the audio clips recorded with it",
-            );
-            let playable = item.video.is_some() || item.has_audio;
-            if playable && ui.button("New Sequence From Clip").clicked() {
-                self.action = Some(PoolAction::NewSequenceFrom(item.id));
-            }
-            if item.nest.is_some() && ui.button("Open in Timeline").clicked() {
-                self.action = Some(PoolAction::OpenNest(item.id));
-            }
-            if ui.button("Rename").clicked() {
-                self.view.renaming = Some((entry, item.name.clone()));
-            }
-            if ui.button("Duplicate").clicked() {
-                self.action = Some(PoolAction::Duplicate(item.id));
-            }
-            if item.bin.is_some() && ui.button("Move to Top").clicked() {
-                self.action = Some(PoolAction::Move(entry, None));
-            }
-            let relink = if offline {
-                "Link Media…"
-            } else {
-                "Replace Footage…"
-            };
-            if item.is_file() && ui.button(relink).clicked() {
-                self.action = Some(PoolAction::Replace(item.id));
-            }
-            if item.is_file() && !item.offline && ui.button("Make Offline").clicked() {
-                self.action = Some(PoolAction::MakeOffline(to_take_offline));
-            }
-            if ui.button("Remove from Project").clicked() {
-                self.action = Some(PoolAction::Remove(item.id));
-            }
-            if item.has_audio && item.is_file() && ui.button("Modify Audio Channels…").clicked() {
-                self.action = Some(PoolAction::AudioChannels(item.id));
-            }
-            if item.video.is_some() && item.is_file() {
-                if ui.button("Interpret Footage…").clicked() {
-                    self.action = Some(PoolAction::Interpret(item.id));
-                }
-                ui.separator();
-                let can_build = self.proxies.is_some() && building.is_none();
-                proxy_menu(ui, item, can_build, &mut self.action);
-            }
-        });
+        response.context_menu(|ui| self.item_menu(ui, item, offline, building));
     }
 
     /// Shows the name field in place of `entry` while it is being renamed.
@@ -454,31 +363,4 @@ impl Pool<'_> {
             self.action = Some(PoolAction::Move(entry, to));
         }
     }
-}
-
-/// The selected picture item first and then the selected sound-only items, when the
-/// selection holding `item` is one of each or more sound.
-fn merge_sources(
-    sequence: &Sequence,
-    selected: &[SourceId],
-    item: SourceId,
-) -> Option<Vec<SourceId>> {
-    if !selected.contains(&item) {
-        return None;
-    }
-    let (pictures, sounds): (Vec<&MediaItem>, Vec<&MediaItem>) = sequence
-        .media
-        .iter()
-        .filter(|item| selected.contains(&item.id) && item.is_file())
-        .partition(|item| item.video.is_some());
-    let all_sound = sounds.iter().all(|item| item.has_audio);
-    let [picture] = pictures[..] else {
-        return None;
-    };
-    (!sounds.is_empty() && all_sound).then(|| {
-        iter::once(picture)
-            .chain(sounds)
-            .map(|item| item.id)
-            .collect()
-    })
 }
