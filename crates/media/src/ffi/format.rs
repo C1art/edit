@@ -7,6 +7,7 @@ use timeline::{ColorSpace, FieldOrder, Ticks, Timebase};
 
 use super::error::check;
 use super::Packet;
+use crate::turn::Turn;
 use crate::{MediaError, StreamInfo, StreamKind};
 
 /// An opened demuxer whose stream info has been read.
@@ -153,6 +154,33 @@ impl InputContext {
             AV_FIELD_BB | AV_FIELD_TB => FieldOrder::LowerFirst,
             _ => FieldOrder::Progressive,
         }
+    }
+
+    /// The turn that stands the stream's pictures upright, from the display matrix the
+    /// container keeps for it.
+    pub(crate) fn display_turn(&self, index: usize) -> Turn {
+        /// A display matrix is 3 by 3 32-bit numbers.
+        const MATRIX_BYTES: usize = 9 * 4;
+        let Some(stream) = self.stream(index) else {
+            return Turn::None;
+        };
+        // SAFETY: `stream` returns valid stream pointers owned by the open context, and
+        // every stream has non-null `codecpar`, whose `coded_side_data` holds
+        // `nb_coded_side_data` entries. The entry found is checked to hold a whole
+        // matrix before it is read.
+        let counterclockwise = unsafe {
+            let codecpar = &*(*stream).codecpar;
+            let side_data = sys::av_packet_side_data_get(
+                codecpar.coded_side_data,
+                codecpar.nb_coded_side_data,
+                sys::AVPacketSideDataType::AV_PKT_DATA_DISPLAYMATRIX,
+            );
+            if side_data.is_null() || (*side_data).size < MATRIX_BYTES {
+                return Turn::None;
+            }
+            sys::av_display_rotation_get((*side_data).data.cast::<i32>())
+        };
+        Turn::clockwise(-counterclockwise)
     }
 
     /// The coded picture size declared in the stream header.

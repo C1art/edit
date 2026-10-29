@@ -124,8 +124,8 @@ const CASES: &[(&str, Expect)] = &[
     (
         "rotated.mp4",
         Expect::Movie {
-            width: 96,
-            height: 54,
+            width: 54,
+            height: 96,
             seconds: 1.0,
             audio: false,
         },

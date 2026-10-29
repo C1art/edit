@@ -22,6 +22,7 @@ mod still;
 mod subject;
 #[cfg(test)]
 mod test_picture;
+mod turn;
 mod writer;
 
 pub use codec::{AudioCodec, DnxhrQuality, RateControl, VideoCodec};

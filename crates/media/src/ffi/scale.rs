@@ -8,6 +8,7 @@ use timeline::FieldOrder;
 use super::error::check;
 use super::{Frame, Picture, RgbaResizer};
 use crate::deinterlace::deinterlace;
+use crate::turn::Turn;
 use crate::MediaError;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -26,8 +27,10 @@ struct ScalerKey {
 #[derive(Default)]
 pub(crate) struct Scaler {
     context: Option<(NonNull<sys::SwsContext>, ScalerKey)>,
-    /// Pictures are resized to this; `None` keeps the decoded size.
+    /// Pictures are resized to this, as they stand once turned; `None` keeps the
+    /// decoded size.
     output_size: Option<(i32, i32)>,
+    turn: Turn,
     /// Interlaced pictures are rebuilt from their first field at the decoded size,
     /// before any resizing mixes the fields' rows.
     fields: FieldOrder,
@@ -60,20 +63,31 @@ impl Scaler {
         self.fields = fields;
     }
 
+    pub(crate) fn set_turn(&mut self, turn: Turn) {
+        self.turn = turn;
+    }
+
     pub(crate) fn set_planar(&mut self, planar: bool) {
         self.planar = planar;
     }
 
     /// Whether pictures are to be left planar where their format allows.
     pub(crate) fn keeps_planes(&self) -> bool {
-        self.planar && self.fields.is_progressive()
+        self.planar && self.fields.is_progressive() && self.turn == Turn::None
     }
 
     pub(crate) fn convert(&mut self, picture: &Picture) -> Result<(u32, u32, Vec<u8>), MediaError> {
+        let (width, height, pixels) = self.convert_unturned(picture)?;
+        Ok(self.turn.apply(width, height, pixels))
+    }
+
+    fn convert_unturned(&mut self, picture: &Picture) -> Result<(u32, u32, Vec<u8>), MediaError> {
         let (frame, format) = (picture.frame(), picture.format());
         let raw = frame.raw();
         let decoded = (raw.width, raw.height);
-        let wanted = self.output_size.unwrap_or(decoded);
+        let wanted = self
+            .output_size
+            .map_or(decoded, |size| self.turn.sides(size));
         if self.fields.is_progressive() {
             return self.convert_to(format, frame, wanted);
         }

@@ -153,11 +153,13 @@ impl MediaReader {
             video
                 .converter
                 .set_field_order(input.field_order(video.index));
+            video.converter.set_turn(input.display_turn(video.index));
         }
         let info = SourceInfo {
             duration: input.duration().map(to_ticks),
             video: video.as_ref().map(|video| {
-                let (width, height) = input.frame_size(video.index).unwrap_or((0, 0));
+                let turn = input.display_turn(video.index);
+                let (width, height) = turn.sides(input.frame_size(video.index).unwrap_or((0, 0)));
                 VideoInfo {
                     width,
                     height,
@@ -166,7 +168,10 @@ impl MediaReader {
                         .and_then(|(num, den)| FrameRate::new(num, den)),
                     pixel_aspect: input
                         .pixel_aspect(video.index)
-                        .and_then(|(num, den)| PixelAspect::new(num, den))
+                        .and_then(|aspect| {
+                            let (num, den) = turn.sides(aspect);
+                            PixelAspect::new(num, den)
+                        })
                         .unwrap_or_default(),
                     color_space: input.color_space(video.index),
                     field_order: input.field_order(video.index),
