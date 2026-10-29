@@ -55,6 +55,8 @@ pub enum Picture<'a> {
     Planes {
         width: u32,
         height: u32,
+        /// The size to turn them into: theirs, or smaller to shrink them on the way.
+        output: (u32, u32),
         luma: PlaneRows<'a>,
         chroma: ChromaRows<'a>,
         color: YuvColor,

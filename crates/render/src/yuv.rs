@@ -123,7 +123,7 @@ impl YuvConverter {
             "fs_main",
         );
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("chroma"),
+            label: Some("planes"),
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
             ..wgpu::SamplerDescriptor::default()
@@ -216,12 +216,13 @@ impl PlaneTextures {
         }
     }
 
+    /// Uploads the planes, to be converted into a texture of `output` size.
     pub(crate) fn upload(
         &self,
         queue: &wgpu::Queue,
-        luma: PlaneRows<'_>,
-        chroma: &ChromaRows<'_>,
+        (luma, chroma): (PlaneRows<'_>, &ChromaRows<'_>),
         color: YuvColor,
+        output: (u32, u32),
     ) {
         let write = |texture: &wgpu::Texture, plane: PlaneRows<'_>| {
             let size = texture.size();
@@ -241,7 +242,8 @@ impl PlaneTextures {
             write(texture, plane);
         }
         let luma_size = self.luma.size();
-        let uniform = uniform(color, (luma_size.width, luma_size.height), chroma.layout());
+        let size = (luma_size.width, luma_size.height);
+        let uniform = uniform(color, (size, output), chroma.layout());
         queue.write_buffer(&self.uniform, 0, &uniform);
     }
 
@@ -261,10 +263,14 @@ impl PlaneTextures {
     }
 }
 
-/// The matrix columns, offset, two chroma masks and chroma shift and scale.
-const UNIFORM_BYTES: usize = 7 * 16;
+/// The matrix columns, offset, two chroma masks, chroma shift and scale, and footprint.
+const UNIFORM_BYTES: usize = 8 * 16;
 
-fn uniform(color: YuvColor, size: (u32, u32), layout: ChromaLayout) -> [u8; UNIFORM_BYTES] {
+fn uniform(
+    color: YuvColor,
+    (size, output): ((u32, u32), (u32, u32)),
+    layout: ChromaLayout,
+) -> [u8; UNIFORM_BYTES] {
     let (columns, offset) = conversion(color);
     let (cb_mask, cr_mask) = match layout {
         ChromaLayout::Separate => ([1.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]),
@@ -277,8 +283,14 @@ fn uniform(color: YuvColor, size: (u32, u32), layout: ChromaLayout) -> [u8; UNIF
         ChromaSiting::Left => 0.5 * scale[0],
         ChromaSiting::Center => 0.0,
     };
+    let footprint = [
+        size.0 as f32 / output.0.max(1) as f32,
+        size.1 as f32 / output.1.max(1) as f32,
+        1.0 / size.0 as f32,
+        1.0 / size.1 as f32,
+    ];
     let [first, second, third] = columns.map(|[r, g, b]| [r, g, b, 0.0]);
-    let values: [[f32; 4]; 7] = [
+    let values: [[f32; 4]; 8] = [
         first,
         second,
         third,
@@ -286,6 +298,7 @@ fn uniform(color: YuvColor, size: (u32, u32), layout: ChromaLayout) -> [u8; UNIF
         cb_mask,
         cr_mask,
         [shift, 0.0, scale[0], scale[1]],
+        footprint,
     ];
     let mut bytes = [0; UNIFORM_BYTES];
     let (chunks, _) = bytes.as_chunks_mut::<4>();

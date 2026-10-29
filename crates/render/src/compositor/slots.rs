@@ -22,8 +22,8 @@ pub(super) enum SlotKind {
     Picture,
     /// A canvas-sized working texture that a group is drawn into.
     Group,
-    /// A working texture that uploaded planes are turned into.
-    Planes(ChromaLayout),
+    /// A working texture that uploaded planes of this size are turned into.
+    Planes(ChromaLayout, (u32, u32)),
 }
 
 /// Texture and placement for one layer, reused while the layer's size and kind hold.
@@ -130,7 +130,8 @@ impl Compositor {
             return false;
         }
         if let Some(planes) = &self.slots[index].planes {
-            planes.upload(&self.queue, luma, chroma, color);
+            let output = (self.slots[index].width, self.slots[index].height);
+            planes.upload(&self.queue, (luma, chroma), color, output);
         }
         true
     }
@@ -180,7 +181,7 @@ impl Compositor {
     fn create_slot(&mut self, (width, height): (u32, u32), kind: SlotKind) -> Slot {
         let (format, written) = match kind {
             SlotKind::Picture => (SOURCE_FORMAT, wgpu::TextureUsages::COPY_DST),
-            SlotKind::Planes(_) => (WORKING_FORMAT, wgpu::TextureUsages::RENDER_ATTACHMENT),
+            SlotKind::Planes(..) => (WORKING_FORMAT, wgpu::TextureUsages::RENDER_ATTACHMENT),
             // Copied to the backdrop under members with a blend mode.
             SlotKind::Group => (
                 WORKING_FORMAT,
@@ -196,15 +197,10 @@ impl Compositor {
         let placement = Blit::placement_buffer(&self.device);
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         let planes = match kind {
-            SlotKind::Planes(layout) => {
+            SlotKind::Planes(layout, size) => {
                 let device = &self.device;
                 let converter = self.yuv.get_or_insert_with(|| YuvConverter::new(device));
-                Some(PlaneTextures::new(
-                    device,
-                    converter,
-                    (width, height),
-                    layout,
-                ))
+                Some(PlaneTextures::new(device, converter, size, layout))
             }
             SlotKind::Picture | SlotKind::Group => None,
         };

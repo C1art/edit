@@ -28,7 +28,7 @@ pub(crate) fn morphed(
 fn rgba(picture: &LayerPicture) -> Option<Arc<VideoFrame>> {
     match picture {
         LayerPicture::Frame(frame) => Some(Arc::clone(frame)),
-        LayerPicture::Planes(frame) => frame.to_rgba().ok().map(Arc::new),
+        LayerPicture::Planes(frame, _) => frame.to_rgba().ok().map(Arc::new),
         _ => None,
     }
 }

@@ -100,6 +100,7 @@ fn planes_show_as_the_rgb_they_encode_in_either_layout() -> Result<(), RenderErr
         image.picture = Picture::Planes {
             width: WIDTH,
             height: HEIGHT,
+            output: (WIDTH, HEIGHT),
             luma,
             chroma,
             color: YuvColor {
@@ -129,6 +130,7 @@ fn planes_too_short_for_their_picture_are_refused() {
     image.picture = Picture::Planes {
         width: 4,
         height: 4,
+        output: (4, 4),
         luma: PlaneRows {
             bytes: &luma,
             stride: 4,
@@ -146,4 +148,48 @@ fn planes_too_short_for_their_picture_are_refused() {
     };
     let refused = compositor().composite((4, 4), &[image]);
     assert!(matches!(refused, Err(RenderError::PlaneSize { .. })));
+}
+
+#[test]
+#[ignore = "needs a GPU"]
+fn shrunk_planes_average_the_pixels_each_output_pixel_covers() -> Result<(), RenderError> {
+    let (width, height) = (8, 4);
+    // Columns of video black and white, which only averaging all of each two or four
+    // turns mid-gray.
+    let luma: Vec<u8> = [16, 235, 235, 16].repeat(width as usize / 4 * height as usize);
+    let chroma = [128; 8];
+    let half = PlaneRows {
+        bytes: &chroma,
+        stride: width / 2,
+    };
+    for output in [(4, 2), (2, 1)] {
+        let mut image = layer(&[], BlendMode::Normal);
+        image.picture = Picture::Planes {
+            width,
+            height,
+            output,
+            luma: PlaneRows {
+                bytes: &luma,
+                stride: width,
+            },
+            chroma: ChromaRows::Separate(half, half),
+            color: YuvColor {
+                matrix: YuvMatrix::Bt709,
+                range: YuvRange::Limited,
+                siting: ChromaSiting::Center,
+            },
+            source: None,
+        };
+        let mut compositor = compositor();
+        compositor.composite((width, height), &[image])?;
+        let shown = compositor.read_output()?;
+        let gray = shown.as_chunks::<4>().0.iter().all(|pixel| {
+            pixel[..3]
+                .iter()
+                .all(|channel| (126..=129).contains(channel))
+                && pixel[3] == 255
+        });
+        assert!(gray, "shrunk to {output:?}: {shown:?}");
+    }
+    Ok(())
 }

@@ -210,7 +210,9 @@ fn clip_picture(
             // before it lost its last one, can come either way.
             let rgba = match frame {
                 Ok(Some(ClipFrame::Planar(planes))) if planar => {
-                    return Some(LayerPicture::Planes(planes));
+                    let (width, height) = (planes.width, planes.height);
+                    let output = resolution.shrink(width, height).unwrap_or((width, height));
+                    return Some(LayerPicture::Planes(planes, output));
                 }
                 Ok(frame) => frame.map(|frame| frame.rgba()).transpose(),
                 Err(error) => Err(error),

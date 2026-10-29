@@ -17,8 +17,8 @@ pub struct Layer {
 #[derive(Debug, Clone)]
 pub enum LayerPicture {
     Frame(Arc<VideoFrame>),
-    /// A decoded picture left in its planes, for the GPU to turn into RGB.
-    Planes(Arc<PlanarFrame>),
+    /// A decoded picture left in its planes, for the GPU to turn into RGB at this size.
+    Planes(Arc<PlanarFrame>, (u32, u32)),
     /// What a nested sequence shows, bottom layer first, composited before the look.
     Nest(Vec<Layer>),
     /// A clip's layer shown where the layers of its track matte let it.
@@ -45,11 +45,12 @@ impl Layer {
                 rgba: &frame.pixels,
                 source: Some(Arc::clone(frame) as Arc<dyn Any + Send + Sync>),
             },
-            LayerPicture::Planes(frame) => {
+            LayerPicture::Planes(frame, output) => {
                 let planes = frame.planes();
                 Picture::Planes {
                     width: frame.width,
                     height: frame.height,
+                    output: *output,
                     luma: rows(planes.luma),
                     chroma: match planes.chroma {
                         Chroma::Separate(cb, cr) => ChromaRows::Separate(rows(cb), rows(cr)),
