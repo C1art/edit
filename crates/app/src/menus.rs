@@ -153,6 +153,28 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                 editor.remove_attributes();
             }
             ui.separator();
+            let removable = selected || editor.view.gap.is_some();
+            let clear = Button::new("Clear").shortcut_text(editor.keymap.label(Command::Clear));
+            if ui.add_enabled(removable, clear).clicked() {
+                editor.lift();
+            }
+            let ripple_delete = Button::new("Ripple Delete")
+                .shortcut_text(editor.keymap.label(Command::RippleDelete));
+            if ui.add_enabled(removable, ripple_delete).clicked() {
+                editor.ripple_delete();
+            }
+            ui.separator();
+            let select_all =
+                Button::new("Select All").shortcut_text(editor.keymap.label(Command::SelectAll));
+            if ui.add(select_all).clicked() {
+                editor.select_all();
+            }
+            let deselect_all = Button::new("Deselect All")
+                .shortcut_text(editor.keymap.label(Command::DeselectAll));
+            if ui.add_enabled(selected, deselect_all).clicked() {
+                editor.deselect_all();
+            }
+            ui.separator();
             let find = Button::new("Find…").shortcut_text(editor.keymap.label(Command::Find));
             if ui.add(find).clicked() {
                 editor.open_find();

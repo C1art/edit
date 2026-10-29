@@ -92,10 +92,7 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         }
         Command::SelectAll if editor.act_on_keyframes(KeyAction::SelectAll) => {}
         Command::SelectAll => editor.select_all(),
-        Command::DeselectAll => {
-            editor.view.selection.clear();
-            editor.view.edit_point = None;
-        }
+        Command::DeselectAll => editor.deselect_all(),
         Command::Find => editor.open_find(),
         Command::KeyboardShortcuts => {
             editor.keymap_window = Some(KeymapWindow::default());

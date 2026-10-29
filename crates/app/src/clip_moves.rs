@@ -103,4 +103,10 @@ impl Editor {
             .flat_map(|(_, track)| track.clips.iter().map(|clip| clip.id))
             .collect();
     }
+
+    pub(crate) fn deselect_all(&mut self) {
+        self.view.selection.clear();
+        self.view.edit_point = None;
+        self.view.gap = None;
+    }
 }
