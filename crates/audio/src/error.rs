@@ -1,5 +1,7 @@
 use std::fmt;
 
+use cpal::ErrorKind;
+
 #[derive(Debug)]
 pub enum AudioError {
     NoOutputDevice,
@@ -18,8 +20,21 @@ impl fmt::Display for AudioError {
         match self {
             Self::NoOutputDevice => f.write_str("no audio output device available"),
             Self::MissingDevice(name) => write!(f, "the audio device “{name}” is not connected"),
-            // Every message about it already says it is about audio.
-            Self::Device(error) => write!(f, "{error}"),
+            Self::Device(error) => match error.kind() {
+                // cpal's own words for these speak of a "requested" device even when the
+                // system default was the one asked for.
+                ErrorKind::DeviceNotAvailable => {
+                    f.write_str("the audio device isn't available or was disconnected")
+                }
+                ErrorKind::DeviceBusy => f.write_str("another program is using the audio device"),
+                ErrorKind::HostUnavailable => {
+                    f.write_str("the system's audio service isn't running")
+                }
+                ErrorKind::PermissionDenied => {
+                    f.write_str("the system denied access to the audio device")
+                }
+                _ => write!(f, "{error}"),
+            },
             Self::UnsupportedSampleFormat => {
                 f.write_str("audio device does not accept 32-bit float samples")
             }

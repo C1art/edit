@@ -103,7 +103,7 @@ impl Editor {
         }
         if let Err(error) = switch.open(ctx) {
             switch.retry_at = Some(Instant::now() + RETRY);
-            self.notices.push(format!("Audio disabled: {error}"));
+            self.notices.push(format!("No sound: {error}"));
         }
     }
 
@@ -148,7 +148,7 @@ impl Editor {
             }
             Err(error) => {
                 if !switch.told_failure {
-                    self.notices.push(format!("Audio disabled: {error}"));
+                    self.notices.push(format!("No sound: {error}"));
                     switch.told_failure = true;
                 }
                 switch.retry_at = Some(Instant::now() + RETRY);
@@ -167,7 +167,7 @@ impl Editor {
         ];
         for player in players.into_iter().flatten() {
             if let Err(error) = player.set_output(output.as_ref().map(AudioOutput::writer)) {
-                self.notices.push(format!("Audio disabled: {error}"));
+                self.notices.push(format!("No sound: {error}"));
             }
         }
         self.audio = output;
