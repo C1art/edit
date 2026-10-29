@@ -385,6 +385,7 @@ mod range;
 mod rearrange;
 mod reframe;
 mod remap;
+mod remix;
 mod rename;
 mod render_replace;
 mod replace;

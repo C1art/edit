@@ -81,6 +81,7 @@ pub struct Editor {
     pub(crate) metadata: crate::metadata_panel::MetadataPanel,
     pub(crate) gain_dialog: Option<crate::gain_dialog::GainDialog>,
     pub(crate) duck_dialog: Option<crate::duck_dialog::DuckDialog>,
+    pub(crate) remix_dialog: Option<crate::remix_dialog::RemixDialog>,
     pub(crate) interpret_dialog: Option<crate::interpret_dialog::InterpretDialog>,
     pub(crate) channels_dialog: Option<crate::channels_dialog::ChannelsDialog>,
     pub(crate) find: crate::find_dialog::FindDialog,
@@ -219,6 +220,7 @@ impl Editor {
             metadata: Default::default(),
             gain_dialog: None,
             duck_dialog: None,
+            remix_dialog: None,
             interpret_dialog: None,
             channels_dialog: None,
             find: Default::default(),
@@ -465,6 +467,7 @@ impl eframe::App for Editor {
         crate::marker_dialog::dialog(self, &ctx);
         crate::gain_dialog::dialog(self, &ctx);
         crate::duck_dialog::dialog(self, &ctx);
+        crate::remix_dialog::dialog(self, &ctx);
         crate::interpret_dialog::dialog(self, &ctx);
         crate::channels_dialog::dialog(self, &ctx);
         crate::sequence_settings::dialog(self, &ctx);

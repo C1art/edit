@@ -9,9 +9,10 @@ pub use dsp::{
     Coefficients, Compressor, CompressorSettings, Convolver, DeEsser, DeHum, DeNoise, DeReverb,
     Delay, Expander, FilterBand, FilterDesign, Gate, GraphicEqualizer, GraphicEqualizer10,
     GraphicEqualizer20, GraphicEqualizer30, ImpulseShape, LevelerSettings, Limiter, LoudnessMeter,
-    ModulatedDelay, MultibandCompressor, MultibandSettings, MultitapDelay, Phaser, PhaserSettings,
-    PitchShifter, Reverb, ScientificFilter, ScientificSettings, SpeechLeveler, Sweep, Tap,
-    GRAPHIC_BANDS_20_HZ, GRAPHIC_BANDS_30_HZ, GRAPHIC_BANDS_HZ, MAX_HARMONICS, MAX_PHASER_STAGES,
+    ModulatedDelay, MultibandCompressor, MultibandSettings, MultitapDelay, MusicFeatures, Phaser,
+    PhaserSettings, PitchShifter, Reverb, ScientificFilter, ScientificSettings, SpeechLeveler,
+    Sweep, Tap, GRAPHIC_BANDS_20_HZ, GRAPHIC_BANDS_30_HZ, GRAPHIC_BANDS_HZ, MAX_HARMONICS,
+    MAX_PHASER_STAGES, RETIME_HOP,
 };
 pub use error::AudioError;
 pub use output::{AudioOutput, AudioWriter, OutputFormat};

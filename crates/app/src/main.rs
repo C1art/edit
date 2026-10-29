@@ -54,6 +54,7 @@ mod project_store;
 mod proxies;
 mod reframe_analysis;
 mod reframe_dialog;
+mod remix_dialog;
 mod rename_clip;
 mod render_previews;
 mod render_replace;

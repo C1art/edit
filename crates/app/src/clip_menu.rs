@@ -117,6 +117,13 @@ pub(crate) fn items(editor: &mut Editor, ui: &mut Ui) {
     {
         editor.open_auto_duck();
     }
+    if ui
+        .button("Remix…")
+        .on_hover_text("Cut or loop the selected music to a new length")
+        .clicked()
+    {
+        editor.open_remix();
+    }
     ui.menu_button("Label", |ui| labels(editor, ui));
     ui.menu_button("Video Options", |ui| {
         if ui.button("Add Frame Hold").clicked() {
