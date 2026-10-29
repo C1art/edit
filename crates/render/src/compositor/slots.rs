@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::sync::Arc;
 
 use timeline::{AlphaInterpretation, BlendMode};
@@ -39,6 +40,9 @@ pub(super) struct Slot {
     pub(super) features: Features,
     /// The lookups last drawn with and their textures' binding.
     pub(super) grade: Option<(Arc<Grade>, wgpu::BindGroup)>,
+    /// What the picture in the texture came from. Holding it keeps its address from
+    /// being reused, so the same address means the same, unchanged picture.
+    pub(super) uploaded: Option<Arc<dyn Any + Send + Sync>>,
 }
 
 impl Slot {
@@ -69,8 +73,20 @@ impl Compositor {
         index
     }
 
-    pub(super) fn upload(&self, index: usize, rgba: &[u8]) {
-        let slot = &self.slots[index];
+    pub(super) fn upload(
+        &mut self,
+        index: usize,
+        rgba: &[u8],
+        source: Option<&Arc<dyn Any + Send + Sync>>,
+    ) {
+        let slot = &mut self.slots[index];
+        let same = |held: &Arc<dyn Any + Send + Sync>| {
+            source.is_some_and(|source| std::ptr::addr_eq(Arc::as_ptr(held), Arc::as_ptr(source)))
+        };
+        if slot.uploaded.as_ref().is_some_and(same) {
+            return;
+        }
+        slot.uploaded = source.cloned();
         self.queue.write_texture(
             wgpu::TexelCopyTextureInfo {
                 texture: &slot.texture,
@@ -160,6 +176,7 @@ impl Compositor {
             blend: BlendMode::Normal,
             features: Features::NONE,
             grade: None,
+            uploaded: None,
         }
     }
 }

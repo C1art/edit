@@ -1,6 +1,7 @@
 mod prepare;
 mod slots;
 
+use std::any::Any;
 use std::sync::Arc;
 
 use timeline::MatteChannel;
@@ -44,6 +45,9 @@ pub enum Picture<'a> {
         width: u32,
         height: u32,
         rgba: &'a [u8],
+        /// What holds `rgba`, unchanged for as long as it lives. A layer showing the
+        /// same source as last time keeps its texture instead of uploading it again.
+        source: Option<Arc<dyn Any + Send + Sync>>,
     },
     /// Layers composited bottom first onto a transparent canvas of their own, so the
     /// look applies to them as one picture, as to a nested sequence.

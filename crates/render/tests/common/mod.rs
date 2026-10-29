@@ -47,6 +47,7 @@ pub fn layer(rgba: &[u8], blend: BlendMode) -> LayerImage<'_> {
             width: SIZE,
             height: SIZE,
             rgba,
+            source: None,
         },
         look: LayerLook {
             blend,

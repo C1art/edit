@@ -14,6 +14,7 @@ impl Compositor {
                     width,
                     height,
                     rgba,
+                    ..
                 } => {
                     self.check_size(*width, *height)?;
                     if rgba.len() != *width as usize * *height as usize * 4 {
@@ -59,9 +60,10 @@ impl Compositor {
                     width,
                     height,
                     rgba,
+                    source,
                 } => {
                     let index = self.claim(next, (*width, *height), SlotKind::Picture);
-                    self.upload(index, rgba);
+                    self.upload(index, rgba, source.as_ref());
                     index
                 }
                 Picture::Group(members) => self.group(members, canvas, next, steps),

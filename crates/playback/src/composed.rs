@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::sync::Arc;
 
 use media::VideoFrame;
@@ -40,6 +41,7 @@ impl Layer {
                 width: frame.width,
                 height: frame.height,
                 rgba: &frame.pixels,
+                source: Some(Arc::clone(frame) as Arc<dyn Any + Send + Sync>),
             },
             LayerPicture::Nest(layers) => Picture::Group(images(layers)),
             LayerPicture::Matted {
