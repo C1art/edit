@@ -1,6 +1,6 @@
 use timeline::{
-    Generator, Rgb, Scroll, ShadowStyle, Shape, ShapeKind, TextAlign, TextStroke, Title, TitleFont,
-    TitleMotion,
+    CountingLeader, Generator, Rgb, Scroll, ShadowStyle, Shape, ShapeKind, TextAlign, TextStroke,
+    Title, TitleFont, TitleMotion,
 };
 
 use crate::mixer::{response_state, Change};
@@ -12,7 +12,13 @@ pub(super) fn controls(
     generator: &mut Generator,
     height: u32,
 ) -> Option<Change> {
-    if *generator == Generator::AdjustmentLayer {
+    if matches!(
+        generator,
+        Generator::AdjustmentLayer
+            | Generator::BarsAndTone
+            | Generator::BlackVideo
+            | Generator::TransparentVideo
+    ) {
         return None;
     }
     let mut change = None;
@@ -23,8 +29,12 @@ pub(super) fn controls(
                 change = color_row(ui, "Color", color);
             }
             Generator::Title(title) => change = title_controls(ui, title),
-            Generator::AdjustmentLayer => {}
+            Generator::AdjustmentLayer
+            | Generator::BarsAndTone
+            | Generator::BlackVideo
+            | Generator::TransparentVideo => {}
             Generator::Shape(shape) => change = shape_controls(ui, shape, height),
+            Generator::CountingLeader(leader) => change = leader_controls(ui, leader),
         });
     change
 }
@@ -291,6 +301,31 @@ fn shadow_rows(
     }
     if edited != style.unwrap_or(usual) {
         *style = Some(edited);
+    }
+    change
+}
+
+fn leader_controls(ui: &mut egui::Ui, leader: &mut CountingLeader) -> Option<Change> {
+    let mut change = None;
+    for (label, color) in [
+        ("Wipe Color", &mut leader.wipe_color),
+        ("Background Color", &mut leader.background_color),
+        ("Line Color", &mut leader.line_color),
+        ("Target Color", &mut leader.target_color),
+        ("Numeral Color", &mut leader.numeral_color),
+    ] {
+        change = color_row(ui, label, color).or(change);
+    }
+    for (on, label) in [
+        (&mut leader.blip_on_two, "Cue Blip on 2"),
+        (
+            &mut leader.blip_every_second,
+            "Cue Blip at all Second Starts",
+        ),
+    ] {
+        if ui.checkbox(on, label).changed() {
+            change = Some(Change::Commit);
+        }
     }
     change
 }

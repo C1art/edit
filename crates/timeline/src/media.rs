@@ -98,6 +98,7 @@ impl MediaItem {
     /// usual still length of a picture or generated media.
     pub fn default_range(&self, timebase: Timebase) -> Range<Ticks> {
         match (&self.generator, &self.subclip) {
+            (Some(Generator::CountingLeader(_)), _) => Ticks::ZERO..self.duration,
             (Some(_), _) => Ticks::ZERO..placed_length(timebase).min(self.duration),
             (None, Some(range)) => range.clone(),
             (None, None) if self.still => Ticks::ZERO..placed_length(timebase).min(self.duration),

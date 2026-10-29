@@ -38,7 +38,18 @@ pub fn thumbnails(
             painter.rect_filled(rect, 2.0, color * tint);
             return;
         }
-        Some(Generator::Title(_) | Generator::AdjustmentLayer | Generator::Shape(_)) => return,
+        Some(Generator::BlackVideo) => {
+            painter.rect_filled(rect, 2.0, Color32::BLACK * tint);
+            return;
+        }
+        Some(
+            Generator::Title(_)
+            | Generator::AdjustmentLayer
+            | Generator::Shape(_)
+            | Generator::BarsAndTone
+            | Generator::TransparentVideo
+            | Generator::CountingLeader(_),
+        ) => return,
         None if item.nest.is_some() => return,
         None => {}
     }

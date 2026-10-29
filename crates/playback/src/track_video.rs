@@ -26,8 +26,9 @@ enum Source {
     /// Opening failed; retried after a while, in case the file comes back, or when the
     /// track moves to other media or another file of it, such as its proxy.
     Failed(SourceId, PathBuf, Instant),
-    /// Drawn once at a canvas size and held for as long as the clip shows.
-    Generated(Generator, [u32; 2], Arc<VideoFrame>),
+    /// Drawn once at a canvas size, and frame for what changes over time, and held for
+    /// as long as that shows.
+    Generated(Generator, [u32; 2], i64, Arc<VideoFrame>),
 }
 
 /// Decodes the pictures one video track needs, reading forward while playback is
@@ -92,7 +93,7 @@ impl TrackVideo {
         resolution: Resolution,
     ) -> Result<Option<Arc<VideoFrame>>, MediaError> {
         if let Some(generator) = &media.generator {
-            return Ok(Some(self.generated(generator, canvas)));
+            return Ok(Some(self.generated(media, generator, time, canvas)));
         }
         if media.offline {
             return Ok(Some(offline_frame(canvas[0], canvas[1])));
@@ -242,15 +243,26 @@ impl TrackVideo {
         matches!(self.source, Source::Failed(..)).then(|| offline_frame(canvas[0], canvas[1]))
     }
 
-    fn generated(&mut self, generator: &Generator, canvas: [u32; 2]) -> Arc<VideoFrame> {
-        if let Source::Generated(drawn, size, frame) = &self.source {
-            if drawn == generator && *size == canvas {
+    fn generated(
+        &mut self,
+        media: &MediaItem,
+        generator: &Generator,
+        time: Ticks,
+        canvas: [u32; 2],
+    ) -> Arc<VideoFrame> {
+        let rate = media.video.unwrap_or_default().frame_rate;
+        let at = match generator {
+            Generator::CountingLeader(_) => rate.frame_at(time, self.timebase),
+            _ => 0,
+        };
+        if let Source::Generated(drawn, size, drawn_at, frame) = &self.source {
+            if drawn == generator && *size == canvas && *drawn_at == at {
                 return Arc::clone(frame);
             }
         }
         self.reset();
-        let frame = generated_frame(generator, canvas[0], canvas[1]);
-        self.source = Source::Generated(generator.clone(), canvas, Arc::clone(&frame));
+        let frame = generated_frame(generator, (at, rate), canvas[0], canvas[1]);
+        self.source = Source::Generated(generator.clone(), canvas, at, Arc::clone(&frame));
         frame
     }
 }

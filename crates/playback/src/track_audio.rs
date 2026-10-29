@@ -3,12 +3,15 @@ use std::path::PathBuf;
 
 use audio::{Resampler, SampleRate};
 use media::{DecodedFrame, MediaReader, Streams};
-use timeline::{ChannelMap, MediaItem, SourceId, Ticks, Timebase};
+use timeline::{ChannelMap, Generator, MediaItem, SourceId, Ticks, Timebase};
 
 use crate::PlaybackError;
 
 /// Stereo, like everything the media reader decodes.
 const CHANNELS: usize = 2;
+/// Bars and Tone's reference tone: 1 kHz at -20 dBFS.
+const TONE_HZ: f64 = 1_000.0;
+const TONE_LEVEL: f32 = 0.1;
 
 enum Source {
     None,
@@ -57,6 +60,23 @@ impl TrackAudio {
     ) -> Result<(), PlaybackError> {
         if media.offline {
             return Ok(());
+        }
+        match &media.generator {
+            Some(Generator::BarsAndTone) => {
+                add_reference_tone(self.rate, first, out, |_| true);
+                return Ok(());
+            }
+            Some(Generator::CountingLeader(leader)) => {
+                let rate = media.video.unwrap_or_default().frame_rate;
+                let per_frame = |sample: i64| {
+                    let frame = i128::from(sample) * i128::from(rate.num())
+                        / (i128::from(self.rate.0) * i128::from(rate.den()));
+                    leader.blips_on_frame(frame as i64, rate)
+                };
+                add_reference_tone(self.rate, first, out, per_frame);
+                return Ok(());
+            }
+            _ => {}
         }
         let same_media = match &self.source {
             Source::Open(id, path, map, _) => {
@@ -130,9 +150,25 @@ impl TrackAudio {
     }
 }
 
+/// Adds the tone to the sample frames from `first` that `sounding` picks.
+fn add_reference_tone(
+    rate: SampleRate,
+    first: i64,
+    out: &mut [f32],
+    sounding: impl Fn(i64) -> bool,
+) {
+    let step = std::f64::consts::TAU * TONE_HZ / f64::from(rate.0);
+    let frames = (first..).zip(out.as_chunks_mut::<2>().0);
+    for (frame, pair) in frames.filter(|(frame, _)| sounding(*frame)) {
+        let sample = TONE_LEVEL * (frame as f64 * step).sin() as f32;
+        pair.iter_mut().for_each(|channel| *channel += sample);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use timeline::{CountingLeader, FrameRate, VideoFormat};
 
     fn fixture() -> MediaItem {
         let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -191,5 +227,44 @@ mod tests {
         };
         let one_frame_late = max_difference(CHANNELS);
         assert!(max_difference(0) < one_frame_late / 2.0);
+    }
+
+    #[test]
+    fn bars_and_tone_plays_1_khz_at_minus_20_dbfs_from_any_frame() {
+        let bars = MediaItem {
+            generator: Some(Generator::BarsAndTone),
+            ..fixture()
+        };
+        let mut track = TrackAudio::new(Timebase::HZ_90K, SampleRate(48_000));
+        let mut out = vec![0.0; 48 * CHANNELS];
+        // A whole number of cycles in, so a quarter cycle on is the crest.
+        track.mix_into(&bars, 48_000, &mut out).unwrap();
+        assert!((out[12 * CHANNELS] - 0.1).abs() < 1e-4);
+        assert!((out[12 * CHANNELS + 1] - 0.1).abs() < 1e-4);
+        assert!((out[36 * CHANNELS] + 0.1).abs() < 1e-4);
+    }
+
+    #[test]
+    fn the_leader_pops_for_exactly_the_frame_its_two_shows() {
+        let leader = MediaItem {
+            generator: Some(Generator::CountingLeader(CountingLeader::default())),
+            video: Some(VideoFormat {
+                frame_rate: FrameRate::FPS_25,
+                ..VideoFormat::default()
+            }),
+            ..fixture()
+        };
+        let mut track = TrackAudio::new(Timebase::HZ_90K, SampleRate(48_000));
+        let sounding = |track: &mut TrackAudio, first| {
+            let mut out = vec![0.0; CHANNELS];
+            track.mix_into(&leader, first, &mut out).unwrap();
+            out[0] != 0.0
+        };
+        // The 2 is frame 150, six seconds in; a frame is 1920 samples at 25 fps.
+        let two = 6 * 48_000;
+        assert!(!sounding(&mut track, two - 1));
+        assert!(sounding(&mut track, two + 1));
+        assert!(sounding(&mut track, two + 1919));
+        assert!(!sounding(&mut track, two + 1920));
     }
 }

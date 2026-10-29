@@ -1,5 +1,8 @@
 use crate::generator::seconds;
-use crate::{Edit, Generator, MediaItem, Sequence, SourceId, TimelineError, GENERATED_SECONDS};
+use crate::{
+    Edit, Generator, MediaItem, Sequence, SourceId, TimelineError, GENERATED_SECONDS,
+    LEADER_SECONDS,
+};
 
 /// Adds generated media to the pool, drawn at the sequence's frame size.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -15,18 +18,29 @@ impl Edit for AddGenerated {
             Generator::Title(_) => "New Title",
             Generator::AdjustmentLayer => "New Adjustment Layer",
             Generator::Shape(_) => "New Shape",
+            Generator::BarsAndTone => "New Bars and Tone",
+            Generator::BlackVideo => "New Black Video",
+            Generator::TransparentVideo => "New Transparent Video",
+            Generator::CountingLeader(_) => "New Universal Counting Leader",
         }
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
         let id = SourceId(sequence.ids.next());
+        let seconds_long = match self.generator {
+            Generator::CountingLeader(_) => LEADER_SECONDS,
+            _ => GENERATED_SECONDS,
+        };
         sequence.media.push(MediaItem {
             id,
             name: self.name.clone(),
             path: Default::default(),
-            duration: seconds(GENERATED_SECONDS, sequence.timebase),
+            duration: seconds(seconds_long, sequence.timebase),
             video: Some(sequence.format),
-            has_audio: false,
+            has_audio: matches!(
+                self.generator,
+                Generator::BarsAndTone | Generator::CountingLeader(_)
+            ),
             proxy: None,
             bin: None,
             generator: Some(self.generator.clone()),
@@ -58,6 +72,10 @@ impl Edit for SetGenerator {
             Generator::Title(_) => "Edit Title",
             Generator::AdjustmentLayer => "Change Adjustment Layer",
             Generator::Shape(_) => "Edit Shape",
+            Generator::BarsAndTone | Generator::BlackVideo | Generator::TransparentVideo => {
+                "Change Synthetic Media"
+            }
+            Generator::CountingLeader(_) => "Change Counting Leader",
         }
     }
 

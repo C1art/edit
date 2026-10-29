@@ -112,6 +112,10 @@ pub fn new_generated(editor: &mut Editor, generator: Generator) -> Option<ClipId
     let source = item.id;
     let range = item.default_range(sequence.timebase);
     let duration = range.end - range.start;
+    let audio_track = item
+        .has_audio
+        .then(|| editor.view.targets.audio.unwrap_or(0))
+        .filter(|&track| track < sequence.audio.len());
     let at = editor.playhead();
     let first = editor.view.targets.video.unwrap_or(0);
     let free = sequence
@@ -143,7 +147,7 @@ pub fn new_generated(editor: &mut Editor, generator: Generator) -> Option<ClipId
         duration,
         at,
         video_track: Some(track),
-        audio_track: None,
+        audio_track,
         mode: PlaceMode::Overwrite,
         fill: None,
     });

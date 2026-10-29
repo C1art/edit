@@ -2,7 +2,7 @@ use std::f64::consts::SQRT_2;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Rgb, ShadowStyle, Ticks, Timebase, TitleMotion};
+use crate::{CountingLeader, Rgb, ShadowStyle, Ticks, Timebase, TitleMotion};
 
 /// Generated pictures have no length of their own; they hold for as long as they're
 /// trimmed to, up to this many seconds.
@@ -20,6 +20,13 @@ pub enum Generator {
     /// Draws nothing itself; its clips' looks apply to the picture of the tracks below.
     AdjustmentLayer,
     Shape(Shape),
+    /// SMPTE color bars, with a 1 kHz reference tone at -20 dBFS.
+    BarsAndTone,
+    BlackVideo,
+    /// Draws nothing itself, for effects that draw, such as Timecode, to draw on.
+    TransparentVideo,
+    /// Lasts its own eight seconds, not as long as it's trimmed to.
+    CountingLeader(CountingLeader),
 }
 
 impl Generator {
@@ -29,6 +36,10 @@ impl Generator {
             Self::Title(_) => "Title",
             Self::AdjustmentLayer => "Adjustment Layer",
             Self::Shape(shape) => shape.kind.name(),
+            Self::BarsAndTone => "Bars and Tone",
+            Self::BlackVideo => "Black Video",
+            Self::TransparentVideo => "Transparent Video",
+            Self::CountingLeader(_) => "Universal Counting Leader",
         }
     }
 }

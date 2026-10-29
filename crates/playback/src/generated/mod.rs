@@ -1,4 +1,6 @@
+mod bars;
 mod coverage;
+mod leader;
 mod scroll;
 mod shape;
 
@@ -7,11 +9,13 @@ use std::sync::Arc;
 
 use media::VideoFrame;
 use timeline::{
-    CaptionStyle, Generator, Rgb, ShadowStyle, Shape, TextAlign, Ticks, Title, TitleFont,
-    TitleMotion,
+    CaptionStyle, CountingLeader, FrameRate, Generator, Rgb, ShadowStyle, Shape, TextAlign, Ticks,
+    Title, TitleFont, TitleMotion,
 };
 
+use bars::draw_bars;
 use coverage::Coverage;
+use leader::draw_leader;
 pub(crate) use scroll::scrolled;
 use shape::shape_coverage;
 
@@ -41,8 +45,14 @@ enum Anchor {
 }
 
 /// The picture `generator` draws on a `width` by `height` canvas, with straight alpha;
-/// for a rolling or crawling title, the whole strip that travels across it.
-pub fn generated_frame(generator: &Generator, width: u32, height: u32) -> Arc<VideoFrame> {
+/// for a rolling or crawling title, the whole strip that travels across it. `frame`
+/// counts at `rate` from the media's start, for what draws differently over time.
+pub fn generated_frame(
+    generator: &Generator,
+    (frame, rate): (i64, FrameRate),
+    width: u32,
+    height: u32,
+) -> Arc<VideoFrame> {
     let mut canvas = Canvas::new(width, height);
     match generator {
         Generator::ColorMatte { color } => canvas.fill(*color),
@@ -50,8 +60,17 @@ pub fn generated_frame(generator: &Generator, width: u32, height: u32) -> Arc<Vi
             canvas = scroll::title_strip(title, width, height);
         }
         Generator::Title(title) => draw_title(&mut canvas, title, Anchor::Center),
-        Generator::AdjustmentLayer => {}
+        Generator::AdjustmentLayer | Generator::TransparentVideo => {}
+        Generator::BarsAndTone => draw_bars(&mut canvas),
+        Generator::BlackVideo => canvas.fill(Rgb::new(0, 0, 0)),
         Generator::Shape(shape) => draw_shape(&mut canvas, shape),
+        Generator::CountingLeader(leader) => {
+            draw_leader(
+                &mut canvas,
+                leader,
+                CountingLeader::picture_on_frame(frame, rate),
+            );
+        }
     }
     Arc::new(VideoFrame {
         pts: Ticks::ZERO,

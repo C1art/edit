@@ -53,6 +53,18 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                 if ui.button("Adjustment Layer").clicked() {
                     placing::new_generated(editor, Generator::AdjustmentLayer);
                 }
+                ui.separator();
+                for synthetic in [
+                    Generator::BarsAndTone,
+                    Generator::BlackVideo,
+                    Generator::TransparentVideo,
+                    Generator::CountingLeader(Default::default()),
+                ] {
+                    if ui.button(synthetic.kind_name()).clicked() {
+                        placing::new_generated(editor, synthetic);
+                    }
+                }
+                ui.separator();
                 for kind in ShapeKind::ALL {
                     if ui.button(kind.name()).clicked() {
                         placing::new_generated(editor, Generator::Shape(Shape::new(kind)));
