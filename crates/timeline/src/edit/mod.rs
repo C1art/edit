@@ -58,7 +58,7 @@ pub use media::{
     DuplicateMedia, MakeOffline, MakeSubclip, RelinkMedia, RenameMedia, SetChannelMap, SetMediaLog,
 };
 pub use multicam::{CreateMulticam, FlattenMulticam, SwitchAngle};
-pub use nest::{AddNest, InNest, NestClips};
+pub use nest::{AddNest, InNest, NestClips, NestFromMedia};
 pub use paste::{Clipboard, PasteClips};
 pub use place::{AddEdits, PlaceClip, PlaceMode, Razor, RazorTarget};
 pub use range::{ExtractMarked, LiftMarked, RippleTrimToPlayhead, SetMarks, TrimToPlayhead};

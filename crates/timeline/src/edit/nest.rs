@@ -1,7 +1,7 @@
 use super::ops::{insert, remove};
 use crate::{
-    Clip, ClipId, Edit, LinkId, MediaItem, Nest, Sequence, SourceId, Ticks, TimelineError,
-    TrackKind, TrackRef,
+    Clip, ClipId, Edit, LinkId, MediaItem, Nest, PlaceClip, PlaceMode, Sequence, SourceId, Ticks,
+    TimelineError, TrackKind, TrackRef,
 };
 
 /// Runs `edit` on the tracks, mix and markers of nest `nest` instead of the sequence's
@@ -149,5 +149,49 @@ impl Edit for AddNest {
         });
         sequence.fit_nest(id);
         Ok(())
+    }
+}
+
+/// Adds a nested sequence holding all of media item `source`, its video on the first
+/// video track and its audio on the first audio track, linked.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NestFromMedia {
+    pub source: SourceId,
+    pub name: String,
+}
+
+impl Edit for NestFromMedia {
+    fn name(&self) -> &'static str {
+        "New Sequence From Clip"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let range = sequence
+            .media_item(self.source)
+            .ok_or(TimelineError::MediaNotFound(self.source))?
+            .default_range(sequence.timebase);
+        AddNest {
+            name: self.name.clone(),
+        }
+        .edit(sequence)?;
+        let nest = sequence
+            .media
+            .last()
+            .map(|item| item.id)
+            .ok_or(TimelineError::NothingToEdit)?;
+        InNest {
+            nest,
+            edit: PlaceClip {
+                source: self.source,
+                source_in: range.start,
+                duration: range.end - range.start,
+                at: Ticks::ZERO,
+                video_track: Some(0),
+                audio_track: Some(0),
+                mode: PlaceMode::Overwrite,
+                fill: None,
+            },
+        }
+        .edit(sequence)
     }
 }

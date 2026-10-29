@@ -79,3 +79,29 @@ fn a_duplicated_sequence_gives_its_clips_and_links_new_ids() {
         .all(|(other, other_link)| id != other && link != other_link)));
     assert!(copy[0].1.is_some() && copy[0].1 == copy[1].1);
 }
+
+#[test]
+fn a_sequence_from_a_clip_holds_all_of_it_linked_and_undoes_at_once() {
+    let (mut timeline, source) = timeline();
+    timeline
+        .apply(NestFromMedia {
+            source,
+            name: "a".into(),
+        })
+        .unwrap();
+    let nest = timeline.sequence().media[1].id;
+    assert_eq!(
+        timeline.project().media_item(nest).unwrap().duration,
+        Ticks(1000)
+    );
+    assert!(timeline.set_open_nest(Some(nest)));
+    assert_eq!(spans(&timeline, V1), [(0, 1000, 0)]);
+    assert_eq!(spans(&timeline, A1), [(0, 1000, 0)]);
+    let sequence = timeline.sequence();
+    let (_, video) = sequence.clip(clip_on(&timeline, V1, 0)).unwrap();
+    let (_, audio) = sequence.clip(clip_on(&timeline, A1, 0)).unwrap();
+    assert!(video.link.is_some() && video.link == audio.link);
+
+    timeline.undo();
+    assert_eq!(timeline.project().media.len(), 1);
+}
