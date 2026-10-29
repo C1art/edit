@@ -56,15 +56,11 @@ pub(super) fn controls(
                 let width = &mut motion.scale_width;
                 rows.param(ui, "Scale Width", width, 0.0..=1_000.0, "%");
             }
-            if ui
-                .checkbox(&mut motion.uniform_scale, "Uniform Scale")
-                .changed()
+            // Unlinking starts the width where the shared scale left it.
+            if rows.checkbox(ui, &mut motion.uniform_scale, "Uniform Scale")
+                && !motion.uniform_scale
             {
-                // Unlinking starts the width where the shared scale left it.
-                if !motion.uniform_scale {
-                    motion.scale_width = motion.scale.clone();
-                }
-                rows.commit();
+                motion.scale_width = motion.scale.clone();
             }
             rows.param(
                 ui,
@@ -81,23 +77,22 @@ pub(super) fn controls(
         .default_open(true)
         .show(ui, |ui| {
             rows.param(ui, "Opacity", &mut look.opacity, 0.0..=100.0, "%");
-            ui.horizontal(|ui| {
-                ui.label("Blend Mode");
+            let blend = &mut look.blend;
+            rows.choice(ui, "Blend Mode", |ui| {
+                let mut chosen = false;
                 egui::ComboBox::from_id_salt("blend_mode")
                     .width(ui.available_width().min(ui.spacing().combo_width))
-                    .selected_text(look.blend.name())
+                    .selected_text(blend.name())
                     .height(f32::INFINITY)
                     .show_ui(ui, |ui| {
                         for mode in BlendMode::ALL {
                             if mode.starts_group() {
                                 ui.separator();
                             }
-                            let choice = ui.selectable_value(&mut look.blend, mode, mode.name());
-                            if choice.clicked() {
-                                rows.commit();
-                            }
+                            chosen |= ui.selectable_value(blend, mode, mode.name()).clicked();
                         }
                     });
+                chosen
             });
             super::masks::controls(ui, &mut rows, &mut look.masks);
         });

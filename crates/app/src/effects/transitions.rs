@@ -60,7 +60,7 @@ fn transition_row(
     };
     let mut chosen = current;
     ui.horizontal(|ui| {
-        ui.add_sized([30.0, 18.0], egui::Label::new(label));
+        super::controls::label_column(ui, label);
         let selected = current.map_or("None", |transition| name(transition.kind));
         egui::ComboBox::from_id_salt(label)
             .selected_text(selected)

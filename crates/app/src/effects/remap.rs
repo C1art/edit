@@ -45,7 +45,7 @@ pub(super) fn controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
             });
             let Some(remap) = &clip.remap else {
                 ui.horizontal(|ui| {
-                    ui.label("Speed");
+                    super::controls::label_column(ui, "Speed");
                     ui.label(percent_text(clip.speed));
                 });
                 return;
@@ -74,7 +74,7 @@ pub(super) fn controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
                     _ => speed.percent(),
                 };
                 ui.horizontal(|ui| {
-                    ui.label("Speed");
+                    super::controls::label_column(ui, "Speed");
                     let response = ui.add(
                         DragValue::new(&mut percent)
                             .range(1.0..=10_000.0)

@@ -42,17 +42,15 @@ pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, masks: &mut Vec<Mask>
                 -1_000.0..=1_000.0,
                 " px",
             );
-            if ui.checkbox(&mut mask.inverted, "Inverted").changed() {
-                rows.commit();
-            }
+            rows.checkbox(ui, &mut mask.inverted, "Inverted");
         });
     }
     if let Some(index) = removed {
         masks.remove(index);
         rows.commit();
     }
-    ui.horizontal(|ui| {
-        ui.label("Add Mask");
+    rows.choice(ui, "Add Mask", |ui| {
+        let mut added = false;
         ui.add_enabled_ui(masks.len() < MAX_MASKS, |ui| {
             for shape in MaskShape::ALL {
                 let icon = match shape {
@@ -66,10 +64,11 @@ pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, masks: &mut Vec<Mask>
                     .clicked()
                 {
                     masks.push(Mask::new(shape));
-                    rows.commit();
+                    added = true;
                 }
             }
         });
+        added
     });
 }
 
