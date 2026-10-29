@@ -4,6 +4,7 @@ use std::thread::{self, JoinHandle};
 use crossbeam::channel::{Receiver, Select, Sender};
 use timeline::{Sequence, SourceId, Ticks};
 
+use crate::clock::SharedPosition;
 use crate::command::{coalesce, Coalesced, Command, Event};
 use crate::frame_picker::TaggedFrame;
 use crate::preroll::preroll;
@@ -18,6 +19,7 @@ pub(crate) struct VideoChannels {
     pub(crate) stale_frames: Receiver<TaggedFrame>,
     /// Without an audio worker, video reports seeks so the player can start its clock.
     pub(crate) reports_seeks: bool,
+    pub(crate) playing_at: Arc<SharedPosition>,
 }
 
 pub(crate) fn spawn(
@@ -155,10 +157,14 @@ impl VideoWorker {
 
     fn compose_next(&mut self) {
         let sequence = Arc::clone(&self.sequence);
-        let pts = sequence
-            .format
-            .frame_rate
-            .frame_start(self.next_frame, sequence.timebase);
+        let rate = sequence.format.frame_rate;
+        // A frame whose time has passed would only be dropped once shown, so composing
+        // too slowly to keep up skips to where playing has reached, keeping in sync.
+        if let Some(reached) = self.channels.playing_at.get().filter(|_| self.composed) {
+            let due = rate.frame_at(reached, sequence.timebase);
+            self.next_frame = self.next_frame.max(due);
+        }
+        let pts = rate.frame_start(self.next_frame, sequence.timebase);
         // A seek to the end shows the last frame, or nothing in an empty sequence, so
         // the picture from before the seek doesn't linger, as after undoing every edit.
         if pts >= sequence.duration() && !self.composed {

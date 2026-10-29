@@ -10,7 +10,7 @@ use timeline::{FrameRate, Sequence, Ticks, Timebase};
 
 mod moves;
 
-use crate::clock::PlaybackClock;
+use crate::clock::{PlaybackClock, SharedPosition};
 use crate::command::{Command, Event, Seek};
 use crate::frame_picker::{FramePicker, TaggedFrame};
 use crate::shuttle::Shuttle;
@@ -63,6 +63,10 @@ pub struct Player {
     scrub_audio: bool,
     /// Whether the last move was a scrub, which leaves no audio queued to play on with.
     scrubbed: bool,
+    playing_at: Arc<SharedPosition>,
+    /// The frame last shown while playing, to count the frames skipped after it.
+    last_shown: Option<Ticks>,
+    dropped: u64,
 }
 
 /// Where playback started by [`Player::play_range`] ends.
@@ -82,6 +86,7 @@ impl Player {
         let (event_tx, event_rx) = channel::unbounded();
         let (frame_tx, frame_rx) = channel::bounded(FRAME_QUEUE);
         let latest_seek = Arc::new(AtomicU64::new(0));
+        let playing_at = Arc::new(SharedPosition::new());
         let audio_commands = match &writer {
             Some(writer) => {
                 let (audio_tx, audio_rx) = channel::unbounded();
@@ -107,6 +112,7 @@ impl Player {
                 frames: frame_tx,
                 stale_frames: frame_rx.clone(),
                 reports_seeks: writer.is_none(),
+                playing_at: Arc::clone(&playing_at),
             },
         )
         .map_err(PlaybackError::WorkerSpawn)?;
@@ -138,6 +144,9 @@ impl Player {
             looping: None,
             stop: None,
             scrub_audio: true,
+            playing_at,
+            last_shown: None,
+            dropped: 0,
             scrubbed: false,
         };
         player.seek(Ticks::ZERO);
@@ -223,6 +232,23 @@ impl Player {
         self.picker.current()
     }
 
+    /// Frames skipped to keep up since playing last started.
+    pub fn dropped_frames(&self) -> u64 {
+        self.dropped
+    }
+
+    fn count_dropped(&mut self) {
+        let Some(shown) = self.picker.current().map(|frame| frame.pts) else {
+            return;
+        };
+        let frame = |time| self.frame_rate().frame_at(time, self.sequence.timebase);
+        if let Some(last) = self.last_shown.filter(|&last| last < shown) {
+            let skipped = frame(shown) - frame(last) - 1;
+            self.dropped += u64::try_from(skipped).unwrap_or(0);
+        }
+        self.last_shown = Some(shown);
+    }
+
     /// Problems with individual media since the last call, for the UI to report.
     pub fn take_warnings(&mut self) -> Vec<PlaybackError> {
         std::mem::take(&mut self.warnings)
@@ -261,6 +287,10 @@ impl Player {
         }
         let frames = &self.frames;
         let changed = self.picker.advance(position, || frames.try_recv().ok());
+        self.playing_at.set(self.playing.then_some(position));
+        if changed && self.playing {
+            self.count_dropped();
+        }
         self.advance_shuttle();
         if self.playing {
             self.keep_in_range(position);
@@ -297,6 +327,8 @@ impl Player {
             self.seek(self.position());
         }
         self.playing = true;
+        self.dropped = 0;
+        self.last_shown = None;
         if let Some(writer) = &self.writer {
             writer.set_paused(false);
         }
@@ -312,6 +344,7 @@ impl Player {
             return;
         }
         self.playing = false;
+        self.playing_at.set(None);
         if let Some(writer) = &self.writer {
             writer.set_paused(true);
         }
@@ -334,6 +367,9 @@ impl Player {
 
     fn go_to(&mut self, position: Ticks, scrub: bool) {
         let position = position.clamp(Ticks::ZERO, self.duration());
+        // Until the clock has moved there, the video worker mustn't skip toward the old position.
+        self.playing_at.set(None);
+        self.last_shown = None;
         self.generation += 1;
         self.latest_seek.store(self.generation, Ordering::Release);
         self.scrubbed = scrub;

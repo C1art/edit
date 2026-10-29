@@ -1,4 +1,29 @@
+use std::sync::atomic::{AtomicI64, Ordering};
+
 use timeline::{Ticks, Timebase};
+
+const NOT_PLAYING: i64 = i64::MIN;
+
+/// Where playing has reached, or nothing while it isn't playing, shared with the video
+/// worker so that one falling behind can skip the frames it would only make late.
+#[derive(Debug)]
+pub(crate) struct SharedPosition(AtomicI64);
+
+impl SharedPosition {
+    pub(crate) fn new() -> Self {
+        Self(AtomicI64::new(NOT_PLAYING))
+    }
+
+    pub(crate) fn set(&self, position: Option<Ticks>) {
+        let value = position.map_or(NOT_PLAYING, |position| position.0);
+        self.0.store(value, Ordering::Relaxed);
+    }
+
+    pub(crate) fn get(&self) -> Option<Ticks> {
+        let value = self.0.load(Ordering::Relaxed);
+        (value != NOT_PLAYING).then_some(Ticks(value))
+    }
+}
 
 /// Maps a monotonically increasing counter onto media time. The counter is the number of
 /// audio frames the device has played (the master clock) or, without audio, wall-clock
