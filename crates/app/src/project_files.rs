@@ -24,6 +24,8 @@ pub enum PathPurpose {
     ExportFrame,
     /// A `.cube` file for one of a clip's LUTs.
     Lut(ClipId, LutSlot),
+    /// The picture for the Image Matte Key at an index in a clip's effects.
+    ImageMatte(ClipId, usize),
 }
 
 pub struct PathPrompt {

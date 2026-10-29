@@ -26,6 +26,7 @@ mod generate_effects;
 mod generated;
 mod grades;
 mod image_effects;
+mod image_matte;
 mod layer_look;
 mod layered;
 mod lighting_effects;

@@ -41,7 +41,7 @@ use egui::RichText;
 use timeline::{
     preview, AudioEffect, Clip, ClipId, Edit, Generator, Look, Param, Sequence,
     SetClipAudioEffects, SetClipLook, SetClipPan, SetClipVolume, SetGenerator, SourceId, Ticks,
-    TrackKind, TrackRef,
+    TrackKind, TrackRef, VideoEffect,
 };
 
 use crate::editor::Editor;
@@ -166,6 +166,9 @@ fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
     seek_to_key(editor, clip, output.seek);
     if let Some(slot) = output.choose_lut {
         editor.prompt_path(PathPurpose::Lut(clip.id, slot));
+    }
+    if let Some(effect) = output.choose_matte {
+        editor.prompt_path(PathPurpose::ImageMatte(clip.id, effect));
     }
     if let (Some(generator), Some(change)) = (drawing, drawing_change) {
         let edit = SetGenerator {
@@ -330,6 +333,21 @@ pub(crate) fn set_lut(editor: &mut Editor, clip: ClipId, slot: LutSlot, path: Pa
         LutSlot::Look => &mut look.color.look,
     };
     *lut = Some(path);
+    editor.apply(SetClipLook {
+        clip: clip.id,
+        look,
+    });
+}
+
+pub(crate) fn set_image_matte(editor: &mut Editor, clip: ClipId, effect: usize, path: PathBuf) {
+    let Some((_, clip)) = editor.timeline.sequence().clip(clip) else {
+        return;
+    };
+    let mut look = clip.look.clone();
+    let Some(VideoEffect::ImageMatteKey(key)) = look.effects.get_mut(effect) else {
+        return;
+    };
+    key.matte = Some(path);
     editor.apply(SetClipLook {
         clip: clip.id,
         look,

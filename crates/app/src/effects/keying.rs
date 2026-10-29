@@ -1,4 +1,5 @@
-use timeline::{KeyOutput, MatteChannel, VideoEffect};
+use egui::RichText;
+use timeline::{ImageMatteSource, KeyOutput, MatteChannel, VideoEffect};
 
 use super::look::Rows;
 
@@ -98,6 +99,38 @@ impl Rows {
                     self.param(ui, &format!("Point {number} X"), x, -100.0..=200.0, "%");
                     self.param(ui, &format!("Point {number} Y"), y, -100.0..=200.0, "%");
                 }
+            }
+            VideoEffect::ImageMatteKey(key) => {
+                ui.horizontal(|ui| {
+                    ui.label("Matte");
+                    match key.matte.as_ref().and_then(|path| path.file_name()) {
+                        Some(name) => {
+                            let path = key.matte.as_ref().map(|path| path.display().to_string());
+                            ui.label(name.to_string_lossy())
+                                .on_hover_text(path.unwrap_or_default());
+                        }
+                        None => {
+                            ui.label(RichText::new("None").weak());
+                        }
+                    }
+                    if ui.small_button("Browse…").clicked() {
+                        self.browse_matte = true;
+                    }
+                    if key.matte.is_some() && ui.small_button("Remove").clicked() {
+                        key.matte = None;
+                        self.commit();
+                    }
+                });
+                self.options(
+                    ui,
+                    "Composite Using",
+                    "composite_using",
+                    &mut key.composite_using,
+                    ImageMatteSource::ALL,
+                    ImageMatteSource::name,
+                );
+                let reverse = &mut key.reverse;
+                self.choice(ui, "Reverse", |ui| ui.checkbox(reverse, "").changed());
             }
             _ => {}
         }

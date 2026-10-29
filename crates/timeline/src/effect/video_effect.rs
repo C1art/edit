@@ -455,4 +455,5 @@ pub enum VideoEffect {
     RollingShutterRepair(RollingShutterRepair),
     PaintBucket(PaintBucket),
     WriteOn(WriteOn),
+    ImageMatteKey(ImageMatteKey),
 }

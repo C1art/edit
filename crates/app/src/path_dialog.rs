@@ -53,6 +53,11 @@ pub fn path_dialog(editor: &mut Editor, ctx: &egui::Context) {
             "Path to a .cube LUT for the clip's source, such as a log conversion:",
             "Apply",
         ),
+        PathPurpose::ImageMatte(..) => (
+            "Image Matte",
+            "Path to a still image whose alpha or luma shows the clip through:",
+            "Apply",
+        ),
         PathPurpose::Lut(_, LutSlot::Look) => (
             "Creative Look",
             "Path to a .cube LUT giving the clip its look:",
@@ -102,6 +107,9 @@ pub fn path_dialog(editor: &mut Editor, ctx: &egui::Context) {
             PathPurpose::Export(kind) => editor.export_interchange(path, kind),
             PathPurpose::ExportFrame => editor.export_frame(path),
             PathPurpose::Lut(clip, slot) => crate::effects::set_lut(editor, clip, slot, path),
+            PathPurpose::ImageMatte(clip, effect) => {
+                crate::effects::set_image_matte(editor, clip, effect, path);
+            }
         }
     } else if cancelled {
         editor.path_prompt = None;

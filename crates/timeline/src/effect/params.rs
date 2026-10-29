@@ -45,6 +45,7 @@ macro_rules! effect_params {
             | VideoEffect::BlackAndWhite
             | VideoEffect::TrackMatteKey { .. }
             | VideoEffect::SetMatte { .. }
+            | VideoEffect::ImageMatteKey(_)
             | VideoEffect::WarpStabilizer(_)
             | VideoEffect::RollingShutterRepair(_) => Vec::new(),
             VideoEffect::Tint { amount, .. }

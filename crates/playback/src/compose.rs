@@ -10,6 +10,7 @@ use crate::clip_decoders::ClipDecoders;
 use crate::echo::{echo_of, echoed_frame_at};
 use crate::generated::{caption_frame, scrolled};
 use crate::grades::grade_for;
+use crate::image_matte::image_matted;
 use crate::layer_look::{interpreted, layer_look};
 use crate::layered::{combination, combined, matted, track_matte};
 use crate::morph_cut::morphed;
@@ -204,6 +205,7 @@ fn clip_picture(
                     .map(|frame| scrolled(frame, sequence, plan.clip, media, time))
                     .map(|frame| bucket_filled(frame, effects, time))
                     .map(|frame| written_on(frame, plan.clip, sequence.timebase, time))
+                    .map(|frame| image_matted(frame, effects, sequence.timebase, decoding.warnings))
                     .map(|frame| with_burn_ins(frame, sequence, plan.clip, media, time))
                     .map(LayerPicture::Frame),
                 Err(error) => {

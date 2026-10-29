@@ -297,7 +297,8 @@ impl Rows {
             | VideoEffect::ColorKey { .. }
             | VideoEffect::LumaKey { .. }
             | VideoEffect::AlphaAdjust { .. }
-            | VideoEffect::GarbageMatte(_) => self.keying(ui, effect, video_tracks),
+            | VideoEffect::GarbageMatte(_)
+            | VideoEffect::ImageMatteKey(_) => self.keying(ui, effect, video_tracks),
             VideoEffect::DifferenceMatte(_)
             | VideoEffect::CompoundBlur(_)
             | VideoEffect::Texturize(_) => self.layered(ui, effect, video_tracks),

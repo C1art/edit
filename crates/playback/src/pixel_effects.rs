@@ -39,6 +39,7 @@ pub(crate) fn pixel_effects(
             | VideoEffect::TrackMatteKey { .. }
             | VideoEffect::SetMatte { .. }
             | VideoEffect::DifferenceMatte(_)
+            | VideoEffect::ImageMatteKey(_)
             | VideoEffect::CompoundBlur(_)
             | VideoEffect::Texturize(_) => {}
             VideoEffect::BrightnessContrast {

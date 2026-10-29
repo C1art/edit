@@ -21,6 +21,8 @@ pub(super) struct Output {
     pub(super) seek: Option<Ticks>,
     /// A LUT to ask for the file of.
     pub(super) choose_lut: Option<LutSlot>,
+    /// The effect, by index, whose Image Matte Key to ask for the picture of.
+    pub(super) choose_matte: Option<usize>,
     /// Whether to analyze the clip's motion for Warp Stabilizer.
     pub(super) analyze_motion: bool,
     /// Whether to find the clip's subject for Auto Reframe.
@@ -122,6 +124,9 @@ pub(super) fn controls(
                         }
                     });
                     rows.effect(ui, effect, video_tracks);
+                    if std::mem::take(&mut rows.browse_matte) {
+                        rows.output.choose_matte = Some(index);
+                    }
                 });
             }
             if let Some(index) = removed {
@@ -153,6 +158,8 @@ pub(super) struct Rows {
     /// Which mask is being tracked and how far along, while one is.
     pub(super) tracking: Option<(usize, f32)>,
     pub(super) tone: ToneState,
+    /// Whether the effect being shown asked for its matte picture.
+    pub(super) browse_matte: bool,
     pub(super) output: Output,
 }
 
@@ -165,10 +172,12 @@ impl Rows {
             reframing: None,
             tracking: None,
             tone: ToneState::default(),
+            browse_matte: false,
             output: Output {
                 change: None,
                 seek: None,
                 choose_lut: None,
+                choose_matte: None,
                 analyze_motion: false,
                 analyze_reframe: false,
                 track_mask: None,

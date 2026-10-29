@@ -102,12 +102,13 @@ pub use effect::{
     CineonConverter, Circle, ClipNameSource, ColorBalance, ColorChange, ColorEmboss, ColorMatch,
     ColorPass, ColorReplace, CompoundBlur, ConvolutionKernel, DifferenceMatte, DifferenceView,
     Echo, EchoOperator, EdgeFeather, EffectCategory, Ellipse, Extract, EyedropperFill,
-    FillSelector, FourColorGradient, GarbageMatte, Grid, KeyOutput, LensType, Light, LightKind,
-    LightingEffects, Lightning, LimiterMethod, MagnifyShape, MatchColors, MatteChannel, Median,
-    NoiseAlpha, NoiseHls, NoiseHlsAuto, OriginalAlpha, PaintBucket, PaintSurface, RadialShadow,
-    RadialWipeDirection, RampShape, ReduceInterlaceFlicker, Rgb, RoughenEdgeType, RoughenEdges,
-    SdrConform, ShadowHighlight, ShadowRender, SimpleText, Texturize, TimecodeSource, UnsharpMask,
-    VideoEffect, VideoLimiter, WriteOn, WriteOnStyle, MAX_LIGHTS, ULTRA_KEY_REACH,
+    FillSelector, FourColorGradient, GarbageMatte, Grid, ImageMatteKey, ImageMatteSource,
+    KeyOutput, LensType, Light, LightKind, LightingEffects, Lightning, LimiterMethod, MagnifyShape,
+    MatchColors, MatteChannel, Median, NoiseAlpha, NoiseHls, NoiseHlsAuto, OriginalAlpha,
+    PaintBucket, PaintSurface, RadialShadow, RadialWipeDirection, RampShape,
+    ReduceInterlaceFlicker, Rgb, RoughenEdgeType, RoughenEdges, SdrConform, ShadowHighlight,
+    ShadowRender, SimpleText, Texturize, TimecodeSource, UnsharpMask, VideoEffect, VideoLimiter,
+    WriteOn, WriteOnStyle, MAX_LIGHTS, ULTRA_KEY_REACH,
 };
 pub use error::TimelineError;
 pub use find::{next_found, FindOperator, FindQuery, Found};

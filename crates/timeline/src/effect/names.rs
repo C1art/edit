@@ -104,6 +104,7 @@ impl VideoEffect {
             Self::Texturize(_) => "Texturize",
             Self::PaintBucket(_) => "Paint Bucket",
             Self::WriteOn(_) => "Write-on",
+            Self::ImageMatteKey(_) => "Image Matte Key",
         }
     }
 }

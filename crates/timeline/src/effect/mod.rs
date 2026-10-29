@@ -11,6 +11,7 @@ mod layered;
 mod lighting;
 #[macro_use]
 mod more_params;
+mod image_matte;
 mod names;
 mod noise;
 mod options;
@@ -31,6 +32,7 @@ pub use edges::{AlphaGlow, Bevel, ColorEmboss, RoughenEdgeType, RoughenEdges};
 pub use garbage::GarbageMatte;
 pub use generate::{Checkerboard, Circle, FourColorGradient, Grid};
 pub use image::{CineonConversion, CineonConverter, ColorPass, ReduceInterlaceFlicker};
+pub use image_matte::{ImageMatteKey, ImageMatteSource};
 pub use key::{KeyOutput, MatteChannel, ULTRA_KEY_REACH};
 pub use layered::{CompoundBlur, DifferenceMatte, DifferenceView, Texturize};
 pub use lighting::{Light, LightKind, LightingEffects, MAX_LIGHTS};

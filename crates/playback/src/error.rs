@@ -10,6 +10,11 @@ pub enum PlaybackError {
         path: std::path::PathBuf,
         reason: String,
     },
+    /// An Image Matte Key's picture could not be read.
+    ImageMatte {
+        path: std::path::PathBuf,
+        error: media::MediaError,
+    },
 }
 
 impl fmt::Display for PlaybackError {
@@ -22,6 +27,9 @@ impl fmt::Display for PlaybackError {
             Self::Lut { path, reason } => {
                 write!(f, "cannot use the LUT {}: {reason}", path.display())
             }
+            Self::ImageMatte { path, error } => {
+                write!(f, "cannot use the matte {}: {error}", path.display())
+            }
         }
     }
 }
@@ -33,6 +41,7 @@ impl std::error::Error for PlaybackError {
             Self::Render(error) => Some(error),
             Self::Audio(error) => Some(error),
             Self::WorkerSpawn(error) => Some(error),
+            Self::ImageMatte { error, .. } => Some(error),
             Self::Lut { .. } => None,
         }
     }
