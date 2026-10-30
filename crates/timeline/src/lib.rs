@@ -141,7 +141,7 @@ pub use export_overlay::{ExportOverlays, OverlayPlace, Watermark};
 pub use fill_gradient::{FillGradient, GradientKind};
 pub use find::{next_found, FindOperator, FindQuery, Found};
 pub use generator::{
-    held_length, Generator, Shape, ShapeKind, TextAlign, TextStroke, Title, TitleFont,
+    held_length, BoxStyle, Generator, Shape, ShapeKind, TextAlign, TextStroke, Title, TitleFont,
     GENERATED_SECONDS,
 };
 pub use graphic::{Graphic, GraphicContent, GraphicLayer, Pin, VerticalPin};

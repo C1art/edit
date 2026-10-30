@@ -69,6 +69,8 @@ pub struct Title {
     #[serde(default)]
     pub background: Option<Rgb>,
     #[serde(default)]
+    pub background_style: BoxStyle,
+    #[serde(default)]
     pub bold: bool,
     #[serde(default)]
     pub italic: bool,
@@ -83,6 +85,42 @@ pub struct Title {
     pub stroke: Option<TextStroke>,
     #[serde(default)]
     pub motion: TitleMotion,
+}
+
+/// How a title's background box sits around its text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(default)]
+pub struct BoxStyle {
+    /// In percent.
+    pub opacity: u32,
+    /// Space around the text in sequence pixels; scaled to the text when unset.
+    pub padding: Option<u32>,
+    /// Rounds the corners, in sequence pixels.
+    pub radius: u32,
+}
+
+impl Default for BoxStyle {
+    fn default() -> Self {
+        Self {
+            opacity: 100,
+            padding: None,
+            radius: 0,
+        }
+    }
+}
+
+impl BoxStyle {
+    /// The space left and right of the text, and above and below it, for text `size`
+    /// pixels high.
+    pub fn margins(&self, size: u32) -> (u32, u32) {
+        match self.padding {
+            Some(padding) => (padding, padding),
+            None => {
+                let side = (size as f32 * 0.3).round() as u32;
+                (side, side / 2)
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -125,6 +163,7 @@ impl Default for Title {
             shadow: true,
             shadow_style: None,
             background: None,
+            background_style: BoxStyle::default(),
             bold: false,
             italic: false,
             tracking: 0,

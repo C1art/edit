@@ -222,18 +222,20 @@ fn draw_title(canvas: &mut Canvas, title: &Title, anchor: Anchor) {
         .filter(|stroke| stroke.width > 0)
         .map(|stroke| (text.dilated(stroke.width as f32), stroke.color));
     if let Some(background) = title.background {
-        let pad = (size * 0.3).round() as i64;
+        let style = title.background_style;
+        let (side, above) = style.margins(title.size);
         let grown = title.stroke.map_or(0, |stroke| i64::from(stroke.width));
+        let (side, above) = (i64::from(side) + grown, i64::from(above) + grown);
         let (left, top, right, bottom) = text.bounds;
-        canvas.fill_box(
-            (
-                left - pad - grown,
-                top - pad / 2 - grown,
-                right + pad + grown,
-                bottom + pad / 2 + grown,
-            ),
+        canvas.fill_rounded_box(
+            (left - side, top - above, right + side, bottom + above),
             background,
+            style.opacity.min(100) as f32 / 100.0,
+            style.radius as f32,
         );
+        if !title.shadow {
+            canvas.bleed(background);
+        }
     }
     let silhouette = outline.as_ref().map_or(&text, |(outline, _)| outline);
     if title.shadow {
@@ -329,6 +331,42 @@ impl Canvas {
         }
     }
 
+    /// A box with corners rounded to `radius`, smoothed along their curve.
+    fn fill_rounded_box(
+        &mut self,
+        bounds: (i64, i64, i64, i64),
+        color: Rgb,
+        opacity: f32,
+        radius: f32,
+    ) {
+        let (left, top, right, bottom) = bounds;
+        let clamp_x = |x: i64| x.clamp(0, i64::from(self.width)) as usize;
+        let clamp_y = |y: i64| y.clamp(0, i64::from(self.height)) as usize;
+        let width = self.width as usize;
+        let color = opaque(color);
+        let (left_f, top_f, right_f, bottom_f) =
+            (left as f32, top as f32, right as f32, bottom as f32);
+        let radius = radius
+            .min((right_f - left_f) / 2.0)
+            .min((bottom_f - top_f) / 2.0)
+            .max(0.0);
+        for y in clamp_y(top)..clamp_y(bottom) {
+            let center_y = y as f32 + 0.5;
+            let into_corner_y = (top_f + radius - center_y).max(center_y - (bottom_f - radius));
+            for x in clamp_x(left)..clamp_x(right) {
+                let center_x = x as f32 + 0.5;
+                let into_corner_x = (left_f + radius - center_x).max(center_x - (right_f - radius));
+                let cover = if radius > 0.0 && into_corner_x > 0.0 && into_corner_y > 0.0 {
+                    let from_center = into_corner_x.hypot(into_corner_y);
+                    (radius - from_center + 0.5).clamp(0.0, 1.0)
+                } else {
+                    1.0
+                };
+                composite(&mut self.pixels[y * width + x], color, cover * opacity);
+            }
+        }
+    }
+
     /// Composites `color` over the canvas where `coverage` covers it.
     fn paint(&mut self, coverage: &Coverage, color: Rgb, opacity: f32) {
         let color = opaque(color);
@@ -380,4 +418,20 @@ fn composite(pixel: &mut [f32; 4], [r, g, b, _]: [f32; 4], alpha: f32) {
 
 fn opaque(color: Rgb) -> [f32; 4] {
     [color.r, color.g, color.b, 255].map(|channel| f32::from(channel) / 255.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_rounded_box_leaves_its_corners_clear_and_fills_its_middle() {
+        let mut canvas = Canvas::new(40, 20);
+        canvas.fill_rounded_box((0, 0, 40, 20), Rgb::WHITE, 0.5, 8.0);
+        let alpha = |x: usize, y: usize| canvas.pixels[y * 40 + x][3];
+        assert_eq!(alpha(0, 0), 0.0);
+        assert_eq!(alpha(39, 19), 0.0);
+        assert_eq!(alpha(20, 10), 0.5);
+        assert_eq!(alpha(20, 0), 0.5);
+    }
 }

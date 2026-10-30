@@ -2,11 +2,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use timeline::{
-    AlphaInterpretation, AudioEffect, Bin, BinId, BinSearch, Caption, Clip, ClipId, ColorSpace,
-    CurvePoint, FillGradient, Gain, Generator, GradientKind, Interpolation, Keyframe, Marks, Mask,
-    MaskShape, MediaItem, MediaLog, Nest, Pan, Param, PixelAspect, Rgb, Scroll, SearchField,
-    ShadowStyle, SourceId, TextAlign, TextStroke, Ticks, Timebase, Title, TitleFont, TitleMotion,
-    Track, Transition, TransitionKind, VideoEffect, VideoFormat,
+    AlphaInterpretation, AudioEffect, Bin, BinId, BinSearch, BoxStyle, Caption, Clip, ClipId,
+    ColorSpace, CurvePoint, FillGradient, Gain, Generator, GradientKind, Interpolation, Keyframe,
+    Marks, Mask, MaskShape, MediaItem, MediaLog, Nest, Pan, Param, PixelAspect, Rgb, Scroll,
+    SearchField, ShadowStyle, SourceId, TextAlign, TextStroke, Ticks, Timebase, Title, TitleFont,
+    TitleMotion, Track, Transition, TransitionKind, VideoEffect, VideoFormat,
 };
 
 use super::*;
@@ -76,6 +76,11 @@ fn sample() -> ProjectFile {
                 ..ShadowStyle::falling(11, 4)
             }),
             background: Some(Rgb::BLACK),
+            background_style: BoxStyle {
+                opacity: 60,
+                padding: Some(24),
+                radius: 9,
+            },
             bold: true,
             italic: true,
             tracking: -40,

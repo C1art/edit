@@ -129,6 +129,13 @@ pub(super) fn text_controls(ui: &mut egui::Ui, title: &mut Title) -> Option<Chan
     change = stroke_row(ui, &mut title.stroke).or(change);
     let usual = title.usual_shadow();
     change = shadow_rows(ui, &mut title.shadow, &mut title.shadow_style, usual).or(change);
+    background_rows(ui, title).or(change)
+}
+
+/// The box behind the text: its color, how see-through, how far it reaches past the
+/// text and how round its corners are.
+fn background_rows(ui: &mut egui::Ui, title: &mut Title) -> Option<Change> {
+    let mut change = None;
     ui.horizontal_wrapped(|ui| {
         let mut boxed = title.background.is_some();
         if ui.checkbox(&mut boxed, "Background").changed() {
@@ -137,7 +144,38 @@ pub(super) fn text_controls(ui: &mut egui::Ui, title: &mut Title) -> Option<Chan
         }
         if let Some(background) = &mut title.background {
             change = color_button(ui, background).or(change);
+            let style = &mut title.background_style;
+            let opacity = ui.add(
+                egui::DragValue::new(&mut style.opacity)
+                    .range(0..=100)
+                    .suffix(" %"),
+            );
+            change = response_state(&opacity.on_hover_text("Opacity"), change);
         }
+    });
+    if title.background.is_none() {
+        return change;
+    }
+    let style = &mut title.background_style;
+    ui.horizontal_wrapped(|ui| {
+        ui.add_space(ui.spacing().indent);
+        ui.label("Size");
+        let mut auto = style.padding.is_none();
+        if ui.checkbox(&mut auto, "Auto").changed() {
+            style.padding = (!auto).then(|| style.margins(title.size).0);
+            change = Some(Change::Commit);
+        }
+        if let Some(padding) = &mut style.padding {
+            let size = ui.add(egui::DragValue::new(padding).range(0..=1000).suffix(" px"));
+            change = response_state(&size, change);
+        }
+        ui.label("Corners");
+        let corners = ui.add(
+            egui::DragValue::new(&mut style.radius)
+                .range(0..=1000)
+                .suffix(" px"),
+        );
+        change = response_state(&corners, change);
     });
     change
 }
