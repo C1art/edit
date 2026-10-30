@@ -157,31 +157,21 @@ impl Editor {
 
 #[cfg(windows)]
 mod on_screen {
-    use std::ffi::c_void;
-
-    #[repr(C)]
-    struct Point {
-        x: i32,
-        y: i32,
-    }
-
-    const MONITOR_DEFAULTTONULL: u32 = 0;
-
-    #[link(name = "user32")]
-    extern "system" {
-        fn MonitorFromPoint(point: Point, flags: u32) -> *mut c_void;
-    }
+    use windows::Win32::Foundation::POINT;
+    use windows::Win32::Graphics::Gdi::{MonitorFromPoint, MONITOR_DEFAULTTONULL};
 
     /// `pixel` is in the desktop's pixels, across every monitor.
     pub(super) fn has_monitor_at(pixel: egui::Pos2) -> bool {
-        let point = Point {
+        let point = POINT {
             x: pixel.x as i32,
             y: pixel.y as i32,
         };
         // SAFETY: MonitorFromPoint only reads the point passed by value and, with
         // MONITOR_DEFAULTTONULL, returns null when no monitor holds it; the handle it
         // returns needs no release.
-        !unsafe { MonitorFromPoint(point, MONITOR_DEFAULTTONULL) }.is_null()
+        !unsafe { MonitorFromPoint(point, MONITOR_DEFAULTTONULL) }
+            .0
+            .is_null()
     }
 }
 

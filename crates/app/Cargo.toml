@@ -16,5 +16,8 @@ eframe.workspace = true
 egui.workspace = true
 crossbeam.workspace = true
 
+[target.'cfg(windows)'.dependencies]
+windows.workspace = true
+
 [lints]
 workspace = true
