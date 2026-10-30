@@ -78,6 +78,13 @@ pub(crate) fn items(editor: &mut Editor, ui: &mut Ui) {
     if ui.add_enabled(selected, Button::new("Nest")).clicked() {
         editor.nest_selection();
     }
+    if ui
+        .add_enabled(selected, Button::new("Unnest"))
+        .on_hover_text("Put the clips inside the selected nests back in their place")
+        .clicked()
+    {
+        editor.unnest_selection();
+    }
     let render = Button::new("Render and Replace");
     if ui
         .add_enabled(editor.can_render_and_replace(), render)

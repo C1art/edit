@@ -41,6 +41,7 @@ mod sync;
 mod synchronize;
 mod through;
 mod trim;
+mod unnest;
 
 #[cfg(test)]
 mod tests;
@@ -99,6 +100,7 @@ pub use sync::{IntoSync, SyncMethod};
 pub use synchronize::{synchronized_clips, SynchronizeClips};
 pub use through::{is_through_edit, JoinThroughEdits};
 pub use trim::{Edge, Roll, Slide, Slip, Trim, TrimMode};
+pub use unnest::Unnest;
 
 use crate::{preview, Edit, Sequence, Ticks};
 

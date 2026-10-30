@@ -108,7 +108,7 @@ pub use edit::{
     SetTimeInterpolation, SetToFrameSize, SetTrackAutomation, SetTrackEffects, SetTrackMix,
     SetTrackOutput, SetTrackSends, SetTrackSwitch, SetTransition, SimplifySequence, Slide, Slip,
     SwitchAngle, SyncMethod, SynchronizeClips, TrackSwitch, Trim, TrimMode, TrimToPlayhead,
-    Unlinked, UpdateMarker,
+    Unlinked, Unnest, UpdateMarker,
 };
 pub use edl::to_edl;
 pub use effect::{

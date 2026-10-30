@@ -131,3 +131,45 @@ fn clearing_media_removes_its_clips_in_nests_too_and_undoes_at_once() {
     timeline.undo();
     assert_eq!(timeline.project(), &before);
 }
+
+#[test]
+fn unnesting_a_trimmed_nest_clip_lays_out_the_part_it_played_where_it_played_it() {
+    let (mut timeline, source) = timeline();
+    timeline
+        .apply(place(source, 0, 0, 300, PlaceMode::Overwrite))
+        .unwrap();
+    let video_only = PlaceClip {
+        video_track: Some(1),
+        audio_track: None,
+        ..place(source, 400, 0, 100, PlaceMode::Overwrite)
+    };
+    timeline.apply(video_only).unwrap();
+    let clips = vec![
+        clip_on(&timeline, V1, 0),
+        clip_on(&timeline, V2, 0),
+        clip_on(&timeline, A1, 0),
+    ];
+    let name = "Nest".into();
+    timeline.apply(NestClips { clips, name }).unwrap();
+    let nest = timeline.sequence().media[1].id;
+    timeline
+        .apply(place(nest, 1000, 100, 350, PlaceMode::Overwrite))
+        .unwrap();
+
+    let clips = vec![clip_on(&timeline, V1, 1)];
+    timeline.apply(Unnest { clips }).unwrap();
+
+    assert_eq!(spans(&timeline, V1), [(0, 500, 0), (1000, 1200, 100)]);
+    assert_eq!(spans(&timeline, V2), [(1300, 1350, 0)]);
+    assert_eq!(spans(&timeline, A1), [(0, 500, 0), (1000, 1200, 100)]);
+    let track = |track| timeline.sequence().track(track).unwrap();
+    let (video, audio) = (&track(V1).clips[1], &track(A1).clips[1]);
+    assert_eq!((video.source, audio.source), (source, source));
+    assert!(video.link.is_some());
+    assert_eq!(video.link, audio.link);
+    assert_ne!(video.link, track(V1).clips[0].link);
+
+    timeline.undo();
+    assert_eq!(spans(&timeline, V1), [(0, 500, 0), (1000, 1350, 100)]);
+    assert!(spans(&timeline, V2).is_empty());
+}

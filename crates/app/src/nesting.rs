@@ -1,4 +1,4 @@
-use timeline::{AddNest, ClipId, NestClips, NestFromMedia, SourceId, Ticks};
+use timeline::{AddNest, ClipId, NestClips, NestFromMedia, SourceId, Ticks, Unnest};
 
 use crate::editor::Editor;
 
@@ -28,6 +28,19 @@ impl Editor {
                 .filter(|clip| Some(clip.source) == nest)
                 .map(|clip| clip.id)
                 .collect();
+        }
+    }
+
+    /// Puts the clips inside the selected nests back in the sequence in their place.
+    pub(crate) fn unnest_selection(&mut self) {
+        let clips = self.view.selection.clone();
+        if self.apply(Unnest { clips }) {
+            self.view.selection.clear();
+        } else {
+            self.notice(
+                "Only nests at normal speed, without effects, transitions or volume changes, \
+                 can be unnested",
+            );
         }
     }
 
