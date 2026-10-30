@@ -76,6 +76,7 @@ mod render_previews;
 mod render_replace;
 mod replace_clip;
 mod safe_margins;
+mod same_path;
 mod scene_edits;
 mod scopes;
 mod sequence_marks;

@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 use crossbeam::channel::{self, Receiver, Sender};
 
 use crate::editor::Editor;
+use crate::same_path::same_path;
 
 /// How long an answer about an unchanged path holds, so files written or removed while
 /// the dialog stays open are noticed.
@@ -98,7 +99,7 @@ impl TargetCheck {
 
 fn check(path: &Path, queued: &[PathBuf], on_disk: impl Fn(&Path) -> bool) -> Target {
     let holder = |path: &Path| {
-        if queued.iter().any(|queued| queued == path) {
+        if queued.iter().any(|queued| same_path(queued, path)) {
             Some(Holder::Queue)
         } else if on_disk(path) {
             Some(Holder::File)
@@ -141,6 +142,19 @@ fn numbered(path: &Path) -> impl Iterator<Item = PathBuf> + '_ {
 }
 
 impl Editor {
+    /// Whether exporting to `path` would write over the project file or a file the
+    /// project reads from while the export does.
+    pub(crate) fn is_project_file(&self, path: &Path) -> bool {
+        let media = self.timeline.project().media.iter();
+        let sources = media
+            .filter(|item| item.generator.is_none() && item.nest.is_none())
+            .flat_map(|item| std::iter::once(&item.path).chain(&item.proxy));
+        self.project_path
+            .iter()
+            .chain(sources)
+            .any(|used| same_path(used, path))
+    }
+
     /// A file name for what the open sequence makes: the sequence's own name, else the
     /// project's.
     pub(crate) fn output_stem(&self) -> String {

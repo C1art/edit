@@ -235,6 +235,8 @@ fn prepare(editor: &mut Editor) -> Option<(Arc<Sequence>, ExportSettings)> {
         .then(|| sequence.marks.range(sequence.duration()));
     let problem = if path.as_os_str().is_empty() {
         Some("Choose an output file first".to_owned())
+    } else if editor.is_project_file(&path) {
+        Some(format!("{} is part of the project", quoted_name(&path)))
     } else if sequence.duration() == timeline::Ticks::ZERO {
         Some(EMPTY_SEQUENCE.to_owned())
     } else if dialog.format.format.has_video()
