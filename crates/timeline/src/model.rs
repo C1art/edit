@@ -3,61 +3,13 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AudioEffect, AudioType, Bin, Captions, ColorSpace, FieldOrder, FrameRate, Gain, GroupId, Guide,
-    Label, LinkedSelection, Look, Marker, Marks, MediaItem, Param, PinnedEnds, PixelAspect,
-    SourceId, Speed, Submix, Ticks, TimeDisplay, TimeInterpolation, TimeRemap, Timebase,
-    Transition,
+    AudioEffect, AudioType, Bin, Captions, ClipId, ColorSpace, FieldOrder, FrameRate, Gain,
+    GroupId, Guide, Label, LinkId, LinkedSelection, Look, Marker, Marks, MediaItem, Param,
+    PinnedEnds, PixelAspect, SourceId, Speed, Submix, Ticks, TimeDisplay, TimeInterpolation,
+    TimeRemap, Timebase, TrackKind, TrackRef, Transition,
 };
 
 pub use crate::track::Track;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct ClipId(pub u64);
-
-/// Clips sharing a link move, trim and delete together, like the video and audio of
-/// one source placed side by side.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct LinkId(pub u64);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-pub enum TrackKind {
-    Video,
-    Audio,
-}
-
-/// Video tracks are numbered from the bottom layer up (V1 is under V2); audio tracks
-/// from the top down.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct TrackRef {
-    pub kind: TrackKind,
-    pub index: usize,
-}
-
-impl TrackRef {
-    pub const fn video(index: usize) -> Self {
-        Self {
-            kind: TrackKind::Video,
-            index,
-        }
-    }
-
-    pub const fn audio(index: usize) -> Self {
-        Self {
-            kind: TrackKind::Audio,
-            index,
-        }
-    }
-}
-
-impl std::fmt::Display for TrackRef {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let letter = match self.kind {
-            TrackKind::Video => 'V',
-            TrackKind::Audio => 'A',
-        };
-        write!(f, "{letter}{}", self.index + 1)
-    }
-}
 
 /// All times are in the owning sequence's timebase.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

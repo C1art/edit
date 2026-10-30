@@ -9,6 +9,7 @@ use crate::{
     Alignment, Clip, ClipId, Edit, FrameRate, Gain, LinkId, MediaItem, Nest, Sequence, SourceId,
     Ticks, TimelineError, Track, Transition, TransitionKind, VideoFormat,
 };
+use resolve::{resolve, Item};
 
 /// A sequence read from Final Cut Pro XML, as Premiere, Resolve and Final Cut Pro 7
 /// write it. Applied, it joins the project as a nested sequence, adding its files to the
@@ -49,20 +50,6 @@ struct XmlClip {
     transition_in: Option<(TransitionKind, i64, Alignment)>,
     transition_out: Option<(TransitionKind, i64)>,
     markers: Vec<XmlMarker>,
-}
-
-/// One child of a `<track>` in document order, with times as written, -1 for unknown.
-enum Item {
-    Transition {
-        start: i64,
-        end: i64,
-        alignment: String,
-        kind: TransitionKind,
-    },
-    Clip {
-        clip: XmlClip,
-        out: i64,
-    },
 }
 
 /// Reads the first sequence in a Final Cut Pro XML document.
@@ -238,68 +225,6 @@ impl Reader {
         }
         Ok(index)
     }
-}
-
-/// Fills in the times written as -1 around transitions, which sit at the cut between
-/// the clips, and hands each transition to the clip it belongs to.
-fn resolve(items: Vec<Item>) -> Vec<XmlClip> {
-    let mut clips: Vec<XmlClip> = Vec::new();
-    let mut pending: Option<(i64, TransitionKind, i64, Alignment)> = None;
-    let mut open_end = false;
-    for item in items {
-        match item {
-            Item::Transition {
-                start,
-                end,
-                alignment,
-                kind,
-            } => {
-                let length = (end - start).max(0);
-                let cut = match alignment.as_str() {
-                    "start" | "start-black" => start,
-                    "end" | "end-black" => end,
-                    _ => start + length / 2,
-                };
-                if alignment == "end-black" {
-                    if let Some(last) = clips.last_mut() {
-                        last.transition_out = Some((kind, length));
-                    }
-                } else {
-                    if open_end {
-                        if let Some(last) = clips.last_mut() {
-                            last.end = cut;
-                        }
-                    }
-                    let aligned = match alignment.as_str() {
-                        "start" => Alignment::StartAtCut,
-                        "end" => Alignment::EndAtCut,
-                        _ => Alignment::Center,
-                    };
-                    pending = Some((cut, kind, length, aligned));
-                }
-                open_end = false;
-            }
-            Item::Clip { mut clip, out } => {
-                let length = (out - clip.source_in).max(0);
-                if let Some((cut, kind, length, alignment)) = pending.take() {
-                    if clip.start < 0 {
-                        clip.start = cut;
-                    }
-                    clip.transition_in = Some((kind, length, alignment));
-                }
-                if clip.start < 0 {
-                    clip.start = clips.last().map_or(0, |last| last.end);
-                }
-                open_end = clip.end < 0;
-                if open_end {
-                    clip.end = clip.start + length;
-                }
-                clips.push(clip);
-            }
-        }
-    }
-    clips.retain(|clip| clip.end > clip.start);
-    clips
 }
 
 impl Edit for ImportXmeml {
@@ -494,6 +419,9 @@ fn level(clip: &Element) -> Gain {
             Gain::from_db(20.0 * amplitude.max(1e-6).log10())
         })
 }
+
+#[path = "xmeml_resolve.rs"]
+mod resolve;
 
 #[cfg(test)]
 #[path = "xmeml_import_tests.rs"]

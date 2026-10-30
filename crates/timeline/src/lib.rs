@@ -27,6 +27,7 @@ mod group;
 mod guide;
 mod history;
 mod hue_curves;
+mod ids;
 mod interpretation;
 mod ken_burns;
 mod keyframe;
@@ -155,6 +156,7 @@ pub use group::GroupId;
 pub use guide::{Guide, GuideAxis};
 pub use history::{preview, Edit, EditCommand, Timeline};
 pub use hue_curves::{HueCurve, HueCurves, HUE_CURVE_NEUTRAL};
+pub use ids::{ClipId, LinkId, TrackKind, TrackRef};
 pub use interpretation::{
     AlphaInterpretation, ColorSpace, FieldOrder, PixelAspect, Primaries, Transfer,
 };
@@ -176,9 +178,7 @@ pub use mask_path::{
 pub use mask_track::{MaskTracking, PictureUnits};
 pub use media::{ChannelMap, MediaItem, MediaLog, SourceId};
 pub use mix::{balance, Gain, Pan};
-pub use model::{
-    Clip, ClipId, IdGenerator, LinkId, Sequence, Track, TrackKind, TrackRef, VideoFormat,
-};
+pub use model::{Clip, IdGenerator, Sequence, Track, VideoFormat};
 pub use motion_preset::MotionPreset;
 pub use multicam::MulticamLayout;
 pub use nest::Nest;
