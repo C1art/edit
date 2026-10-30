@@ -15,6 +15,7 @@ fn sample() -> ProjectFile {
     let mut sequence = Sequence::new(Timebase::HZ_90K, VideoFormat::default());
     Arc::make_mut(&mut sequence.media).push(MediaItem {
         poster: Some(Ticks(45_000)),
+        transcript: None,
         id: SourceId(1),
         name: "Interview \"A\" — café\n".to_owned(),
         path: PathBuf::from(r"C:\Footage\interview 😀.mp4"),
@@ -51,6 +52,7 @@ fn sample() -> ProjectFile {
     });
     Arc::make_mut(&mut sequence.media).push(MediaItem {
         poster: None,
+        transcript: None,
         id: SourceId(2),
         name: "Title 01".to_owned(),
         path: PathBuf::new(),
@@ -145,6 +147,7 @@ fn sample() -> ProjectFile {
     nest.marks = Marks::default().with_in(Ticks(10));
     Arc::make_mut(&mut sequence.media).push(MediaItem {
         poster: None,
+        transcript: None,
         id: SourceId(3),
         name: "Nested Sequence 01".to_owned(),
         path: PathBuf::new(),

@@ -33,6 +33,7 @@ impl PreviewPictures {
             let duration = preview.range.end - preview.range.start;
             Arc::make_mut(&mut sequence.media).push(MediaItem {
                 poster: None,
+                transcript: None,
                 id: SourceId(index),
                 name: String::new(),
                 path: preview.path.clone(),

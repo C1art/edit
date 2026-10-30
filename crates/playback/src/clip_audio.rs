@@ -277,6 +277,7 @@ mod tests {
     fn media() -> MediaItem {
         MediaItem {
             poster: None,
+            transcript: None,
             id: SourceId(1),
             name: "ramp".into(),
             path: "ramp.wav".into(),

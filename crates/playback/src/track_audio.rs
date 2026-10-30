@@ -175,6 +175,7 @@ mod tests {
             .join("../../tests/fixtures/testsrc_2s_25fps_44k.mp4");
         MediaItem {
             poster: None,
+            transcript: None,
             id: SourceId(1),
             name: "testsrc".into(),
             path,

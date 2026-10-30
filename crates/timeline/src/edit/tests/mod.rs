@@ -483,5 +483,6 @@ mod subsequence;
 mod synchronize;
 mod through;
 mod track;
+mod transcript;
 mod transitions;
 mod trim;

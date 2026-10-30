@@ -226,6 +226,7 @@ impl Edit for ImportMedia {
             frame_fit: self.frame_fit,
             timecode: self.timecode,
             poster: None,
+            transcript: None,
         });
         Ok(())
     }

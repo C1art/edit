@@ -81,13 +81,13 @@ pub use look::{ApplyTransitions, RemoveTransitions, SetClipLook, SetTransition};
 pub use marker::{AddMarker, AddMarkers, ClearMarkers, MarkerOwner, RemoveMarker, UpdateMarker};
 pub use media::{
     BreakoutToMono, DuplicateMedia, EditSubclip, MakeOffline, MakeSubclip, RelinkMedia,
-    RenameMedia, SetChannelMap, SetMediaLog, SetMediaTimecode, SetPosterFrame,
+    RenameMedia, SetChannelMap, SetMediaLog, SetMediaTimecode, SetPosterFrame, SetTranscript,
 };
 pub use merge::MergeClips;
 pub use multicam::{CreateMulticam, FlattenMulticam, SwitchAngle};
 pub use nest::{AddNest, InNest, NestClips, NestFromMedia};
 pub use paste::{Clipboard, PasteClips};
-pub use pauses::{pauses, PauseRules, RemovePauses};
+pub use pauses::{pauses, DeleteText, PauseRules, RemovePauses};
 pub use place::{AddEdits, PlaceClip, PlaceClips, PlaceMode, Razor, RazorTarget};
 pub use range::{ExtractMarked, LiftMarked, RippleTrimToPlayhead, SetMarks, TrimToPlayhead};
 pub use reframe::ReframeSequence;

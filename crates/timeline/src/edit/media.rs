@@ -6,7 +6,7 @@ use std::sync::Arc;
 use crate::model::IdGenerator;
 use crate::{
     ChannelMap, ClipId, Edit, GroupId, ImportMedia, LinkId, MediaItem, MediaLog, Nest, Sequence,
-    SourceId, Ticks, TimelineError,
+    SourceId, Ticks, TimelineError, Transcript,
 };
 
 fn media_item(sequence: &mut Sequence, source: SourceId) -> Result<&mut MediaItem, TimelineError> {
@@ -14,6 +14,28 @@ fn media_item(sequence: &mut Sequence, source: SourceId) -> Result<&mut MediaIte
         .iter_mut()
         .find(|item| item.id == source)
         .ok_or(TimelineError::MediaNotFound(source))
+}
+
+/// Keeps what speech recognition heard in a media item's sound, or forgets it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetTranscript {
+    pub source: SourceId,
+    pub transcript: Option<Arc<Transcript>>,
+}
+
+impl Edit for SetTranscript {
+    fn name(&self) -> &'static str {
+        "Transcribe"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let item = media_item(sequence, self.source)?;
+        if item.transcript == self.transcript {
+            return Err(TimelineError::NothingToEdit);
+        }
+        item.transcript.clone_from(&self.transcript);
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

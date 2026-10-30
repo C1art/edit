@@ -1,12 +1,13 @@
 use std::ops::Range;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
 use crate::generator::placed_length;
 use crate::{
     AlphaInterpretation, BinId, ColorSpace, FieldOrder, FrameFit, FrameRate, Generator, Nest,
-    PixelAspect, Speed, Ticks, Timebase, VideoFormat,
+    PixelAspect, Speed, Ticks, Timebase, Transcript, VideoFormat,
 };
 
 /// Identifies a media item in the sequence's media pool.
@@ -83,6 +84,9 @@ pub struct MediaItem {
     /// where it starts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub poster: Option<Ticks>,
+    /// What was said in the sound, as speech recognition heard it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transcript: Option<Arc<Transcript>>,
 }
 
 /// Which of a file's audio channels, counting from zero, play on the left and the right;

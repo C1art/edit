@@ -95,6 +95,7 @@ impl Edit for CreateMulticam {
             frame_fit: None,
             timecode: None,
             poster: None,
+            transcript: None,
         });
         sequence.fit_nest(id);
         Ok(())

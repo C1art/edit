@@ -102,6 +102,7 @@ impl Sequence {
             frame_fit: None,
             timecode: None,
             poster: None,
+            transcript: None,
         });
         let mut whole = Clip::new(
             ClipId(view.ids.next()),

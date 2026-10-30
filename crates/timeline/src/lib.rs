@@ -73,6 +73,7 @@ mod timecode;
 mod title_motion;
 mod title_template;
 mod track;
+mod transcript;
 mod transition;
 mod validate;
 mod wipe;
@@ -104,25 +105,26 @@ pub use edit::{
     AddSpeedKeyframe, AddSubmix, AddTrack, AddTracks, AdjustClips, ApplyEffect, ApplySpeedRamp,
     ApplyTransitions, Attribute, AutoDuck, AutomateToSequence, AutomatedPiece, BreakoutToMono,
     CaptionsToTitles, ClearMarkers, ClipEffect, ClipSound, Clipboard, CloseGap, CloseGaps,
-    ConsolidateDuplicates, CreateMulticam, DeleteEmptyTracks, DeltaBounds, DuplicateMedia, Edge,
-    EditSubclip, ExtractMarked, FlattenMulticam, FrameFit, GuideEdit, HoldFrame, ImportMedia,
-    InNest, InsertFrameHold, InterpretFootage, IntoSync, JoinThroughEdits, Lift, LiftMarked,
-    MakeOffline, MakeSubclip, MakeSubsequence, MarkerOwner, MergeClips, MoveClips, MoveMode,
-    MoveToBin, NestClips, NestFromMedia, NewTracks, NormalizeClipGains, NudgeClipGain,
-    PasteAttributes, PasteClips, PauseRules, PlaceClip, PlaceClips, PlaceMode, RateStretch, Razor,
-    RazorTarget, ReframeSequence, RelinkMedia, RemixClip, RemoveAttributes, RemoveBin,
-    RemoveMarker, RemoveMedia, RemovePauses, RemoveSpeedKeyframe, RemoveSubmix, RemoveTimeRemap,
-    RemoveTrack, RemoveTransitions, RemoveUnused, RenameBin, RenameClips, RenameMedia, RenameTrack,
-    RenderAndReplace, ReplaceClip, RestoreUnrendered, RippleDelete, RippleTrimToPlayhead, Roll,
-    SetBinSearch, SetCaptions, SetChannelMap, SetClipAudioEffects, SetClipGain, SetClipLabel,
-    SetClipLine, SetClipLook, SetClipPan, SetClipSpeed, SetClipVolume, SetClipsEnabled,
-    SetClipsSound, SetFrameHold, SetGenerator, SetGrouped, SetLinked, SetLinkedSelection,
-    SetMaintainPitch, SetMarks, SetMasterEffects, SetMasterGain, SetMediaLog, SetMediaTimecode,
-    SetPinnedEnds, SetPosterFrame, SetProxy, SetRippleMarkers, SetSegmentSpeed, SetSequenceFormat,
-    SetStartTime, SetSubmix, SetTimeDisplay, SetTimeInterpolation, SetToFrameSize,
-    SetTrackAutomation, SetTrackEffects, SetTrackMix, SetTrackOutput, SetTrackSends,
-    SetTrackSwitch, SetTransition, SimplifySequence, Slide, Slip, SwitchAngle, SyncMethod,
-    SynchronizeClips, TrackSwitch, Trim, TrimMode, TrimToPlayhead, Unlinked, Unnest, UpdateMarker,
+    ConsolidateDuplicates, CreateMulticam, DeleteEmptyTracks, DeleteText, DeltaBounds,
+    DuplicateMedia, Edge, EditSubclip, ExtractMarked, FlattenMulticam, FrameFit, GuideEdit,
+    HoldFrame, ImportMedia, InNest, InsertFrameHold, InterpretFootage, IntoSync, JoinThroughEdits,
+    Lift, LiftMarked, MakeOffline, MakeSubclip, MakeSubsequence, MarkerOwner, MergeClips,
+    MoveClips, MoveMode, MoveToBin, NestClips, NestFromMedia, NewTracks, NormalizeClipGains,
+    NudgeClipGain, PasteAttributes, PasteClips, PauseRules, PlaceClip, PlaceClips, PlaceMode,
+    RateStretch, Razor, RazorTarget, ReframeSequence, RelinkMedia, RemixClip, RemoveAttributes,
+    RemoveBin, RemoveMarker, RemoveMedia, RemovePauses, RemoveSpeedKeyframe, RemoveSubmix,
+    RemoveTimeRemap, RemoveTrack, RemoveTransitions, RemoveUnused, RenameBin, RenameClips,
+    RenameMedia, RenameTrack, RenderAndReplace, ReplaceClip, RestoreUnrendered, RippleDelete,
+    RippleTrimToPlayhead, Roll, SetBinSearch, SetCaptions, SetChannelMap, SetClipAudioEffects,
+    SetClipGain, SetClipLabel, SetClipLine, SetClipLook, SetClipPan, SetClipSpeed, SetClipVolume,
+    SetClipsEnabled, SetClipsSound, SetFrameHold, SetGenerator, SetGrouped, SetLinked,
+    SetLinkedSelection, SetMaintainPitch, SetMarks, SetMasterEffects, SetMasterGain, SetMediaLog,
+    SetMediaTimecode, SetPinnedEnds, SetPosterFrame, SetProxy, SetRippleMarkers, SetSegmentSpeed,
+    SetSequenceFormat, SetStartTime, SetSubmix, SetTimeDisplay, SetTimeInterpolation,
+    SetToFrameSize, SetTrackAutomation, SetTrackEffects, SetTrackMix, SetTrackOutput,
+    SetTrackSends, SetTrackSwitch, SetTranscript, SetTransition, SimplifySequence, Slide, Slip,
+    SwitchAngle, SyncMethod, SynchronizeClips, TrackSwitch, Trim, TrimMode, TrimToPlayhead,
+    Unlinked, Unnest, UpdateMarker,
 };
 pub use edl::to_edl;
 pub use effect::{
@@ -204,6 +206,9 @@ pub use time_display::TimeDisplay;
 pub use timecode::{FrameRate, Timecode, TypedTimecode};
 pub use title_motion::{Scroll, TitleMotion};
 pub use title_template::{TemplateLength, TitleTemplate};
+pub use transcript::{
+    captions_from_words, spoken_words, CaptionRules, SpokenWord, Transcript, Word,
+};
 pub use transition::{nearest_transition_edge, Alignment, Side, Transition, TransitionKind};
 pub use wipe::{Border, Sweep, Wipe, WipePattern};
 pub use xmeml::to_xmeml;

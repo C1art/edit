@@ -78,6 +78,7 @@ pub(crate) fn generated_item(
         frame_fit: None,
         timecode: None,
         poster: None,
+        transcript: None,
     }
 }
 

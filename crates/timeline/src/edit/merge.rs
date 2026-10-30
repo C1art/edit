@@ -97,6 +97,7 @@ impl Edit for MergeClips {
             frame_fit: None,
             timecode: None,
             poster: None,
+            transcript: None,
         });
         sequence.fit_nest(id);
         Ok(())

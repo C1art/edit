@@ -22,22 +22,49 @@ impl Edit for RemovePauses {
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
-        if self.pauses.is_empty() {
-            return Err(TimelineError::NothingToEdit);
-        }
-        let mut relinks = Relinks::default();
-        // From the last, so closing one up leaves those before it where they were.
-        for pause in merge_ranges(self.pauses.clone()).into_iter().rev() {
-            if self.ripple {
-                extract(sequence, &self.tracks, pause)?;
-            } else {
-                for &track in &self.tracks {
-                    ops::clear(sequence, track, pause.clone(), &mut relinks)?;
-                }
+        remove_ranges(sequence, &self.pauses, &self.tracks, self.ripple)
+    }
+}
+
+/// Takes the stretches where words selected in a transcript play out of `tracks`,
+/// closing them up on every sync-locked track.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeleteText {
+    pub spans: Vec<Range<Ticks>>,
+    pub tracks: Vec<TrackRef>,
+}
+
+impl Edit for DeleteText {
+    fn name(&self) -> &'static str {
+        "Delete Text"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        remove_ranges(sequence, &self.spans, &self.tracks, true)
+    }
+}
+
+fn remove_ranges(
+    sequence: &mut Sequence,
+    ranges: &[Range<Ticks>],
+    tracks: &[TrackRef],
+    ripple: bool,
+) -> Result<(), TimelineError> {
+    if ranges.is_empty() {
+        return Err(TimelineError::NothingToEdit);
+    }
+    let mut relinks = Relinks::default();
+    // From the last, so closing one up leaves those before it where they were.
+    for range in merge_ranges(ranges.to_vec()).into_iter().rev() {
+        if ripple {
+            extract(sequence, tracks, range)?;
+        } else {
+            for &track in tracks {
+                ops::clear(sequence, track, range.clone(), &mut relinks)?;
             }
         }
-        Ok(())
     }
+    Ok(())
 }
 
 /// How loud counts as sound, what's too short to count as a pause, and how much quiet
