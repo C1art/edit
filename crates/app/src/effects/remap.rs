@@ -1,7 +1,7 @@
 use egui::DragValue;
 use timeline::{
-    AddSpeedKeyframe, Clip, RemoveSpeedKeyframe, RemoveTimeRemap, SetSegmentSpeed, Speed, Ticks,
-    Timecode,
+    AddSpeedKeyframe, Clip, RemoveSpeedKeyframe, RemoveTimeRemap, SetMaintainPitch,
+    SetSegmentSpeed, Speed, Ticks, Timecode,
 };
 
 use crate::editor::Editor;
@@ -14,6 +14,7 @@ enum Action {
     Remove(Ticks),
     Speed(usize, f64, Change),
     Reset,
+    MaintainPitch(bool),
 }
 
 /// Lists the speed of each stretch of a remapped clip between its keyframes, with the
@@ -50,6 +51,14 @@ pub(super) fn controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
                 });
                 return;
             };
+            let mut maintain = clip.maintain_pitch;
+            if ui
+                .checkbox(&mut maintain, "Maintain Audio Pitch")
+                .on_hover_text("Keep voices natural as the speed changes, instead of as on tape")
+                .changed()
+            {
+                action = Some(Action::MaintainPitch(maintain));
+            }
             let segments = remap.anchors().windows(2).enumerate();
             for (index, pair) in segments {
                 let (from, to) = (pair[0].offset, pair[1].offset);
@@ -106,6 +115,12 @@ pub(super) fn controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
         }
         Action::Reset => {
             editor.apply(RemoveTimeRemap { clip: clip.id });
+        }
+        Action::MaintainPitch(maintain) => {
+            editor.apply(SetMaintainPitch {
+                clip: clip.id,
+                maintain,
+            });
         }
         Action::Speed(index, percent, change) => {
             let Some(speed) = Speed::from_basis_points((percent * 100.0).round() as u64) else {
