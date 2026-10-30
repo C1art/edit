@@ -32,6 +32,7 @@ mod export_loudness;
 mod export_overlays;
 mod export_progress;
 mod export_queue;
+mod export_settings;
 mod export_summary;
 mod export_target;
 mod export_video;

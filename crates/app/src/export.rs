@@ -1,24 +1,20 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use egui::{ComboBox, Key};
-use media::VideoCodec;
+use egui::Key;
 use playback::{ExportEvent, ExportJob, ExportSettings};
 use timeline::{ExportOverlays, Sequence, Ticks};
 
 use crate::editor::Editor;
 use crate::export_captions::{self, CaptionExport};
-use crate::export_format::{ExportFormat, Format, PRESETS};
+use crate::export_format::ExportFormat;
 use crate::export_overlays;
 use crate::export_progress::{self, ExportProgress};
+use crate::export_settings::settings;
 use crate::export_summary::{length_text, span_length, summary};
 use crate::export_target::{Holder, Target, TargetCheck};
-use crate::export_video;
 use crate::path_dialog::FolderUse;
 use crate::project_files::{quoted_name, PathPurpose};
-
-const SAMPLE_RATES: [u32; 2] = [44_100, 48_000];
-const AUDIO_KBPS: [u32; 4] = [128, 192, 256, 320];
 
 struct Running {
     job: ExportJob,
@@ -370,84 +366,6 @@ fn queue_job(editor: &mut Editor) {
     editor.export_queue.add(sequence, settings, summary);
     editor.export_queue.open = true;
     editor.export = None;
-}
-
-/// The export's settings as a grid, with `more` rows below them.
-fn settings(
-    ui: &mut egui::Ui,
-    format: &mut ExportFormat,
-    sequence_size: (u32, u32),
-    more: impl FnOnce(&mut egui::Ui, &ExportFormat),
-) {
-    egui::Grid::new("export settings")
-        .num_columns(2)
-        .spacing([12.0, 6.0])
-        .show(ui, |ui| {
-            ui.label("Preset:");
-            let current = format.preset_name();
-            ComboBox::from_id_salt("export preset")
-                .width(260.0)
-                .selected_text(current.unwrap_or("Custom"))
-                .show_ui(ui, |ui| {
-                    for preset in &PRESETS {
-                        if ui
-                            .selectable_label(current == Some(preset.name), preset.name)
-                            .clicked()
-                        {
-                            *format = ExportFormat {
-                                acceleration: format.acceleration,
-                                loudness: format.loudness,
-                                ..preset.format
-                            };
-                        }
-                    }
-                });
-            ui.end_row();
-            ui.label("Format:");
-            ComboBox::from_id_salt("export format")
-                .width(260.0)
-                .selected_text(format.format.name())
-                .show_ui(ui, |ui| {
-                    for kind in Format::ALL {
-                        ui.selectable_value(&mut format.format, kind, kind.name());
-                    }
-                });
-            ui.end_row();
-            if format.format.has_video() {
-                let codec = format.format.video_codec();
-                let rate_controlled = codec.is_some_and(VideoCodec::is_rate_controlled);
-                export_video::rows(ui, format, sequence_size, rate_controlled);
-            }
-            if format.has_audio() {
-                ui.label("Sample rate:");
-                match format.fixed_sample_rate() {
-                    Some(rate) => {
-                        ui.label(format!("{} kHz", rate as f32 / 1_000.0));
-                    }
-                    None => {
-                        ui.horizontal(|ui| {
-                            for rate in SAMPLE_RATES {
-                                let text = format!("{} kHz", rate as f32 / 1_000.0);
-                                ui.selectable_value(&mut format.sample_rate, rate, text);
-                            }
-                        });
-                    }
-                }
-                ui.end_row();
-                if format.audio_is_lossy() {
-                    ui.label("Audio bitrate:");
-                    ui.horizontal(|ui| {
-                        for kbps in AUDIO_KBPS {
-                            let text = format!("{kbps} kbps");
-                            ui.selectable_value(&mut format.audio_kbps, kbps, text);
-                        }
-                    });
-                    ui.end_row();
-                }
-                crate::export_loudness::row(ui, &mut format.loudness);
-            }
-            more(ui, format);
-        });
 }
 
 fn poll(editor: &mut Editor) {
