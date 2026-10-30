@@ -1,13 +1,19 @@
 use std::ops::Range;
+use std::sync::LazyLock;
 
 use egui::{Align2, Color32, FontId, Painter, Rect, Stroke, StrokeKind};
-use timeline::{is_through_edit, Clip, Sequence, Ticks, Track};
+use timeline::{is_through_edit, Clip, Look, Param, Sequence, Ticks, Track, TrackKind};
 
 use super::layout::{clip_rect, Row};
 use super::scale::TimeScale;
 use super::transition_grip;
 
 const OUT_OF_SYNC: Color32 = Color32::from_rgb(200, 30, 30);
+const APPLIED_EFFECTS: Color32 = Color32::from_rgb(196, 150, 230);
+const CHANGED_PROPERTIES: Color32 = Color32::from_rgb(230, 200, 80);
+
+/// Kept rather than built for every clip painted.
+static UNTOUCHED: LazyLock<Look> = LazyLock::new(Look::default);
 
 /// Premiere's bow-tie at a cut the media plays straight through, which can be joined.
 pub(super) fn through_edit_marks(painter: &Painter, row: &Row, scale: &TimeScale, track: &Track) {
@@ -59,6 +65,36 @@ pub(super) fn sync_badge(
     );
     painter.rect_filled(badge, 2.0, OUT_OF_SYNC);
     painter.galley(badge.min + egui::vec2(3.0, 1.0), text, Color32::WHITE);
+    badge.width() + 2.0
+}
+
+/// Premiere's fx badge after the name's other badges, starting `left` points in: purple
+/// once effects are applied, yellow when only the clip's own properties are changed.
+/// Returns the width it takes.
+pub(super) fn fx_badge(
+    painter: &Painter,
+    rect: Rect,
+    left: f32,
+    kind: TrackKind,
+    clip: &Clip,
+) -> f32 {
+    let fill = match kind {
+        TrackKind::Video if !clip.look.effects.is_empty() => APPLIED_EFFECTS,
+        TrackKind::Video if clip.look != *UNTOUCHED => CHANGED_PROPERTIES,
+        TrackKind::Audio if !clip.audio_effects.is_empty() => APPLIED_EFFECTS,
+        TrackKind::Audio if clip.volume != Param::default() || clip.pan != Param::default() => {
+            CHANGED_PROPERTIES
+        }
+        _ => return 0.0,
+    };
+    let painter = painter.with_clip_rect(rect.shrink(1.0));
+    let text = painter.layout_no_wrap("fx".to_owned(), FontId::proportional(10.0), Color32::BLACK);
+    let badge = Rect::from_min_size(
+        rect.left_top() + egui::vec2(2.0 + left, 2.0),
+        text.size() + egui::vec2(6.0, 2.0),
+    );
+    painter.rect_filled(badge, 2.0, fill);
+    painter.galley(badge.min + egui::vec2(3.0, 1.0), text, Color32::BLACK);
     badge.width() + 2.0
 }
 

@@ -6,7 +6,8 @@ use timeline::{Clip, ClipId, Gain, Label, Sequence, Ticks, Timecode, TrackKind};
 
 use super::clip_art::{self, ClipArea};
 use super::clip_marks::{
-    duplicate_marks, keyframe_marks, speed_marks, sync_badge, through_edit_marks, transition_marks,
+    duplicate_marks, fx_badge, keyframe_marks, speed_marks, sync_badge, through_edit_marks,
+    transition_marks,
 };
 use super::layout::{clip_rect, Row};
 use super::rubber_band;
@@ -331,6 +332,7 @@ pub fn clips(
         let name_left = strip.left().max(visible.min);
         let shown = rect.with_min_x(rect.left().max(visible.min));
         let badge = sync_badge(painter, shown, sequence, states.sync_offsets.get(&clip.id));
+        let badge = badge + fx_badge(painter, shown, badge, row.track.kind, clip);
         painter.with_clip_rect(strip.shrink(1.0)).text(
             egui::pos2(name_left + 5.0 + badge, strip.center().y),
             Align2::LEFT_CENTER,
