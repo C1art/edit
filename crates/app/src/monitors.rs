@@ -261,6 +261,13 @@ fn program(editor: &mut Editor, ui: &mut egui::Ui) {
             ui.checkbox(&mut editor.safe_margins, "Safe Margins");
             ui.checkbox(&mut editor.transparency_grid, "Transparency Grid")
                 .on_hover_text("A checkerboard where nothing covers the frame");
+            let mut ganged = editor.ganged;
+            let toggle = ui
+                .checkbox(&mut ganged, "Gang Source and Program")
+                .on_hover_text("Moving either playhead moves the other by as much");
+            if toggle.clicked() {
+                editor.toggle_gang();
+            }
             ui.checkbox(
                 &mut editor.dropped_frame_indicator,
                 "Show Dropped Frame Indicator",

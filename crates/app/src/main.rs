@@ -35,6 +35,7 @@ mod find_dialog;
 mod fit_clip;
 mod full_screen;
 mod gain_dialog;
+mod gang;
 mod gap_navigation;
 mod gpu_setup;
 mod graphics_tools;

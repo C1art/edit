@@ -58,6 +58,8 @@ pub struct Editor {
     /// Outlines the action and title safe areas over the program picture.
     pub(crate) safe_margins: bool,
     pub(crate) transparency_grid: bool,
+    pub(crate) ganged: bool,
+    pub(crate) gang: Option<crate::gang::Gang>,
     pub(crate) dropped_frame_indicator: bool,
     pub(crate) full_screen: bool,
     pub(crate) transition_defaults: crate::transition_defaults::TransitionDefaults,
@@ -233,6 +235,8 @@ impl Editor {
             selection_followed: None,
             safe_margins: false,
             transparency_grid: false,
+            ganged: false,
+            gang: None,
             dropped_frame_indicator: false,
             full_screen: false,
             transition_defaults: crate::transition_defaults::TransitionDefaults::STANDARD,
@@ -476,6 +480,7 @@ impl eframe::App for Editor {
         self.update_window();
         self.sync_program();
         self.update_viewers(&ctx);
+        self.follow_gang();
         self.follow_playhead_with_selection();
 
         self.lay_out_panels(ui);
