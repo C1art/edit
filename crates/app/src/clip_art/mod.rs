@@ -47,6 +47,7 @@ pub struct ClipArt {
     frame: u64,
     pub show_waveforms: bool,
     pub show_thumbnails: bool,
+    pub show_duplicates: bool,
     /// Media whose files are missing, drawn as offline instead.
     pub offline: HashSet<SourceId>,
 }
@@ -62,6 +63,7 @@ impl ClipArt {
             frame: 0,
             show_waveforms: true,
             show_thumbnails: true,
+            show_duplicates: false,
             offline: HashSet::new(),
         }
     }

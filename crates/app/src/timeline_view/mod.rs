@@ -298,7 +298,7 @@ impl TimelineView {
             .as_ref()
             .filter(|point| point.is_on(sequence));
         let shown = painter.clip_rect().y_range();
-        let states = paint::ClipStates::new(sequence, &self.selection);
+        let states = paint::ClipStates::new(sequence, &self.selection, art);
         for row in rows.iter().filter(|row| row.y_range().intersects(shown)) {
             paint::row_background(
                 &painter,

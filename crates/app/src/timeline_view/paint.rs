@@ -1,11 +1,12 @@
 use std::collections::{HashMap, HashSet};
+use std::ops::Range;
 
 use egui::{Align2, Color32, FontId, Painter, Rect, Stroke, StrokeKind};
 use timeline::{Clip, ClipId, Gain, Label, Sequence, Ticks, Timecode, TrackKind};
 
 use super::clip_art::{self, ClipArea};
 use super::clip_marks::{
-    keyframe_marks, speed_marks, sync_badge, through_edit_marks, transition_marks,
+    duplicate_marks, keyframe_marks, speed_marks, sync_badge, through_edit_marks, transition_marks,
 };
 use super::layout::{clip_rect, Row};
 use super::rubber_band;
@@ -28,13 +29,19 @@ const MIN_LABEL_SPACING: f32 = 90.0;
 pub struct ClipStates {
     selected: HashSet<ClipId>,
     sync_offsets: HashMap<ClipId, Ticks>,
+    duplicates: HashMap<ClipId, Vec<Range<Ticks>>>,
 }
 
 impl ClipStates {
-    pub fn new(sequence: &Sequence, selection: &[ClipId]) -> Self {
+    pub fn new(sequence: &Sequence, selection: &[ClipId], art: &ClipArt) -> Self {
         Self {
             selected: selection.iter().copied().collect(),
             sync_offsets: sequence.sync_offsets(),
+            duplicates: if art.show_duplicates {
+                sequence.duplicate_frames()
+            } else {
+                HashMap::new()
+            },
         }
     }
 }
@@ -272,6 +279,9 @@ pub fn clips(
             TrackKind::Video => {
                 keyframe_marks(painter, rect, scale, clip);
                 speed_marks(painter, rect, scale, clip);
+                if let Some(ranges) = states.duplicates.get(&clip.id) {
+                    duplicate_marks(painter, body, scale, clip, ranges);
+                }
                 if rubber_band::opacity_shown(rect) {
                     let envelope = rubber_band::Envelope::opacity(clip);
                     rubber_band::paint(painter, rect.shrink(1.0), scale, &envelope);

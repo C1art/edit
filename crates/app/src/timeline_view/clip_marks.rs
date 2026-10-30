@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use egui::{Align2, Color32, FontId, Painter, Rect, Stroke, StrokeKind};
 use timeline::{cut_window, is_through_edit, Clip, Sequence, Ticks, Track};
 
@@ -143,5 +145,37 @@ pub(super) fn transition_marks(
             FontId::proportional(9.0),
             Color32::WHITE,
         );
+    }
+}
+
+/// Colors told apart at a glance, one per source, as Premiere's duplicate frame markers.
+const DUPLICATE_COLORS: [Color32; 8] = [
+    Color32::from_rgb(235, 90, 90),
+    Color32::from_rgb(240, 170, 60),
+    Color32::from_rgb(230, 220, 80),
+    Color32::from_rgb(120, 210, 90),
+    Color32::from_rgb(70, 200, 200),
+    Color32::from_rgb(90, 140, 240),
+    Color32::from_rgb(170, 110, 230),
+    Color32::from_rgb(230, 110, 190),
+];
+const DUPLICATE_HEIGHT: f32 = 3.0;
+
+/// A strip along the foot of `body` over the `ranges` of `clip` that show footage
+/// shown elsewhere in the sequence.
+pub(super) fn duplicate_marks(
+    painter: &Painter,
+    body: Rect,
+    scale: &TimeScale,
+    clip: &Clip,
+    ranges: &[Range<Ticks>],
+) {
+    let palette_index = (clip.source.0 % DUPLICATE_COLORS.len() as u64) as usize;
+    let color = DUPLICATE_COLORS[palette_index];
+    let foot = body.bottom() - 1.0;
+    for range in ranges {
+        let across = scale.x(range.start).max(body.left())..=scale.x(range.end).min(body.right());
+        let strip = Rect::from_x_y_ranges(across, foot - DUPLICATE_HEIGHT..=foot);
+        painter.rect_filled(strip, 0.0, color);
     }
 }

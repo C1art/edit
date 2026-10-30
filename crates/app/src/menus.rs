@@ -372,6 +372,13 @@ pub fn timeline_toolbar(editor: &mut Editor, ui: &mut egui::Ui) {
                     "Show Video Thumbnails",
                 );
                 ui.checkbox(&mut editor.clip_art.show_waveforms, "Show Audio Waveforms");
+                ui.checkbox(
+                    &mut editor.clip_art.show_duplicates,
+                    "Show Duplicate Frame Markers",
+                )
+                .on_hover_text(
+                    "A colored strip where a clip shows footage another clip also shows",
+                );
             });
         });
         theme::segmented(ui, |ui| {
