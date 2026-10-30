@@ -2,6 +2,7 @@ mod blur_echo;
 mod clip_wipes;
 mod color;
 mod controls;
+mod crop_overlay;
 mod curves;
 mod detail;
 mod edges;
@@ -105,6 +106,9 @@ pub struct EffectControls {
     keys: KeySelection,
     /// The property of several clips being dragged together, and its value.
     together: Option<(together::Property, f32)>,
+    /// Whether the Crop section is open, which turns the program picture's handles to
+    /// cropping.
+    cropping: bool,
     /// Whether the source monitor shows where the selected clip's picture starts and ends.
     ken_burns: bool,
 }
@@ -227,6 +231,9 @@ fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip, section
         }
     };
     editor.effects.keys = std::mem::take(&mut output.keys);
+    if sections == Sections::All {
+        editor.effects.cropping = output.cropping;
+    }
     if output.change.is_some() {
         let timebase = editor.timeline.sequence().timebase;
         stabilizer::retune(&mut look, timebase);

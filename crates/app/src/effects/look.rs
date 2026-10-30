@@ -36,6 +36,8 @@ pub(super) struct Output {
     /// Ken Burns boxes turned on or off.
     pub(super) ken_burns: Option<bool>,
     pub(super) swap_ken_burns: bool,
+    /// Whether the Crop section is open.
+    pub(super) cropping: bool,
 }
 
 /// Edits `look` in `rows`, of a clip among `video_tracks` video tracks.
@@ -124,7 +126,7 @@ pub(super) fn controls(
                 super::masks::controls(ui, &mut rows, MaskOwner::Opacity, &mut look.masks);
             }
         });
-    egui::CollapsingHeader::new("Crop").show(ui, |ui| {
+    let crop = egui::CollapsingHeader::new("Crop").show(ui, |ui| {
         let crop = &mut look.crop;
         for (label, side) in [
             ("Left", &mut crop.left),
@@ -135,6 +137,7 @@ pub(super) fn controls(
             rows.param(ui, label, side, 0.0..=100.0, "%");
         }
     });
+    rows.output.cropping = crop.fully_open();
     egui::CollapsingHeader::new("Effects")
         .default_open(true)
         .show(ui, |ui| {
@@ -203,6 +206,7 @@ impl Rows {
                 keys,
                 ken_burns: None,
                 swap_ken_burns: false,
+                cropping: false,
             },
         }
     }

@@ -56,6 +56,9 @@ pub fn motion_overlay(editor: &mut Editor, ui: &egui::Ui, area: egui::Rect) {
     if editor.side_tab != SideTab::EffectControls {
         return;
     }
+    if editor.effects.cropping {
+        return super::crop_overlay::crop_overlay(editor, ui, area);
+    }
     let Some(clip) = moved_clip(editor) else {
         return;
     };
@@ -203,7 +206,7 @@ pub fn motion_overlay(editor: &mut Editor, ui: &egui::Ui, area: egui::Rect) {
 }
 
 /// The selected video clip under the playhead, unless its masks take the handles.
-fn moved_clip(editor: &Editor) -> Option<Clip> {
+pub(super) fn moved_clip(editor: &Editor) -> Option<Clip> {
     let sequence = editor.timeline.sequence();
     let playhead = editor.playhead();
     let (_, clip) = editor
