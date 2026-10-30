@@ -11,6 +11,7 @@ use crate::monitors;
 use crate::panels::MediaTab;
 use crate::project_store::Setting;
 use crate::theme;
+use crate::window_state::SMALLEST;
 use maximize::Pane;
 
 pub(crate) use menu::{dialog, window_menu, workspace_bar, NamingWorkspace};
@@ -157,7 +158,7 @@ impl Workspaces {
         index < BUILT_IN.len()
     }
 
-    fn current(&self) -> Layout {
+    pub(crate) fn current(&self) -> Layout {
         self.list[self.active].current
     }
 
@@ -336,7 +337,11 @@ impl Editor {
             media_tab: self.media_tab,
             side_tab: self.side_tab,
         };
-        if measured != layout {
+        // A window below its smallest size, as a minimized one is on Windows, crushes the
+        // panels against their least sizes, which says nothing of the layout wanted.
+        let window = ui.ctx().content_rect().size() + Vec2::splat(1.0);
+        let squeezed = window.x < SMALLEST.x || window.y < SMALLEST.y;
+        if measured != layout && !squeezed {
             *self.workspaces.current_mut() = measured;
             self.workspaces.unsaved = true;
         }

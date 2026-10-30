@@ -4,7 +4,7 @@ use crate::editor::Editor;
 use crate::project_store::Setting;
 
 /// Below this the panels no longer fit side by side.
-const SMALLEST: Vec2 = Vec2::new(960.0, 540.0);
+pub(crate) const SMALLEST: Vec2 = Vec2::new(960.0, 540.0);
 
 /// The window's size when not maximized, and whether it was, so it opens as it was left.
 #[derive(Debug, Clone, Copy, PartialEq)]

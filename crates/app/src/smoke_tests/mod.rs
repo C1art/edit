@@ -2,6 +2,7 @@
 //! takes it down.
 
 mod commands;
+mod layout;
 mod monkey;
 mod soak;
 
@@ -60,6 +61,7 @@ pub(super) fn gpu() -> egui_wgpu::RenderState {
 pub(super) struct Screen {
     frame: eframe::Frame,
     time: f64,
+    pub(super) size: egui::Vec2,
 }
 
 impl Default for Screen {
@@ -67,6 +69,7 @@ impl Default for Screen {
         Self {
             frame: eframe::Frame::_new_kittest(),
             time: 0.0,
+            size: SCREEN,
         }
     }
 }
@@ -86,7 +89,7 @@ impl Screen {
             })
             .unwrap_or_default();
         let input = egui::RawInput {
-            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, SCREEN)),
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, self.size)),
             time: Some(self.time),
             predicted_dt: Self::FRAME_SECONDS,
             events: std::iter::once(egui::Event::ModifiersChanged(modifiers))
