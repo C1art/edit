@@ -1,4 +1,5 @@
 use super::*;
+use crate::ChannelMap;
 
 fn relink(source: SourceId, path: &str, duration: i64) -> RelinkMedia {
     RelinkMedia {
@@ -80,6 +81,39 @@ fn a_duplicate_follows_its_original_under_a_new_id_and_undoes() {
     assert_ne!(media[1].id, source);
     timeline.undo();
     assert_eq!(timeline.sequence().media.len(), 1);
+}
+
+#[test]
+fn breakout_to_mono_adds_an_item_playing_each_channel_alone() {
+    let (mut timeline, source) = timeline();
+    assert_eq!(
+        timeline.apply(BreakoutToMono {
+            source,
+            channels: 1
+        }),
+        Err(TimelineError::NothingToEdit)
+    );
+    timeline
+        .apply(BreakoutToMono {
+            source,
+            channels: 2,
+        })
+        .unwrap();
+    let media = &timeline.sequence().media;
+    let mono: Vec<_> = media[1..]
+        .iter()
+        .map(|item| (item.name.as_str(), item.channel_map, item.video.is_some()))
+        .collect();
+    let map = |channel| {
+        Some(ChannelMap {
+            left: channel,
+            right: channel,
+        })
+    };
+    assert_eq!(
+        mono,
+        [("a Left", map(0), false), ("a Right", map(1), false)]
+    );
 }
 
 #[test]

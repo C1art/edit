@@ -120,6 +120,9 @@ impl Pool<'_> {
         if item.has_audio && item.is_file() && ui.button("Modify Audio Channels…").clicked() {
             self.action = Some(PoolAction::AudioChannels(item.id));
         }
+        if item.has_audio && item.is_file() && ui.button("Breakout to Mono").clicked() {
+            self.action = Some(PoolAction::BreakoutToMono(item.id));
+        }
         if item.video.is_some() && item.is_file() {
             if ui.button("Interpret Footage…").clicked() {
                 self.action = Some(PoolAction::Interpret(item.id));

@@ -60,6 +60,8 @@ pub struct Editor {
     pub(crate) transparency_grid: bool,
     pub(crate) ganged: bool,
     pub(crate) gang: Option<crate::gang::Gang>,
+    /// Items waiting on their files to say how many channels to break out.
+    pub(crate) breakouts: Vec<timeline::SourceId>,
     pub(crate) dropped_frame_indicator: bool,
     pub(crate) full_screen: bool,
     pub(crate) transition_defaults: crate::transition_defaults::TransitionDefaults,
@@ -238,6 +240,7 @@ impl Editor {
             transparency_grid: false,
             ganged: false,
             gang: None,
+            breakouts: Vec::new(),
             dropped_frame_indicator: false,
             full_screen: false,
             transition_defaults: crate::transition_defaults::TransitionDefaults::STANDARD,
@@ -483,6 +486,7 @@ impl eframe::App for Editor {
         self.sync_program();
         self.update_viewers(&ctx);
         self.follow_gang();
+        self.follow_breakouts(&ctx);
         self.follow_playhead_with_selection();
 
         self.lay_out_panels(ui);

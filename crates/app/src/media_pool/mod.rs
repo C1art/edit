@@ -38,6 +38,8 @@ pub enum PoolAction {
     Interpret(SourceId),
     /// Asks which of the file's channels play on each side.
     AudioChannels(SourceId),
+    /// Adds a mono item for each of the file's channels.
+    BreakoutToMono(SourceId),
     /// Asks for files to import.
     Import,
     /// Adds a bin inside the given one, or at the top, and starts naming it.

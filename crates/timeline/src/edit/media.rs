@@ -233,3 +233,53 @@ pub(super) fn renumber(nest: &mut Nest, ids: &mut IdGenerator) {
         }
     }
 }
+
+/// Adds a mono item for each of a file's `channels` after it, as Premiere's Breakout to
+/// Mono does so each microphone can be placed and mixed on its own.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BreakoutToMono {
+    pub source: SourceId,
+    pub channels: u16,
+}
+
+impl Edit for BreakoutToMono {
+    fn name(&self) -> &'static str {
+        "Breakout to Mono"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let index = sequence
+            .media
+            .iter()
+            .position(|item| item.id == self.source)
+            .ok_or(TimelineError::MediaNotFound(self.source))?;
+        let original = &sequence.media[index];
+        if !original.has_audio || !original.is_file() || self.channels < 2 {
+            return Err(TimelineError::NothingToEdit);
+        }
+        let mono: Vec<_> = (0..self.channels)
+            .map(|channel| MediaItem {
+                id: SourceId(sequence.ids.next()),
+                name: format!("{} {}", original.name, channel_name(channel, self.channels)),
+                video: None,
+                proxy: None,
+                frame_fit: None,
+                channel_map: Some(ChannelMap {
+                    left: channel,
+                    right: channel,
+                }),
+                ..original.clone()
+            })
+            .collect();
+        Arc::make_mut(&mut sequence.media).splice(index + 1..index + 1, mono);
+        Ok(())
+    }
+}
+
+fn channel_name(channel: u16, channels: u16) -> String {
+    match (channel, channels) {
+        (0, 2) => "Left".to_owned(),
+        (1, 2) => "Right".to_owned(),
+        _ => format!("Channel {}", channel + 1),
+    }
+}

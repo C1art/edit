@@ -59,8 +59,15 @@ impl Default for MetadataPanel {
     }
 }
 
+/// How many channels a file's sound has, as far as reading its headers has got.
+pub(crate) enum Channels {
+    Reading,
+    Read(u16),
+    Failed(String),
+}
+
 impl MetadataPanel {
-    fn poll(&mut self) {
+    pub(crate) fn poll(&mut self) {
         for (path, probed) in self.receiver.try_iter() {
             let probe = match probed {
                 Ok((info, bytes)) => Probe::Read { info, bytes },
@@ -87,6 +94,22 @@ impl MetadataPanel {
                 Err(error) => Probe::Failed(error.to_string()),
             }
         })
+    }
+
+    /// The channels of the file's first sound stream, reading its headers if not yet read.
+    pub(crate) fn audio_channels(&mut self, path: &Path) -> Channels {
+        match self.probe(path) {
+            Probe::Reading => Channels::Reading,
+            Probe::Read { info, .. } => info
+                .streams
+                .iter()
+                .filter(|stream| stream.kind == StreamKind::Audio)
+                .find_map(|stream| stream.channels)
+                .map_or(Channels::Read(0), |channels| {
+                    Channels::Read(u16::try_from(channels).unwrap_or(u16::MAX))
+                }),
+            Probe::Failed(error) => Channels::Failed(error.clone()),
+        }
     }
 
     /// Follows whichever of the project and timeline selections changed last.

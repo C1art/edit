@@ -3,6 +3,7 @@ mod audio_meters;
 mod audio_switch;
 mod automate_dialog;
 mod autosave;
+mod breakout;
 mod captions;
 mod channels_dialog;
 mod clip_art;
