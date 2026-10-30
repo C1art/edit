@@ -108,6 +108,9 @@ impl Pool<'_> {
         if item.is_file() && !item.offline && ui.button("Reveal in Explorer").clicked() {
             self.action = Some(PoolAction::RevealInExplorer(item.id));
         }
+        if item.is_file() && !item.offline && ui.button("Edit Original").clicked() {
+            self.action = Some(PoolAction::EditOriginal(item.id));
+        }
         if item.is_file() && !item.offline && ui.button("Make Offline").clicked() {
             self.action = Some(PoolAction::MakeOffline(to_take_offline));
         }

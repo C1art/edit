@@ -18,6 +18,7 @@ impl Editor {
         match action {
             PoolAction::Open(id) => self.open_source(id),
             PoolAction::RevealInExplorer(id) => self.reveal_in_explorer(id),
+            PoolAction::EditOriginal(id) => self.edit_original(id),
             PoolAction::OpenNest(id) => self.enter_nest(id, Ticks::ZERO),
             PoolAction::Remove(id) => self.remove_media(id),
             PoolAction::Duplicate(source) => {

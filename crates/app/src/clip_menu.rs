@@ -138,6 +138,9 @@ fn on_selection(editor: &mut Editor, ui: &mut Ui) {
         if on_disk && ui.button("Reveal in Explorer").clicked() {
             editor.reveal_in_explorer(source);
         }
+        if on_disk && ui.button("Edit Original").clicked() {
+            editor.edit_original(source);
+        }
     }
     if let Some(clip) = kept_title(editor) {
         if ui.button("Save as Title Template…").clicked() {

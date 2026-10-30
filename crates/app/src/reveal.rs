@@ -1,7 +1,7 @@
-//! Shows where a clip's media comes from: its file in the system's file manager, or its
-//! item in the project panel.
+//! Shows where a clip's media comes from: its file in the system's file manager or the
+//! application that opens it, or its item in the project panel.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use timeline::SourceId;
@@ -10,25 +10,39 @@ use crate::editor::Editor;
 
 impl Editor {
     pub(crate) fn reveal_in_explorer(&mut self, source: SourceId) {
-        let sequence = self.timeline.sequence();
-        let Some(item) = sequence
+        if let Some(path) = self.file_of(source) {
+            self.start(file_manager(&path), "Cannot open the file's folder");
+        }
+    }
+
+    /// Opens `source`'s file in the application the system opens it with, as Premiere's
+    /// Edit Original does.
+    pub(crate) fn edit_original(&mut self, source: SourceId) {
+        if let Some(path) = self.file_of(source) {
+            self.start(default_application(&path), "Cannot open the file");
+        }
+    }
+
+    fn file_of(&self, source: SourceId) -> Option<PathBuf> {
+        self.timeline
+            .sequence()
             .media
             .iter()
             .find(|item| item.id == source && item.is_file())
-        else {
-            return;
-        };
-        let mut file_manager = file_manager(&item.path);
+            .map(|item| item.path.clone())
+    }
+
+    fn start(&mut self, mut command: Command, failure: &str) {
         // Starting a process can stall on a busy system, so it happens off the UI thread.
         let spawned = std::thread::Builder::new()
             .name("reveal".to_owned())
             .spawn(move || {
-                if let Ok(mut shown) = file_manager.spawn() {
+                if let Ok(mut shown) = command.spawn() {
                     let _ = shown.wait();
                 }
             });
         if let Err(error) = spawned {
-            self.notice(format!("Cannot open the file's folder: {error}"));
+            self.notice(format!("{failure}: {error}"));
         }
     }
 
@@ -59,5 +73,20 @@ fn file_manager(path: &Path) -> Command {
 fn file_manager(path: &Path) -> Command {
     let mut command = Command::new("xdg-open");
     command.arg(path.parent().unwrap_or(path));
+    command
+}
+
+#[cfg(windows)]
+fn default_application(path: &Path) -> Command {
+    use std::os::windows::process::CommandExt;
+    let mut command = Command::new("explorer");
+    command.raw_arg(format!("\"{}\"", path.display()));
+    command
+}
+
+#[cfg(not(windows))]
+fn default_application(path: &Path) -> Command {
+    let mut command = Command::new("xdg-open");
+    command.arg(path);
     command
 }

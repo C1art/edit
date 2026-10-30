@@ -55,6 +55,8 @@ pub enum PoolAction {
     /// Makes a sequence holding all of the item and opens it.
     NewSequenceFrom(SourceId),
     RevealInExplorer(SourceId),
+    /// Opens the item's file in the application the system opens it with.
+    EditOriginal(SourceId),
     /// Asks how to lay the selected items into the sequence.
     Automate,
 }
