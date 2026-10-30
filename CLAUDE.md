@@ -13,6 +13,7 @@ A non-linear video editor for Windows 11, built in Rust. The end goal is feature
 - Audio: `cpal` for output, `rubato` for resampling
 - Concurrency: `crossbeam` (channels, queues)
 - Persistence: `serde`
+- Windows APIs: `windows` (D3D12/DXGI texture sharing and other Win32 calls), as a `cfg(windows)` dependency
 - Ask before adding any dependency not listed here.
 
 ## Structure
@@ -35,7 +36,7 @@ Cargo workspace. Dependencies flow downward only; `timeline` and `project` never
 - Test: `cargo test --workspace`
 - Lint: `cargo clippy --workspace --all-targets -- -D warnings`
 - Format: `cargo fmt --all`
-- FFmpeg: set `FFMPEG_DIR` to a shared FFmpeg build before building
+- FFmpeg: set `FFMPEG_DIR` to a shared FFmpeg build (8.1 or newer; the Windows D3D12 decode path needs its headers) before building
 
 ## Verification
 
