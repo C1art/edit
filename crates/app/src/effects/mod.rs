@@ -148,8 +148,12 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
         ui.spacing_mut().indent = 10.0;
         if let Some((_, clip)) = &picture {
             picture_controls(editor, ui, clip, Sections::All);
-            remap::controls(editor, ui, clip);
-            responsive::controls(editor, ui, clip);
+            if !editor.simple() || clip.remap.is_some() {
+                remap::controls(editor, ui, clip);
+            }
+            if !editor.simple() {
+                responsive::controls(editor, ui, clip);
+            }
         }
         if let Some((_, clip)) = &sound {
             volume_controls(editor, ui, clip);
@@ -203,6 +207,7 @@ fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip, section
     rows.reframing = editor.reframe_analysis_progress(clip.id);
     rows.tracking = editor.mask_tracking(clip.id);
     rows.ken_burns = editor.effects.ken_burns;
+    rows.simple = editor.simple();
     rows.tone = match (editor.analyzing_tone(clip.id), &editor.comparison) {
         (true, _) => ToneState::Analyzing,
         (false, Some(_)) => ToneState::ReadyToMatch,

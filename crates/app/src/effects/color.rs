@@ -33,7 +33,9 @@ pub enum LutSlot {
 }
 
 pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorrection) {
-    lut_row(ui, rows, "Input LUT", &mut color.input_lut, LutSlot::Input);
+    if !rows.simple || color.input_lut.is_some() {
+        lut_row(ui, rows, "Input LUT", &mut color.input_lut, LutSlot::Input);
+    }
     ui.label(RichText::new("White Balance").weak());
     rows.param(
         ui,
@@ -53,7 +55,9 @@ pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorr
     rows.param(ui, "Blacks", &mut color.blacks, -100.0..=100.0, "");
     ui.label(RichText::new("Creative").weak());
     look_presets(ui, rows, color);
-    lut_row(ui, rows, "Look", &mut color.look, LutSlot::Look);
+    if !rows.simple {
+        lut_row(ui, rows, "Look", &mut color.look, LutSlot::Look);
+    }
     if color.look.is_some() {
         rows.param(ui, "Intensity", &mut color.look_intensity, 0.0..=100.0, "%");
     }
@@ -61,6 +65,14 @@ pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorr
     rows.param(ui, "Sharpen", &mut color.sharpen, 0.0..=100.0, "");
     rows.param(ui, "Vibrance", &mut color.vibrance, -100.0..=100.0, "");
     rows.param(ui, "Saturation", &mut color.saturation, 0.0..=200.0, "%");
+    if !rows.simple {
+        grading(ui, rows, color);
+    }
+    egui::CollapsingHeader::new("Vignette").show(ui, |ui| vignette(ui, rows, &mut color.vignette));
+}
+
+/// Curves, wheels and secondaries, for finer grading than a first edit needs.
+fn grading(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorrection) {
     split_tone(ui, rows, color);
     egui::CollapsingHeader::new("RGB Curves").show(ui, |ui| {
         super::curves::controls(ui, rows, &mut color.curves);
@@ -88,7 +100,6 @@ pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorr
         });
     }
     super::secondary::controls(ui, rows, &mut color.secondary);
-    egui::CollapsingHeader::new("Vignette").show(ui, |ui| vignette(ui, rows, &mut color.vignette));
 }
 
 fn look_presets(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorrection) {

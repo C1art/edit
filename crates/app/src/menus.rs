@@ -13,310 +13,260 @@ use crate::timeline_view::Tool;
 
 pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
     MenuBar::new().ui(ui, |ui| {
-        crate::theme::menu(ui, "File", |ui| {
-            let new =
-                Button::new("New Project").shortcut_text(editor.keymap.label(Command::NewProject));
-            if ui.add(new).clicked() {
-                editor.discard_then(AfterDiscard::NewProject);
-            }
-            let open = Button::new("Open Project…")
-                .shortcut_text(editor.keymap.label(Command::OpenProject));
-            if ui.add(open).clicked() {
-                editor.prompt_path(PathPurpose::OpenProject);
-            }
-            crate::recent_projects::menu(editor, ui);
-            let save = Button::new("Save").shortcut_text(editor.keymap.label(Command::Save));
-            if ui.add_enabled(editor.is_dirty(), save).clicked() {
-                editor.save_project();
-            }
-            let save_as =
-                Button::new("Save As…").shortcut_text(editor.keymap.label(Command::SaveAs));
-            if ui.add(save_as).clicked() {
-                editor.prompt_path(PathPurpose::SaveProject);
-            }
-            if ui.button("Save a Copy…").clicked() {
-                editor.prompt_path(PathPurpose::SaveCopy);
-            }
-            let revert = editor.project_path.is_some() && editor.is_dirty();
-            if ui.add_enabled(revert, Button::new("Revert")).clicked() {
-                editor.confirm_revert = true;
-            }
-            ui.separator();
-            let import = Button::new("Import…").shortcut_text(editor.keymap.label(Command::Import));
-            if ui.add(import).clicked() {
-                editor.prompt_path(PathPurpose::Import);
-            }
-            ui.menu_button("New", |ui| {
-                let title =
-                    Button::new("Title").shortcut_text(editor.keymap.label(Command::NewTitle));
-                if ui.add(title).clicked() {
-                    placing::new_generated(editor, Generator::Title(Title::default()));
-                }
-                crate::title_templates::menu(ui, editor);
-                if ui.button("Sequence").clicked() {
-                    editor.new_sequence();
-                }
-                if ui.button("Color Matte").clicked() {
-                    let color = Rgb::new(32, 32, 48);
-                    placing::new_generated(editor, Generator::ColorMatte { color });
-                }
-                if ui.button("Adjustment Layer").clicked() {
-                    placing::new_generated(editor, Generator::AdjustmentLayer);
-                }
-                ui.separator();
-                for synthetic in [
-                    Generator::BarsAndTone,
-                    Generator::BlackVideo,
-                    Generator::TransparentVideo,
-                    Generator::CountingLeader(Default::default()),
-                ] {
-                    if ui.button(synthetic.kind_name()).clicked() {
-                        placing::new_generated(editor, synthetic);
-                    }
-                }
-                ui.separator();
-                for kind in ShapeKind::ALL {
-                    if ui.button(kind.name()).clicked() {
-                        placing::new_generated(editor, Generator::Shape(Shape::new(kind)));
-                    }
-                }
-            });
-            let has_program = editor.timeline.sequence().duration() > Ticks::ZERO;
-            let export = Button::new("Export Media…")
-                .shortcut_text(editor.keymap.label(Command::ExportMedia));
-            if ui.add_enabled(has_program, export).clicked() {
-                crate::export::open(editor);
-            }
-            if ui.button("Export Queue…").clicked() {
-                editor.export_queue.open = true;
-            }
-            let frame = Button::new("Export Frame…")
-                .shortcut_text(editor.keymap.label(Command::ExportFrame));
-            if ui.add_enabled(has_program, frame).clicked() {
-                editor.prompt_path(PathPurpose::ExportFrame);
-            }
-            if ui
-                .add_enabled(has_program, Button::new("Export EDL…"))
-                .clicked()
-            {
-                editor.prompt_path(PathPurpose::Export(Interchange::Edl));
-            }
-            if ui
-                .add_enabled(has_program, Button::new("Export Final Cut Pro XML…"))
-                .clicked()
-            {
-                editor.prompt_path(PathPurpose::Export(Interchange::FinalCutXml));
-            }
-            let has_markers = !editor.timeline.sequence().markers.is_empty();
-            if ui
-                .add_enabled(has_markers, Button::new("Export Markers…"))
-                .clicked()
-            {
-                editor.prompt_path(PathPurpose::Export(Interchange::MarkersCsv));
-            }
-            ui.separator();
-            let has_media = !editor.timeline.sequence().media.is_empty();
-            let manager = Button::new("Project Manager…");
-            if ui.add_enabled(has_media, manager).clicked() {
-                editor.open_project_manager();
-            }
-            ui.separator();
-            let quit = Button::new("Quit").shortcut_text(editor.keymap.label(Command::Quit));
-            if ui.add(quit).clicked() {
-                ui.ctx().send_viewport_cmd(ViewportCommand::Close);
+        if editor.simple() {
+            crate::simple_menus::menus(editor, ui);
+        } else {
+            advanced_menus(editor, ui);
+        }
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            crate::ui_mode::switch(editor, ui);
+            if !editor.simple() {
+                crate::workspaces::workspace_bar(editor, ui);
             }
         });
-        crate::theme::menu(ui, "Edit", |ui| {
-            let undo = editor
-                .timeline
-                .undo_name()
-                .map_or("Undo".to_owned(), |name| format!("Undo {name}"));
-            let undo = Button::new(undo).shortcut_text(editor.keymap.label(Command::Undo));
-            if ui
-                .add_enabled(editor.timeline.undo_name().is_some(), undo)
-                .clicked()
-            {
-                editor.undo();
-            }
-            let redo = editor
-                .timeline
-                .redo_name()
-                .map_or("Redo".to_owned(), |name| format!("Redo {name}"));
-            let redo = Button::new(redo).shortcut_text(editor.keymap.label(Command::Redo));
-            if ui
-                .add_enabled(editor.timeline.redo_name().is_some(), redo)
-                .clicked()
-            {
-                editor.redo();
-            }
-            ui.separator();
-            let selected = !editor.view.selection.is_empty();
-            let cut = Button::new("Cut").shortcut_text(editor.keymap.label(Command::Cut));
-            if ui.add_enabled(selected, cut).clicked() {
-                editor.cut();
-            }
-            let copy = Button::new("Copy").shortcut_text(editor.keymap.label(Command::Copy));
-            if ui.add_enabled(selected, copy).clicked() {
-                editor.copy();
-            }
-            let can_paste = editor.clipboard.is_some();
-            let paste = Button::new("Paste").shortcut_text(editor.keymap.label(Command::Paste));
-            if ui.add_enabled(can_paste, paste).clicked() {
-                editor.paste(PlaceMode::Overwrite);
-            }
-            let paste_insert = Button::new("Paste Insert")
-                .shortcut_text(editor.keymap.label(Command::PasteInsert));
-            if ui.add_enabled(can_paste, paste_insert).clicked() {
-                editor.paste(PlaceMode::Insert);
-            }
-            let paste_attributes = Button::new("Paste Attributes…")
-                .shortcut_text(editor.keymap.label(Command::PasteAttributes));
-            if ui
-                .add_enabled(can_paste && selected, paste_attributes)
-                .clicked()
-            {
-                editor.paste_attributes();
-            }
-            let remove_attributes = Button::new("Remove Attributes…");
-            if ui.add_enabled(selected, remove_attributes).clicked() {
-                editor.remove_attributes();
-            }
-            ui.separator();
-            let removable = selected || editor.view.gap.is_some();
-            let clear = Button::new("Clear").shortcut_text(editor.keymap.label(Command::Clear));
-            if ui.add_enabled(removable, clear).clicked() {
-                editor.lift();
-            }
-            let ripple_delete = Button::new("Ripple Delete")
-                .shortcut_text(editor.keymap.label(Command::RippleDelete));
-            if ui.add_enabled(removable, ripple_delete).clicked() {
-                editor.ripple_delete();
-            }
-            ui.separator();
-            let select_all =
-                Button::new("Select All").shortcut_text(editor.keymap.label(Command::SelectAll));
-            let has_clips = editor.timeline.sequence().has_clips();
-            if ui.add_enabled(has_clips, select_all).clicked() {
-                editor.select_all();
-            }
-            let deselect_all = Button::new("Deselect All")
-                .shortcut_text(editor.keymap.label(Command::DeselectAll));
-            if ui.add_enabled(selected, deselect_all).clicked() {
-                editor.deselect_all();
-            }
-            ui.separator();
-            let find = Button::new("Find…").shortcut_text(editor.keymap.label(Command::Find));
-            if ui.add(find).clicked() {
-                editor.open_find();
-            }
-            ui.separator();
-            if ui.button("Remove Unused").clicked() {
-                editor.remove_unused();
-            }
-            if ui.button("Consolidate Duplicates").clicked() {
-                editor.consolidate_duplicates();
-            }
-            ui.separator();
-            ui.menu_button("Preferences", |ui| {
-                let decoding = &mut editor.hardware_decoding;
-                let device = media::hardware_decoder().map_or_else(
-                    || "No GPU decoder is in use yet.".to_owned(),
-                    |name| format!("Decoding on {name}."),
-                );
-                let hint = format!("Applies to media opened from now on. {device}");
-                if ui
-                    .checkbox(decoding, "Hardware-Accelerated Decoding")
-                    .on_hover_text(hint)
-                    .changed()
-                {
-                    media::set_hardware_decoding(*decoding);
-                }
-                ui.horizontal(|ui| {
-                    let autosave = &mut editor.autosave;
-                    ui.checkbox(&mut autosave.enabled, "Auto-Save Every");
-                    ui.add_enabled(
-                        autosave.enabled,
-                        egui::DragValue::new(&mut autosave.minutes)
-                            .range(1..=60)
-                            .suffix(" min"),
-                    );
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Default Transition Duration");
-                    let length = &mut editor.transition_defaults.length;
-                    ui.add(hundredths_field(
-                        length,
-                        crate::transition_defaults::TransitionDefaults::LENGTHS,
-                    ))
-                    .on_hover_text("Right-click a video transition in the Effects panel to make it the default");
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Still Image Default Duration");
-                    ui.add(hundredths_field(
-                        &mut editor.still_length.0,
-                        crate::still_length::StillLength::LENGTHS,
-                    ))
-                    .on_hover_text("How long stills and titles brought in from now on place for");
-                });
-                ui.menu_button("Default Media Scaling", |ui| {
-                    let choice = &mut editor.media_scaling;
-                    for option in crate::media_scaling::MediaScaling::ALL {
-                        ui.radio_value(choice, option, option.label());
-                    }
-                    ui.weak("For media brought in from now on");
-                });
-                ui.menu_button("Timeline Playback Auto-Scrolling", |ui| {
-                    let choice = &mut editor.view.auto_scroll;
-                    for option in crate::timeline_view::AutoScroll::ALL {
-                        ui.radio_value(choice, option, option.label());
-                    }
-                });
-                ui.menu_button("Proxies for 4K and High Frame Rate Media", |ui| {
-                    let choice = &mut editor.proxy_offer.choice;
-                    for option in crate::proxy_offer::HeavyMedia::ALL {
-                        ui.radio_value(choice, option, option.label());
-                    }
-                });
-                ui.menu_button("Audio Output", |ui| {
-                    crate::audio_switch::menu(editor, ui);
-                });
-            });
-            let shortcuts = Button::new("Keyboard Shortcuts…")
-                .shortcut_text(editor.keymap.label(Command::KeyboardShortcuts));
-            if ui.add(shortcuts).clicked() {
-                editor.keymap_window = Some(crate::keymap::KeymapWindow::default());
-            }
-        });
-        crate::theme::menu(ui, "Clip", |ui| {
-            let has_source = editor.source.is_some();
-            let insert = Button::new("Insert").shortcut_text(editor.keymap.label(Command::Insert));
-            if ui.add_enabled(has_source, insert).clicked() {
-                placing::edit_from_source(editor, PlaceMode::Insert);
-            }
-            let overwrite =
-                Button::new("Overwrite").shortcut_text(editor.keymap.label(Command::Overwrite));
-            if ui.add_enabled(has_source, overwrite).clicked() {
-                placing::edit_from_source(editor, PlaceMode::Overwrite);
-            }
-            let subclip = Button::new("Make Subclip")
-                .shortcut_text(editor.keymap.label(Command::MakeSubclip));
-            if ui.add_enabled(has_source, subclip).clicked() {
-                editor.make_subclip();
-            }
-            ui.separator();
-            crate::clip_menu::items(editor, ui);
-        });
-        crate::theme::menu(ui, "Markers", |ui| {
-            crate::sequence_menu::in_out_items(editor, ui);
-            ui.separator();
-            crate::marker_dialog::menu(editor, ui);
-        });
-        crate::theme::menu(ui, "Sequence", |ui| {
-            crate::sequence_menu::sequence_menu(editor, ui)
-        });
-        crate::workspaces::window_menu(editor, ui);
-        crate::workspaces::workspace_bar(editor, ui);
     });
+}
+
+fn advanced_menus(editor: &mut Editor, ui: &mut egui::Ui) {
+    crate::theme::menu(ui, "File", |ui| {
+        let new =
+            Button::new("New Project").shortcut_text(editor.keymap.label(Command::NewProject));
+        if ui.add(new).clicked() {
+            editor.discard_then(AfterDiscard::NewProject);
+        }
+        let open =
+            Button::new("Open Project…").shortcut_text(editor.keymap.label(Command::OpenProject));
+        if ui.add(open).clicked() {
+            editor.prompt_path(PathPurpose::OpenProject);
+        }
+        crate::recent_projects::menu(editor, ui);
+        let save = Button::new("Save").shortcut_text(editor.keymap.label(Command::Save));
+        if ui.add_enabled(editor.is_dirty(), save).clicked() {
+            editor.save_project();
+        }
+        let save_as = Button::new("Save As…").shortcut_text(editor.keymap.label(Command::SaveAs));
+        if ui.add(save_as).clicked() {
+            editor.prompt_path(PathPurpose::SaveProject);
+        }
+        if ui.button("Save a Copy…").clicked() {
+            editor.prompt_path(PathPurpose::SaveCopy);
+        }
+        let revert = editor.project_path.is_some() && editor.is_dirty();
+        if ui.add_enabled(revert, Button::new("Revert")).clicked() {
+            editor.confirm_revert = true;
+        }
+        ui.separator();
+        let import = Button::new("Import…").shortcut_text(editor.keymap.label(Command::Import));
+        if ui.add(import).clicked() {
+            editor.prompt_path(PathPurpose::Import);
+        }
+        ui.menu_button("New", |ui| {
+            let title = Button::new("Title").shortcut_text(editor.keymap.label(Command::NewTitle));
+            if ui.add(title).clicked() {
+                placing::new_generated(editor, Generator::Title(Title::default()));
+            }
+            crate::title_templates::menu(ui, editor);
+            if ui.button("Sequence").clicked() {
+                editor.new_sequence();
+            }
+            if ui.button("Color Matte").clicked() {
+                let color = Rgb::new(32, 32, 48);
+                placing::new_generated(editor, Generator::ColorMatte { color });
+            }
+            if ui.button("Adjustment Layer").clicked() {
+                placing::new_generated(editor, Generator::AdjustmentLayer);
+            }
+            ui.separator();
+            for synthetic in [
+                Generator::BarsAndTone,
+                Generator::BlackVideo,
+                Generator::TransparentVideo,
+                Generator::CountingLeader(Default::default()),
+            ] {
+                if ui.button(synthetic.kind_name()).clicked() {
+                    placing::new_generated(editor, synthetic);
+                }
+            }
+            ui.separator();
+            for kind in ShapeKind::ALL {
+                if ui.button(kind.name()).clicked() {
+                    placing::new_generated(editor, Generator::Shape(Shape::new(kind)));
+                }
+            }
+        });
+        let has_program = editor.timeline.sequence().duration() > Ticks::ZERO;
+        let export =
+            Button::new("Export Media…").shortcut_text(editor.keymap.label(Command::ExportMedia));
+        if ui.add_enabled(has_program, export).clicked() {
+            crate::export::open(editor);
+        }
+        if ui.button("Export Queue…").clicked() {
+            editor.export_queue.open = true;
+        }
+        let frame =
+            Button::new("Export Frame…").shortcut_text(editor.keymap.label(Command::ExportFrame));
+        if ui.add_enabled(has_program, frame).clicked() {
+            editor.prompt_path(PathPurpose::ExportFrame);
+        }
+        if ui
+            .add_enabled(has_program, Button::new("Export EDL…"))
+            .clicked()
+        {
+            editor.prompt_path(PathPurpose::Export(Interchange::Edl));
+        }
+        if ui
+            .add_enabled(has_program, Button::new("Export Final Cut Pro XML…"))
+            .clicked()
+        {
+            editor.prompt_path(PathPurpose::Export(Interchange::FinalCutXml));
+        }
+        let has_markers = !editor.timeline.sequence().markers.is_empty();
+        if ui
+            .add_enabled(has_markers, Button::new("Export Markers…"))
+            .clicked()
+        {
+            editor.prompt_path(PathPurpose::Export(Interchange::MarkersCsv));
+        }
+        ui.separator();
+        let has_media = !editor.timeline.sequence().media.is_empty();
+        let manager = Button::new("Project Manager…");
+        if ui.add_enabled(has_media, manager).clicked() {
+            editor.open_project_manager();
+        }
+        ui.separator();
+        let quit = Button::new("Quit").shortcut_text(editor.keymap.label(Command::Quit));
+        if ui.add(quit).clicked() {
+            ui.ctx().send_viewport_cmd(ViewportCommand::Close);
+        }
+    });
+    crate::theme::menu(ui, "Edit", |ui| {
+        let undo = editor
+            .timeline
+            .undo_name()
+            .map_or("Undo".to_owned(), |name| format!("Undo {name}"));
+        let undo = Button::new(undo).shortcut_text(editor.keymap.label(Command::Undo));
+        if ui
+            .add_enabled(editor.timeline.undo_name().is_some(), undo)
+            .clicked()
+        {
+            editor.undo();
+        }
+        let redo = editor
+            .timeline
+            .redo_name()
+            .map_or("Redo".to_owned(), |name| format!("Redo {name}"));
+        let redo = Button::new(redo).shortcut_text(editor.keymap.label(Command::Redo));
+        if ui
+            .add_enabled(editor.timeline.redo_name().is_some(), redo)
+            .clicked()
+        {
+            editor.redo();
+        }
+        ui.separator();
+        let selected = !editor.view.selection.is_empty();
+        let cut = Button::new("Cut").shortcut_text(editor.keymap.label(Command::Cut));
+        if ui.add_enabled(selected, cut).clicked() {
+            editor.cut();
+        }
+        let copy = Button::new("Copy").shortcut_text(editor.keymap.label(Command::Copy));
+        if ui.add_enabled(selected, copy).clicked() {
+            editor.copy();
+        }
+        let can_paste = editor.clipboard.is_some();
+        let paste = Button::new("Paste").shortcut_text(editor.keymap.label(Command::Paste));
+        if ui.add_enabled(can_paste, paste).clicked() {
+            editor.paste(PlaceMode::Overwrite);
+        }
+        let paste_insert =
+            Button::new("Paste Insert").shortcut_text(editor.keymap.label(Command::PasteInsert));
+        if ui.add_enabled(can_paste, paste_insert).clicked() {
+            editor.paste(PlaceMode::Insert);
+        }
+        let paste_attributes = Button::new("Paste Attributes…")
+            .shortcut_text(editor.keymap.label(Command::PasteAttributes));
+        if ui
+            .add_enabled(can_paste && selected, paste_attributes)
+            .clicked()
+        {
+            editor.paste_attributes();
+        }
+        let remove_attributes = Button::new("Remove Attributes…");
+        if ui.add_enabled(selected, remove_attributes).clicked() {
+            editor.remove_attributes();
+        }
+        ui.separator();
+        let removable = selected || editor.view.gap.is_some();
+        let clear = Button::new("Clear").shortcut_text(editor.keymap.label(Command::Clear));
+        if ui.add_enabled(removable, clear).clicked() {
+            editor.lift();
+        }
+        let ripple_delete =
+            Button::new("Ripple Delete").shortcut_text(editor.keymap.label(Command::RippleDelete));
+        if ui.add_enabled(removable, ripple_delete).clicked() {
+            editor.ripple_delete();
+        }
+        ui.separator();
+        let select_all =
+            Button::new("Select All").shortcut_text(editor.keymap.label(Command::SelectAll));
+        let has_clips = editor.timeline.sequence().has_clips();
+        if ui.add_enabled(has_clips, select_all).clicked() {
+            editor.select_all();
+        }
+        let deselect_all =
+            Button::new("Deselect All").shortcut_text(editor.keymap.label(Command::DeselectAll));
+        if ui.add_enabled(selected, deselect_all).clicked() {
+            editor.deselect_all();
+        }
+        ui.separator();
+        let find = Button::new("Find…").shortcut_text(editor.keymap.label(Command::Find));
+        if ui.add(find).clicked() {
+            editor.open_find();
+        }
+        ui.separator();
+        if ui.button("Remove Unused").clicked() {
+            editor.remove_unused();
+        }
+        if ui.button("Consolidate Duplicates").clicked() {
+            editor.consolidate_duplicates();
+        }
+        ui.separator();
+        ui.menu_button("Preferences", |ui| {
+            crate::preferences_menu::menu(editor, ui)
+        });
+        let shortcuts = Button::new("Keyboard Shortcuts…")
+            .shortcut_text(editor.keymap.label(Command::KeyboardShortcuts));
+        if ui.add(shortcuts).clicked() {
+            editor.keymap_window = Some(crate::keymap::KeymapWindow::default());
+        }
+    });
+    crate::theme::menu(ui, "Clip", |ui| {
+        let has_source = editor.source.is_some();
+        let insert = Button::new("Insert").shortcut_text(editor.keymap.label(Command::Insert));
+        if ui.add_enabled(has_source, insert).clicked() {
+            placing::edit_from_source(editor, PlaceMode::Insert);
+        }
+        let overwrite =
+            Button::new("Overwrite").shortcut_text(editor.keymap.label(Command::Overwrite));
+        if ui.add_enabled(has_source, overwrite).clicked() {
+            placing::edit_from_source(editor, PlaceMode::Overwrite);
+        }
+        let subclip =
+            Button::new("Make Subclip").shortcut_text(editor.keymap.label(Command::MakeSubclip));
+        if ui.add_enabled(has_source, subclip).clicked() {
+            editor.make_subclip();
+        }
+        ui.separator();
+        crate::clip_menu::items(editor, ui);
+    });
+    crate::theme::menu(ui, "Markers", |ui| {
+        crate::sequence_menu::in_out_items(editor, ui);
+        ui.separator();
+        crate::marker_dialog::menu(editor, ui);
+    });
+    crate::theme::menu(ui, "Sequence", |ui| {
+        crate::sequence_menu::sequence_menu(editor, ui)
+    });
+    crate::workspaces::window_menu(editor, ui);
 }
 
 const TOOL: egui::Vec2 = egui::vec2(26.0, 22.0);
@@ -392,7 +342,7 @@ pub fn timeline_toolbar(editor: &mut Editor, ui: &mut egui::Ui) {
     crate::nesting::breadcrumbs(editor, ui);
     ui.horizontal_wrapped(|ui| {
         theme::segmented(ui, |ui| {
-            for group in Tool::GROUPS {
+            for group in crate::ui_mode::tool_groups(editor.ui_mode, editor.view.tool) {
                 tool_group(ui, &mut editor.view.tool, group, &editor.keymap);
             }
         });
@@ -472,18 +422,4 @@ pub fn timeline_toolbar(editor: &mut Editor, ui: &mut egui::Ui) {
             }
         });
     });
-}
-
-/// Hundredths of a second shown and typed as seconds.
-fn hundredths_field(
-    hundredths: &mut u32,
-    range: std::ops::RangeInclusive<u32>,
-) -> egui::DragValue<'_> {
-    egui::DragValue::new(hundredths)
-        .range(range)
-        .custom_formatter(|hundredths, _| format!("{:.2} s", hundredths / 100.0))
-        .custom_parser(|text| {
-            let seconds = text.trim().trim_end_matches('s').trim();
-            seconds.parse::<f64>().ok().map(|seconds| seconds * 100.0)
-        })
 }

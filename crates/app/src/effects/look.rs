@@ -60,7 +60,8 @@ pub(super) fn controls(
                 rows.param(ui, "Scale Width", width, 0.0..=1_000.0, "%");
             }
             // Unlinking starts the width where the shared scale left it.
-            if rows.checkbox(ui, &mut motion.uniform_scale, "Uniform Scale")
+            if (!rows.simple || !motion.uniform_scale)
+                && rows.checkbox(ui, &mut motion.uniform_scale, "Uniform Scale")
                 && !motion.uniform_scale
             {
                 motion.scale_width = motion.scale.clone();
@@ -72,9 +73,16 @@ pub(super) fn controls(
                 -3_600.0..=3_600.0,
                 "°",
             );
-            let [x, y] = &mut motion.anchor;
-            rows.param(ui, "Anchor X", x, -10_000.0..=10_000.0, "");
-            rows.param(ui, "Anchor Y", y, -10_000.0..=10_000.0, "");
+            let anchored = motion.anchor.iter().any(Param::is_animated)
+                || motion
+                    .anchor
+                    .iter()
+                    .any(|param| param.value_at(Ticks::ZERO) != 0.0);
+            if !rows.simple || anchored {
+                let [x, y] = &mut motion.anchor;
+                rows.param(ui, "Anchor X", x, -10_000.0..=10_000.0, "");
+                rows.param(ui, "Anchor Y", y, -10_000.0..=10_000.0, "");
+            }
             ui.horizontal(|ui| {
                 let on = rows.ken_burns;
                 let toggle = ui.selectable_label(on, "Ken Burns").on_hover_text(
@@ -93,23 +101,28 @@ pub(super) fn controls(
         .show(ui, |ui| {
             rows.param(ui, "Opacity", &mut look.opacity, 0.0..=100.0, "%");
             let blend = &mut look.blend;
-            rows.choice(ui, "Blend Mode", |ui| {
-                let mut chosen = false;
-                egui::ComboBox::from_id_salt("blend_mode")
-                    .width(ui.available_width().min(ui.spacing().combo_width))
-                    .selected_text(blend.name())
-                    .height(f32::INFINITY)
-                    .show_ui(ui, |ui| {
-                        for mode in BlendMode::ALL {
-                            if mode.starts_group() {
-                                ui.separator();
+            let plain = rows.simple && *blend == BlendMode::Normal;
+            if !plain {
+                rows.choice(ui, "Blend Mode", |ui| {
+                    let mut chosen = false;
+                    egui::ComboBox::from_id_salt("blend_mode")
+                        .width(ui.available_width().min(ui.spacing().combo_width))
+                        .selected_text(blend.name())
+                        .height(f32::INFINITY)
+                        .show_ui(ui, |ui| {
+                            for mode in BlendMode::ALL {
+                                if mode.starts_group() {
+                                    ui.separator();
+                                }
+                                chosen |= ui.selectable_value(blend, mode, mode.name()).clicked();
                             }
-                            chosen |= ui.selectable_value(blend, mode, mode.name()).clicked();
-                        }
-                    });
-                chosen
-            });
-            super::masks::controls(ui, &mut rows, &mut look.masks);
+                        });
+                    chosen
+                });
+            }
+            if !rows.simple || !look.masks.is_empty() {
+                super::masks::controls(ui, &mut rows, &mut look.masks);
+            }
         });
     egui::CollapsingHeader::new("Crop").show(ui, |ui| {
         let crop = &mut look.crop;
@@ -146,9 +159,12 @@ pub(super) fn controls(
             }
             super::video_effects::add_menu(ui, &mut rows, &mut look.effects);
         });
-    egui::CollapsingHeader::new("Color").show(ui, |ui| {
-        super::color::controls(ui, &mut rows, &mut look.color);
-    });
+    // Simple mode keeps color to the Lumetri Color tab.
+    if !rows.simple {
+        egui::CollapsingHeader::new("Color").show(ui, |ui| {
+            super::color::controls(ui, &mut rows, &mut look.color);
+        });
+    }
     ui.add_space(4.0);
     if ui.button("Reset Effects").clicked() && *look != Look::default() {
         *look = Look::default();
@@ -172,6 +188,8 @@ pub(super) struct Rows {
     /// Whether the effect being shown asked for its matte picture.
     pub(super) browse_matte: bool,
     pub(super) ken_burns: bool,
+    /// Simple mode: controls a first edit doesn't need stay hidden until they're used.
+    pub(super) simple: bool,
     pub(super) output: Output,
 }
 
@@ -186,6 +204,7 @@ impl Rows {
             tone: ToneState::default(),
             browse_matte: false,
             ken_burns: false,
+            simple: false,
             output: Output {
                 change: None,
                 seek: None,

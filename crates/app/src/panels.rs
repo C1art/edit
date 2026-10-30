@@ -67,7 +67,15 @@ impl SideTab {
 
 impl Editor {
     pub(crate) fn media_panel(&mut self, ui: &mut egui::Ui) {
-        theme::tab_bar(ui, &mut self.media_tab, MediaTab::ALL, |tab| tab.words().1);
+        self.keep_tabs_in_mode();
+        let tabs: &[MediaTab] = if self.simple() {
+            &crate::ui_mode::SIMPLE_MEDIA_TABS
+        } else {
+            &MediaTab::ALL
+        };
+        theme::tab_bar(ui, &mut self.media_tab, tabs.iter().copied(), |tab| {
+            tab.words().1
+        });
         ui.separator();
         match self.media_tab {
             MediaTab::Project => {
@@ -90,7 +98,15 @@ impl Editor {
     }
 
     pub(crate) fn side_panel(&mut self, ui: &mut egui::Ui) {
-        theme::tab_bar(ui, &mut self.side_tab, SideTab::ALL, |tab| tab.words().1);
+        self.keep_tabs_in_mode();
+        let tabs: &[SideTab] = if self.simple() {
+            &crate::ui_mode::SIMPLE_SIDE_TABS
+        } else {
+            &SideTab::ALL
+        };
+        theme::tab_bar(ui, &mut self.side_tab, tabs.iter().copied(), |tab| {
+            tab.words().1
+        });
         ui.separator();
         // Measuring costs GPU time, so only while someone is looking.
         if let (Some(program), false) = (&mut self.program, self.side_tab == SideTab::Scopes) {
@@ -132,7 +148,13 @@ impl Editor {
         );
         if let Some(response) = output.clip_menu {
             response.context_menu(|ui| {
-                theme::scrolling_menu(ui, |ui| crate::clip_menu::context(self, ui));
+                theme::scrolling_menu(ui, |ui| {
+                    if self.simple() {
+                        crate::simple_menus::clip_context(self, ui);
+                    } else {
+                        crate::clip_menu::context(self, ui);
+                    }
+                });
             });
         }
         if let Some(response) = output.gap_menu {

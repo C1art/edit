@@ -7,6 +7,7 @@ use crate::proxy_offer::HeavyMedia;
 use crate::still_length::StillLength;
 use crate::timeline_view::AutoScroll;
 use crate::transition_defaults::TransitionDefaults;
+use crate::ui_mode::UiMode;
 
 /// The choices kept from one session to the next, written as `name<TAB>value` lines.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,6 +31,7 @@ pub(crate) struct Preferences {
     auto_scroll: AutoScroll,
     waveforms: bool,
     rectified_waveforms: bool,
+    ui_mode: UiMode,
 }
 
 impl Preferences {
@@ -52,6 +54,7 @@ impl Preferences {
             auto_scroll: editor.view.auto_scroll,
             waveforms: editor.clip_art.show_waveforms,
             rectified_waveforms: editor.clip_art.rectified_waveforms,
+            ui_mode: editor.ui_mode,
         }
     }
 
@@ -62,7 +65,8 @@ impl Preferences {
              audio_device\t{}\naudio_device_id\t{}\nvoiceover_input\t{}\n\
              voiceover_input_id\t{}\nvoiceover_countdown\t{}\nvoiceover_hear_sequence\t{}\n\
              default_transition\t{}\ndefault_transition_length\t{}\nstill_length\t{}\n\
-             media_scaling\t{}\nauto_scroll\t{}\nwaveforms\t{}\nrectified_waveforms\t{}\n",
+             media_scaling\t{}\nauto_scroll\t{}\nwaveforms\t{}\nrectified_waveforms\t{}\n\
+             ui_mode\t{}\n",
             self.hardware_decoding,
             self.autosave,
             self.autosave_minutes,
@@ -93,6 +97,7 @@ impl Preferences {
             self.auto_scroll.key(),
             self.waveforms,
             self.rectified_waveforms,
+            self.ui_mode.key(),
         )
     }
 
@@ -146,6 +151,7 @@ impl Preferences {
                 "auto_scroll" => set(&mut self.auto_scroll, AutoScroll::from_key(value)),
                 "waveforms" => set(&mut self.waveforms, flag),
                 "rectified_waveforms" => set(&mut self.rectified_waveforms, flag),
+                "ui_mode" => set(&mut self.ui_mode, UiMode::from_key(value)),
                 _ => {}
             }
         }
@@ -191,6 +197,7 @@ impl Editor {
         self.view.auto_scroll = preferences.auto_scroll;
         self.clip_art.show_waveforms = preferences.waveforms;
         self.clip_art.rectified_waveforms = preferences.rectified_waveforms;
+        self.set_ui_mode(preferences.ui_mode);
         self.saved_preferences = Some(Preferences::of(self));
     }
 
@@ -229,6 +236,7 @@ mod tests {
         auto_scroll: AutoScroll::Page,
         waveforms: true,
         rectified_waveforms: false,
+        ui_mode: UiMode::Advanced,
     };
 
     #[test]
@@ -262,6 +270,7 @@ mod tests {
             auto_scroll: AutoScroll::Smooth,
             waveforms: false,
             rectified_waveforms: true,
+            ui_mode: UiMode::Simple,
         };
         assert_eq!(DEFAULTS.read(&chosen.to_text()), chosen);
     }

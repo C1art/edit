@@ -74,9 +74,16 @@ pub(crate) fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
             .desired_width(f32::INFINITY),
     );
     ui.label("Drag onto a clip or cut, or double-click to apply to the selection");
+    if editor.simple() {
+        ui.weak("Showing the basics; switch to Advanced for every effect");
+    }
     let search = editor.effects_search.trim().to_lowercase();
     let searching = !search.is_empty();
-    let shown = |item: &EffectItem| item.name().to_lowercase().contains(&search);
+    let simple = editor.simple();
+    let shown = |item: &EffectItem| {
+        (!simple || crate::ui_mode::simple_effect(item))
+            && item.name().to_lowercase().contains(&search)
+    };
     let mut picked = Picked {
         item: None,
         default: editor.transition_defaults.video,

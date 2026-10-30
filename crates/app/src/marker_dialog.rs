@@ -60,7 +60,7 @@ impl Editor {
         self.apply(ClearMarkers { owner });
     }
 
-    fn has_markers(&self) -> bool {
+    pub(crate) fn has_markers(&self) -> bool {
         !self.markers_of(self.marker_target().0).is_empty()
     }
 
