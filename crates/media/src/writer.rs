@@ -285,6 +285,12 @@ mod tests {
             ),
             ("hevc.mp4", Some(video(VideoCodec::Hevc, 32)), None),
             (
+                "vp9.webm",
+                Some(video(VideoCodec::Vp9, 64)),
+                Some(audio(AudioCodec::Opus)),
+            ),
+            ("av1.mp4", Some(video(VideoCodec::Av1, 64)), None),
+            (
                 "prores.mov",
                 Some(video(VideoCodec::ProRes422Hq, 128)),
                 Some(audio(AudioCodec::Pcm24)),

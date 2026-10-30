@@ -383,12 +383,19 @@ fn settings(
             }
             if format.has_audio() {
                 ui.label("Sample rate:");
-                ui.horizontal(|ui| {
-                    for rate in SAMPLE_RATES {
-                        let text = format!("{} kHz", rate as f32 / 1_000.0);
-                        ui.selectable_value(&mut format.sample_rate, rate, text);
+                match format.fixed_sample_rate() {
+                    Some(rate) => {
+                        ui.label(format!("{} kHz", rate as f32 / 1_000.0));
                     }
-                });
+                    None => {
+                        ui.horizontal(|ui| {
+                            for rate in SAMPLE_RATES {
+                                let text = format!("{} kHz", rate as f32 / 1_000.0);
+                                ui.selectable_value(&mut format.sample_rate, rate, text);
+                            }
+                        });
+                    }
+                }
                 ui.end_row();
                 if format.audio_is_lossy() {
                     ui.label("Audio bitrate:");

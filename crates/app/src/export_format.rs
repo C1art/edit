@@ -8,6 +8,9 @@ use playback::{LoudnessTarget, VideoEncoding, VideoExport};
 pub enum Format {
     H264,
     Hevc,
+    /// VP9 with Opus sound in WebM, for the web.
+    WebM,
+    Av1,
     ProRes422,
     ProRes422Hq,
     ProRes4444,
@@ -22,9 +25,11 @@ pub enum Format {
 }
 
 impl Format {
-    pub const ALL: [Self; 18] = [
+    pub const ALL: [Self; 20] = [
         Self::H264,
         Self::Hevc,
+        Self::WebM,
+        Self::Av1,
         Self::ProRes422,
         Self::ProRes422Hq,
         Self::ProRes4444,
@@ -47,6 +52,8 @@ impl Format {
         match self {
             Self::H264 => "H.264",
             Self::Hevc => "HEVC (H.265)",
+            Self::WebM => "WebM (VP9)",
+            Self::Av1 => "AV1",
             Self::ProRes422 => "Apple ProRes 422",
             Self::ProRes422Hq => "Apple ProRes 422 HQ",
             Self::ProRes4444 => "Apple ProRes 4444 with Alpha",
@@ -68,7 +75,8 @@ impl Format {
 
     pub fn extension(self) -> &'static str {
         match self {
-            Self::H264 | Self::Hevc => "mp4",
+            Self::H264 | Self::Hevc | Self::Av1 => "mp4",
+            Self::WebM => "webm",
             Self::ProRes422 | Self::ProRes422Hq | Self::ProRes4444 | Self::Dnxhr(_) => "mov",
             Self::AnimatedGif => "gif",
             Self::Stills(still) => still.extension(),
@@ -83,6 +91,8 @@ impl Format {
         match self {
             Self::H264 => Some(VideoCodec::H264),
             Self::Hevc => Some(VideoCodec::Hevc),
+            Self::WebM => Some(VideoCodec::Vp9),
+            Self::Av1 => Some(VideoCodec::Av1),
             Self::ProRes422 => Some(VideoCodec::ProRes422),
             Self::ProRes422Hq => Some(VideoCodec::ProRes422Hq),
             Self::ProRes4444 => Some(VideoCodec::ProRes4444),
@@ -99,7 +109,8 @@ impl Format {
     /// `None` for formats that can't carry sound.
     pub fn audio_codec(self) -> Option<AudioCodec> {
         match self {
-            Self::H264 | Self::Hevc | Self::Aac => Some(AudioCodec::Aac),
+            Self::H264 | Self::Hevc | Self::Av1 | Self::Aac => Some(AudioCodec::Aac),
+            Self::WebM => Some(AudioCodec::Opus),
             // Mastering formats carry uncompressed sound, as cameras and Premiere do.
             Self::ProRes422 | Self::ProRes422Hq | Self::ProRes4444 | Self::Dnxhr(_) => {
                 Some(AudioCodec::Pcm24)
@@ -179,7 +190,7 @@ const fn format_preset(name: &'static str, format: Format) -> Preset {
     }
 }
 
-pub const PRESETS: [Preset; 18] = [
+pub const PRESETS: [Preset; 20] = [
     Preset {
         name: "Match Source - High Bitrate",
         format: MATCH_SOURCE,
@@ -195,6 +206,25 @@ pub const PRESETS: [Preset; 18] = [
         name: "HEVC Match Source",
         format: ExportFormat {
             format: Format::Hevc,
+            rate_control: RateControl::Quality(22),
+            ..MATCH_SOURCE
+        },
+        vertical: false,
+    },
+    Preset {
+        name: "WebM VP9 Match Source",
+        format: ExportFormat {
+            format: Format::WebM,
+            rate_control: RateControl::Quality(20),
+            audio_kbps: 192,
+            ..MATCH_SOURCE
+        },
+        vertical: false,
+    },
+    Preset {
+        name: "AV1 Match Source",
+        format: ExportFormat {
+            format: Format::Av1,
             rate_control: RateControl::Quality(22),
             ..MATCH_SOURCE
         },
@@ -261,7 +291,7 @@ impl ExportFormat {
             } else {
                 unused.audio_kbps
             },
-            sample_rate: if self.has_audio() {
+            sample_rate: if self.has_audio() && self.fixed_sample_rate().is_none() {
                 self.sample_rate
             } else {
                 unused.sample_rate
@@ -273,6 +303,12 @@ impl ExportFormat {
     pub fn has_audio(&self) -> bool {
         let wanted = self.with_audio || !self.format.has_video();
         wanted && self.format.audio_codec().is_some()
+    }
+
+    pub fn fixed_sample_rate(&self) -> Option<u32> {
+        self.format
+            .audio_codec()
+            .and_then(AudioCodec::fixed_sample_rate)
     }
 
     pub fn audio_is_lossy(&self) -> bool {
@@ -300,7 +336,7 @@ impl ExportFormat {
         let codec = self.format.audio_codec().filter(|_| self.has_audio())?;
         Some(AudioSettings {
             codec,
-            sample_rate: self.sample_rate,
+            sample_rate: self.fixed_sample_rate().unwrap_or(self.sample_rate),
             bits_per_second: self.audio_kbps * 1_000,
         })
     }

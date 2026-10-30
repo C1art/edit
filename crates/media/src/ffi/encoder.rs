@@ -105,6 +105,7 @@ impl Encoder {
         let (id, name) = match settings.codec {
             AudioCodec::Aac => (sys::AVCodecID::AV_CODEC_ID_AAC, None),
             AudioCodec::Mp3 => (sys::AVCodecID::AV_CODEC_ID_MP3, Some(c"libmp3lame")),
+            AudioCodec::Opus => (sys::AVCodecID::AV_CODEC_ID_OPUS, Some(c"libopus")),
             AudioCodec::Flac => (sys::AVCodecID::AV_CODEC_ID_FLAC, None),
             AudioCodec::Pcm16 => (sys::AVCodecID::AV_CODEC_ID_PCM_S16LE, None),
             AudioCodec::Pcm24 => (sys::AVCodecID::AV_CODEC_ID_PCM_S24LE, None),
@@ -122,6 +123,7 @@ impl Encoder {
             };
             raw.sample_fmt = match settings.codec {
                 AudioCodec::Aac | AudioCodec::Mp3 => sys::AVSampleFormat::AV_SAMPLE_FMT_FLTP,
+                AudioCodec::Opus => sys::AVSampleFormat::AV_SAMPLE_FMT_FLT,
                 AudioCodec::Flac | AudioCodec::Pcm16 => sys::AVSampleFormat::AV_SAMPLE_FMT_S16,
                 AudioCodec::Pcm24 => sys::AVSampleFormat::AV_SAMPLE_FMT_S32,
             };

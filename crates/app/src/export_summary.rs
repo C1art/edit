@@ -78,5 +78,6 @@ fn audio_codec_name(codec: AudioCodec) -> &'static str {
         AudioCodec::Flac => "FLAC",
         AudioCodec::Pcm16 => "16-bit PCM",
         AudioCodec::Pcm24 => "24-bit PCM",
+        AudioCodec::Opus => "Opus",
     }
 }

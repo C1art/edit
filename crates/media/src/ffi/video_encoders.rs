@@ -15,6 +15,10 @@ use crate::{
 const BITS_PER_PIXEL_AT_18: f64 = 0.12;
 /// HEVC's share of H.264's bitrate for the same look.
 const HEVC_SHARE: f64 = 0.6;
+const VP9_SHARE: f64 = 0.65;
+const AV1_SHARE: f64 = 0.5;
+/// The top of VP9's and AV1's quality scale, where H.264's is 51.
+const WIDE_WORST: u16 = 63;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Family {
@@ -23,6 +27,9 @@ pub(super) enum Family {
     QuickSync,
     X264,
     X265,
+    Vpx,
+    SvtAv1,
+    Aom,
     /// Software encoders without a quality target, such as OpenH264 and Kvazaar.
     BitrateOnly,
     /// ProRes, DNxHR and GIF, which set their own data rates.
@@ -44,6 +51,12 @@ impl Family {
             Self::X264
         } else if name == b"libx265" {
             Self::X265
+        } else if name == b"libvpx-vp9" {
+            Self::Vpx
+        } else if name == b"libsvtav1" {
+            Self::SvtAv1
+        } else if name == b"libaom-av1" {
+            Self::Aom
         } else {
             Self::BitrateOnly
         }
@@ -95,6 +108,18 @@ pub(super) fn candidates(codec: VideoCodec, acceleration: Acceleration) -> Vec<C
             ],
             sys::AVCodecID::AV_CODEC_ID_HEVC,
         ),
+        VideoCodec::Vp9 => (&[c"libvpx-vp9"], sys::AVCodecID::AV_CODEC_ID_VP9),
+        VideoCodec::Av1 => (
+            &[
+                c"av1_nvenc",
+                c"av1_amf",
+                c"av1_qsv",
+                c"libsvtav1",
+                c"libaom-av1",
+                c"librav1e",
+            ],
+            sys::AVCodecID::AV_CODEC_ID_AV1,
+        ),
         VideoCodec::ProRes422 | VideoCodec::ProRes422Hq | VideoCodec::ProRes4444 => {
             (&[c"prores_ks"], sys::AVCodecID::AV_CODEC_ID_PRORES)
         }
@@ -128,7 +153,9 @@ pub(super) fn pixel_format(codec: VideoCodec, family: Family) -> sys::AVPixelFor
     use sys::AVPixelFormat as Format;
     match codec {
         _ if family.is_gpu() => Format::AV_PIX_FMT_NV12,
-        VideoCodec::H264 | VideoCodec::Hevc => Format::AV_PIX_FMT_YUV420P,
+        VideoCodec::H264 | VideoCodec::Hevc | VideoCodec::Vp9 | VideoCodec::Av1 => {
+            Format::AV_PIX_FMT_YUV420P
+        }
         VideoCodec::ProRes422 | VideoCodec::ProRes422Hq => Format::AV_PIX_FMT_YUV422P10LE,
         VideoCodec::ProRes4444 => Format::AV_PIX_FMT_YUVA444P10LE,
         VideoCodec::Dnxhr(DnxhrQuality::Lb | DnxhrQuality::Sq | DnxhrQuality::Hq) => {
@@ -184,6 +211,18 @@ pub(super) fn configure(
                 if editing { c"veryfast" } else { c"medium" },
             ));
         }
+        (Family::Vpx, _) => {
+            options.push(option(c"deadline", c"good"));
+            options.push(option(c"cpu-used", if editing { c"5" } else { c"3" }));
+            options.push(option(c"row-mt", c"1"));
+        }
+        (Family::SvtAv1, _) => {
+            options.push(option(c"preset", if editing { c"12" } else { c"8" }));
+        }
+        (Family::Aom, _) => {
+            options.push(option(c"cpu-used", if editing { c"8" } else { c"6" }));
+            options.push(option(c"row-mt", c"1"));
+        }
         (Family::BitrateOnly, _) => {}
         (Family::Fixed, VideoCodec::ProRes422) => options.push(option(c"profile", c"standard")),
         (Family::Fixed, VideoCodec::ProRes422Hq) => options.push(option(c"profile", c"hq")),
@@ -203,7 +242,10 @@ pub(super) fn configure(
         (Family::Fixed, VideoCodec::Gif) => {
             options.push(option(c"gifflags", c"-offsetting-transdiff"));
         }
-        (Family::Fixed, VideoCodec::H264 | VideoCodec::Hevc) => {}
+        (
+            Family::Fixed,
+            VideoCodec::H264 | VideoCodec::Hevc | VideoCodec::Vp9 | VideoCodec::Av1,
+        ) => {}
     }
     if settings.codec.is_prores() {
         // Apple's vendor code, which some players check before trusting the stream.
@@ -234,11 +276,15 @@ fn rate(
             return Ok(());
         }
     };
-    // GPU encoders come with a default bitrate that would otherwise cap the quality.
+    // GPU encoders come with a default bitrate that would otherwise cap the quality,
+    // and libvpx targets constant quality only without one.
     raw.bit_rate = 0;
+    let quality = native_quality(settings.codec, family, quality);
     let quality_text = number(quality)?;
     match family {
-        Family::X264 | Family::X265 => options.push((c"crf", quality_text)),
+        Family::X264 | Family::X265 | Family::Vpx | Family::SvtAv1 | Family::Aom => {
+            options.push((c"crf", quality_text));
+        }
         Family::Nvenc => {
             options.push((c"rc", c"vbr".to_owned()));
             options.push((c"cq", quality_text));
@@ -260,6 +306,17 @@ fn rate(
     Ok(())
 }
 
+/// Settings give quality on x264's CRF scale; VP9 and AV1 count to 63 instead, and
+/// AV1's AMF and Quick Sync quantizers to 255.
+fn native_quality(codec: VideoCodec, family: Family, quality: u8) -> u16 {
+    let wide = (u16::from(quality) * 3 / 2 + 1).min(WIDE_WORST);
+    match (codec, family) {
+        (VideoCodec::Av1, Family::Amf | Family::QuickSync) => wide * 4,
+        (_, Family::Vpx | Family::SvtAv1 | Family::Aom) => wide,
+        _ => u16::from(quality),
+    }
+}
+
 /// Peaks may run half again over the average, smoothed over two seconds.
 fn set_bitrate(raw: &mut sys::AVCodecContext, bits: i64) {
     raw.bit_rate = bits;
@@ -272,10 +329,11 @@ fn set_bitrate(raw: &mut sys::AVCodecContext, bits: i64) {
 fn quality_bitrate(settings: &VideoSettings, quality: u8) -> i64 {
     let frames_per_second = settings.frame_rate.approx_fps();
     let pixels = f64::from(settings.width) * f64::from(settings.height) * frames_per_second;
-    let share = if settings.codec == VideoCodec::Hevc {
-        HEVC_SHARE
-    } else {
-        1.0
+    let share = match settings.codec {
+        VideoCodec::Hevc => HEVC_SHARE,
+        VideoCodec::Vp9 => VP9_SHARE,
+        VideoCodec::Av1 => AV1_SHARE,
+        _ => 1.0,
     };
     let bits_per_pixel = BITS_PER_PIXEL_AT_18 * ((18.0 - f64::from(quality)) / 6.0).exp2();
     (pixels * bits_per_pixel * share).round() as i64
