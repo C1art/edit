@@ -87,6 +87,7 @@ pub enum Command {
     MulticamView,
     ComparisonView,
     RenderInToOut,
+    RenderSelection,
     DeleteRenderFiles,
     NextGapInSequence,
     PreviousGapInSequence,
@@ -151,7 +152,7 @@ pub enum Command {
 pub const WORKSPACE_SLOTS: u8 = 9;
 
 impl Command {
-    pub const ALL: [Self; 151] = [
+    pub const ALL: [Self; 152] = [
         Self::NewProject,
         Self::OpenProject,
         Self::Save,
@@ -238,6 +239,7 @@ impl Command {
         Self::MulticamView,
         Self::ComparisonView,
         Self::RenderInToOut,
+        Self::RenderSelection,
         Self::DeleteRenderFiles,
         Self::NextGapInSequence,
         Self::PreviousGapInSequence,
@@ -389,6 +391,7 @@ impl Command {
             | MulticamView
             | ComparisonView
             | RenderInToOut
+            | RenderSelection
             | DeleteRenderFiles
             | NextGapInSequence
             | PreviousGapInSequence

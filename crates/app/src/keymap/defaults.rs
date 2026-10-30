@@ -100,7 +100,8 @@ impl Command {
             Self::NextGapInSequence => vec![shift(Key::Semicolon)],
             Self::PreviousGapInSequence => vec![ctrl_shift(Key::Semicolon)],
             Self::NextGapInTrack | Self::PreviousGapInTrack => Vec::new(),
-            Self::DeleteRenderFiles
+            Self::RenderSelection
+            | Self::DeleteRenderFiles
             | Self::ToggleLinkedSelection
             | Self::JoinThroughEdits
             | Self::ComparisonView => Vec::new(),

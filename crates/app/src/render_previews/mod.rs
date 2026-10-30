@@ -142,6 +142,27 @@ impl Editor {
     pub(crate) fn render_in_to_out(&mut self) {
         let sequence = self.timeline.sequence();
         let range = sequence.marks.range(sequence.duration());
+        self.render_spans(&[range]);
+    }
+
+    /// Renders the costly segments under the selected clips that have no preview yet.
+    pub(crate) fn render_selection(&mut self) {
+        let sequence = self.timeline.sequence();
+        let spans: Vec<_> = self
+            .view
+            .selection
+            .iter()
+            .filter_map(|&id| sequence.clip(id))
+            .map(|(_, clip)| clip.start..clip.end())
+            .collect();
+        if spans.is_empty() {
+            self.notice("Select the clips to render");
+            return;
+        }
+        self.render_spans(&spans);
+    }
+
+    fn render_spans(&mut self, spans: &[Range<Ticks>]) {
         let Some(previews) = &mut self.render_previews else {
             self.notice("Render previews are unavailable");
             return;
@@ -149,7 +170,11 @@ impl Editor {
         let in_range: Vec<_> = previews
             .segments
             .iter()
-            .filter(|(segment, _)| segment.start < range.end && range.start < segment.end)
+            .filter(|(segment, _)| {
+                spans
+                    .iter()
+                    .any(|span| segment.start < span.end && span.start < segment.end)
+            })
             .collect();
         let queue: VecDeque<Range<Ticks>> = in_range
             .iter()

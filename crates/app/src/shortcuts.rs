@@ -192,6 +192,7 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         Command::MaximizePanel => editor.toggle_maximized_panel(),
         Command::FullScreen => editor.toggle_full_screen(),
         Command::RenderInToOut => editor.render_in_to_out(),
+        Command::RenderSelection => editor.render_selection(),
         Command::DeleteRenderFiles => editor.delete_render_files(),
         Command::MarkIn
         | Command::MarkOut

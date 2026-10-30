@@ -123,6 +123,7 @@ impl Command {
             Self::MulticamView => ("multicam_view", "Multi-Camera View"),
             Self::ComparisonView => ("comparison_view", "Comparison View"),
             Self::RenderInToOut => ("render_in_to_out", "Render In to Out"),
+            Self::RenderSelection => ("render_selection", "Render Selection"),
             Self::DeleteRenderFiles => ("delete_render_files", "Delete Render Files"),
             Self::NextGapInSequence => ("next_gap_in_sequence", "Go to Next Gap in Sequence"),
             Self::PreviousGapInSequence => {
