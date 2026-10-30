@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 
 use timeline::{
-    AddFrameHold, AddTrack, ClipId, Clipboard, CloseGap, CloseGaps, FrameFit, JoinThroughEdits,
-    Lift, LinkedSelection, MakeSubsequence, PasteClips, PlaceMode, Razor, RazorTarget,
-    RippleDelete, Sequence, SetClipsEnabled, SetGrouped, SetLinked, SetLinkedSelection,
-    SetToFrameSize, Timecode, TrackKind, TrackRef,
+    AddFrameHold, AddTrack, ClipId, Clipboard, CloseGap, CloseGaps, FrameFit, InsertFrameHold,
+    JoinThroughEdits, Lift, LinkedSelection, MakeSubsequence, PasteClips, PlaceMode, Razor,
+    RazorTarget, RippleDelete, Sequence, SetClipsEnabled, SetGrouped, SetLinked,
+    SetLinkedSelection, SetToFrameSize, Ticks, Timebase, Timecode, TrackKind, TrackRef,
 };
 
 use crate::editor::Editor;
@@ -199,20 +199,37 @@ impl Editor {
     /// on the frame at the playhead.
     pub(crate) fn add_frame_hold(&mut self) {
         let at = self.playhead();
-        let mut clips = self.view.selection.clone();
-        if clips.is_empty() {
-            clips = self
-                .timeline
-                .sequence()
-                .tracks()
-                .filter(|(track, contents)| track.kind == TrackKind::Video && !contents.locked)
-                .filter_map(|(_, contents)| contents.clip_at(at))
-                .map(|clip| clip.id)
-                .collect();
-        }
+        let clips = self.held_clips(at);
         if !self.apply(AddFrameHold { clips, at }) {
             self.notice("Put the playhead over a video clip to hold its frame");
         }
+    }
+
+    /// Like `add_frame_hold`, but puts two seconds of the frame in the clip and pushes
+    /// the rest of it later.
+    pub(crate) fn insert_frame_hold(&mut self) {
+        let at = self.playhead();
+        let clips = self.held_clips(at);
+        let timebase = self.timeline.sequence().timebase;
+        let Some(length) = Timebase::new(2, 1).map(|two| Ticks(1).rescale(two, timebase)) else {
+            return;
+        };
+        if !self.apply(InsertFrameHold { clips, at, length }) {
+            self.notice("Put the playhead over a video clip to hold its frame");
+        }
+    }
+
+    fn held_clips(&self, at: Ticks) -> Vec<ClipId> {
+        if !self.view.selection.is_empty() {
+            return self.view.selection.clone();
+        }
+        self.timeline
+            .sequence()
+            .tracks()
+            .filter(|(track, contents)| track.kind == TrackKind::Video && !contents.locked)
+            .filter_map(|(_, contents)| contents.clip_at(at))
+            .map(|clip| clip.id)
+            .collect()
     }
 
     /// Disables the selected clips, or enables them when all are already disabled.

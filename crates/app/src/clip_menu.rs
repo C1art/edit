@@ -198,6 +198,9 @@ fn video_options(editor: &mut Editor, ui: &mut Ui, selected: bool) {
         if ui.button("Add Frame Hold").clicked() {
             editor.add_frame_hold();
         }
+        if ui.button("Insert Frame Hold Segment").clicked() {
+            editor.insert_frame_hold();
+        }
         ui.add_enabled_ui(selected, |ui| {
             if ui.button("Set to Frame Size").clicked() {
                 editor.set_to_frame_size(FrameFit::Fit);
