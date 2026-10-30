@@ -445,6 +445,7 @@ mod attributes;
 mod automate;
 mod bin;
 mod caption;
+mod cleanup;
 mod duplicates;
 mod enable;
 mod frame_size;

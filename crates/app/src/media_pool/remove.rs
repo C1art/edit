@@ -1,5 +1,5 @@
 use egui::{Context, Key};
-use timeline::{RemoveMedia, SourceId};
+use timeline::{ConsolidateDuplicates, Edit, RemoveMedia, RemoveUnused, SourceId};
 
 use crate::editor::Editor;
 
@@ -23,6 +23,37 @@ impl Editor {
             self.source = None;
         }
         self.apply_to_pool(RemoveMedia { source });
+    }
+
+    pub(crate) fn remove_unused(&mut self) {
+        self.tidy_pool(RemoveUnused, "Every item is used in a sequence");
+    }
+
+    pub(crate) fn consolidate_duplicates(&mut self) {
+        self.tidy_pool(ConsolidateDuplicates, "No two items are the same footage");
+    }
+
+    /// Applies an edit that takes items out of the project, and lets go of those it took
+    /// wherever the editor still holds them.
+    fn tidy_pool(&mut self, edit: impl Edit, untouched: &str) {
+        let before = self.timeline.project().media.len();
+        if !self.apply_to_pool(edit) {
+            self.notice(untouched);
+            return;
+        }
+        let project = self.timeline.project();
+        let removed = before - project.media.len();
+        let kept = |id: SourceId| project.media_item(id).is_some();
+        self.pool.selected.retain(|&id| kept(id));
+        if self
+            .source
+            .as_ref()
+            .is_some_and(|shown| !kept(shown.source))
+        {
+            self.source = None;
+        }
+        let plural = if removed == 1 { "" } else { "s" };
+        self.notice(format!("Took {removed} item{plural} out of the project"));
     }
 }
 

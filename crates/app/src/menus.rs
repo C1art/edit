@@ -196,6 +196,13 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                 editor.open_find();
             }
             ui.separator();
+            if ui.button("Remove Unused").clicked() {
+                editor.remove_unused();
+            }
+            if ui.button("Consolidate Duplicates").clicked() {
+                editor.consolidate_duplicates();
+            }
+            ui.separator();
             ui.menu_button("Preferences", |ui| {
                 let decoding = &mut editor.hardware_decoding;
                 let device = media::hardware_decoder().map_or_else(
