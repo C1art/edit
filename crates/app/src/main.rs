@@ -100,6 +100,7 @@ mod theme;
 mod timecode_field;
 mod timeline_view;
 mod title_templates;
+mod transition_defaults;
 mod transport;
 mod trim_monitor;
 mod viewer;

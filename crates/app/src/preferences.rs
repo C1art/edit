@@ -3,6 +3,7 @@ use audio::{InputDevice, OutputDevice};
 use crate::editor::Editor;
 use crate::project_store::Setting;
 use crate::proxy_offer::HeavyMedia;
+use crate::transition_defaults::TransitionDefaults;
 
 /// The choices kept from one session to the next, written as `name<TAB>value` lines.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,6 +21,7 @@ pub(crate) struct Preferences {
     voiceover_input: Option<InputDevice>,
     voiceover_countdown: bool,
     voiceover_hear_sequence: bool,
+    transitions: TransitionDefaults,
 }
 
 impl Preferences {
@@ -36,6 +38,7 @@ impl Preferences {
             voiceover_input: editor.voiceover.input.clone(),
             voiceover_countdown: editor.voiceover.countdown,
             voiceover_hear_sequence: editor.voiceover.hear_sequence,
+            transitions: editor.transition_defaults,
         }
     }
 
@@ -44,7 +47,8 @@ impl Preferences {
             "hardware_decoding\t{}\nautosave\t{}\nautosave_minutes\t{}\nscrub_audio\t{}\n\
              selection_follows_playhead\t{}\ndropped_frame_indicator\t{}\nheavy_media\t{}\n\
              audio_device\t{}\naudio_device_id\t{}\nvoiceover_input\t{}\n\
-             voiceover_input_id\t{}\nvoiceover_countdown\t{}\nvoiceover_hear_sequence\t{}\n",
+             voiceover_input_id\t{}\nvoiceover_countdown\t{}\nvoiceover_hear_sequence\t{}\n\
+             default_transition\t{}\ndefault_transition_length\t{}\n",
             self.hardware_decoding,
             self.autosave,
             self.autosave_minutes,
@@ -68,6 +72,8 @@ impl Preferences {
                 .unwrap_or_default(),
             self.voiceover_countdown,
             self.voiceover_hear_sequence,
+            self.transitions.key(),
+            self.transitions.length,
         )
     }
 
@@ -109,6 +115,13 @@ impl Preferences {
                 }
                 "voiceover_countdown" => set(&mut self.voiceover_countdown, flag),
                 "voiceover_hear_sequence" => set(&mut self.voiceover_hear_sequence, flag),
+                "default_transition" => set(
+                    &mut self.transitions.video,
+                    TransitionDefaults::video_from_key(value),
+                ),
+                "default_transition_length" => {
+                    set(&mut self.transitions.length, value.parse().ok());
+                }
                 _ => {}
             }
         }
@@ -137,6 +150,13 @@ impl Editor {
         self.voiceover.input = preferences.voiceover_input;
         self.voiceover.countdown = preferences.voiceover_countdown;
         self.voiceover.hear_sequence = preferences.voiceover_hear_sequence;
+        self.transition_defaults = TransitionDefaults {
+            length: (preferences.transitions.length).clamp(
+                *TransitionDefaults::LENGTHS.start(),
+                *TransitionDefaults::LENGTHS.end(),
+            ),
+            ..preferences.transitions
+        };
         self.saved_preferences = Some(Preferences::of(self));
     }
 
@@ -169,6 +189,7 @@ mod tests {
         voiceover_input: None,
         voiceover_countdown: true,
         voiceover_hear_sequence: false,
+        transitions: TransitionDefaults::STANDARD,
     };
 
     #[test]
@@ -193,6 +214,10 @@ mod tests {
             }),
             voiceover_countdown: false,
             voiceover_hear_sequence: true,
+            transitions: TransitionDefaults {
+                video: timeline::TransitionKind::DipToBlack,
+                length: 45,
+            },
         };
         assert_eq!(DEFAULTS.read(&chosen.to_text()), chosen);
     }

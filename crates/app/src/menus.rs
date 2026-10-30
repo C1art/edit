@@ -220,6 +220,20 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                             .suffix(" min"),
                     );
                 });
+                ui.horizontal(|ui| {
+                    ui.label("Default Transition Duration");
+                    let length = &mut editor.transition_defaults.length;
+                    ui.add(
+                        egui::DragValue::new(length)
+                            .range(crate::transition_defaults::TransitionDefaults::LENGTHS)
+                            .custom_formatter(|hundredths, _| format!("{:.2} s", hundredths / 100.0))
+                            .custom_parser(|text| {
+                                let seconds = text.trim().trim_end_matches('s').trim();
+                                seconds.parse::<f64>().ok().map(|seconds| seconds * 100.0)
+                            }),
+                    )
+                    .on_hover_text("Right-click a video transition in the Effects panel to make it the default");
+                });
                 ui.menu_button("Proxies for 4K and High Frame Rate Media", |ui| {
                     let choice = &mut editor.proxy_offer.choice;
                     for option in crate::proxy_offer::HeavyMedia::ALL {

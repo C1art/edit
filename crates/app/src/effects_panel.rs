@@ -1,4 +1,4 @@
-use egui::{CollapsingHeader, Sense, TextEdit};
+use egui::{CollapsingHeader, RichText, Sense, TextEdit};
 use timeline::{
     ApplyEffect, AudioEffect, ClipEffect, ClipId, EffectCategory, EffectPreset, MotionPreset,
     Ticks, TrackKind, TrackRef, TransitionKind, VideoEffect,
@@ -51,6 +51,13 @@ impl EffectItem {
     }
 }
 
+/// What was done to the panel's entries this frame.
+struct Picked {
+    item: Option<EffectItem>,
+    default: TransitionKind,
+    new_default: Option<TransitionKind>,
+}
+
 /// An Effects panel entry released over a track.
 #[derive(Debug, Clone)]
 pub struct EffectDrop {
@@ -70,11 +77,15 @@ pub(crate) fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
     let search = editor.effects_search.trim().to_lowercase();
     let searching = !search.is_empty();
     let shown = |item: &EffectItem| item.name().to_lowercase().contains(&search);
-    let mut chosen = None;
+    let mut picked = Picked {
+        item: None,
+        default: editor.transition_defaults.video,
+        new_default: None,
+    };
     let mut preset_action = None;
     egui::ScrollArea::vertical().show(ui, |ui| {
         let presets = &editor.presets;
-        preset_action = presets_folder(ui, presets, searching, &shown, &mut chosen);
+        preset_action = presets_folder(ui, presets, searching, &shown, &mut picked);
         let video = VideoEffect::catalog();
         let groups = EffectCategory::ALL.map(|category| {
             let items = video
@@ -83,7 +94,7 @@ pub(crate) fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
                 .map(|effect| EffectItem::Video(Box::new(effect.clone())));
             (category.name(), items.collect::<Vec<_>>())
         });
-        folder(ui, "Video Effects", searching, &groups, &shown, &mut chosen);
+        folder(ui, "Video Effects", searching, &groups, &shown, &mut picked);
         let groups = TRANSITION_CATEGORIES.map(|category| {
             let items = TransitionKind::VIDEO
                 .iter()
@@ -97,7 +108,7 @@ pub(crate) fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
             searching,
             &groups,
             &shown,
-            &mut chosen,
+            &mut picked,
         );
         let audio = AudioEffect::catalog();
         let groups = AUDIO_CATEGORIES.map(|category| {
@@ -107,7 +118,7 @@ pub(crate) fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
                 .map(|effect| EffectItem::Audio(Box::new(effect.clone())));
             (category, items.collect::<Vec<_>>())
         });
-        folder(ui, "Audio Effects", searching, &groups, &shown, &mut chosen);
+        folder(ui, "Audio Effects", searching, &groups, &shown, &mut picked);
         let transitions = TransitionKind::AUDIO
             .iter()
             .map(|&kind| EffectItem::Transition(TrackKind::Audio, kind));
@@ -118,10 +129,13 @@ pub(crate) fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
             searching,
             &groups,
             &shown,
-            &mut chosen,
+            &mut picked,
         );
     });
-    if let Some(item) = chosen {
+    if let Some(video) = picked.new_default {
+        editor.transition_defaults.video = video;
+    }
+    if let Some(item) = picked.item {
         apply_to_selection(editor, item);
     }
     match preset_action {
@@ -143,7 +157,7 @@ fn presets_folder(
     presets: &[EffectPreset],
     searching: bool,
     shown: &dyn Fn(&EffectItem) -> bool,
-    chosen: &mut Option<EffectItem>,
+    picked: &mut Picked,
 ) -> Option<PresetAction> {
     let items = presets
         .iter()
@@ -167,7 +181,7 @@ fn presets_folder(
                     .open(searching.then_some(true))
                     .show(ui, |ui| {
                         for item in &motions {
-                            let response = entry(ui, item, chosen);
+                            let response = entry(ui, item, picked);
                             if let EffectItem::Motion(preset) = item {
                                 response.on_hover_text(preset.description());
                             }
@@ -178,7 +192,7 @@ fn presets_folder(
                 ui.weak("Keep a clip's effects with Save Preset… in Effect Controls");
             }
             for (index, item) in &matching {
-                let response = entry(ui, item, chosen).on_hover_text(contents(&presets[*index]));
+                let response = entry(ui, item, picked).on_hover_text(contents(&presets[*index]));
                 response.context_menu(|ui| {
                     if ui.button("Rename…").clicked() {
                         action = Some(PresetAction::Rename(*index));
@@ -207,7 +221,7 @@ fn folder(
     searching: bool,
     groups: &[(&str, Vec<EffectItem>)],
     shown: &dyn Fn(&EffectItem) -> bool,
-    chosen: &mut Option<EffectItem>,
+    picked: &mut Picked,
 ) {
     let matching = groups.iter().map(|(group, items)| {
         let items: Vec<_> = items.iter().filter(|item| shown(item)).collect();
@@ -222,33 +236,51 @@ fn folder(
         .show(ui, |ui| {
             for (group, items) in matching {
                 if group.is_empty() {
-                    entries(ui, &items, chosen);
+                    entries(ui, &items, picked);
                 } else {
                     CollapsingHeader::new(group)
                         .open(searching.then_some(true))
-                        .show(ui, |ui| entries(ui, &items, chosen));
+                        .show(ui, |ui| entries(ui, &items, picked));
                 }
             }
         });
 }
 
-fn entries(ui: &mut egui::Ui, items: &[&EffectItem], chosen: &mut Option<EffectItem>) {
+fn entries(ui: &mut egui::Ui, items: &[&EffectItem], picked: &mut Picked) {
     for &item in items {
-        entry(ui, item, chosen);
+        entry(ui, item, picked);
     }
 }
 
-/// An item that can be dragged out, or double-clicked to choose it.
-fn entry(ui: &mut egui::Ui, item: &EffectItem, chosen: &mut Option<EffectItem>) -> egui::Response {
-    let label = egui::Label::new(item.name())
+/// An item that can be dragged out, or double-clicked to choose it. The default video
+/// transition is marked, and any other can be made the default from its context menu.
+fn entry(ui: &mut egui::Ui, item: &EffectItem, picked: &mut Picked) -> egui::Response {
+    let video_transition = match *item {
+        EffectItem::Transition(TrackKind::Video, kind) => Some(kind),
+        _ => None,
+    };
+    let name = match video_transition {
+        Some(kind) if kind == picked.default => {
+            RichText::new(format!("{} (Default)", item.name())).strong()
+        }
+        _ => RichText::new(item.name()),
+    };
+    let label = egui::Label::new(name)
         .selectable(false)
         .sense(Sense::click_and_drag());
     let response = ui.add(label);
+    if let Some(kind) = video_transition.filter(|&kind| kind != picked.default) {
+        response.context_menu(|ui| {
+            if ui.button("Set Selected as Default Transition").clicked() {
+                picked.new_default = Some(kind);
+            }
+        });
+    }
     if response.drag_started() {
         response.dnd_set_drag_payload(item.clone());
     }
     if response.double_clicked() {
-        *chosen = Some(item.clone());
+        picked.item = Some(item.clone());
     }
     if response.dragged() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
