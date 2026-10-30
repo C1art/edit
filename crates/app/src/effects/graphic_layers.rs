@@ -5,6 +5,7 @@ use timeline::{
 };
 
 use super::generated::{pairs, shape_controls, text_controls};
+use super::layer_animation::animation_controls;
 use crate::mixer::{response_state, Change};
 
 /// A new text layer, a shape layer of a kind, or a picture from a file still to be
@@ -210,6 +211,7 @@ fn layer_controls(ui: &mut egui::Ui, layer: &mut GraphicLayer, height: u32) -> O
             change = response_state(&ui.add(opacity), change);
         });
     });
+    change = animation_controls(ui, layer).or(change);
     match &mut layer.content {
         GraphicContent::Text(title) => {
             // Named after its text until renamed, as Premiere names text layers.

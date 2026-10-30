@@ -45,6 +45,7 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                 if ui.add(title).clicked() {
                     placing::new_generated(editor, Generator::Title(Title::default()));
                 }
+                crate::title_templates::menu(ui, editor);
                 if ui.button("Sequence").clicked() {
                     editor.new_sequence();
                 }

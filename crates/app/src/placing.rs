@@ -167,8 +167,9 @@ fn pieces(media: &[SourceDrag]) -> Vec<(SourceId, Ticks, Ticks)> {
 /// track from the targeted one up, adding a track when all are busy, then selects the
 /// placed clip and returns it.
 pub fn new_generated(editor: &mut Editor, generator: Generator) -> Option<ClipId> {
-    let sequence = editor.timeline.sequence();
-    let count = sequence
+    let count = editor
+        .timeline
+        .sequence()
         .media
         .iter()
         .filter(|item| {
@@ -178,6 +179,17 @@ pub fn new_generated(editor: &mut Editor, generator: Generator) -> Option<ClipId
         })
         .count();
     let name = format!("{} {:02}", generator.kind_name(), count + 1);
+    place_generated(editor, name, generator, None)
+}
+
+/// As [`new_generated`], naming the media and placing `length` of it rather than the
+/// usual still length.
+pub fn place_generated(
+    editor: &mut Editor,
+    name: String,
+    generator: Generator,
+    length: Option<Ticks>,
+) -> Option<ClipId> {
     if !editor.apply(AddGenerated { name, generator }) {
         return None;
     }
@@ -185,7 +197,7 @@ pub fn new_generated(editor: &mut Editor, generator: Generator) -> Option<ClipId
     let item = sequence.media.last()?;
     let source = item.id;
     let range = item.default_range(sequence.timebase);
-    let duration = range.end - range.start;
+    let duration = length.map_or(range.end - range.start, |length| length.min(item.duration));
     let audio_track = item
         .has_audio
         .then(|| editor.view.targets.audio.unwrap_or(0))

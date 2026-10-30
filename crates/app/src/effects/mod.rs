@@ -13,6 +13,7 @@ mod image;
 mod key_selection;
 mod keying;
 mod lane;
+mod layer_animation;
 mod layered;
 mod lighting;
 mod look;

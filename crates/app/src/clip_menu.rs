@@ -1,7 +1,7 @@
 use egui::{Atom, Button, Checkbox, RichText, Ui};
 use timeline::{
     ClipId, Edit, FrameFit, IntoSync, JoinThroughEdits, Label, SetClipLabel, SetGrouped,
-    SetTimeInterpolation, SyncMethod, TimeInterpolation, TrackKind,
+    SetTimeInterpolation, SyncMethod, TimeInterpolation, TitleTemplate, TrackKind,
 };
 
 use crate::editor::Editor;
@@ -116,6 +116,11 @@ fn on_selection(editor: &mut Editor, ui: &mut Ui) {
     }
     if ui.button("Rename…").clicked() {
         editor.rename_clips();
+    }
+    if let Some(clip) = kept_title(editor) {
+        if ui.button("Save as Title Template…").clicked() {
+            editor.name_title_template(clip);
+        }
     }
     let sequence = editor.timeline.sequence();
     let mut enabled = !editor.view.selection.is_empty()
@@ -269,4 +274,18 @@ fn set_label(editor: &mut Editor, label: Option<Label>) {
     }
     let clips = editor.view.selection.clone();
     editor.apply(SetClipLabel { clips, label });
+}
+
+/// The one selected clip when it's a title or graphic that can be kept as a template.
+fn kept_title(editor: &Editor) -> Option<ClipId> {
+    let [clip] = editor.view.selection[..] else {
+        return None;
+    };
+    let sequence = editor.timeline.sequence();
+    let (_, placed) = sequence.clip(clip)?;
+    let item = sequence
+        .media
+        .iter()
+        .find(|item| item.id == placed.source)?;
+    TitleTemplate::is_kept(item).then_some(clip)
 }

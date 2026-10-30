@@ -145,6 +145,8 @@ pub struct Editor {
     pub(crate) keymap_window: Option<crate::keymap::KeymapWindow>,
     pub(crate) presets: Vec<timeline::EffectPreset>,
     pub(crate) preset_dialog: Option<crate::effect_presets::PresetDialog>,
+    pub(crate) title_templates: Vec<timeline::TitleTemplate>,
+    pub(crate) template_dialog: Option<crate::title_templates::TemplateDialog>,
     pub(crate) workspaces: crate::workspaces::Workspaces,
     pub(crate) naming_workspace: Option<crate::workspaces::NamingWorkspace>,
     pub(crate) typing: Option<crate::graphics_tools::Typing>,
@@ -298,6 +300,8 @@ impl Editor {
             naming_workspace: None,
             typing: None,
             preset_dialog: None,
+            title_templates: Vec::new(),
+            template_dialog: None,
         };
         for path in initial {
             editor.open_path(path);
