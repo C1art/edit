@@ -80,7 +80,7 @@ pub use audio_plan::{audio_fade, audio_span, clip_balance, clip_level, track_aut
 pub use audio_type::AudioType;
 pub use bin::{Bin, BinId, BinSearch, SearchField};
 pub use blend::BlendMode;
-pub use caption::{captions_from_cues, Caption, CaptionStyle, Captions};
+pub use caption::{captions_from_cues, Caption, CaptionStyle, Captions, CAPTION_MARGIN};
 pub use clip_line::ClipLine;
 pub use collect::{collect_files, Collect, FileCopy};
 pub use color::{ColorCorrection, ColorVignette, ColorWheel};
@@ -90,16 +90,16 @@ pub use edit::{
     clamp_delta, is_through_edit, pauses, synchronized_clips, unused_time, AddBin, AddEdits,
     AddFrameHold, AddGenerated, AddMarker, AddNest, AddSpeedKeyframe, AddSubmix, AddTrack,
     AddTracks, ApplyEffect, ApplyTransitions, Attribute, AutoDuck, AutomateToSequence,
-    AutomatedPiece, BreakoutToMono, ClearMarkers, ClipEffect, ClipSound, Clipboard, CloseGap,
-    CloseGaps, ConsolidateDuplicates, CreateMulticam, DeleteEmptyTracks, DeltaBounds,
-    DuplicateMedia, Edge, ExtractMarked, FlattenMulticam, FrameFit, HoldFrame, ImportMedia, InNest,
-    InsertFrameHold, InterpretFootage, IntoSync, JoinThroughEdits, Lift, LiftMarked, MakeOffline,
-    MakeSubclip, MakeSubsequence, MarkerOwner, MergeClips, MoveClips, MoveMode, MoveToBin,
-    NestClips, NestFromMedia, NewTracks, NormalizeClipGains, NudgeClipGain, PasteAttributes,
-    PasteClips, PauseRules, PlaceClip, PlaceClips, PlaceMode, RateStretch, Razor, RazorTarget,
-    ReframeSequence, RelinkMedia, RemixClip, RemoveAttributes, RemoveBin, RemoveMarker,
-    RemoveMedia, RemovePauses, RemoveSpeedKeyframe, RemoveSubmix, RemoveTimeRemap, RemoveTrack,
-    RemoveTransitions, RemoveUnused, RenameBin, RenameClips, RenameMedia, RenameTrack,
+    AutomatedPiece, BreakoutToMono, CaptionsToTitles, ClearMarkers, ClipEffect, ClipSound,
+    Clipboard, CloseGap, CloseGaps, ConsolidateDuplicates, CreateMulticam, DeleteEmptyTracks,
+    DeltaBounds, DuplicateMedia, Edge, ExtractMarked, FlattenMulticam, FrameFit, HoldFrame,
+    ImportMedia, InNest, InsertFrameHold, InterpretFootage, IntoSync, JoinThroughEdits, Lift,
+    LiftMarked, MakeOffline, MakeSubclip, MakeSubsequence, MarkerOwner, MergeClips, MoveClips,
+    MoveMode, MoveToBin, NestClips, NestFromMedia, NewTracks, NormalizeClipGains, NudgeClipGain,
+    PasteAttributes, PasteClips, PauseRules, PlaceClip, PlaceClips, PlaceMode, RateStretch, Razor,
+    RazorTarget, ReframeSequence, RelinkMedia, RemixClip, RemoveAttributes, RemoveBin,
+    RemoveMarker, RemoveMedia, RemovePauses, RemoveSpeedKeyframe, RemoveSubmix, RemoveTimeRemap,
+    RemoveTrack, RemoveTransitions, RemoveUnused, RenameBin, RenameClips, RenameMedia, RenameTrack,
     RenderAndReplace, ReplaceClip, RestoreUnrendered, RippleDelete, RippleTrimToPlayhead, Roll,
     SetBinSearch, SetCaptions, SetChannelMap, SetClipAudioEffects, SetClipGain, SetClipLabel,
     SetClipLine, SetClipLook, SetClipPan, SetClipSpeed, SetClipVolume, SetClipsEnabled,

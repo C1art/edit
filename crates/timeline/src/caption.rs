@@ -2,6 +2,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{Rgb, Ticks, TimelineError};
 
+/// How far above the frame's bottom captions sit, as a fraction of its height, inside
+/// title safe.
+pub const CAPTION_MARGIN: f32 = 0.08;
+
 /// Subtitles of a sequence, burned into its program picture unless hidden.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(default)]

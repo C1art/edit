@@ -31,39 +31,51 @@ impl Edit for AddGenerated {
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
-        let id = SourceId(sequence.ids.next());
-        let seconds_long = match self.generator {
-            Generator::CountingLeader(_) => LEADER_SECONDS,
-            _ => GENERATED_SECONDS,
-        };
+        let item = generated_item(sequence, self.name.clone(), self.generator.clone());
         Arc::make_mut(&mut sequence.media).push(MediaItem {
-            id,
-            name: self.name.clone(),
-            path: Default::default(),
-            duration: seconds(seconds_long, sequence.timebase),
-            video: Some(sequence.format),
-            has_audio: matches!(
-                self.generator,
-                Generator::BarsAndTone | Generator::CountingLeader(_)
-            ),
-            proxy: None,
-            bin: None,
-            generator: Some(self.generator.clone()),
-            nest: None,
-            subclip: None,
-            interpreted_rate: None,
-            interpreted_aspect: None,
-            interpreted_color: None,
-            interpreted_fields: None,
-            alpha: Default::default(),
-            log: Default::default(),
-            offline: false,
-            still: false,
-            channel_map: None,
             placed: self.placed,
-            frame_fit: None,
+            ..item
         });
         Ok(())
+    }
+}
+
+/// New media drawing `generator`, at the sequence's frame size and outside any bin.
+pub(super) fn generated_item(
+    sequence: &mut Sequence,
+    name: String,
+    generator: Generator,
+) -> MediaItem {
+    let seconds_long = match generator {
+        Generator::CountingLeader(_) => LEADER_SECONDS,
+        _ => GENERATED_SECONDS,
+    };
+    MediaItem {
+        id: SourceId(sequence.ids.next()),
+        name,
+        path: Default::default(),
+        duration: seconds(seconds_long, sequence.timebase),
+        video: Some(sequence.format),
+        has_audio: matches!(
+            generator,
+            Generator::BarsAndTone | Generator::CountingLeader(_)
+        ),
+        proxy: None,
+        bin: None,
+        generator: Some(generator),
+        nest: None,
+        subclip: None,
+        interpreted_rate: None,
+        interpreted_aspect: None,
+        interpreted_color: None,
+        interpreted_fields: None,
+        alpha: Default::default(),
+        log: Default::default(),
+        offline: false,
+        still: false,
+        channel_map: None,
+        placed: None,
+        frame_fit: None,
     }
 }
 

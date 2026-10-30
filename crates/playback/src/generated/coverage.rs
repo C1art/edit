@@ -4,15 +4,13 @@ use std::sync::Arc;
 use egui::epaint::text::{Galley, LayoutJob, TextFormat};
 use egui::epaint::{Color32, FontId};
 use egui::{Align, Rect};
-use timeline::{TextAlign, Title};
+use timeline::{TextAlign, Title, CAPTION_MARGIN};
 
 use super::title_fonts::TitleFonts;
 use super::Anchor;
 
 /// Titles never wrap closer than this to the canvas edges, as broadcast title safe.
 const TITLE_SAFE: f32 = 0.9;
-/// Captions sit this fraction of the canvas height above its bottom, inside title safe.
-const CAPTION_MARGIN: f32 = 0.08;
 /// Faux italic leans each row this far right per pixel up, about eleven degrees.
 const ITALIC_SLANT: f32 = 0.2;
 /// Stands in for infinity in the distance transform, where infinity minus itself is NaN.

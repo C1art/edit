@@ -105,6 +105,20 @@ pub(crate) fn sequence_menu(editor: &mut Editor, ui: &mut egui::Ui) {
     {
         editor.prompt_path(PathPurpose::ExportCaptions);
     }
+    if ui
+        .add_enabled(has_captions, Button::new("Upgrade Captions to Titles"))
+        .on_hover_text(
+            "Make the captions between In and Out, or all of them, into title clips on a new \
+             top track, to style and animate",
+        )
+        .clicked()
+    {
+        let sequence = editor.timeline.sequence();
+        let range = sequence.marks.range(sequence.duration());
+        if !editor.apply(timeline::CaptionsToTitles { range }) {
+            editor.notice("No captions between In and Out");
+        }
+    }
     ui.separator();
     let lift =
         Button::new("Lift In to Out").shortcut_text(editor.keymap.label(Command::LiftMarked));
