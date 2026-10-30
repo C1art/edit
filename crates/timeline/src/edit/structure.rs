@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use crate::edit::ops;
 use crate::{
-    Edit, FrameRate, MediaItem, Sequence, SourceId, Ticks, TimeDisplay, TimelineError, Track,
-    TrackKind, TrackRef, VideoFormat,
+    Edit, FrameFit, FrameRate, MediaItem, Sequence, SourceId, Ticks, TimeDisplay, TimelineError,
+    Track, TrackKind, TrackRef, VideoFormat,
 };
 
 /// Adds a track above the existing ones of its kind.
@@ -135,6 +135,8 @@ pub struct ImportMedia {
     pub interpreted_rate: Option<FrameRate>,
     /// How long an edit places of a still when nothing is marked, instead of the standard.
     pub placed: Option<Ticks>,
+    /// How clips of the pictures are scaled to the sequence frame when placed.
+    pub frame_fit: Option<FrameFit>,
 }
 
 impl Edit for ImportMedia {
@@ -169,6 +171,7 @@ impl Edit for ImportMedia {
             still: self.still,
             channel_map: None,
             placed: self.placed,
+            frame_fit: self.frame_fit,
         });
         Ok(())
     }

@@ -53,6 +53,7 @@ impl PreviewPictures {
                 still: false,
                 channel_map: None,
                 placed: None,
+                frame_fit: None,
             });
             let clip = Clip::new(
                 ClipId(index),

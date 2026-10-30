@@ -403,6 +403,7 @@ mod tests {
             still: false,
             interpreted_rate: None,
             placed: None,
+            frame_fit: None,
         };
         timeline.apply(import).unwrap();
         let source = timeline.sequence().media[0].id;

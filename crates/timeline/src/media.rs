@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::generator::placed_length;
 use crate::{
-    AlphaInterpretation, BinId, ColorSpace, FieldOrder, FrameRate, Generator, Nest, PixelAspect,
-    Speed, Ticks, Timebase, VideoFormat,
+    AlphaInterpretation, BinId, ColorSpace, FieldOrder, FrameFit, FrameRate, Generator, Nest,
+    PixelAspect, Speed, Ticks, Timebase, VideoFormat,
 };
 
 /// Identifies a media item in the sequence's media pool.
@@ -71,6 +71,10 @@ pub struct MediaItem {
     /// as the preference stood when it was imported; unset places the standard length.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub placed: Option<Ticks>,
+    /// How clips of the pictures are scaled to the sequence frame when placed, as the
+    /// preference stood when it was imported; unset places them at their own size.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frame_fit: Option<FrameFit>,
 }
 
 /// Which of a file's audio channels, counting from zero, play on the left and the right;

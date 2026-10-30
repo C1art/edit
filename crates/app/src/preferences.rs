@@ -1,6 +1,7 @@
 use audio::{InputDevice, OutputDevice};
 
 use crate::editor::Editor;
+use crate::media_scaling::MediaScaling;
 use crate::project_store::Setting;
 use crate::proxy_offer::HeavyMedia;
 use crate::still_length::StillLength;
@@ -24,6 +25,7 @@ pub(crate) struct Preferences {
     voiceover_hear_sequence: bool,
     transitions: TransitionDefaults,
     still_length: StillLength,
+    media_scaling: MediaScaling,
 }
 
 impl Preferences {
@@ -42,6 +44,7 @@ impl Preferences {
             voiceover_hear_sequence: editor.voiceover.hear_sequence,
             transitions: editor.transition_defaults,
             still_length: editor.still_length,
+            media_scaling: editor.media_scaling,
         }
     }
 
@@ -51,7 +54,8 @@ impl Preferences {
              selection_follows_playhead\t{}\ndropped_frame_indicator\t{}\nheavy_media\t{}\n\
              audio_device\t{}\naudio_device_id\t{}\nvoiceover_input\t{}\n\
              voiceover_input_id\t{}\nvoiceover_countdown\t{}\nvoiceover_hear_sequence\t{}\n\
-             default_transition\t{}\ndefault_transition_length\t{}\nstill_length\t{}\n",
+             default_transition\t{}\ndefault_transition_length\t{}\nstill_length\t{}\n\
+             media_scaling\t{}\n",
             self.hardware_decoding,
             self.autosave,
             self.autosave_minutes,
@@ -78,6 +82,7 @@ impl Preferences {
             self.transitions.key(),
             self.transitions.length,
             self.still_length.0,
+            self.media_scaling.key(),
         )
     }
 
@@ -127,6 +132,7 @@ impl Preferences {
                     set(&mut self.transitions.length, value.parse().ok());
                 }
                 "still_length" => set(&mut self.still_length.0, value.parse().ok()),
+                "media_scaling" => set(&mut self.media_scaling, MediaScaling::from_key(value)),
                 _ => {}
             }
         }
@@ -168,6 +174,7 @@ impl Editor {
                 .0
                 .clamp(*StillLength::LENGTHS.start(), *StillLength::LENGTHS.end()),
         );
+        self.media_scaling = preferences.media_scaling;
         self.saved_preferences = Some(Preferences::of(self));
     }
 
@@ -202,6 +209,7 @@ mod tests {
         voiceover_hear_sequence: false,
         transitions: TransitionDefaults::STANDARD,
         still_length: StillLength::STANDARD,
+        media_scaling: MediaScaling::None,
     };
 
     #[test]
@@ -231,6 +239,7 @@ mod tests {
                 length: 45,
             },
             still_length: StillLength(250),
+            media_scaling: MediaScaling::SetToFillFrame,
         };
         assert_eq!(DEFAULTS.read(&chosen.to_text()), chosen);
     }

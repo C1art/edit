@@ -1,6 +1,8 @@
+use crate::edit::frame_size::scale_hundredths;
 use crate::edit::ops::{self, Relinks};
 use crate::{
-    Clip, ClipId, Edit, LinkId, Sequence, SourceId, Speed, Ticks, TimelineError, TrackRef,
+    Clip, ClipId, Edit, LinkId, Param, Sequence, SourceId, Speed, Ticks, TimelineError, TrackKind,
+    TrackRef,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -52,6 +54,10 @@ impl Edit for PlaceClip {
             return Err(TimelineError::NothingToEdit);
         }
         let conform = media.conform();
+        let fitted = media
+            .frame_fit
+            .zip(media.played_format())
+            .map(|(fit, picture)| Param::new(scale_hundredths(picture, sequence.format, fit)));
         let duration = self
             .fill
             .unwrap_or_else(|| conform.sequence_span(self.duration));
@@ -80,7 +86,7 @@ impl Edit for PlaceClip {
         }
         let link = (targets.len() > 1).then(|| LinkId(sequence.ids.next()));
         for track in targets {
-            let clip = Clip {
+            let mut clip = Clip {
                 link,
                 conform,
                 speed,
@@ -92,6 +98,10 @@ impl Edit for PlaceClip {
                     self.source_in,
                 )
             };
+            if let (Some(scale), TrackKind::Video) = (&fitted, track.kind) {
+                clip.look.motion.scale = scale.clone();
+                clip.look.motion.scale_width = scale.clone();
+            }
             ops::insert(sequence, track, clip)?;
         }
         Ok(())

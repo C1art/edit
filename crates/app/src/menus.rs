@@ -237,6 +237,13 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                     ))
                     .on_hover_text("How long stills and titles brought in from now on place for");
                 });
+                ui.menu_button("Default Media Scaling", |ui| {
+                    let choice = &mut editor.media_scaling;
+                    for option in crate::media_scaling::MediaScaling::ALL {
+                        ui.radio_value(choice, option, option.label());
+                    }
+                    ui.weak("For media brought in from now on");
+                });
                 ui.menu_button("Proxies for 4K and High Frame Rate Media", |ui| {
                     let choice = &mut editor.proxy_offer.choice;
                     for option in crate::proxy_offer::HeavyMedia::ALL {

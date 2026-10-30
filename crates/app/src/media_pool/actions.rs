@@ -119,7 +119,13 @@ impl Editor {
                         .still
                         .then(|| self.still_length.placed(self.timeline.sequence()))
                         .flatten();
-                    if self.apply(ImportMedia { placed, ..media }) {
+                    let frame_fit = self.media_scaling.fit();
+                    let media = ImportMedia {
+                        placed,
+                        frame_fit,
+                        ..media
+                    };
+                    if self.apply(media) {
                         if let Some(item) = self.timeline.sequence().media.last() {
                             self.proxy_offer.imported(item);
                             let id = item.id;

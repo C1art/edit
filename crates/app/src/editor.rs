@@ -64,6 +64,7 @@ pub struct Editor {
     pub(crate) full_screen: bool,
     pub(crate) transition_defaults: crate::transition_defaults::TransitionDefaults,
     pub(crate) still_length: crate::still_length::StillLength,
+    pub(crate) media_scaling: crate::media_scaling::MediaScaling,
     pub(crate) program_zoom: crate::program_zoom::ProgramZoom,
     /// Whether the program monitor shows every camera of the multi-camera clips beside
     /// the program, and where it puts them while it does.
@@ -241,6 +242,7 @@ impl Editor {
             full_screen: false,
             transition_defaults: crate::transition_defaults::TransitionDefaults::STANDARD,
             still_length: crate::still_length::StillLength::STANDARD,
+            media_scaling: crate::media_scaling::MediaScaling::None,
             program_zoom: Default::default(),
             multicam_view: false,
             multicam_layout: None,

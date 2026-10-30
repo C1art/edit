@@ -151,5 +151,6 @@ pub(crate) fn probe(
         still: info.still,
         interpreted_rate: info.sequence.then_some(sequence_rate),
         placed: None,
+        frame_fit: None,
     })
 }

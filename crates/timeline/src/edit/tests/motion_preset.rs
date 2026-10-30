@@ -14,6 +14,7 @@ fn ten_frames() -> (Timeline, ClipId) {
             still: false,
             interpreted_rate: None,
             placed: None,
+            frame_fit: None,
         })
         .unwrap();
     let long = timeline.sequence().media[1].id;

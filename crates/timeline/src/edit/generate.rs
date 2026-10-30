@@ -61,6 +61,7 @@ impl Edit for AddGenerated {
             still: false,
             channel_map: None,
             placed: self.placed,
+            frame_fit: None,
         });
         Ok(())
     }

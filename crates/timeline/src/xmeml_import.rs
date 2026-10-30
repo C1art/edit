@@ -364,6 +364,7 @@ impl Edit for ImportXmeml {
                         still: false,
                         channel_map: None,
                         placed: None,
+                        frame_fit: None,
                     });
                     id
                 }
@@ -445,6 +446,7 @@ impl Edit for ImportXmeml {
             still: false,
             channel_map: None,
             placed: None,
+            frame_fit: None,
         });
         sequence.fit_nest(id);
         Ok(())

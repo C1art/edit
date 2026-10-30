@@ -30,6 +30,7 @@ fn rendered_title() -> (Timeline, SourceId, SourceId) {
             still: false,
             interpreted_rate: None,
             placed: None,
+            frame_fit: None,
         })
         .unwrap();
     let rendered = timeline.sequence().media[2].id;
@@ -110,6 +111,7 @@ fn a_render_too_short_for_the_clip_is_refused() {
             still: false,
             interpreted_rate: None,
             placed: None,
+            frame_fit: None,
         })
         .unwrap();
     let short = timeline.sequence().media[3].id;

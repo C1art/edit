@@ -14,6 +14,7 @@ fn multicam() -> (Timeline, SourceId) {
             still: false,
             interpreted_rate: None,
             placed: None,
+            frame_fit: None,
         })
         .unwrap();
     let second = timeline.sequence().media[1].id;
