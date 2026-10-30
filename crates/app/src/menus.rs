@@ -100,6 +100,13 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             {
                 editor.prompt_path(PathPurpose::Export(Interchange::FinalCutXml));
             }
+            let has_markers = !editor.timeline.sequence().markers.is_empty();
+            if ui
+                .add_enabled(has_markers, Button::new("Export Markers…"))
+                .clicked()
+            {
+                editor.prompt_path(PathPurpose::Export(Interchange::MarkersCsv));
+            }
             ui.separator();
             let has_media = !editor.timeline.sequence().media.is_empty();
             let manager = Button::new("Project Manager…");

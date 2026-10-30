@@ -51,6 +51,8 @@ pub enum Interchange {
     Edl,
     /// Final Cut Pro 7 XML, which Premiere and Resolve also import.
     FinalCutXml,
+    /// The sequence markers, for a spreadsheet or a client's notes.
+    MarkersCsv,
 }
 
 impl Interchange {
@@ -58,6 +60,7 @@ impl Interchange {
         match self {
             Self::Edl => EDL,
             Self::FinalCutXml => XML,
+            Self::MarkersCsv => CSV,
         }
     }
 }
@@ -73,6 +76,7 @@ pub enum AfterDiscard {
 const SUBRIP: &str = "srt";
 const EDL: &str = "edl";
 const XML: &str = "xml";
+const CSV: &str = "csv";
 
 /// How a file the user just chose is named in a message: they know where it is, and its
 /// full path would bury what's being said about it.
@@ -207,6 +211,7 @@ impl Editor {
                 timeline::to_edl(sequence, &title, self.view.targets.video.unwrap_or(0))
             }
             Interchange::FinalCutXml => timeline::to_xmeml(sequence, &title),
+            Interchange::MarkersCsv => timeline::markers_csv(sequence),
         };
         match &mut self.store {
             Some(store) => store.write_interchange(path, text),
@@ -330,7 +335,7 @@ impl Editor {
                     self.notice(format!("Cannot import {}: {error}", quoted_name(&path)));
                 }
                 StoreEvent::InterchangeWritten(path, Ok(())) => {
-                    self.notice(format!("Exported the sequence to {}", path.display()));
+                    self.notice(format!("Exported {}", path.display()));
                 }
                 StoreEvent::InterchangeWritten(path, Err(error)) => {
                     self.notice(format!("Cannot export {}: {error}", quoted_name(&path)));

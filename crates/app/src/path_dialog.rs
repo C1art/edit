@@ -151,6 +151,11 @@ fn wording(purpose: PathPurpose) -> (&'static str, &'static str, &'static str) {
             "Writes the sequence as Final Cut Pro XML, for Premiere, Resolve or Final Cut.",
             "Export",
         ),
+        PathPurpose::Export(Interchange::MarkersCsv) => (
+            "Export Markers",
+            "Writes the sequence markers as comma-separated values, for a spreadsheet.",
+            "Export",
+        ),
         PathPurpose::ExportMedia => ("Export Media To", "", "Choose"),
         PathPurpose::ExportFrame => (
             "Export Frame",
@@ -261,6 +266,7 @@ fn kind(purpose: PathPurpose) -> (Mode, Vec<FileFilter>) {
         PathPurpose::ExportCaptions => (Mode::Save, vec![SUBRIP]),
         PathPurpose::Export(Interchange::Edl) => (Mode::Save, vec![EDL]),
         PathPurpose::Export(Interchange::FinalCutXml) => (Mode::Save, vec![FINAL_CUT_XML]),
+        PathPurpose::Export(Interchange::MarkersCsv) => (Mode::Save, vec![MARKERS_CSV]),
         PathPurpose::ExportFrame => (Mode::Save, vec![FRAME_IMAGES]),
         PathPurpose::ExportMedia => (Mode::Save, vec![ALL_MEDIA]),
         PathPurpose::Lut(..) => (Mode::Open { many: false }, vec![CUBE_LUT, ALL_FILES]),

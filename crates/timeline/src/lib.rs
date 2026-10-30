@@ -29,6 +29,7 @@ mod leader;
 mod links;
 mod look;
 mod marker;
+mod marker_csv;
 mod marks;
 mod mask;
 mod mask_path;
@@ -145,6 +146,7 @@ pub use leader::{CountingLeader, LeaderPicture, LEADER_SECONDS};
 pub use links::LinkedSelection;
 pub use look::{Crop, Look, Motion};
 pub use marker::{chapters, Chapter, Marker, MarkerColor, MarkerId, MarkerKind};
+pub use marker_csv::markers_csv;
 pub use marks::Marks;
 pub use mask::{Mask, MaskShape};
 pub use mask_path::{

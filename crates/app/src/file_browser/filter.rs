@@ -45,6 +45,10 @@ pub const EDL: FileFilter = FileFilter {
     name: "CMX 3600 EDL",
     extensions: &[&["edl"]],
 };
+pub const MARKERS_CSV: FileFilter = FileFilter {
+    name: "Comma-Separated Values",
+    extensions: &[&["csv"]],
+};
 pub const SUBRIP: FileFilter = FileFilter {
     name: "SubRip Captions",
     extensions: &[&["srt"]],
