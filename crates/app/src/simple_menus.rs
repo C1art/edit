@@ -210,6 +210,13 @@ fn markers(editor: &mut Editor, ui: &mut Ui) {
         "Clear All Markers",
         has_markers,
     );
+    if ui
+        .button("Add Markers at Beats…")
+        .on_hover_text("Mark the beats of the selected music")
+        .clicked()
+    {
+        editor.open_beat_markers();
+    }
     ui.separator();
     let marks = editor.timeline.sequence().marks;
     item(editor, ui, Command::MarkIn, "Mark In", true);

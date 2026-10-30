@@ -225,7 +225,7 @@ fn cut(editor: &mut Editor, levels: &[f32]) {
     }
 }
 
-fn heard_span(sequence: &Sequence, clips: &[ClipId]) -> Option<Range<Ticks>> {
+pub(crate) fn heard_span(sequence: &Sequence, clips: &[ClipId]) -> Option<Range<Ticks>> {
     let spans = clips
         .iter()
         .filter_map(|&id| sequence.clip(id).map(|(_, clip)| clip.start..clip.end()));
@@ -233,7 +233,7 @@ fn heard_span(sequence: &Sequence, clips: &[ClipId]) -> Option<Range<Ticks>> {
 }
 
 /// Only `clips`, as they are mixed.
-fn heard_alone(sequence: &Sequence, clips: &[ClipId]) -> Sequence {
+pub(crate) fn heard_alone(sequence: &Sequence, clips: &[ClipId]) -> Sequence {
     let mut heard = sequence.clone();
     heard.video.iter_mut().for_each(|track| track.clips.clear());
     heard.master = Gain::UNITY;

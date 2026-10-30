@@ -238,6 +238,13 @@ fn on_selection(editor: &mut Editor, ui: &mut Ui) {
         editor.open_remove_pauses();
     }
     if ui
+        .add_enabled(has_audio, Button::new("Add Markers at Beats…"))
+        .on_hover_text("Mark the beats of the selected music")
+        .clicked()
+    {
+        editor.open_beat_markers();
+    }
+    if ui
         .add_enabled(has_audio, Button::new("Remix…"))
         .on_hover_text("Cut or loop the selected music to a new length")
         .clicked()

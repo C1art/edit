@@ -264,6 +264,13 @@ pub fn menu(editor: &mut Editor, ui: &mut egui::Ui) {
     if ui.add_enabled(editor.has_markers(), clear_all).clicked() {
         editor.clear_all_markers();
     }
+    if ui
+        .button("Add Markers at Beats…")
+        .on_hover_text("Mark the beats of the selected music")
+        .clicked()
+    {
+        editor.open_beat_markers();
+    }
     ui.separator();
     let mut ripple = editor.timeline.sequence().ripple_markers;
     if ui

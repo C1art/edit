@@ -110,6 +110,7 @@ pub struct Editor {
     pub(crate) gain_dialog: Option<crate::gain_dialog::GainDialog>,
     pub(crate) duck_dialog: Option<crate::duck_dialog::DuckDialog>,
     pub(crate) pauses_dialog: Option<crate::pauses_dialog::PausesDialog>,
+    pub(crate) beats_dialog: Option<crate::beats_dialog::BeatsDialog>,
     pub(crate) remix_dialog: Option<crate::remix_dialog::RemixDialog>,
     pub(crate) transition_duration_dialog:
         Option<crate::transition_duration_dialog::TransitionDurationDialog>,
@@ -296,6 +297,7 @@ impl Editor {
             gain_dialog: None,
             duck_dialog: None,
             pauses_dialog: None,
+            beats_dialog: None,
             remix_dialog: None,
             transition_duration_dialog: None,
             interpret_dialog: None,
