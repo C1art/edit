@@ -136,6 +136,8 @@ impl Command {
             Self::ShuttleLeft => vec![plain(Key::J)],
             Self::ShuttleStop => vec![plain(Key::K)],
             Self::ShuttleRight => vec![plain(Key::L)],
+            Self::ShuttleSlowLeft => vec![shift(Key::J)],
+            Self::ShuttleSlowRight => vec![shift(Key::L)],
             Self::StepBack => vec![plain(Key::ArrowLeft)],
             Self::StepForward => vec![plain(Key::ArrowRight)],
             Self::StepBackFive => vec![shift(Key::ArrowLeft)],

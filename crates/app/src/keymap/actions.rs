@@ -38,6 +38,8 @@ impl Command {
             Self::ShuttleLeft => TransportKey::Reverse,
             Self::ShuttleStop => TransportKey::Pause,
             Self::ShuttleRight => TransportKey::Forward,
+            Self::ShuttleSlowLeft => TransportKey::SlowReverse,
+            Self::ShuttleSlowRight => TransportKey::SlowForward,
             Self::StepBack => TransportKey::Step(-1),
             Self::StepForward => TransportKey::Step(1),
             Self::StepBackFive => TransportKey::Step(-5),

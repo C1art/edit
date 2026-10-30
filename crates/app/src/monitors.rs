@@ -177,6 +177,7 @@ fn source(editor: &mut Editor, ui: &mut egui::Ui) {
         after: &after,
         settings: false,
     };
+    transport::rate_badge(ui, picture_rect, &source.viewer.player);
     let pressed = transport::ui(ui, &mut source.viewer.player, Some(marks), keymap, buttons);
     let mut place = None;
     let mut subclip = false;
@@ -400,6 +401,9 @@ fn zoomed_program(editor: &mut Editor, ui: &mut egui::Ui) {
         .filter(|_| editor.dropped_frame_indicator)
     {
         crate::dropped_frames::indicator(&mut clipped, area, &program.player);
+    }
+    if let Some(program) = &editor.program {
+        transport::rate_badge(&clipped, area, &program.player);
     }
 }
 

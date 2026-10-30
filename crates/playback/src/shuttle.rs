@@ -11,18 +11,27 @@ const NANOSECONDS: Timebase = match Timebase::new(1, 1_000_000_000) {
     None => unreachable!(),
 };
 
-/// Pictures-only playback at a multiple of normal speed, backwards when negative. It
-/// runs on the wall clock and seeks to each new position once the last one is shown.
+/// A playing speed in percent of normal, backwards when negative.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PlayRate(pub i32);
+
+impl PlayRate {
+    pub const STOPPED: Self = Self(0);
+    pub const NORMAL: Self = Self(100);
+}
+
+/// Pictures-only playback off normal speed, backwards when negative. It runs on the
+/// wall clock and seeks to each new position once the last one is shown.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Shuttle {
-    rate: i32,
+    rate: PlayRate,
     anchor: Ticks,
     started: Instant,
     last_seek: Instant,
 }
 
 impl Shuttle {
-    pub(crate) fn new(rate: i32, anchor: Ticks, now: Instant) -> Self {
+    pub(crate) fn new(rate: PlayRate, anchor: Ticks, now: Instant) -> Self {
         Self {
             rate,
             anchor,
@@ -31,7 +40,7 @@ impl Shuttle {
         }
     }
 
-    pub(crate) fn rate(&self) -> i32 {
+    pub(crate) fn rate(&self) -> PlayRate {
         self.rate
     }
 
@@ -40,7 +49,8 @@ impl Shuttle {
         let elapsed =
             i64::try_from(now.duration_since(self.started).as_nanos()).unwrap_or(i64::MAX);
         let played = Ticks(elapsed).rescale(NANOSECONDS, timebase);
-        let moved = Ticks(played.0.saturating_mul(i64::from(self.rate)));
+        let moved = i128::from(played.0) * i128::from(self.rate.0) / 100;
+        let moved = Ticks(i64::try_from(moved).unwrap_or(i64::MAX));
         (self.anchor + moved).clamp(Ticks::ZERO, duration)
     }
 
@@ -62,13 +72,15 @@ mod tests {
     fn moves_at_its_rate_and_stops_at_the_ends() {
         let start = Instant::now();
         let second = Duration::from_secs(1);
-        let reverse = Shuttle::new(-4, Ticks(900_000), start);
+        let reverse = Shuttle::new(PlayRate(-400), Ticks(900_000), start);
         let position = |shuttle: &Shuttle, after| {
             shuttle.position(start + after, Timebase::HZ_90K, Ticks(1_800_000))
         };
         assert_eq!(position(&reverse, second), Ticks(540_000));
         assert_eq!(position(&reverse, 3 * second), Ticks::ZERO);
-        let forward = Shuttle::new(8, Ticks(900_000), start);
+        let forward = Shuttle::new(PlayRate(800), Ticks(900_000), start);
         assert_eq!(position(&forward, 2 * second), Ticks(1_800_000));
+        let slow = Shuttle::new(PlayRate(10), Ticks(900_000), start);
+        assert_eq!(position(&slow, second), Ticks(909_000));
     }
 }

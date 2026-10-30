@@ -1,5 +1,5 @@
 use egui::{Color32, Rect, RichText, Sense, Stroke};
-use playback::Player;
+use playback::{PlayRate, Player};
 use timeline::{Marks, Ticks, Timebase, Timecode};
 
 use crate::icons::{self, Icon, Look};
@@ -275,6 +275,33 @@ fn scrub_bar(ui: &mut egui::Ui, player: &mut Player, marks: Marks) {
     }
 }
 
+/// The shuttle speed in the top right of a monitor's picture in `area`, while playing
+/// off normal speed.
+pub(crate) fn rate_badge(ui: &egui::Ui, area: Rect, player: &Player) {
+    let PlayRate(rate) = player.rate();
+    if rate == 0 || rate == PlayRate::NORMAL.0 {
+        return;
+    }
+    let arrow = if rate < 0 { '◀' } else { '▶' };
+    let speed = rate.abs();
+    let text = if speed % PlayRate::NORMAL.0 == 0 {
+        format!("{arrow} {}×", speed / PlayRate::NORMAL.0)
+    } else {
+        format!("{arrow} {speed}%")
+    };
+    let painter = ui.painter_at(area);
+    let galley = painter.layout_no_wrap(text, egui::FontId::proportional(13.0), Color32::WHITE);
+    let corner = area.right_top() + egui::vec2(-8.0, 8.0);
+    let rect = Rect::from_min_size(corner - egui::vec2(galley.size().x, 0.0), galley.size())
+        .expand2(egui::vec2(6.0, 3.0));
+    painter.rect_filled(rect, 4.0, Color32::from_black_alpha(170));
+    painter.galley(
+        rect.shrink2(egui::vec2(6.0, 3.0)).min,
+        galley,
+        Color32::WHITE,
+    );
+}
+
 /// What a transport key asks of the focused viewer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransportKey {
@@ -283,6 +310,9 @@ pub enum TransportKey {
     Forward,
     /// Plays backwards, faster on each press.
     Reverse,
+    /// Plays forwards in slow motion, a little faster on each press up to normal speed.
+    SlowForward,
+    SlowReverse,
     Pause,
     Step(i64),
     Start,
@@ -319,6 +349,8 @@ pub fn handle_key(player: &mut Player, key: TransportKey, marks: Marks) {
         TransportKey::Toggle => player.toggle(),
         TransportKey::Forward => player.shuttle(faster(player.rate(), 1)),
         TransportKey::Reverse => player.shuttle(faster(player.rate(), -1)),
+        TransportKey::SlowForward => player.shuttle(slower(player.rate(), 1)),
+        TransportKey::SlowReverse => player.shuttle(slower(player.rate(), -1)),
         TransportKey::Pause => player.pause(),
         TransportKey::Step(frames) => player.step(frames),
         TransportKey::Start => player.seek(Ticks::ZERO),
@@ -340,12 +372,41 @@ pub fn handle_key(player: &mut Player, key: TransportKey, marks: Marks) {
 }
 
 /// The shuttle rate after pressing towards `direction` (1 or -1): normal speed from a
-/// stop or the other way, then doubling up to the fastest.
-fn faster(rate: i32, direction: i32) -> i32 {
-    const FASTEST: i32 = 8;
-    if rate.signum() == direction {
-        (rate * 2).clamp(-FASTEST, FASTEST)
+/// stop, the other way or slow motion, then doubling up to the fastest.
+fn faster(PlayRate(rate): PlayRate, direction: i32) -> PlayRate {
+    const FASTEST: i32 = 800;
+    let normal = PlayRate::NORMAL.0;
+    if rate.signum() == direction && rate.abs() >= normal {
+        PlayRate((rate * 2).clamp(-FASTEST, FASTEST))
     } else {
-        direction
+        PlayRate(direction * normal)
+    }
+}
+
+/// The slow motion rate after pressing towards `direction`: a tenth of normal speed
+/// from a stop, the other way or fast forward, then a tenth more up to normal speed.
+fn slower(PlayRate(rate): PlayRate, direction: i32) -> PlayRate {
+    const STEP: i32 = 10;
+    if rate.signum() == direction && rate.abs() < PlayRate::NORMAL.0 {
+        PlayRate(rate + direction * STEP)
+    } else {
+        PlayRate(direction * STEP)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shuttle_presses_step_through_slow_motion_and_fast_forward() {
+        let presses = |press: fn(PlayRate, i32) -> PlayRate, direction, count| {
+            (0..count).fold(PlayRate::STOPPED, |rate, _| press(rate, direction))
+        };
+        assert_eq!(presses(slower, 1, 3), PlayRate(30));
+        assert_eq!(presses(slower, -1, 12), PlayRate(-20));
+        assert_eq!(presses(faster, 1, 5), PlayRate(800));
+        assert_eq!(faster(PlayRate(30), 1), PlayRate::NORMAL);
+        assert_eq!(slower(PlayRate(400), 1), PlayRate(10));
     }
 }

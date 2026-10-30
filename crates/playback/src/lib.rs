@@ -72,6 +72,7 @@ pub use player::Player;
 pub use previews::Preview;
 pub use remix::{RemixEvent, RemixJob};
 pub use resolution::Resolution;
+pub use shuttle::PlayRate;
 pub use still::{Saved, StillJob};
 pub use tone::{auto_correction, matched_correction, BasicCorrection, ToneStats};
 pub use tone_job::{clip_ungraded, Picture, ToneJob};

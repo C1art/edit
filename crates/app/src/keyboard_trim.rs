@@ -60,11 +60,14 @@ impl Editor {
             return false;
         };
         match key {
-            TransportKey::Forward | TransportKey::Reverse => {
+            TransportKey::Forward
+            | TransportKey::Reverse
+            | TransportKey::SlowForward
+            | TransportKey::SlowReverse => {
                 // Playing on from the end, or in a loop, jumps away from the point.
                 let player = &program.player;
-                let leaps = player.is_looping()
-                    || (key == TransportKey::Forward && point.at >= player.duration());
+                let forward = matches!(key, TransportKey::Forward | TransportKey::SlowForward);
+                let leaps = player.is_looping() || (forward && point.at >= player.duration());
                 if !point.dynamic && !leaps {
                     point.dynamic = true;
                     program.player.pause();

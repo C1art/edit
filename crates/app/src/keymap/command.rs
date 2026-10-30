@@ -125,6 +125,8 @@ pub enum Command {
     ShuttleLeft,
     ShuttleStop,
     ShuttleRight,
+    ShuttleSlowLeft,
+    ShuttleSlowRight,
     StepBack,
     StepForward,
     StepBackFive,
@@ -152,7 +154,7 @@ pub enum Command {
 pub const WORKSPACE_SLOTS: u8 = 9;
 
 impl Command {
-    pub const ALL: [Self; 152] = [
+    pub const ALL: [Self; 154] = [
         Self::NewProject,
         Self::OpenProject,
         Self::Save,
@@ -277,6 +279,8 @@ impl Command {
         Self::ShuttleLeft,
         Self::ShuttleStop,
         Self::ShuttleRight,
+        Self::ShuttleSlowLeft,
+        Self::ShuttleSlowRight,
         Self::StepBack,
         Self::StepForward,
         Self::StepBackFive,
@@ -418,6 +422,8 @@ impl Command {
             | ShuttleLeft
             | ShuttleStop
             | ShuttleRight
+            | ShuttleSlowLeft
+            | ShuttleSlowRight
             | StepBack
             | StepForward
             | StepBackFive

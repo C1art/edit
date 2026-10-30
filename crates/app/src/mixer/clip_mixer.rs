@@ -1,4 +1,5 @@
 use egui::{RichText, Slider};
+use playback::PlayRate;
 use timeline::{Clip, ClipId, Gain, Param, SetClipPan, SetClipVolume, TrackRef};
 
 use super::{meter_bar, response_state, Change, FADER_RANGE, METER_FLOOR, RECORDING, STRIP_HEIGHT};
@@ -32,10 +33,9 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
 
 fn strip(editor: &mut Editor, ui: &mut egui::Ui, track_ref: TrackRef) {
     let playhead = editor.playhead();
-    let playing = editor
-        .program
-        .as_ref()
-        .is_some_and(|program| program.player.is_playing() && program.player.rate() > 0);
+    let playing = editor.program.as_ref().is_some_and(|program| {
+        program.player.is_playing() && program.player.rate() > PlayRate::STOPPED
+    });
     let sequence = editor.timeline.sequence();
     let Some(track) = sequence.track(track_ref) else {
         return;

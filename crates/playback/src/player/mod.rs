@@ -14,7 +14,7 @@ mod output;
 use crate::clock::{PlaybackClock, SharedPosition};
 use crate::command::{Command, Event, Seek};
 use crate::frame_picker::{FramePicker, TaggedFrame};
-use crate::shuttle::Shuttle;
+use crate::shuttle::{PlayRate, Shuttle};
 use crate::{
     audio_worker, video_worker, ComposedFrame, Levels, PlaybackError, Preview, Resolution,
 };
@@ -224,11 +224,11 @@ impl Player {
         self.playing || self.shuttle.is_some()
     }
 
-    /// The speed as a multiple of normal: 0 when paused, negative when backwards.
-    pub fn rate(&self) -> i32 {
+    pub fn rate(&self) -> PlayRate {
         match self.shuttle {
             Some(shuttle) => shuttle.rate(),
-            None => i32::from(self.playing),
+            None if self.playing => PlayRate::NORMAL,
+            None => PlayRate::STOPPED,
         }
     }
 

@@ -167,6 +167,8 @@ impl Command {
             Self::ShuttleLeft => ("shuttle_left", "Shuttle Left"),
             Self::ShuttleStop => ("shuttle_stop", "Shuttle Stop"),
             Self::ShuttleRight => ("shuttle_right", "Shuttle Right"),
+            Self::ShuttleSlowLeft => ("shuttle_slow_left", "Shuttle Slow Left"),
+            Self::ShuttleSlowRight => ("shuttle_slow_right", "Shuttle Slow Right"),
             Self::StepBack => ("step_back", "Step Back One Frame"),
             Self::StepForward => ("step_forward", "Step Forward One Frame"),
             Self::StepBackFive => ("step_back_five", "Step Back Five Frames"),

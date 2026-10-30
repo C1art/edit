@@ -7,6 +7,7 @@ mod submixes;
 use std::collections::HashMap;
 
 use egui::{Color32, Rect, RichText, Sense, Slider};
+use playback::PlayRate;
 use timeline::{
     preview, Edit, Gain, Pan, Param, SetMasterGain, SetTrackAutomation, SetTrackMix,
     SetTrackSwitch, SubmixId, TrackRef, TrackSwitch,
@@ -389,10 +390,9 @@ fn mode_picker(ui: &mut egui::Ui, mixer: &mut Mixer, track: TrackRef) {
 /// Records the fader into the track's volume keyframes while its mode says to, and
 /// commits a pass once it ends. True while the fader is being recorded.
 fn automate(editor: &mut Editor, track: TrackRef, volume: Gain, db: f32, touched: bool) -> bool {
-    let playing = editor
-        .program
-        .as_ref()
-        .is_some_and(|program| program.player.is_playing() && program.player.rate() > 0);
+    let playing = editor.program.as_ref().is_some_and(|program| {
+        program.player.is_playing() && program.player.rate() > PlayRate::STOPPED
+    });
     let playhead = editor.playhead();
     let last = editor.mixer.passes.get(&track).map(Pass::last);
     // Looping or seeking back starts a new pass rather than writing over this one.

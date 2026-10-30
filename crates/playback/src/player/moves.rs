@@ -4,17 +4,17 @@ use std::time::Instant;
 use timeline::Ticks;
 
 use super::{Player, Stop};
-use crate::shuttle::Shuttle;
+use crate::shuttle::{PlayRate, Shuttle};
 
 /// Moving the playhead other than by playing on: shuttling, ranges, loops, steps and
 /// scrubs.
 impl Player {
-    /// Plays at `rate` times normal speed, backwards when negative. Off normal speed the
-    /// sound comes in scrub snippets from where the pictures have reached.
-    pub fn shuttle(&mut self, rate: i32) {
+    /// Plays at `rate`, backwards when negative. Off normal speed the sound comes in
+    /// scrub snippets from where the pictures have reached.
+    pub fn shuttle(&mut self, rate: PlayRate) {
         match rate {
-            0 => self.pause(),
-            1 => self.play(),
+            PlayRate::STOPPED => self.pause(),
+            PlayRate::NORMAL => self.play(),
             _ => {
                 self.pause();
                 self.shuttle = Some(Shuttle::new(rate, self.position(), Instant::now()));
