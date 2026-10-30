@@ -97,6 +97,7 @@ pub fn path_dialog(editor: &mut Editor, ctx: &egui::Context) {
         PathPurpose::Replace(id) => editor.import(path, Some(id)),
         PathPurpose::OpenProject => editor.discard_then(AfterDiscard::Open(path)),
         PathPurpose::SaveProject => editor.save_project_to(path),
+        PathPurpose::SaveCopy => editor.save_copy_to(path),
         PathPurpose::ImportCaptions => editor.import_captions(path),
         PathPurpose::ExportCaptions => editor.export_captions(path),
         PathPurpose::Export(kind) => editor.export_interchange(path, kind),
@@ -131,6 +132,11 @@ fn wording(purpose: PathPurpose) -> (&'static str, &'static str, &'static str) {
         ),
         PathPurpose::OpenProject => ("Open Project", "", "Open"),
         PathPurpose::SaveProject => ("Save Project As", "", "Save"),
+        PathPurpose::SaveCopy => (
+            "Save a Copy",
+            "The open project stays the one you edit and save.",
+            "Save",
+        ),
         PathPurpose::ImportCaptions => (
             "Import Captions",
             "A SubRip (.srt) file. Its captions replace the sequence's.",
@@ -230,7 +236,9 @@ impl FolderUse {
             | PathPurpose::Replace(_)
             | PathPurpose::ImageMatte(..)
             | PathPurpose::GraphicPicture(_) => Self::Media,
-            PathPurpose::OpenProject | PathPurpose::SaveProject => Self::Project,
+            PathPurpose::OpenProject | PathPurpose::SaveProject | PathPurpose::SaveCopy => {
+                Self::Project
+            }
             PathPurpose::ImportCaptions
             | PathPurpose::ExportCaptions
             | PathPurpose::Export(_)
@@ -261,7 +269,7 @@ fn kind(purpose: PathPurpose) -> (Mode, Vec<FileFilter>) {
             vec![ALL_MEDIA, VIDEO_FILES, AUDIO_FILES, STILL_IMAGES, ALL_FILES],
         ),
         PathPurpose::OpenProject => (Mode::Open { many: false }, vec![PROJECTS, ALL_FILES]),
-        PathPurpose::SaveProject => (Mode::Save, vec![PROJECTS]),
+        PathPurpose::SaveProject | PathPurpose::SaveCopy => (Mode::Save, vec![PROJECTS]),
         PathPurpose::ImportCaptions => (Mode::Open { many: false }, vec![SUBRIP, ALL_FILES]),
         PathPurpose::ExportCaptions => (Mode::Save, vec![SUBRIP]),
         PathPurpose::Export(Interchange::Edl) => (Mode::Save, vec![EDL]),

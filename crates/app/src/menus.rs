@@ -34,6 +34,13 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
             if ui.add(save_as).clicked() {
                 editor.prompt_path(PathPurpose::SaveProject);
             }
+            if ui.button("Save a Copy…").clicked() {
+                editor.prompt_path(PathPurpose::SaveCopy);
+            }
+            let revert = editor.project_path.is_some() && editor.is_dirty();
+            if ui.add_enabled(revert, Button::new("Revert")).clicked() {
+                editor.confirm_revert = true;
+            }
             ui.separator();
             let import = Button::new("Import…").shortcut_text(editor.keymap.label(Command::Import));
             if ui.add(import).clicked() {

@@ -145,6 +145,7 @@ pub struct Editor {
     pub(crate) recovery: crate::recovery::Recovery,
     pub(crate) saved_revision: u64,
     pub(crate) confirm_discard: Option<AfterDiscard>,
+    pub(crate) confirm_revert: bool,
     /// Runs once the save in progress succeeds.
     pub(crate) after_save: Option<AfterDiscard>,
     /// Set once the user chose to close, so the close request isn't questioned again.
@@ -321,6 +322,7 @@ impl Editor {
             saved_preferences: None,
             project_path: None,
             confirm_discard: None,
+            confirm_revert: false,
             after_save: None,
             autosave: Autosave::default(),
             quitting: false,

@@ -15,6 +15,11 @@ enum Request {
         sequence: Box<Sequence>,
         revision: u64,
     },
+    /// Writes the project elsewhere without it counting as saved.
+    SaveCopy {
+        path: PathBuf,
+        sequence: Box<Sequence>,
+    },
     Open(PathBuf),
     Autosave {
         path: PathBuf,
@@ -40,6 +45,7 @@ enum Request {
 pub enum StoreEvent {
     /// The timeline revision that was written, so later edits still count as unsaved.
     Saved(PathBuf, u64, Result<(), AppError>),
+    CopySaved(PathBuf, Result<(), AppError>),
     Opened(PathBuf, Result<Box<Sequence>, AppError>),
     Autosaved(PathBuf, Result<(), AppError>),
     CaptionsRead(PathBuf, Result<Vec<Caption>, AppError>),
@@ -157,6 +163,16 @@ impl ProjectStore {
         }
     }
 
+    pub fn save_copy(&mut self, path: PathBuf, sequence: Sequence) {
+        let request = Request::SaveCopy {
+            path,
+            sequence: Box::new(sequence),
+        };
+        if self.requests.send(request).is_ok() {
+            self.pending += 1;
+        }
+    }
+
     /// Writes a copy that doesn't count as saving the project.
     pub fn autosave(&mut self, path: PathBuf, sequence: Sequence) {
         let request = Request::Autosave {
@@ -256,6 +272,12 @@ fn handle(request: Request) -> StoreEvent {
                 .save(&path)
                 .map_err(AppError::from);
             StoreEvent::Saved(path, revision, result)
+        }
+        Request::SaveCopy { path, sequence } => {
+            let result = ProjectFile::new(*sequence)
+                .save(&path)
+                .map_err(AppError::from);
+            StoreEvent::CopySaved(path, result)
         }
         Request::Open(path) => {
             let result = ProjectFile::load(&path)

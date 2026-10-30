@@ -4,6 +4,7 @@ use crate::editor::Editor;
 pub(crate) fn show(editor: &mut Editor, ctx: &egui::Context) {
     crate::path_dialog::path_dialog(editor, ctx);
     crate::project_files::discard_dialog(editor, ctx);
+    crate::project_copy::revert_dialog(editor, ctx);
     crate::recovery::dialog(editor, ctx);
     crate::media_pool::remove::dialog(editor, ctx);
     crate::marker_dialog::dialog(editor, ctx);

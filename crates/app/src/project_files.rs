@@ -20,6 +20,8 @@ pub enum PathPurpose {
     Replace(SourceId),
     OpenProject,
     SaveProject,
+    /// Where to write the project without it becoming the one being edited.
+    SaveCopy,
     ImportCaptions,
     ExportCaptions,
     Export(Interchange),
@@ -97,6 +99,14 @@ pub fn is_subrip(path: &Path) -> bool {
     has_extension(path, SUBRIP)
 }
 
+pub(crate) fn with_project_extension(mut path: PathBuf) -> PathBuf {
+    if !is_project(&path) {
+        path.as_mut_os_string()
+            .push(format!(".{}", project::EXTENSION));
+    }
+    path
+}
+
 fn has_extension(path: &Path, wanted: &str) -> bool {
     path.extension()
         .is_some_and(|extension| extension.eq_ignore_ascii_case(wanted))
@@ -123,6 +133,10 @@ impl Editor {
         };
         let start = match purpose {
             PathPurpose::SaveProject => self.project_path.clone(),
+            PathPurpose::SaveCopy => self
+                .project_path
+                .as_deref()
+                .map(crate::project_copy::copy_path),
             PathPurpose::Replace(id) => self
                 .timeline
                 .project()
@@ -150,11 +164,8 @@ impl Editor {
         }
     }
 
-    pub(crate) fn save_project_to(&mut self, mut path: PathBuf) {
-        if !is_project(&path) {
-            path.as_mut_os_string()
-                .push(format!(".{}", project::EXTENSION));
-        }
+    pub(crate) fn save_project_to(&mut self, path: PathBuf) {
+        let path = with_project_extension(path);
         let sequence = self.timeline.project().clone();
         let revision = self.timeline.revision();
         match &mut self.store {
@@ -228,7 +239,7 @@ impl Editor {
         }
     }
 
-    fn after_discard(&mut self, action: AfterDiscard) {
+    pub(crate) fn after_discard(&mut self, action: AfterDiscard) {
         match action {
             AfterDiscard::NewProject => {
                 let sequence =
@@ -302,6 +313,7 @@ impl Editor {
                         self.replace_sequence(*sequence, Some(path));
                     }
                 },
+                StoreEvent::CopySaved(path, result) => self.copy_saved(&path, result),
                 StoreEvent::Opened(path, Err(error)) => {
                     self.notice(format!("Cannot open {}: {error}", quoted_name(&path)));
                 }
