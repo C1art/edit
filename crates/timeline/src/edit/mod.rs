@@ -1,3 +1,4 @@
+mod add_tracks;
 mod apply_effect;
 mod arrange;
 mod attributes;
@@ -43,6 +44,7 @@ mod trim;
 #[cfg(test)]
 mod tests;
 
+pub use add_tracks::{AddTracks, NewTracks};
 pub use apply_effect::{ApplyEffect, ClipEffect};
 pub use arrange::{CloseGap, Lift, MoveClips, MoveMode, RippleDelete};
 pub use attributes::{Attribute, PasteAttributes, RemoveAttributes};

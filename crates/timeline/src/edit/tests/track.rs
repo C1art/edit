@@ -87,3 +87,35 @@ fn deleting_empty_tracks_keeps_effects_reading_the_tracks_they_read() {
         [VideoEffect::TrackMatteKey { matte: Some(1), .. }]
     ));
 }
+
+#[test]
+fn tracks_added_between_others_keep_effects_reading_the_tracks_they_read() {
+    let (mut timeline, source) = timeline();
+    timeline
+        .apply(place(source, 0, 0, 400, PlaceMode::Overwrite))
+        .unwrap();
+    let keyed = clip_on(&timeline, V1, 0);
+    let mut look = timeline.sequence().clip(keyed).unwrap().1.look.clone();
+    look.effects.push(VideoEffect::TrackMatteKey {
+        matte: Some(1),
+        channel: MatteChannel::Luma,
+        reverse: false,
+    });
+    timeline.apply(SetClipLook { clip: keyed, look }).unwrap();
+    timeline
+        .apply(AddTracks {
+            video: NewTracks { at: 1, count: 2 },
+            audio: NewTracks { at: 0, count: 1 },
+        })
+        .unwrap();
+    let matte =
+        |timeline: &Timeline| match timeline.sequence().clip(keyed).unwrap().1.look.effects[..] {
+            [VideoEffect::TrackMatteKey { matte, .. }] => matte,
+            _ => None,
+        };
+    let sequence = timeline.sequence();
+    assert_eq!((sequence.video.len(), sequence.audio.len()), (4, 3));
+    assert_eq!(matte(&timeline), Some(3));
+    timeline.undo();
+    assert_eq!(matte(&timeline), Some(1));
+}

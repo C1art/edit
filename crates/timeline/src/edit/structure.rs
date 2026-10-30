@@ -91,28 +91,11 @@ fn remove_track(sequence: &mut Sequence, track: TrackRef) {
         return;
     }
     let removed = track.index;
-    let shifted = |layer: Option<usize>| match layer {
-        Some(layer) if layer == removed => None,
-        Some(layer) if layer > removed => Some(layer - 1),
-        layer => layer,
-    };
-    for (_, track) in sequence.tracks_mut() {
-        for clip in &mut track.clips {
-            let reads_above = clip
-                .look
-                .effects
-                .iter()
-                .any(|effect| effect.other_track().is_some_and(|layer| layer >= removed));
-            if !reads_above {
-                continue;
-            }
-            for effect in &mut Arc::make_mut(clip).look.effects {
-                if let Some(layer) = effect.other_track_mut() {
-                    *layer = shifted(*layer);
-                }
-            }
-        }
-    }
+    super::add_tracks::renumber_layers(sequence, |layer| match layer {
+        layer if layer == removed => None,
+        layer if layer > removed => Some(layer - 1),
+        layer => Some(layer),
+    });
 }
 
 /// Names a track, or clears its name when `name` is none or blank.

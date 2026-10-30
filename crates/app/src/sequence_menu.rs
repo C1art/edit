@@ -148,6 +148,9 @@ pub(crate) fn sequence_menu(editor: &mut Editor, ui: &mut egui::Ui) {
     if ui.button("Add Audio Track").clicked() {
         editor.add_track(TrackKind::Audio);
     }
+    if ui.button("Add Tracks…").clicked() {
+        editor.open_add_tracks();
+    }
     if ui.button("Simplify Sequence…").clicked() {
         editor.open_simplify();
     }

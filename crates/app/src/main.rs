@@ -1,3 +1,4 @@
+mod add_tracks_dialog;
 mod attributes_dialog;
 mod audio_meters;
 mod audio_switch;

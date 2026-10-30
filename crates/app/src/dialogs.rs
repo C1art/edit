@@ -15,6 +15,7 @@ pub(crate) fn show(editor: &mut Editor, ctx: &egui::Context) {
     crate::sequence_settings::dialog(editor, ctx);
     crate::automate_dialog::dialog(editor, ctx);
     crate::simplify_dialog::dialog(editor, ctx);
+    crate::add_tracks_dialog::dialog(editor, ctx);
     crate::reframe_dialog::dialog(editor, ctx);
     crate::fit_clip::dialog(editor, ctx);
     crate::find_dialog::dialog(editor, ctx);
