@@ -42,6 +42,7 @@ pub struct Editor {
     pub(crate) render_state: Option<RenderState>,
     pub(crate) importer: Option<Importer>,
     pub(crate) proxies: Option<ProxyMaker>,
+    pub(crate) proxy_offer: crate::proxy_offer::ProxyOffer,
     pub(crate) offline: Option<crate::offline::OfflineMedia>,
     pub(crate) render_previews: Option<crate::render_previews::RenderPreviews>,
     pub(crate) render_replace: Option<crate::render_replace::RenderReplace>,
@@ -212,6 +213,7 @@ impl Editor {
             render_state,
             importer,
             proxies,
+            proxy_offer: Default::default(),
             offline,
             render_previews,
             render_replace: None,
@@ -486,6 +488,7 @@ impl eframe::App for Editor {
         crate::effect_presets::dialog(self, &ctx);
         crate::workspaces::dialog(self, &ctx);
         crate::link_media::dialog(self, &ctx);
+        crate::proxy_offer::dialog(self, &ctx);
         crate::render_previews::window(self, &ctx);
         crate::render_replace::window(self, &ctx);
         crate::project_manager::window(self, &ctx);

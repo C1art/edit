@@ -219,6 +219,12 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                             .suffix(" min"),
                     );
                 });
+                ui.menu_button("Proxies for 4K and High Frame Rate Media", |ui| {
+                    let choice = &mut editor.proxy_offer.choice;
+                    for option in crate::proxy_offer::HeavyMedia::ALL {
+                        ui.radio_value(choice, option, option.label());
+                    }
+                });
                 ui.menu_button("Audio Output", |ui| {
                     crate::audio_switch::menu(editor, ui);
                 });

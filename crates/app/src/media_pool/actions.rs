@@ -113,8 +113,9 @@ impl Editor {
                 }
                 None => {
                     if self.apply(media) {
-                        if let Some(id) = self.timeline.sequence().media.last().map(|item| item.id)
-                        {
+                        if let Some(item) = self.timeline.sequence().media.last() {
+                            self.proxy_offer.imported(item);
+                            let id = item.id;
                             self.open_source(id);
                         }
                     }

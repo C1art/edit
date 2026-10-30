@@ -2,6 +2,7 @@ use audio::OutputDevice;
 
 use crate::editor::Editor;
 use crate::project_store::Setting;
+use crate::proxy_offer::HeavyMedia;
 
 /// The choices kept from one session to the next, written as `name<TAB>value` lines.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -12,6 +13,7 @@ pub(crate) struct Preferences {
     scrub_audio: bool,
     selection_follows_playhead: bool,
     dropped_frame_indicator: bool,
+    heavy_media: HeavyMedia,
     /// `None` follows the system default.
     audio_device: Option<OutputDevice>,
 }
@@ -25,6 +27,7 @@ impl Preferences {
             scrub_audio: editor.scrub_audio,
             selection_follows_playhead: editor.selection_follows_playhead,
             dropped_frame_indicator: editor.dropped_frame_indicator,
+            heavy_media: editor.proxy_offer.choice,
             audio_device: editor.audio_switch.chosen.clone(),
         }
     }
@@ -32,14 +35,15 @@ impl Preferences {
     pub(crate) fn to_text(&self) -> String {
         format!(
             "hardware_decoding\t{}\nautosave\t{}\nautosave_minutes\t{}\nscrub_audio\t{}\n\
-             selection_follows_playhead\t{}\ndropped_frame_indicator\t{}\naudio_device\t{}\n\
-             audio_device_id\t{}\n",
+             selection_follows_playhead\t{}\ndropped_frame_indicator\t{}\nheavy_media\t{}\n\
+             audio_device\t{}\naudio_device_id\t{}\n",
             self.hardware_decoding,
             self.autosave,
             self.autosave_minutes,
             self.scrub_audio,
             self.selection_follows_playhead,
             self.dropped_frame_indicator,
+            self.heavy_media.key(),
             self.audio_device
                 .as_ref()
                 .map_or("", |device| device.name.as_str()),
@@ -62,6 +66,7 @@ impl Preferences {
                 "scrub_audio" => set(&mut self.scrub_audio, flag),
                 "selection_follows_playhead" => set(&mut self.selection_follows_playhead, flag),
                 "dropped_frame_indicator" => set(&mut self.dropped_frame_indicator, flag),
+                "heavy_media" => set(&mut self.heavy_media, HeavyMedia::from_key(value)),
                 "audio_device" => {
                     self.audio_device = (!value.is_empty()).then(|| OutputDevice {
                         id: None,
@@ -97,6 +102,7 @@ impl Editor {
         self.scrub_audio = preferences.scrub_audio;
         self.selection_follows_playhead = preferences.selection_follows_playhead;
         self.dropped_frame_indicator = preferences.dropped_frame_indicator;
+        self.proxy_offer.choice = preferences.heavy_media;
         self.audio_switch.chosen = preferences.audio_device;
         self.saved_preferences = Some(Preferences::of(self));
     }
@@ -125,6 +131,7 @@ mod tests {
         scrub_audio: true,
         selection_follows_playhead: false,
         dropped_frame_indicator: false,
+        heavy_media: HeavyMedia::Ask,
         audio_device: None,
     };
 
@@ -137,6 +144,7 @@ mod tests {
             scrub_audio: false,
             selection_follows_playhead: true,
             dropped_frame_indicator: true,
+            heavy_media: HeavyMedia::CreateProxies,
             audio_device: Some(OutputDevice {
                 id: Some(
                     "wasapi:{0.0.0.00000000}.{6c1f2a52-3b8e-4f0a-9d3c-0a1b2c3d4e5f}".to_owned(),

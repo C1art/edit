@@ -68,6 +68,7 @@ mod project_files;
 mod project_manager;
 mod project_store;
 mod proxies;
+mod proxy_offer;
 mod recent_projects;
 mod recovery;
 mod reframe_analysis;
