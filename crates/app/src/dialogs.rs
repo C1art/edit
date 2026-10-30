@@ -9,6 +9,7 @@ pub(crate) fn show(editor: &mut Editor, ctx: &egui::Context) {
     crate::marker_dialog::dialog(editor, ctx);
     crate::gain_dialog::dialog(editor, ctx);
     crate::duck_dialog::dialog(editor, ctx);
+    crate::pauses_dialog::dialog(editor, ctx);
     crate::remix_dialog::dialog(editor, ctx);
     crate::interpret_dialog::dialog(editor, ctx);
     crate::channels_dialog::dialog(editor, ctx);

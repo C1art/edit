@@ -215,6 +215,13 @@ fn on_selection(editor: &mut Editor, ui: &mut Ui) {
         editor.open_auto_duck();
     }
     if ui
+        .add_enabled(has_audio, Button::new("Remove Pauses…"))
+        .on_hover_text("Cut out where the selected clips go quiet")
+        .clicked()
+    {
+        editor.open_remove_pauses();
+    }
+    if ui
         .add_enabled(has_audio, Button::new("Remix…"))
         .on_hover_text("Cut or loop the selected music to a new length")
         .clicked()

@@ -72,6 +72,7 @@ mod notifications;
 mod offline;
 mod panels;
 mod path_dialog;
+mod pauses_dialog;
 mod placing;
 mod preferences;
 mod program_zoom;

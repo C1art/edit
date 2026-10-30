@@ -462,6 +462,7 @@ mod motion_preset;
 mod multicam;
 mod nest;
 mod paste;
+mod pauses;
 mod random;
 mod range;
 mod rearrange;
