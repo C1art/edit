@@ -1656,6 +1656,7 @@ version = "0.1.0"
 dependencies = [
  "ffmpeg-sys-next",
  "timeline",
+ "windows",
 ]
 
 [[package]]
@@ -2668,6 +2669,7 @@ dependencies = [
  "crossbeam",
  "timeline",
  "wgpu",
+ "windows",
 ]
 
 [[package]]

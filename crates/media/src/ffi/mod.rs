@@ -1,3 +1,5 @@
+#[cfg(windows)]
+mod d3d12;
 mod decoder;
 mod encode_frame;
 mod encoder;
@@ -17,10 +19,16 @@ mod sws_flags;
 mod to_palette;
 mod to_yuv;
 
+#[cfg(windows)]
+pub use d3d12::GpuSurface;
+#[cfg(windows)]
+pub(crate) use d3d12::Hold;
 pub(crate) use decoder::{Decoder, Received};
 pub(crate) use encoder::Encoder;
 pub(crate) use format::InputContext;
 pub(crate) use frame::Frame;
+#[cfg(windows)]
+pub(crate) use hardware::set_adapter as set_decode_adapter;
 pub(crate) use hardware::{
     device_name as hardware_device_name, set_enabled as set_hardware_decoding,
 };

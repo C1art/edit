@@ -27,12 +27,22 @@ mod writer;
 
 pub use codec::{AudioCodec, DnxhrQuality, RateControl, VideoCodec};
 pub use error::MediaError;
+#[cfg(windows)]
+pub use ffi::GpuSurface;
 pub use ffi::{Chroma, PlanarFrame, Plane, Planes, RgbaResizer};
 pub use frames::{AudioBuffer, DecodedFrame, VideoFrame};
 /// Decodes video on the GPU where the codec and device allow, from the next file opened.
 /// On by default; streams the device can't handle decode in software either way.
 pub fn set_hardware_decoding(enabled: bool) {
     ffi::set_hardware_decoding(enabled);
+}
+
+/// Decodes on the adapter with this LUID, through D3D12, so planar frames can carry
+/// their pictures as textures it draws from. Takes effect only before the first video
+/// opens, and only once.
+#[cfg(windows)]
+pub fn set_decode_adapter(luid: [u8; 8]) {
+    ffi::set_decode_adapter(luid);
 }
 
 /// The kind of device decoding video, such as `d3d11va`, once one is in use.

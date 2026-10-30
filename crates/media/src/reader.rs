@@ -399,6 +399,7 @@ impl MediaReader {
                 } else {
                     picture
                 };
+                let picture = picture.into_memory()?;
                 let (width, height, pixels) = video.converter.convert(&picture)?;
                 Ok(DecodedFrame::Video(VideoFrame {
                     pts,
@@ -424,6 +425,10 @@ impl MediaReader {
             .as_mut()
             .filter(|v| draining || index == Some(v.index))
         {
+            #[cfg(windows)]
+            video
+                .decoder
+                .set_keep_on_gpu(video.converter.keeps_planes());
             video.decoder.send_packet(packet)?;
             while let Received::Frame = video.decoder.receive_frame(&mut self.frame)? {
                 let pts = clock.pts(&self.frame, video.timebase, video.next_pts);

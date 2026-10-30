@@ -20,6 +20,8 @@ pub struct PlanarFrame {
     pub format: PlaneFormat,
     layout: Layout,
     picture: Picture,
+    #[cfg(windows)]
+    surface: Option<super::GpuSurface>,
 }
 
 /// One plane's rows, `stride` bytes apart, each starting with `width` samples or, for
@@ -77,8 +79,23 @@ fn return_scaler(scaler: Scaler) {
 
 impl PlanarFrame {
     /// The picture as a planar frame if its planes and color are ones the GPU path
-    /// converts, else the picture back.
+    /// converts, else the picture back. One on the GPU stays there as a surface where it
+    /// can, and is read back where it can't.
     pub(crate) fn new(pts: Ticks, picture: Picture) -> Result<Self, Picture> {
+        #[cfg(windows)]
+        let surface = super::GpuSurface::of(&picture);
+        #[cfg(windows)]
+        let on_surface = surface.is_some() && Self::fits_surface(&picture);
+        #[cfg(not(windows))]
+        let on_surface = false;
+        let picture = if picture.on_gpu() && !on_surface {
+            match picture.to_memory() {
+                Ok(copy) => copy,
+                Err(_) => return Err(picture),
+            }
+        } else {
+            picture
+        };
         match Self::layout(&picture) {
             Some((layout, format, color, (width, height))) => Ok(Self {
                 pts,
@@ -88,9 +105,20 @@ impl PlanarFrame {
                 format,
                 layout,
                 picture,
+                #[cfg(windows)]
+                surface: surface.filter(|_| on_surface),
             }),
             None => Err(picture),
         }
+    }
+
+    /// Whether the GPU path draws straight from this picture's texture: NV12 or P010,
+    /// which open as textures with two planes.
+    #[cfg(windows)]
+    fn fits_surface(picture: &Picture) -> bool {
+        use sys::AVPixelFormat::*;
+        matches!(picture.format(), AV_PIX_FMT_NV12 | AV_PIX_FMT_P010LE)
+            && yuv_color(picture).is_some()
     }
 
     fn layout(picture: &Picture) -> Option<(Layout, PlaneFormat, YuvColor, (u32, u32))> {
@@ -127,16 +155,29 @@ impl PlanarFrame {
             Layout::Interleaved => [width, chroma_width * 2, 0],
         }
         .map(|samples| samples * depth.bytes());
-        let planes_fit = row_bytes.iter().enumerate().all(|(index, &bytes)| {
-            bytes == 0
-                || (!raw.data[index].is_null()
-                    && u32::try_from(raw.linesize[index]).is_ok_and(|stride| stride >= bytes))
-        });
+        // A picture on the GPU has no planes in memory to check.
+        let planes_fit = picture.on_gpu()
+            || row_bytes.iter().enumerate().all(|(index, &bytes)| {
+                bytes == 0
+                    || (!raw.data[index].is_null()
+                        && u32::try_from(raw.linesize[index]).is_ok_and(|stride| stride >= bytes))
+            });
         let color = yuv_color(picture)?;
         planes_fit.then_some((layout, format, color, (width, height)))
     }
 
-    pub fn planes(&self) -> Planes<'_> {
+    /// The decoder's texture, when the picture stayed on the GPU, in which case it has
+    /// no [`planes`](Self::planes) in memory.
+    #[cfg(windows)]
+    pub fn surface(&self) -> Option<&super::GpuSurface> {
+        self.surface.as_ref()
+    }
+
+    /// `None` for a picture on the GPU.
+    pub fn planes(&self) -> Option<Planes<'_>> {
+        if self.picture.on_gpu() {
+            return None;
+        }
         let (width, height) = (self.width, self.height);
         let (chroma_width, chroma_height) = self.format.subsampling.chroma_size((width, height));
         let luma = self.plane(0, width, height, 1);
@@ -149,7 +190,7 @@ impl PlanarFrame {
                 Chroma::Interleaved(self.plane(1, chroma_width, chroma_height, 2))
             }
         };
-        Planes { luma, chroma }
+        Some(Planes { luma, chroma })
     }
 
     fn plane(&self, index: usize, width: u32, height: u32, samples: u32) -> Plane<'_> {
@@ -172,8 +213,14 @@ impl PlanarFrame {
 
     /// The picture as tightly packed RGBA8, converted on this thread.
     pub fn to_rgba(&self) -> Result<VideoFrame, MediaError> {
-        let mut scaler = borrow_scaler(&self.picture);
-        let converted = scaler.convert(&self.picture);
+        let downloaded = if self.picture.on_gpu() {
+            Some(self.picture.to_memory()?)
+        } else {
+            None
+        };
+        let picture = downloaded.as_ref().unwrap_or(&self.picture);
+        let mut scaler = borrow_scaler(picture);
+        let converted = scaler.convert(picture);
         return_scaler(scaler);
         let (width, height, pixels) = converted?;
         Ok(VideoFrame {

@@ -82,7 +82,7 @@ fn a_planar_picture_converts_to_the_one_the_reader_gives_as_rgba() {
     let DecodedFrame::Video(rgba) = first_picture(false) else {
         panic!("expected an RGBA picture");
     };
-    let planes = planar.planes();
+    let planes = planar.planes().unwrap();
     assert_eq!((planes.luma.width, planes.luma.height), (320, 240));
     // Hardware decoders hand back NV12, software ones separate planes.
     let chroma = match planes.chroma {
