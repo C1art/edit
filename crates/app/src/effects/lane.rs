@@ -5,6 +5,7 @@ use super::look::{paint_key, Output, ANIMATED};
 use crate::mixer::Change;
 
 mod graph;
+mod velocity;
 
 /// Room left of the lanes for a parameter's name, value and keyframe buttons.
 const CONTROLS_WIDTH: f32 = 290.0;

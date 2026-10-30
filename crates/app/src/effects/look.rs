@@ -246,6 +246,7 @@ impl Rows {
         });
         if let Some(lane) = self.lane.as_ref().filter(|_| open && param.is_animated()) {
             lane.show_graph(ui, param, &range, time, &mut self.output);
+            lane.show_velocity(ui, param, time, &mut self.output);
         }
     }
 
