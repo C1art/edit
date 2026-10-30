@@ -14,6 +14,7 @@ use super::*;
 fn sample() -> ProjectFile {
     let mut sequence = Sequence::new(Timebase::HZ_90K, VideoFormat::default());
     Arc::make_mut(&mut sequence.media).push(MediaItem {
+        poster: Some(Ticks(45_000)),
         id: SourceId(1),
         name: "Interview \"A\" — café\n".to_owned(),
         path: PathBuf::from(r"C:\Footage\interview 😀.mp4"),
@@ -49,6 +50,7 @@ fn sample() -> ProjectFile {
         timecode: Some(90_000),
     });
     Arc::make_mut(&mut sequence.media).push(MediaItem {
+        poster: None,
         id: SourceId(2),
         name: "Title 01".to_owned(),
         path: PathBuf::new(),
@@ -132,6 +134,7 @@ fn sample() -> ProjectFile {
     nest.master = Gain(-150);
     nest.marks = Marks::default().with_in(Ticks(10));
     Arc::make_mut(&mut sequence.media).push(MediaItem {
+        poster: None,
         id: SourceId(3),
         name: "Nested Sequence 01".to_owned(),
         path: PathBuf::new(),

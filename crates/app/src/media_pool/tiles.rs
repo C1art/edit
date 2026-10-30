@@ -102,10 +102,14 @@ pub(super) fn tile(
     let scrub = response
         .hover_pos()
         .map(|pos| ((pos.x - picture.left()) / picture.width()).clamp(0.0, 1.0));
-    let step = scrub.map_or(0, |at| {
-        ((at * SCRUB_STEPS as f32) as i64).min(SCRUB_STEPS - 1)
-    });
-    let at = Ticks(range.start.0 + (range.end.0 - range.start.0) * step / SCRUB_STEPS);
+    let poster = item.poster.filter(|at| range.contains(at));
+    let at = match scrub {
+        Some(at) => {
+            let step = ((at * SCRUB_STEPS as f32) as i64).min(SCRUB_STEPS - 1);
+            Ticks(range.start.0 + (range.end.0 - range.start.0) * step / SCRUB_STEPS)
+        }
+        None => poster.unwrap_or(range.start),
+    };
     let texture = match item.played_format() {
         Some(video) if item.is_file() && !offline => {
             let path = item.proxy.as_deref().unwrap_or(&item.path);

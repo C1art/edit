@@ -4,7 +4,7 @@ use media::MediaError;
 use timeline::{
     AddBin, BinSearch, CreateMulticam, DuplicateMedia, Edit, ImportMedia, InterpretFootage,
     MakeOffline, MakeSubclip, MergeClips, MoveToBin, RelinkMedia, RemoveBin, RenameBin,
-    RenameMedia, SetBinSearch, SetProxy, SourceId, Ticks, TimelineError,
+    RenameMedia, SetBinSearch, SetPosterFrame, SetProxy, SourceId, Ticks, TimelineError,
 };
 
 use super::{PoolAction, PoolEntry};
@@ -48,6 +48,13 @@ impl Editor {
             PoolAction::AudioChannels(id) => self.open_audio_channels(id),
             PoolAction::Timecode(id) => self.open_media_timecode(id),
             PoolAction::EditSubclip(id) => self.open_edit_subclip(id),
+            PoolAction::SetPosterFrame(id) => self.set_poster_frame(id),
+            PoolAction::ClearPosterFrame(id) => {
+                self.apply_to_pool(SetPosterFrame {
+                    source: id,
+                    at: None,
+                });
+            }
             PoolAction::BreakoutToMono(id) => self.breakout_to_mono(id),
             PoolAction::Import => self.prompt_path(PathPurpose::Import),
             PoolAction::NewBin(parent) => self.new_bin(parent, None),
@@ -208,6 +215,16 @@ impl Editor {
                 self.pool.selected = vec![item.id];
             }
         }
+    }
+
+    fn set_poster_frame(&mut self, id: SourceId) {
+        let Some(source) = self.source.as_ref().filter(|source| source.source == id) else {
+            self.open_source(id);
+            self.notice("Park the Source monitor on the frame, then Set Poster Frame again");
+            return;
+        };
+        let at = Some(source.media_position());
+        self.apply_to_pool(SetPosterFrame { source: id, at });
     }
 
     /// Adds the source monitor's marked range to the project as a subclip.

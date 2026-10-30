@@ -78,6 +78,12 @@ impl SourceMonitor {
         )
     }
 
+    /// Where the monitor is parked, in the media's time.
+    pub fn media_position(&self) -> Ticks {
+        let position = self.viewer.player.position();
+        self.media_range(position..position).0
+    }
+
     pub fn duration(&self) -> Ticks {
         self.viewer.player.duration()
     }

@@ -77,6 +77,7 @@ pub(super) fn generated_item(
         placed: None,
         frame_fit: None,
         timecode: None,
+        poster: None,
     }
 }
 

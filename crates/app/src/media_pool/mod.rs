@@ -40,6 +40,9 @@ pub enum PoolAction {
     AudioChannels(SourceId),
     Timecode(SourceId),
     EditSubclip(SourceId),
+    /// Shows the frame the source monitor is parked on for the item.
+    SetPosterFrame(SourceId),
+    ClearPosterFrame(SourceId),
     /// Adds a mono item for each of the file's channels.
     BreakoutToMono(SourceId),
     /// Asks for files to import.

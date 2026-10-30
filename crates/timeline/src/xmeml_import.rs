@@ -366,6 +366,7 @@ impl Edit for ImportXmeml {
                         placed: None,
                         frame_fit: None,
                         timecode: None,
+                        poster: None,
                     });
                     id
                 }
@@ -449,6 +450,7 @@ impl Edit for ImportXmeml {
             placed: None,
             frame_fit: None,
             timecode: None,
+            poster: None,
         });
         sequence.fit_nest(id);
         Ok(())

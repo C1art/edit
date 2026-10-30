@@ -79,6 +79,10 @@ pub struct MediaItem {
     /// the file's own, or as Modify > Timecode sets it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timecode: Option<i64>,
+    /// The file time of the picture the Project panel shows for the item; unset shows
+    /// where it starts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub poster: Option<Ticks>,
 }
 
 /// Which of a file's audio channels, counting from zero, play on the left and the right;

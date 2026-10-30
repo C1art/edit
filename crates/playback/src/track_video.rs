@@ -389,6 +389,7 @@ mod tests {
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../tests/fixtures/testsrc_2s_25fps_44k.mp4");
         MediaItem {
+            poster: None,
             id: SourceId(1),
             name: "testsrc".into(),
             path,

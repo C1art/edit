@@ -243,6 +243,31 @@ impl Edit for EditSubclip {
     }
 }
 
+/// Picks the picture the Project panel shows for an item, or with none goes back to its
+/// first.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetPosterFrame {
+    pub source: SourceId,
+    /// In the file's time.
+    pub at: Option<Ticks>,
+}
+
+impl Edit for SetPosterFrame {
+    fn name(&self) -> &'static str {
+        "Set Poster Frame"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let item = media_item(sequence, self.source)?;
+        let at = self.at.map(|at| at.clamp(Ticks::ZERO, item.duration));
+        if item.video.is_none() || item.poster == at {
+            return Err(TimelineError::NothingToEdit);
+        }
+        item.poster = at;
+        Ok(())
+    }
+}
+
 /// Copies a media item, as the Project panel's Duplicate does: a sequence's copy is
 /// edited apart from the original, and clips placed from the original keep using it.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -133,6 +133,16 @@ impl Pool<'_> {
             if ui.button("Modify Timecode…").clicked() {
                 self.action = Some(PoolAction::Timecode(item.id));
             }
+            if ui
+                .button("Set Poster Frame")
+                .on_hover_text("Shows the Source monitor's frame for the item in icon view")
+                .clicked()
+            {
+                self.action = Some(PoolAction::SetPosterFrame(item.id));
+            }
+            if item.poster.is_some() && ui.button("Clear Poster Frame").clicked() {
+                self.action = Some(PoolAction::ClearPosterFrame(item.id));
+            }
             ui.separator();
             let can_build = self.proxies.is_some() && building.is_none();
             proxy_menu(ui, item, can_build, &mut self.action);

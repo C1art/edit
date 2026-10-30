@@ -94,6 +94,7 @@ impl Edit for MakeSubsequence {
             placed: None,
             frame_fit: None,
             timecode: None,
+            poster: None,
         });
         sequence.fit_nest(id);
         Ok(())

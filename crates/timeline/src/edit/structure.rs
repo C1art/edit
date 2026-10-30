@@ -225,6 +225,7 @@ impl Edit for ImportMedia {
             placed: self.placed,
             frame_fit: self.frame_fit,
             timecode: self.timecode,
+            poster: None,
         });
         Ok(())
     }
