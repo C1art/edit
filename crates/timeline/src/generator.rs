@@ -3,7 +3,9 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{CountingLeader, Graphic, Rgb, ShadowStyle, Ticks, Timebase, TitleMotion};
+use crate::{
+    CountingLeader, FillGradient, Graphic, Rgb, ShadowStyle, Ticks, Timebase, TitleMotion,
+};
 
 /// Generated pictures have no length of their own; they hold for as long as they're
 /// trimmed to, up to this many seconds.
@@ -54,6 +56,9 @@ pub struct Title {
     /// Line height in sequence pixels.
     pub size: u32,
     pub color: Rgb,
+    /// Blends the fill from `color` to another across the text.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gradient: Option<FillGradient>,
     pub align: TextAlign,
     pub font: TitleFont,
     pub shadow: bool,
@@ -114,6 +119,7 @@ impl Default for Title {
             text: "Title".to_owned(),
             size: 96,
             color: Rgb::WHITE,
+            gradient: None,
             align: TextAlign::Center,
             font: TitleFont::Sans,
             shadow: true,
@@ -142,6 +148,9 @@ pub struct Shape {
     pub corner_radius: u32,
     /// None leaves only the stroke.
     pub fill: Option<Rgb>,
+    /// Blends the fill from its color to another across the shape.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gradient: Option<FillGradient>,
     /// Drawn outside the shape, as on titles.
     #[serde(default)]
     pub stroke: Option<TextStroke>,
@@ -160,6 +169,7 @@ impl Shape {
             height: 300,
             corner_radius: 0,
             fill: Some(Rgb::new(200, 60, 60)),
+            gradient: None,
             stroke: None,
             shadow: false,
             shadow_style: None,

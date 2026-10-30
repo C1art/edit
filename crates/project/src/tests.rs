@@ -3,10 +3,10 @@ use std::sync::Arc;
 
 use timeline::{
     AlphaInterpretation, AudioEffect, Bin, BinId, BinSearch, Caption, Clip, ClipId, ColorSpace,
-    CurvePoint, Gain, Generator, Interpolation, Keyframe, Marks, Mask, MaskShape, MediaItem,
-    MediaLog, Nest, Pan, Param, PixelAspect, Rgb, Scroll, SearchField, ShadowStyle, SourceId,
-    TextAlign, TextStroke, Ticks, Timebase, Title, TitleFont, TitleMotion, Track, Transition,
-    TransitionKind, VideoEffect, VideoFormat,
+    CurvePoint, FillGradient, Gain, Generator, GradientKind, Interpolation, Keyframe, Marks, Mask,
+    MaskShape, MediaItem, MediaLog, Nest, Pan, Param, PixelAspect, Rgb, Scroll, SearchField,
+    ShadowStyle, SourceId, TextAlign, TextStroke, Ticks, Timebase, Title, TitleFont, TitleMotion,
+    Track, Transition, TransitionKind, VideoEffect, VideoFormat,
 };
 
 use super::*;
@@ -63,6 +63,11 @@ fn sample() -> ProjectFile {
             text: "Line one\n«two»".to_owned(),
             size: 72,
             color: Rgb::new(250, 200, 10),
+            gradient: Some(FillGradient {
+                kind: GradientKind::Radial,
+                to: Rgb::new(10, 20, 30),
+                angle: -30,
+            }),
             align: TextAlign::Right,
             font: TitleFont::Mono,
             shadow: false,

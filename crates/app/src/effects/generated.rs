@@ -1,6 +1,6 @@
 use timeline::{
-    CountingLeader, Generator, Rgb, Scroll, ShadowStyle, Shape, ShapeKind, TextAlign, TextStroke,
-    Title, TitleFont, TitleMotion,
+    CountingLeader, FillGradient, Generator, GradientKind, Rgb, Scroll, ShadowStyle, Shape,
+    ShapeKind, TextAlign, TextStroke, Title, TitleFont, TitleMotion,
 };
 
 use super::graphic_layers;
@@ -124,6 +124,7 @@ pub(super) fn text_controls(ui: &mut egui::Ui, title: &mut Title) -> Option<Chan
         }
     });
     change = color_row(ui, "Fill", &mut title.color).or(change);
+    change = gradient_row(ui, &mut title.gradient).or(change);
     change = stroke_row(ui, &mut title.stroke).or(change);
     let usual = title.usual_shadow();
     change = shadow_rows(ui, &mut title.shadow, &mut title.shadow_style, usual).or(change);
@@ -250,6 +251,9 @@ pub(super) fn shape_controls(ui: &mut egui::Ui, shape: &mut Shape, height: u32) 
             change = color_button(ui, fill).or(change);
         }
     });
+    if shape.fill.is_some() {
+        change = gradient_row(ui, &mut shape.gradient).or(change);
+    }
     change = stroke_row(ui, &mut shape.stroke).or(change);
     let usual = Shape::usual_shadow(height);
     change = shadow_rows(ui, &mut shape.shadow, &mut shape.shadow_style, usual).or(change);
@@ -272,6 +276,36 @@ fn stroke_row(ui: &mut egui::Ui, stroke: &mut Option<TextStroke>) -> Option<Chan
                     .suffix(" px"),
             );
             change = response_state(&width, change);
+        }
+    });
+    change
+}
+
+fn gradient_row(ui: &mut egui::Ui, gradient: &mut Option<FillGradient>) -> Option<Change> {
+    let mut change = None;
+    ui.horizontal_wrapped(|ui| {
+        let mut blended = gradient.is_some();
+        if ui.checkbox(&mut blended, "Gradient").changed() {
+            *gradient = blended.then(FillGradient::default);
+            change = Some(Change::Commit);
+        }
+        let Some(gradient) = gradient else {
+            return;
+        };
+        change = color_button(ui, &mut gradient.to).or(change);
+        for kind in GradientKind::ALL {
+            if ui
+                .selectable_value(&mut gradient.kind, kind, kind.name())
+                .changed()
+            {
+                change = Some(Change::Commit);
+            }
+        }
+        if gradient.kind == GradientKind::Linear {
+            let angle = egui::DragValue::new(&mut gradient.angle)
+                .range(-360..=360)
+                .suffix("°");
+            change = response_state(&ui.add(angle).on_hover_text("Angle"), change);
         }
     });
     change

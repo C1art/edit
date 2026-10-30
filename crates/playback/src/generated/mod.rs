@@ -13,8 +13,8 @@ use std::sync::Arc;
 
 use media::VideoFrame;
 use timeline::{
-    CaptionStyle, CountingLeader, FrameRate, Generator, Rgb, ShadowStyle, Shape, TextAlign, Ticks,
-    Title, TitleFont, TitleMotion,
+    CaptionStyle, CountingLeader, FillGradient, FrameRate, Generator, Rgb, ShadowStyle, Shape,
+    TextAlign, Ticks, Title, TitleFont, TitleMotion,
 };
 
 pub(crate) use animate::animated;
@@ -247,7 +247,7 @@ fn draw_title(canvas: &mut Canvas, title: &Title, anchor: Anchor) {
     if let Some((outline, color)) = &outline {
         canvas.paint(outline, *color, 1.0);
     }
-    canvas.paint(&text, title.color, 1.0);
+    canvas.paint_fill(&text, title.color, title.gradient);
 }
 
 fn draw_shape(canvas: &mut Canvas, shape: &Shape) {
@@ -276,7 +276,7 @@ fn draw_shape(canvas: &mut Canvas, shape: &Shape) {
         canvas.bleed(color);
     }
     if let Some(fill) = shape.fill {
-        canvas.paint(&body, fill, 1.0);
+        canvas.paint_fill(&body, fill, shape.gradient);
     }
     if let Some((ring, color)) = &outline {
         canvas.paint(ring, *color, 1.0);
@@ -331,16 +331,31 @@ impl Canvas {
 
     /// Composites `color` over the canvas where `coverage` covers it.
     fn paint(&mut self, coverage: &Coverage, color: Rgb, opacity: f32) {
-        let [r, g, b, _] = opaque(color);
+        let color = opaque(color);
         for (pixel, &cover) in self.pixels.iter_mut().zip(&coverage.alpha) {
-            let alpha = cover * opacity;
-            if alpha <= 0.0 {
-                continue;
-            }
-            let below = pixel[3] * (1.0 - alpha);
-            let out = alpha + below;
-            let mix = |top: f32, bottom: f32| (top * alpha + bottom * below) / out;
-            *pixel = [mix(r, pixel[0]), mix(g, pixel[1]), mix(b, pixel[2]), out];
+            composite(pixel, color, cover * opacity);
+        }
+    }
+
+    /// Paints `color`, or with a gradient a blend from it across the coverage's bounds.
+    fn paint_fill(&mut self, coverage: &Coverage, color: Rgb, gradient: Option<FillGradient>) {
+        let Some(gradient) = gradient else {
+            return self.paint(coverage, color, 1.0);
+        };
+        let (left, top, right, bottom) = coverage.bounds;
+        let center = ((left + right) as f32 / 2.0, (top + bottom) as f32 / 2.0);
+        let half = ((right - left) as f32 / 2.0, (bottom - top) as f32 / 2.0);
+        let (from, to) = (opaque(color), opaque(gradient.to));
+        let width = self.width as usize;
+        let covered = self.pixels.iter_mut().zip(&coverage.alpha).enumerate();
+        for (index, (pixel, &cover)) in covered.filter(|(_, (_, &cover))| cover > 0.0) {
+            let x = (index % width) as f32 + 0.5 - center.0;
+            let y = (index / width) as f32 + 0.5 - center.1;
+            let amount = gradient.amount((x, y), half);
+            let shade = std::array::from_fn(|channel| {
+                from[channel] + (to[channel] - from[channel]) * amount
+            });
+            composite(pixel, shade, cover);
         }
     }
 
@@ -350,6 +365,17 @@ impl Canvas {
             .flat_map(|pixel| pixel.map(|channel| (channel * 255.0).round() as u8))
             .collect()
     }
+}
+
+/// Lays `color` over `pixel` at `alpha`, both straight.
+fn composite(pixel: &mut [f32; 4], [r, g, b, _]: [f32; 4], alpha: f32) {
+    if alpha <= 0.0 {
+        return;
+    }
+    let below = pixel[3] * (1.0 - alpha);
+    let out = alpha + below;
+    let mix = |top: f32, bottom: f32| (top * alpha + bottom * below) / out;
+    *pixel = [mix(r, pixel[0]), mix(g, pixel[1]), mix(b, pixel[2]), out];
 }
 
 fn opaque(color: Rgb) -> [f32; 4] {

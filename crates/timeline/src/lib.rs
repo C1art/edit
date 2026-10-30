@@ -17,6 +17,7 @@ mod effect;
 mod error;
 mod export_overlay;
 mod file_url;
+mod fill_gradient;
 mod find;
 mod generator;
 mod graphic;
@@ -137,6 +138,7 @@ pub use effect::{
 };
 pub use error::TimelineError;
 pub use export_overlay::{ExportOverlays, OverlayPlace, Watermark};
+pub use fill_gradient::{FillGradient, GradientKind};
 pub use find::{next_found, FindOperator, FindQuery, Found};
 pub use generator::{
     held_length, Generator, Shape, ShapeKind, TextAlign, TextStroke, Title, TitleFont,
