@@ -113,7 +113,7 @@ fn main() -> eframe::Result {
                 .with_title("Edit")
                 .with_drag_and_drop(true),
         ),
-        centered: true,
+        centered: window.centered(),
         ..Default::default()
     };
     eframe::run_native(

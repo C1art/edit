@@ -1,4 +1,4 @@
-use egui::{Context, Vec2, ViewportBuilder};
+use egui::{Context, Pos2, Vec2, ViewportBuilder};
 
 use crate::editor::Editor;
 use crate::project_store::Setting;
@@ -6,11 +6,36 @@ use crate::project_store::Setting;
 /// Below this the panels no longer fit side by side.
 pub(crate) const SMALLEST: Vec2 = Vec2::new(960.0, 540.0);
 
-/// The window's size when not maximized, and whether it was, so it opens as it was left.
+/// The window's size and place when not maximized, and whether it was, so it opens as
+/// it was left.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct WindowState {
     size: Vec2,
     maximized: bool,
+    placement: Option<Placement>,
+}
+
+/// Where the window's frame had its top left corner, in points, and how many pixels a
+/// point was there, to find the spot again among the monitors.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Placement {
+    corner: Pos2,
+    pixels_per_point: f32,
+}
+
+impl Placement {
+    /// Whether the title bar would land on a monitor connected now, as Windows leaves a
+    /// window wherever it is put, even off every screen. Elsewhere the system places
+    /// windows itself.
+    fn is_on_screen(self) -> bool {
+        #[cfg(windows)]
+        {
+            let title_bar = (self.corner + Vec2::new(100.0, 10.0)) * self.pixels_per_point;
+            on_screen::has_monitor_at(title_bar)
+        }
+        #[cfg(not(windows))]
+        false
+    }
 }
 
 impl Default for WindowState {
@@ -18,6 +43,7 @@ impl Default for WindowState {
         Self {
             size: Vec2::new(1600.0, 900.0),
             maximized: false,
+            placement: None,
         }
     }
 }
@@ -31,18 +57,43 @@ impl WindowState {
             .unwrap_or_default()
     }
 
+    /// Reads "width height", then "maximized" if it was, then "at x y pixels-per-point".
     fn from_text(text: &str) -> Option<Self> {
-        let mut words = text.split_whitespace();
-        let mut length = || words.next()?.parse::<f32>().ok().filter(|v| v.is_finite());
-        let size = Vec2::new(length()?, length()?).max(SMALLEST);
-        let maximized = text.split_whitespace().nth(2) == Some("maximized");
-        Some(Self { size, maximized })
+        let words: Vec<&str> = text.split_whitespace().collect();
+        let number = |index: usize| {
+            let value = words.get(index)?.parse::<f32>().ok();
+            value.filter(|value| value.is_finite())
+        };
+        let size = Vec2::new(number(0)?, number(1)?).max(SMALLEST);
+        let maximized = words.get(2) == Some(&"maximized");
+        let placement = words.iter().position(|&word| word == "at").and_then(|at| {
+            Some(Placement {
+                corner: Pos2::new(number(at + 1)?, number(at + 2)?),
+                pixels_per_point: number(at + 3).filter(|&scale| scale > 0.0)?,
+            })
+        });
+        Some(Self {
+            size,
+            maximized,
+            placement,
+        })
     }
 
     fn to_text(self) -> String {
         let maximized = if self.maximized { " maximized" } else { "" };
+        let placement = self.placement.map_or_else(String::new, |placement| {
+            let Placement {
+                corner,
+                pixels_per_point,
+            } = placement;
+            format!(
+                " at {} {} {pixels_per_point}",
+                corner.x.round(),
+                corner.y.round()
+            )
+        });
         format!(
-            "{} {}{maximized}\n",
+            "{} {}{maximized}{placement}\n",
             self.size.x.round(),
             self.size.y.round()
         )
@@ -51,10 +102,23 @@ impl WindowState {
     pub fn open(self, builder: ViewportBuilder) -> ViewportBuilder {
         // eframe shrinks a size too big for every monitor, so one saved on a larger
         // screen still fits.
-        builder
+        let builder = builder
             .with_inner_size(self.size)
             .with_min_inner_size(SMALLEST)
-            .with_maximized(self.maximized)
+            .with_maximized(self.maximized);
+        match self.placement_on_screen() {
+            Some(placement) => builder.with_position(placement.corner),
+            None => builder,
+        }
+    }
+
+    /// Whether the window opens in the middle of the screen, having no place to go back to.
+    pub fn centered(self) -> bool {
+        self.placement_on_screen().is_none()
+    }
+
+    fn placement_on_screen(self) -> Option<Placement> {
+        self.placement.filter(|placement| placement.is_on_screen())
     }
 }
 
@@ -68,8 +132,19 @@ impl Editor {
                 return;
             }
             self.window.maximized = viewport.maximized.unwrap_or(false);
-            if let Some(inner) = viewport.inner_rect.filter(|_| !self.window.maximized) {
+            if self.window.maximized {
+                return;
+            }
+            if let Some(inner) = viewport.inner_rect {
                 self.window.size = inner.size();
+            }
+            if let (Some(outer), Some(pixels_per_point)) =
+                (viewport.outer_rect, viewport.native_pixels_per_point)
+            {
+                self.window.placement = Some(Placement {
+                    corner: outer.min,
+                    pixels_per_point,
+                });
             }
         });
         if closes {
@@ -77,6 +152,36 @@ impl Editor {
                 store.write_setting(Setting::Window, self.window.to_text());
             }
         }
+    }
+}
+
+#[cfg(windows)]
+mod on_screen {
+    use std::ffi::c_void;
+
+    #[repr(C)]
+    struct Point {
+        x: i32,
+        y: i32,
+    }
+
+    const MONITOR_DEFAULTTONULL: u32 = 0;
+
+    #[link(name = "user32")]
+    extern "system" {
+        fn MonitorFromPoint(point: Point, flags: u32) -> *mut c_void;
+    }
+
+    /// `pixel` is in the desktop's pixels, across every monitor.
+    pub(super) fn has_monitor_at(pixel: egui::Pos2) -> bool {
+        let point = Point {
+            x: pixel.x as i32,
+            y: pixel.y as i32,
+        };
+        // SAFETY: MonitorFromPoint only reads the point passed by value and, with
+        // MONITOR_DEFAULTTONULL, returns null when no monitor holds it; the handle it
+        // returns needs no release.
+        !unsafe { MonitorFromPoint(point, MONITOR_DEFAULTTONULL) }.is_null()
     }
 }
 
@@ -89,8 +194,14 @@ mod tests {
         let left = WindowState {
             size: Vec2::new(1280.0, 720.0),
             maximized: true,
+            placement: Some(Placement {
+                corner: Pos2::new(-1700.0, 40.0),
+                pixels_per_point: 1.25,
+            }),
         };
         assert_eq!(WindowState::from_text(&left.to_text()), Some(left));
+        let unplaced = WindowState::from_text("1280 720 maximized");
+        assert_eq!(unplaced.map(|state| state.placement), Some(None));
         let tiny = WindowState::from_text("200 100").map(|state| state.size);
         assert_eq!(tiny, Some(SMALLEST));
         assert_eq!(WindowState::from_text("wide 720"), None);
