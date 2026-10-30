@@ -6,7 +6,8 @@ use timeline::{
     MaskTracking, Ticks,
 };
 
-use super::look::{icon_button, Icon, Rows, ANIMATED};
+use super::key_icons::{icon_button, Icon};
+use super::look::{Rows, ANIMATED};
 use crate::icons::{self, Look};
 use crate::mask_tracking::TrackSpan;
 

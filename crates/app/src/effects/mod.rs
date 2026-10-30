@@ -13,6 +13,7 @@ mod graphic_layers;
 mod hue_curves;
 mod image;
 mod ken_burns;
+mod key_icons;
 mod key_selection;
 mod key_time;
 mod keying;

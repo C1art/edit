@@ -37,7 +37,11 @@ fn serve(incoming: &Receiver<Request>, outgoing: &Sender<Reply>) {
                     Ok(plugin) => Ok(plugin
                         .parameters()
                         .into_iter()
-                        .filter(|param| !param.flags.hidden() && !param.flags.read_only())
+                        .filter(|param| {
+                            !param.flags.hidden()
+                                && !param.flags.read_only()
+                                && !param.flags.bypass()
+                        })
                         .collect()),
                     Err(error) => Err(error.clone()),
                 };

@@ -4,7 +4,8 @@ use egui::{Align2, Color32, FontId, Pos2, Rect, Sense, Shape, Stroke};
 use timeline::{HandleSide, Param, Ticks};
 
 use super::{Lane, REACH};
-use crate::effects::look::{paint_key, Output, ANIMATED};
+use crate::effects::key_icons::paint_key;
+use crate::effects::look::{Output, ANIMATED};
 use crate::mixer::Change;
 
 const HEIGHT: f32 = 64.0;

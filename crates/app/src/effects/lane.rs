@@ -1,7 +1,8 @@
 use egui::{Color32, Id, Rect, Sense, Stroke};
 use timeline::{Clip, FrameRate, Interpolation, Param, Sequence, Ticks, Timebase};
 
-use super::look::{paint_key, Output, ANIMATED};
+use super::key_icons::paint_key;
+use super::look::{Output, ANIMATED};
 use crate::mixer::Change;
 
 mod graph;
