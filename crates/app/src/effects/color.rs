@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use egui::epaint::{Mesh, Vertex, WHITE_UV};
 use egui::{Color32, Pos2, RichText, Sense, Stroke, Vec2};
-use timeline::{ColorCorrection, ColorVignette, Param};
+use timeline::{ColorCorrection, ColorVignette, CreativeLook, Param};
 
 use super::look::Rows;
 use crate::color_match::ToneGoal;
@@ -52,6 +52,7 @@ pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorr
     rows.param(ui, "Whites", &mut color.whites, -100.0..=100.0, "");
     rows.param(ui, "Blacks", &mut color.blacks, -100.0..=100.0, "");
     ui.label(RichText::new("Creative").weak());
+    look_presets(ui, rows, color);
     lut_row(ui, rows, "Look", &mut color.look, LutSlot::Look);
     if color.look.is_some() {
         rows.param(ui, "Intensity", &mut color.look_intensity, 0.0..=100.0, "%");
@@ -88,6 +89,37 @@ pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorr
     }
     super::secondary::controls(ui, rows, &mut color.secondary);
     egui::CollapsingHeader::new("Vignette").show(ui, |ui| vignette(ui, rows, &mut color.vignette));
+}
+
+fn look_presets(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorrection) {
+    let current = CreativeLook::of(color);
+    let shown = match current {
+        Some(Some(look)) => look.name(),
+        Some(None) => "None",
+        None => "Custom",
+    };
+    let mut picked = None;
+    ui.horizontal(|ui| {
+        ui.add_sized([72.0, 18.0], egui::Label::new("Preset"));
+        egui::ComboBox::from_id_salt("creative look")
+            .selected_text(shown)
+            .height(320.0)
+            .show_ui(ui, |ui| {
+                let looks = [None].into_iter().chain(CreativeLook::ALL.map(Some));
+                for look in looks {
+                    let name = look.map_or("None", CreativeLook::name);
+                    if ui.selectable_label(current == Some(look), name).clicked() {
+                        picked = Some(look);
+                    }
+                }
+            })
+            .response
+            .on_hover_text("Sets Faded Film, Vibrance, Saturation and the tints");
+    });
+    if let Some(look) = picked {
+        CreativeLook::apply(look, color);
+        rows.commit();
+    }
 }
 
 fn split_tone(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorrection) {

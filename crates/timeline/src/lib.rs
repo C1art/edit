@@ -7,6 +7,7 @@ mod caption;
 mod clip_line;
 mod collect;
 mod color;
+mod creative_look;
 mod curves;
 mod ducking;
 mod duplicates;
@@ -88,6 +89,7 @@ pub use caption::{captions_from_cues, Caption, CaptionStyle, Captions, CAPTION_M
 pub use clip_line::ClipLine;
 pub use collect::{collect_files, Collect, FileCopy};
 pub use color::{ColorCorrection, ColorVignette, ColorWheel};
+pub use creative_look::CreativeLook;
 pub use curves::{Curve, CurvePoint, Curves, CURVE_RANGE};
 pub use ducking::{active_spans, ducked_volume};
 pub use edit::{
