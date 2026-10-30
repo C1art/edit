@@ -1,8 +1,6 @@
-mod common;
-
 use std::time::Duration;
 
-use common::{compositor, layer, solid, SIZE};
+use crate::common::{compositor, layer, solid, SIZE};
 use render::{Background, Compositor, Detail, PixelEffects, Presented, RenderError};
 use timeline::BlendMode;
 

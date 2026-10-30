@@ -1,6 +1,4 @@
-mod common;
-
-use common::{compositor, filled, layer, SIZE};
+use crate::common::{compositor, filled, layer, SIZE};
 use render::{Background, LayerMask, Outline, RenderError, MAX_MASKS};
 use timeline::{BlendMode, MaskShape};
 

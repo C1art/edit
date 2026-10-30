@@ -1,8 +1,7 @@
-mod common;
-
+use crate::common;
 use std::sync::Arc;
 
-use common::{compositor, layer, solid};
+use crate::common::{compositor, layer, solid};
 use render::{Grade, RenderError, CURVE_SIZE};
 use timeline::{BlendMode, CurvePoint, HueCurve, HueCurves, HUE_CURVE_NEUTRAL};
 

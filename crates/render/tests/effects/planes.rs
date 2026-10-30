@@ -1,6 +1,4 @@
-mod common;
-
-use common::{compositor, layer};
+use crate::common::{compositor, layer};
 use render::{ChromaRows, LayerImage, Picture, PlaneRows, RenderError};
 use timeline::{
     BlendMode, ChromaSiting, ChromaSubsampling, PlaneFormat, SampleDepth, YuvColor, YuvMatrix,

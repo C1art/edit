@@ -1,6 +1,4 @@
-mod common;
-
-use common::{compositor, layer, solid, SIZE};
+use crate::common::{compositor, layer, solid, SIZE};
 use timeline::BlendMode;
 
 /// The encoded value a blend mode gives a backdrop channel under mid grey.

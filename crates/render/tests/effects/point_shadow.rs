@@ -1,6 +1,4 @@
-mod common;
-
-use common::{compositor, layer, SIZE};
+use crate::common::{compositor, layer, SIZE};
 use render::{PictureStyle, PixelEffects, PointShadow, RenderError};
 use timeline::BlendMode;
 

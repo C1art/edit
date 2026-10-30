@@ -1,6 +1,4 @@
-mod common;
-
-use common::{compositor, layer, solid, SIZE};
+use crate::common::{compositor, layer, solid, SIZE};
 use render::{Magnify, Optics, PixelEffects};
 use timeline::BlendMode;
 

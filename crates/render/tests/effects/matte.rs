@@ -1,6 +1,4 @@
-mod common;
-
-use common::{compositor, filled, layer, solid, SIZE};
+use crate::common::{compositor, filled, layer, solid, SIZE};
 use render::{LayerImage, LayerLook, Picture};
 use timeline::{BlendMode, MatteChannel};
 

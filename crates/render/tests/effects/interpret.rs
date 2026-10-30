@@ -1,6 +1,5 @@
-mod common;
-
-use common::{compositor, filled, layer, solid};
+use crate::common;
+use crate::common::{compositor, filled, layer, solid};
 use render::{PixelEffects, RenderError};
 use timeline::{AlphaInterpretation, BlendMode, ColorSpace};
 

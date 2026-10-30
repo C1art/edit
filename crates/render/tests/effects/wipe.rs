@@ -1,6 +1,5 @@
-mod common;
-
-use common::{compositor, layer, solid};
+use crate::common;
+use crate::common::{compositor, layer, solid};
 use render::{LayerWipe, RenderError};
 use timeline::{BlendMode, Side, Sweep, WipePattern};
 

@@ -1,9 +1,7 @@
-mod common;
-
 use std::any::Any;
 use std::sync::Arc;
 
-use common::{compositor, layer, solid, SIZE};
+use crate::common::{compositor, layer, solid, SIZE};
 use render::{Background, Picture, RenderError};
 use timeline::BlendMode;
 
