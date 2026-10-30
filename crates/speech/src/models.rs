@@ -28,6 +28,20 @@ impl Model {
         }
     }
 
+    /// A stable name for keeping the choice in a settings file.
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::FastEnglish => "fast_english",
+            Self::AccurateEnglish => "accurate_english",
+            Self::FastAnyLanguage => "fast_any_language",
+            Self::AccurateAnyLanguage => "accurate_any_language",
+        }
+    }
+
+    pub fn from_key(key: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|model| model.key() == key)
+    }
+
     pub fn english_only(self) -> bool {
         matches!(self, Self::FastEnglish | Self::AccurateEnglish)
     }

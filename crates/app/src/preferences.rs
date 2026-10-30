@@ -1,4 +1,5 @@
 use audio::{InputDevice, OutputDevice};
+use speech::Model;
 
 use crate::editor::Editor;
 use crate::media_scaling::MediaScaling;
@@ -32,6 +33,9 @@ pub(crate) struct Preferences {
     waveforms: bool,
     rectified_waveforms: bool,
     ui_mode: UiMode,
+    speech_model: Model,
+    /// A language code, or `None` for the model to tell.
+    speech_language: Option<String>,
 }
 
 impl Preferences {
@@ -55,6 +59,8 @@ impl Preferences {
             waveforms: editor.clip_art.show_waveforms,
             rectified_waveforms: editor.clip_art.rectified_waveforms,
             ui_mode: editor.ui_mode,
+            speech_model: editor.speech_choice.0,
+            speech_language: editor.speech_choice.1.clone(),
         }
     }
 
@@ -66,7 +72,7 @@ impl Preferences {
              voiceover_input_id\t{}\nvoiceover_countdown\t{}\nvoiceover_hear_sequence\t{}\n\
              default_transition\t{}\ndefault_transition_length\t{}\nstill_length\t{}\n\
              media_scaling\t{}\nauto_scroll\t{}\nwaveforms\t{}\nrectified_waveforms\t{}\n\
-             ui_mode\t{}\n",
+             ui_mode\t{}\nspeech_model\t{}\nspeech_language\t{}\n",
             self.hardware_decoding,
             self.autosave,
             self.autosave_minutes,
@@ -98,6 +104,8 @@ impl Preferences {
             self.waveforms,
             self.rectified_waveforms,
             self.ui_mode.key(),
+            self.speech_model.key(),
+            self.speech_language.as_deref().unwrap_or_default(),
         )
     }
 
@@ -152,6 +160,10 @@ impl Preferences {
                 "waveforms" => set(&mut self.waveforms, flag),
                 "rectified_waveforms" => set(&mut self.rectified_waveforms, flag),
                 "ui_mode" => set(&mut self.ui_mode, UiMode::from_key(value)),
+                "speech_model" => set(&mut self.speech_model, Model::from_key(value)),
+                "speech_language" => {
+                    self.speech_language = (!value.is_empty()).then(|| value.to_owned());
+                }
                 _ => {}
             }
         }
@@ -198,6 +210,7 @@ impl Editor {
         self.clip_art.show_waveforms = preferences.waveforms;
         self.clip_art.rectified_waveforms = preferences.rectified_waveforms;
         self.set_ui_mode(preferences.ui_mode);
+        self.speech_choice = (preferences.speech_model, preferences.speech_language);
         self.saved_preferences = Some(Preferences::of(self));
     }
 
@@ -237,6 +250,8 @@ mod tests {
         waveforms: true,
         rectified_waveforms: false,
         ui_mode: UiMode::Advanced,
+        speech_model: Model::FastEnglish,
+        speech_language: None,
     };
 
     #[test]
@@ -271,6 +286,8 @@ mod tests {
             waveforms: false,
             rectified_waveforms: true,
             ui_mode: UiMode::Simple,
+            speech_model: Model::AccurateAnyLanguage,
+            speech_language: Some("de".to_owned()),
         };
         assert_eq!(DEFAULTS.read(&chosen.to_text()), chosen);
     }
