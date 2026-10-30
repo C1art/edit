@@ -131,6 +131,8 @@ pub struct ExportFormat {
 pub struct Preset {
     pub name: &'static str,
     pub format: ExportFormat,
+    /// Made for a vertical sequence, as phone apps show it.
+    pub vertical: bool,
 }
 
 const MATCH_SOURCE: ExportFormat = ExportFormat {
@@ -151,6 +153,15 @@ const fn video_preset(name: &'static str, height: u32, mbps: u32) -> Preset {
             rate_control: RateControl::Bitrate(mbps * 1_000_000),
             ..MATCH_SOURCE
         },
+        vertical: false,
+    }
+}
+
+/// 1080 × 1920 from a vertical sequence.
+const fn vertical_preset(name: &'static str, mbps: u32) -> Preset {
+    Preset {
+        vertical: true,
+        ..video_preset(name, 1920, mbps)
     }
 }
 
@@ -161,17 +172,22 @@ const fn format_preset(name: &'static str, format: Format) -> Preset {
             format,
             ..MATCH_SOURCE
         },
+        vertical: false,
     }
 }
 
-pub const PRESETS: [Preset; 15] = [
+pub const PRESETS: [Preset; 18] = [
     Preset {
         name: "Match Source - High Bitrate",
         format: MATCH_SOURCE,
+        vertical: false,
     },
     video_preset("YouTube 2160p 4K Ultra HD", 2160, 45),
     video_preset("YouTube 1080p Full HD", 1080, 16),
     video_preset("Vimeo 720p HD", 720, 10),
+    vertical_preset("YouTube Shorts 1080×1920", 16),
+    vertical_preset("TikTok 1080×1920", 12),
+    vertical_preset("Instagram Reels 1080×1920", 10),
     Preset {
         name: "HEVC Match Source",
         format: ExportFormat {
@@ -179,6 +195,7 @@ pub const PRESETS: [Preset; 15] = [
             rate_control: RateControl::Quality(22),
             ..MATCH_SOURCE
         },
+        vertical: false,
     },
     format_preset("Apple ProRes 422", Format::ProRes422),
     format_preset("Apple ProRes 422 HQ", Format::ProRes422Hq),
@@ -192,6 +209,7 @@ pub const PRESETS: [Preset; 15] = [
             height: Some(480),
             ..MATCH_SOURCE
         },
+        vertical: false,
     },
     format_preset("AAC Audio 320 kbps", Format::Aac),
     format_preset("MP3 320 kbps", Format::Mp3),
@@ -207,12 +225,13 @@ impl Default for ExportFormat {
 
 impl ExportFormat {
     /// The preset these settings match, if any, ignoring choices the format doesn't use.
-    pub fn preset_name(&self) -> Option<&'static str> {
+    pub fn preset(&self) -> Option<&'static Preset> {
         let used = self.used();
-        PRESETS
-            .iter()
-            .find(|preset| preset.format.used() == used)
-            .map(|preset| preset.name)
+        PRESETS.iter().find(|preset| preset.format.used() == used)
+    }
+
+    pub fn preset_name(&self) -> Option<&'static str> {
+        self.preset().map(|preset| preset.name)
     }
 
     /// These settings with choices the format ignores put back to their defaults.

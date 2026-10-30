@@ -36,6 +36,15 @@ pub fn rows(
             }
         });
     ui.end_row();
+    let (width, height) = sequence_size;
+    if format.preset().is_some_and(|preset| preset.vertical) && width > height {
+        ui.label("");
+        ui.colored_label(
+            ui.visuals().warn_fg_color,
+            "This sequence is landscape. Sequence > Auto Reframe Sequence makes a vertical copy.",
+        );
+        ui.end_row();
+    }
     if rate_controlled {
         ui.label("Bitrate:");
         ui.horizontal(|ui| {
