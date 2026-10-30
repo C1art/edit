@@ -44,6 +44,7 @@ mod sound_more;
 mod sound_plugin;
 mod stabilizer;
 mod text_style_row;
+mod title_styling;
 mod together;
 mod tone;
 mod transitions;

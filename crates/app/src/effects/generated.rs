@@ -1,9 +1,10 @@
 use timeline::{
-    CountingLeader, FillGradient, Generator, GradientKind, Rgb, Scroll, ShadowStyle, Shape,
-    ShapeKind, TextAlign, TextStroke, Title, TitleFont, TitleMotion,
+    CountingLeader, Generator, Rgb, Scroll, Shape, ShapeKind, TextAlign, Title, TitleFont,
+    TitleMotion,
 };
 
 use super::graphic_layers;
+use super::title_styling::{gradient_row, shadow_rows, stroke_row};
 use crate::installed_fonts;
 use crate::mixer::{response_state, Change};
 
@@ -299,104 +300,6 @@ pub(super) fn shape_controls(ui: &mut egui::Ui, shape: &mut Shape, height: u32) 
     change
 }
 
-fn stroke_row(ui: &mut egui::Ui, stroke: &mut Option<TextStroke>) -> Option<Change> {
-    let mut change = None;
-    ui.horizontal_wrapped(|ui| {
-        let mut stroked = stroke.is_some();
-        if ui.checkbox(&mut stroked, "Stroke").changed() {
-            *stroke = stroked.then(TextStroke::default);
-            change = Some(Change::Commit);
-        }
-        if let Some(stroke) = stroke {
-            change = color_button(ui, &mut stroke.color).or(change);
-            let width = ui.add(
-                egui::DragValue::new(&mut stroke.width)
-                    .range(1..=100)
-                    .suffix(" px"),
-            );
-            change = response_state(&width, change);
-        }
-    });
-    change
-}
-
-fn gradient_row(ui: &mut egui::Ui, gradient: &mut Option<FillGradient>) -> Option<Change> {
-    let mut change = None;
-    ui.horizontal_wrapped(|ui| {
-        let mut blended = gradient.is_some();
-        if ui.checkbox(&mut blended, "Gradient").changed() {
-            *gradient = blended.then(FillGradient::default);
-            change = Some(Change::Commit);
-        }
-        let Some(gradient) = gradient else {
-            return;
-        };
-        change = color_button(ui, &mut gradient.to).or(change);
-        for kind in GradientKind::ALL {
-            if ui
-                .selectable_value(&mut gradient.kind, kind, kind.name())
-                .changed()
-            {
-                change = Some(Change::Commit);
-            }
-        }
-        if gradient.kind == GradientKind::Linear {
-            let angle = egui::DragValue::new(&mut gradient.angle)
-                .range(-360..=360)
-                .suffix("°");
-            change = response_state(&ui.add(angle).on_hover_text("Angle"), change);
-        }
-    });
-    change
-}
-
-/// Essential Graphics' shadow: until one of its controls is changed, the `usual` look
-/// that scales with what casts it.
-fn shadow_rows(
-    ui: &mut egui::Ui,
-    shadow: &mut bool,
-    style: &mut Option<ShadowStyle>,
-    usual: ShadowStyle,
-) -> Option<Change> {
-    let mut change = None;
-    let mut edited = style.unwrap_or(usual);
-    ui.horizontal_wrapped(|ui| {
-        if ui.checkbox(shadow, "Drop shadow").changed() {
-            change = Some(Change::Commit);
-        }
-        if *shadow {
-            change = color_button(ui, &mut edited.color).or(change);
-            let opacity = egui::DragValue::new(&mut edited.opacity)
-                .range(0..=100)
-                .suffix("%");
-            change = response_state(&ui.add(opacity).on_hover_text("Opacity"), change);
-            let angle = egui::DragValue::new(&mut edited.angle)
-                .range(-360..=360)
-                .suffix("°");
-            change = response_state(&ui.add(angle).on_hover_text("Angle"), change);
-        }
-    });
-    if *shadow {
-        pairs(ui, 255.0, |ui| {
-            for (value, name) in [
-                (&mut edited.distance, "Distance"),
-                (&mut edited.size, "Size"),
-                (&mut edited.blur, "Blur"),
-            ] {
-                ui.horizontal(|ui| {
-                    ui.label(name);
-                    let drag = egui::DragValue::new(value).range(0..=200).suffix(" px");
-                    change = response_state(&ui.add(drag), change);
-                });
-            }
-        });
-    }
-    if edited != style.unwrap_or(usual) {
-        *style = Some(edited);
-    }
-    change
-}
-
 /// Lays out groups of controls side by side, or one under another when the panel is
 /// narrower than `wide`; a wrapping row would part a label from its value.
 pub(super) fn pairs(ui: &mut egui::Ui, wide: f32, add: impl FnOnce(&mut egui::Ui)) {
@@ -440,7 +343,7 @@ fn color_row(ui: &mut egui::Ui, label: &str, color: &mut Rgb) -> Option<Change> 
     .inner
 }
 
-fn color_button(ui: &mut egui::Ui, color: &mut Rgb) -> Option<Change> {
+pub(super) fn color_button(ui: &mut egui::Ui, color: &mut Rgb) -> Option<Change> {
     let mut rgb = [color.r, color.g, color.b];
     ui.color_edit_button_srgb(&mut rgb).changed().then(|| {
         *color = Rgb::new(rgb[0], rgb[1], rgb[2]);
