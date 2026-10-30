@@ -41,7 +41,7 @@ impl Edit for AddGenerated {
 }
 
 /// New media drawing `generator`, at the sequence's frame size and outside any bin.
-pub(super) fn generated_item(
+pub(crate) fn generated_item(
     sequence: &mut Sequence,
     name: String,
     generator: Generator,

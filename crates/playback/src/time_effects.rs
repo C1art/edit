@@ -56,6 +56,9 @@ pub(crate) fn with_burn_ins(
                         sequence.timebase,
                         sequence.format.frame_rate,
                     ),
+                    TimecodeSource::Sequence => {
+                        sequence.timecode_at(clip.position_of(time)).to_string()
+                    }
                 };
                 Some(Stamp::Text(text, position, size, opacity, None))
             }

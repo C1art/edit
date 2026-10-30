@@ -15,6 +15,7 @@ mod edit;
 mod edl;
 mod effect;
 mod error;
+mod export_overlay;
 mod file_url;
 mod find;
 mod generator;
@@ -134,6 +135,7 @@ pub use effect::{
     WriteOn, WriteOnStyle, MAX_LIGHTS, ULTRA_KEY_REACH,
 };
 pub use error::TimelineError;
+pub use export_overlay::{ExportOverlays, OverlayPlace, Watermark};
 pub use find::{next_found, FindOperator, FindQuery, Found};
 pub use generator::{
     held_length, Generator, Shape, ShapeKind, TextAlign, TextStroke, Title, TitleFont,

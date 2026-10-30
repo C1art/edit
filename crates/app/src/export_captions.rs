@@ -90,3 +90,12 @@ impl Editor {
         }
     }
 }
+
+/// What becomes of the captions of `sequence` in a format with or without a picture.
+pub fn chosen(choice: CaptionExport, has_video: bool, sequence: &Sequence) -> CaptionExport {
+    if sequence.captions.items.is_empty() {
+        CaptionExport::Omit
+    } else {
+        choice.for_format(has_video)
+    }
+}

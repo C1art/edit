@@ -37,15 +37,18 @@ pub enum TimecodeSource {
     Media,
     /// The time since the clip's first frame, at the sequence's frame rate.
     Clip,
+    /// The sequence's own timecode where the clip plays, from its start time.
+    Sequence,
 }
 
 impl TimecodeSource {
-    pub const ALL: [Self; 2] = [Self::Media, Self::Clip];
+    pub const ALL: [Self; 3] = [Self::Media, Self::Clip, Self::Sequence];
 
     pub fn name(self) -> &'static str {
         match self {
             Self::Media => "Media",
             Self::Clip => "Clip",
+            Self::Sequence => "Sequence",
         }
     }
 }

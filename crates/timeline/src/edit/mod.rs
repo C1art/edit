@@ -61,6 +61,7 @@ pub use caption_titles::CaptionsToTitles;
 pub use cleanup::{ConsolidateDuplicates, RemoveUnused};
 pub use enable::SetClipsEnabled;
 pub use frame_size::{FrameFit, SetToFrameSize};
+pub(crate) use generate::generated_item;
 pub use generate::{AddGenerated, SetGenerator};
 pub use group::SetGrouped;
 pub use guide::GuideEdit;

@@ -4,11 +4,12 @@ use std::sync::Arc;
 use egui::{ComboBox, Key};
 use media::VideoCodec;
 use playback::{ExportEvent, ExportJob, ExportSettings};
-use timeline::{Sequence, Ticks};
+use timeline::{ExportOverlays, Sequence, Ticks};
 
 use crate::editor::Editor;
 use crate::export_captions::{self, CaptionExport};
 use crate::export_format::{ExportFormat, Format, PRESETS};
+use crate::export_overlays;
 use crate::export_progress::{self, ExportProgress};
 use crate::export_summary::{length_text, span_length, summary};
 use crate::export_target::{Holder, Target, TargetCheck};
@@ -40,6 +41,7 @@ pub struct ExportDialog {
     /// Whether rendered previews stand in for what they cover, as Premiere's Use Previews.
     use_previews: bool,
     captions: CaptionExport,
+    overlays: ExportOverlays,
     running: Option<Running>,
     /// The file suggested on opening, swapped for a free name while it's left as it is.
     suggested: Option<PathBuf>,
@@ -76,6 +78,7 @@ pub fn open(editor: &mut Editor) {
         span,
         use_previews: false,
         captions: CaptionExport::of(sequence),
+        overlays: ExportOverlays::default(),
         running: None,
         suggested: Some(path),
         target: TargetCheck::new(editor.ctx.clone()).ok(),
@@ -185,20 +188,31 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                 ui.label(length_text(format, length, timing));
                 ui.end_row();
                 if format.format.has_video() {
+                    export_overlays::rows(ui, &mut dialog.overlays, sequence);
+                }
+                if has_captions {
+                    export_captions::row(ui, &mut dialog.captions, format.format.has_video());
+                }
+                if format.format.has_video() {
+                    let captions = export_captions::chosen(dialog.captions, true, sequence);
+                    let differs =
+                        export_overlays::differs_from_program(&dialog.overlays, captions, sequence);
                     ui.label("");
-                    ui.add_enabled_ui(rendered, |ui| {
+                    ui.add_enabled_ui(rendered && !differs, |ui| {
                         ui.checkbox(&mut dialog.use_previews, "Use Previews")
                             .on_hover_text(
                                 "Take rendered previews where they cover instead of \
                                  rendering those parts again; faster, though those parts \
                                  are encoded once more",
                             )
-                            .on_disabled_hover_text("Render previews of the sequence first");
+                            .on_disabled_hover_text(if differs {
+                                "Previews show the program as it plays, without these \
+                                 overlays or caption choice"
+                            } else {
+                                "Render previews of the sequence first"
+                            });
                     });
                     ui.end_row();
-                }
-                if has_captions {
-                    export_captions::row(ui, &mut dialog.captions, format.format.has_video());
                 }
             });
             if dialog.format.format != kind {
@@ -263,13 +277,13 @@ fn prepare(editor: &mut Editor) -> Option<(Arc<Sequence>, ExportSettings)> {
     let (width, height) = dialog.format.size(sequence_size);
     let range = (dialog.span == Span::InToOut && sequence.marks.is_set())
         .then(|| sequence.marks.range(sequence.duration()));
+    let has_video = dialog.format.format.has_video();
+    let captions = export_captions::chosen(dialog.captions, has_video, sequence);
+    let overlays = Some(dialog.overlays).filter(|overlays| has_video && !overlays.is_empty());
+    let differs = export_overlays::differs_from_program(&dialog.overlays, captions, sequence);
     let previews = match &editor.render_previews {
-        Some(previews) if dialog.use_previews => previews.previews(),
+        Some(previews) if dialog.use_previews && !differs => previews.previews(),
         _ => Vec::new(),
-    };
-    let captions = match dialog.captions.for_format(dialog.format.format.has_video()) {
-        _ if sequence.captions.items.is_empty() => CaptionExport::Omit,
-        choice => choice,
     };
     let sidecar =
         (captions == CaptionExport::Sidecar).then(|| export_captions::sidecar_path(&path));
@@ -282,9 +296,7 @@ fn prepare(editor: &mut Editor) -> Option<(Arc<Sequence>, ExportSettings)> {
         Some(format!("{} is part of the project", quoted_name(taken)))
     } else if sequence.duration() == timeline::Ticks::ZERO {
         Some(EMPTY_SEQUENCE.to_owned())
-    } else if dialog.format.format.has_video()
-        && !(width.is_multiple_of(2) && height.is_multiple_of(2))
-    {
+    } else if has_video && !(width.is_multiple_of(2) && height.is_multiple_of(2)) {
         Some(format!("The frame size must be even, not {width}×{height}"))
     } else if range.as_ref().is_some_and(|range| range.is_empty()) {
         Some("The in mark is past the end of the sequence".to_owned())
@@ -305,8 +317,11 @@ fn prepare(editor: &mut Editor) -> Option<(Arc<Sequence>, ExportSettings)> {
     };
     let mut sequence = sequence.clone();
     sequence.captions.hidden = captions != CaptionExport::BurnIn;
+    let span = (settings.range.clone()).unwrap_or(Ticks::ZERO..sequence.duration());
+    if let Some(overlays) = overlays {
+        sequence.add_export_overlays(overlays, span.clone());
+    }
     if sidecar.is_some() {
-        let span = (settings.range.clone()).unwrap_or(Ticks::ZERO..sequence.duration());
         editor.write_caption_sidecar(&settings.path, span);
     }
     Some((Arc::new(sequence), settings))

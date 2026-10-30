@@ -29,6 +29,7 @@ mod export_captions;
 mod export_format;
 mod export_frame;
 mod export_loudness;
+mod export_overlays;
 mod export_progress;
 mod export_queue;
 mod export_summary;
