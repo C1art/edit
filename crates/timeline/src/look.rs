@@ -94,7 +94,7 @@ pub struct Crop {
 /// Everything that changes how a video clip's picture looks; ignored for audio.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Look {
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_default")]
     pub motion: Motion,
     /// Percent.
     #[serde(default = "full_opacity")]
@@ -104,17 +104,23 @@ pub struct Look {
     /// What of the picture the opacity applies to; none keeps all of it.
     #[serde(default)]
     pub masks: Vec<Mask>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_default")]
     pub crop: Crop,
     /// Applied in order, before motion.
     #[serde(default)]
     pub effects: Vec<VideoEffect>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_default")]
     pub color: ColorCorrection,
 }
 
 fn full_opacity() -> Param {
     Param::new(10_000)
+}
+
+/// Untouched settings are left out of project files: a clip's color settings alone
+/// would otherwise take kilobytes, and long projects have thousands of clips.
+fn is_default<T: Default + PartialEq>(value: &T) -> bool {
+    *value == T::default()
 }
 
 impl Default for Look {
