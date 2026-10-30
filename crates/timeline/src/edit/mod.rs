@@ -1,6 +1,7 @@
 mod apply_effect;
 mod arrange;
 mod attributes;
+mod automate;
 mod bin;
 mod caption;
 mod enable;
@@ -42,6 +43,7 @@ mod tests;
 pub use apply_effect::{ApplyEffect, ClipEffect};
 pub use arrange::{CloseGap, Lift, MoveClips, MoveMode, RippleDelete};
 pub use attributes::{Attribute, PasteAttributes, RemoveAttributes};
+pub use automate::{AutomateToSequence, AutomatedPiece};
 pub use bin::{AddBin, MoveToBin, RemoveBin, RenameBin, SetBinSearch};
 pub use caption::SetCaptions;
 pub use enable::SetClipsEnabled;

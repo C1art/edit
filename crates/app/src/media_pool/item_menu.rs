@@ -76,6 +76,12 @@ impl Pool<'_> {
         .response
         .on_disabled_hover_text("Ctrl+click one video clip and the audio clips recorded with it");
         let playable = item.video.is_some() || item.has_audio;
+        if playable && ui.button("Automate to Sequence…").clicked() {
+            if !self.view.selected.contains(&item.id) {
+                self.view.selected = vec![item.id];
+            }
+            self.action = Some(PoolAction::Automate);
+        }
         if playable && ui.button("New Sequence From Clip").clicked() {
             self.action = Some(PoolAction::NewSequenceFrom(item.id));
         }

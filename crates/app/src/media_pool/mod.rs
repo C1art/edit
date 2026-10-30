@@ -55,6 +55,8 @@ pub enum PoolAction {
     /// Makes a sequence holding all of the item and opens it.
     NewSequenceFrom(SourceId),
     RevealInExplorer(SourceId),
+    /// Asks how to lay the selected items into the sequence.
+    Automate,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -87,6 +89,13 @@ impl PoolView {
         self.selected = vec![source];
         self.revealing = Some(source);
         self.search.clear();
+    }
+
+    /// The selected items in the order the panel lists them.
+    pub(crate) fn selected_in_sort_order(&self, sequence: &Sequence) -> Vec<SourceId> {
+        let items = sequence.media.iter();
+        let items = items.filter(|item| self.selected.contains(&item.id));
+        self.sort.sorted(items).iter().map(|item| item.id).collect()
     }
 }
 

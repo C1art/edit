@@ -1,6 +1,7 @@
 mod attributes_dialog;
 mod audio_meters;
 mod audio_switch;
+mod automate_dialog;
 mod autosave;
 mod captions;
 mod channels_dialog;

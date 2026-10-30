@@ -441,6 +441,7 @@ fn proxy_replaces_only_the_decoded_path_and_undoes() {
 }
 
 mod attributes;
+mod automate;
 mod bin;
 mod caption;
 mod duplicates;

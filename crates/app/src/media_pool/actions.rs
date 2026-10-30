@@ -71,6 +71,7 @@ impl Editor {
                 };
                 self.apply_to_pool(MoveToBin { media, bins, to });
             }
+            PoolAction::Automate => self.open_automate(),
             PoolAction::CreateMulticam(sources, sync) => {
                 self.sync_sources(sources, sync, Synced::Multicam)
             }
