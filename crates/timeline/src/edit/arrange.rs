@@ -92,6 +92,7 @@ impl Edit for MoveClips {
                 let tracks = ops::rippled_tracks(sequence, &targets);
                 ops::split(sequence, &tracks, start, &mut relinks);
                 ops::shift(sequence, &tracks, start, end - start, &[]);
+                ops::ripple_markers(sequence, start, end - start);
             }
         }
         for (to, clip) in placed {
@@ -181,5 +182,6 @@ pub(super) fn close_gaps(sequence: &mut Sequence, gaps: &[Range<Ticks>], edited:
     let tracks = ops::rippled_tracks(sequence, edited);
     for gap in gaps.iter().rev() {
         ops::shift(sequence, &tracks, gap.end, gap.start - gap.end, &[]);
+        ops::ripple_markers(sequence, gap.end, gap.start - gap.end);
     }
 }

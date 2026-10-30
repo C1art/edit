@@ -80,8 +80,8 @@ pub use replace::ReplaceClip;
 pub use sound::{ClipSound, SetClipsSound};
 pub use speed::{RateStretch, SetClipSpeed, SetTimeInterpolation};
 pub use structure::{
-    AddTrack, ImportMedia, RemoveMedia, RemoveTrack, RenameTrack, SetProxy, SetSequenceFormat,
-    SetTimeDisplay, SetTrackSwitch, TrackSwitch,
+    AddTrack, ImportMedia, RemoveMedia, RemoveTrack, RenameTrack, SetProxy, SetRippleMarkers,
+    SetSequenceFormat, SetTimeDisplay, SetTrackSwitch, TrackSwitch,
 };
 pub use submix::{AddSubmix, RemoveSubmix, SetSubmix, SetTrackOutput, SetTrackSends};
 pub use subsequence::{CloseGaps, MakeSubsequence};

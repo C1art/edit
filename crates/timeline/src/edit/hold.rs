@@ -82,6 +82,7 @@ impl Edit for InsertFrameHold {
         let rippled = ops::rippled_tracks(sequence, &edited);
         ops::split(sequence, &rippled, self.at, &mut Relinks::default());
         ops::shift(sequence, &rippled, self.at, self.length, &[]);
+        ops::ripple_markers(sequence, self.at, self.length);
         for (track, clip) in held {
             let hold = Clip {
                 id: ClipId(sequence.ids.next()),

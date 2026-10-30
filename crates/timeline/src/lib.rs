@@ -98,11 +98,11 @@ pub use edit::{
     SetCaptions, SetChannelMap, SetClipAudioEffects, SetClipGain, SetClipLabel, SetClipLook,
     SetClipOpacity, SetClipPan, SetClipSpeed, SetClipVolume, SetClipsEnabled, SetClipsSound,
     SetGenerator, SetGrouped, SetLinked, SetLinkedSelection, SetMaintainPitch, SetMarks,
-    SetMasterEffects, SetMasterGain, SetMediaLog, SetProxy, SetSegmentSpeed, SetSequenceFormat,
-    SetSubmix, SetTimeDisplay, SetTimeInterpolation, SetToFrameSize, SetTrackAutomation,
-    SetTrackEffects, SetTrackMix, SetTrackOutput, SetTrackSends, SetTrackSwitch, SetTransition,
-    Slide, Slip, SwitchAngle, SyncMethod, TrackSwitch, Trim, TrimMode, TrimToPlayhead, Unlinked,
-    UpdateMarker,
+    SetMasterEffects, SetMasterGain, SetMediaLog, SetProxy, SetRippleMarkers, SetSegmentSpeed,
+    SetSequenceFormat, SetSubmix, SetTimeDisplay, SetTimeInterpolation, SetToFrameSize,
+    SetTrackAutomation, SetTrackEffects, SetTrackMix, SetTrackOutput, SetTrackSends,
+    SetTrackSwitch, SetTransition, Slide, Slip, SwitchAngle, SyncMethod, TrackSwitch, Trim,
+    TrimMode, TrimToPlayhead, Unlinked, UpdateMarker,
 };
 pub use edl::to_edl;
 pub use effect::{

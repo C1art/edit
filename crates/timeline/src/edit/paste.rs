@@ -110,7 +110,9 @@ impl Edit for PasteClips {
                 let edited: Vec<TrackRef> = placed.iter().map(|&(track, _)| track).collect();
                 let tracks = ops::rippled_tracks(sequence, &edited);
                 ops::split(sequence, &tracks, self.at, &mut relinks);
-                ops::shift(sequence, &tracks, self.at, self.clipboard.duration(), &[]);
+                let duration = self.clipboard.duration();
+                ops::shift(sequence, &tracks, self.at, duration, &[]);
+                ops::ripple_markers(sequence, self.at, duration);
             }
             PlaceMode::Overwrite => {
                 for &(track, clip) in &placed {

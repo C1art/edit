@@ -173,5 +173,6 @@ fn extract(sequence: &mut Sequence, range: Range<Ticks>) -> Result<(), TimelineE
         ops::clear(sequence, track, range.clone(), &mut relinks)?;
     }
     ops::shift(sequence, &tracks, range.end, range.start - range.end, &[]);
+    ops::ripple_markers(sequence, range.end, range.start - range.end);
     Ok(())
 }

@@ -284,3 +284,23 @@ impl Edit for SetTimeDisplay {
         Ok(())
     }
 }
+
+/// Sets whether the sequence's markers move with insert and ripple edits.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetRippleMarkers {
+    pub ripple: bool,
+}
+
+impl Edit for SetRippleMarkers {
+    fn name(&self) -> &'static str {
+        "Ripple Sequence Markers"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        if sequence.ripple_markers == self.ripple {
+            return Err(TimelineError::NothingToEdit);
+        }
+        sequence.ripple_markers = self.ripple;
+        Ok(())
+    }
+}

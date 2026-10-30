@@ -91,6 +91,7 @@ pub(super) fn ripple(
             .map_or(primary, |&(_, point)| point);
         ops::shift(sequence, &[track], from, shift, skip);
     }
+    ops::ripple_markers(sequence, primary, shift);
 }
 
 /// Moves the cut at `at` on `tracks` by `delta`: the outgoing clip's tail and the incoming

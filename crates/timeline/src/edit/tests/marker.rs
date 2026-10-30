@@ -93,3 +93,39 @@ fn clip_markers_show_only_within_the_played_source_at_their_sequence_position() 
         .unwrap();
     assert_eq!(shown(&timeline), vec![(200, 250)]);
 }
+
+#[test]
+fn rippling_markers_follow_an_insert_and_go_with_a_ripple_deleted_span() {
+    let (mut timeline, source) = timeline();
+    timeline
+        .apply(place(source, 0, 0, 400, PlaceMode::Overwrite))
+        .unwrap();
+    timeline.apply(SetRippleMarkers { ripple: true }).unwrap();
+    for at in [100, 300] {
+        timeline
+            .apply(AddMarker {
+                owner: MarkerOwner::Sequence,
+                at: Ticks(at),
+            })
+            .unwrap();
+    }
+    timeline
+        .apply(place(source, 200, 0, 50, PlaceMode::Insert))
+        .unwrap();
+    assert_eq!(marker_times(timeline.sequence()), vec![100, 350]);
+    let inserted = clip_on(&timeline, V1, 1);
+    timeline
+        .apply(RippleDelete {
+            clips: vec![clip_on(&timeline, V1, 0)],
+        })
+        .unwrap();
+    // The first clip ran 0 to 200 once the insert split it, taking the marker at 100.
+    assert_eq!(marker_times(timeline.sequence()), vec![150]);
+    assert_eq!(
+        timeline
+            .sequence()
+            .clip(inserted)
+            .map(|(_, clip)| clip.start),
+        Some(Ticks(0))
+    );
+}

@@ -1,7 +1,7 @@
 use egui::Key;
 use timeline::{
     AddMarker, ClearMarkers, Marker, MarkerColor, MarkerId, MarkerKind, MarkerOwner, RemoveMarker,
-    Ticks, Timecode, UpdateMarker,
+    SetRippleMarkers, Ticks, Timecode, UpdateMarker,
 };
 
 use crate::editor::Editor;
@@ -261,5 +261,14 @@ pub fn menu(editor: &mut Editor, ui: &mut egui::Ui) {
         .shortcut_text(editor.keymap.label(Command::ClearAllMarkers));
     if ui.add_enabled(editor.has_markers(), clear_all).clicked() {
         editor.clear_all_markers();
+    }
+    ui.separator();
+    let mut ripple = editor.timeline.sequence().ripple_markers;
+    if ui
+        .checkbox(&mut ripple, "Ripple Sequence Markers")
+        .on_hover_text("Markers move with what insert and ripple edits move")
+        .clicked()
+    {
+        editor.apply_levels(SetRippleMarkers { ripple });
     }
 }

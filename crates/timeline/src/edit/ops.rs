@@ -149,6 +149,21 @@ pub(crate) fn shift(
     }
 }
 
+/// Moves the sequence markers at or after `from` by `delta` when they ripple, dropping
+/// those in the span a negative `delta` closes up.
+pub(crate) fn ripple_markers(sequence: &mut Sequence, from: Ticks, delta: Ticks) {
+    if !sequence.ripple_markers || delta == Ticks::ZERO {
+        return;
+    }
+    let closed = from + delta.min(Ticks::ZERO)..from;
+    let markers = &mut sequence.markers;
+    markers.retain(|marker| !closed.contains(&marker.at));
+    markers
+        .iter_mut()
+        .filter(|marker| marker.at >= from)
+        .for_each(|marker| marker.at = marker.at + delta);
+}
+
 /// Inserts `clip` in start order without checking for overlaps.
 pub(crate) fn insert(
     sequence: &mut Sequence,

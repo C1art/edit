@@ -343,6 +343,9 @@ pub struct Sequence {
     /// Sorted by time.
     #[serde(default)]
     pub markers: Vec<Marker>,
+    /// Whether `markers` move with what insert and ripple edits move.
+    #[serde(default)]
+    pub ripple_markers: bool,
     #[serde(default)]
     pub marks: Marks,
     #[serde(default)]
@@ -368,6 +371,7 @@ impl Sequence {
             master_effects: Vec::new(),
             submixes: Vec::new(),
             markers: Vec::new(),
+            ripple_markers: false,
             marks: Marks::default(),
             captions: Captions::default(),
             linked_selection: LinkedSelection::default(),
