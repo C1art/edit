@@ -182,6 +182,13 @@ impl Editor {
     pub(crate) fn delete_render_files(&mut self) {
         if let Some(previews) = &mut self.render_previews {
             previews.job = None;
+            // Windows can't remove the files while the player has them open.
+            if let Some(program) = &mut self.program {
+                program.player.set_previews(Vec::new());
+            }
+            previews.sent = Some(Vec::new());
+            // Gone already, so they aren't handed back to the player before the reply.
+            previews.rendered.clear();
             previews.files.delete_all();
         }
     }
