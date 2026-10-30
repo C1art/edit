@@ -93,6 +93,7 @@ pub enum Command {
     NextMarker,
     PreviousMarker,
     ClearMarker,
+    ClearAllMarkers,
     SelectionTool,
     TrackSelectForwardTool,
     TrackSelectBackwardTool,
@@ -138,7 +139,7 @@ pub enum Command {
 pub const WORKSPACE_SLOTS: u8 = 9;
 
 impl Command {
-    pub const ALL: [Self; 138] = [
+    pub const ALL: [Self; 139] = [
         Self::NewProject,
         Self::OpenProject,
         Self::Save,
@@ -231,6 +232,7 @@ impl Command {
         Self::NextMarker,
         Self::PreviousMarker,
         Self::ClearMarker,
+        Self::ClearAllMarkers,
         Self::SelectionTool,
         Self::TrackSelectForwardTool,
         Self::TrackSelectBackwardTool,
@@ -357,7 +359,8 @@ impl Command {
             | RenderInToOut
             | DeleteRenderFiles => "Sequence",
             MarkIn | MarkOut | ClearInOut | ClearIn | ClearOut | MarkClip | MarkSelection
-            | GoToIn | GoToOut | AddMarker | NextMarker | PreviousMarker | ClearMarker => "Markers",
+            | GoToIn | GoToOut | AddMarker | NextMarker | PreviousMarker | ClearMarker
+            | ClearAllMarkers => "Markers",
             SelectionTool
             | TrackSelectForwardTool
             | TrackSelectBackwardTool

@@ -58,7 +58,7 @@ pub use levels::{
 };
 pub use link::{SetLinked, SetLinkedSelection, Unlinked};
 pub use look::{ApplyTransitions, RemoveTransitions, SetClipLook, SetTransition};
-pub use marker::{AddMarker, MarkerOwner, RemoveMarker, UpdateMarker};
+pub use marker::{AddMarker, ClearMarkers, MarkerOwner, RemoveMarker, UpdateMarker};
 pub use media::{
     DuplicateMedia, MakeOffline, MakeSubclip, RelinkMedia, RenameMedia, SetChannelMap, SetMediaLog,
 };

@@ -200,6 +200,7 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         Command::PreviousKeyframe => editor.jump_to_keyframe(false),
         Command::NextKeyframe => editor.jump_to_keyframe(true),
         Command::PreviousMarker => editor.jump_to_marker(false),
+        Command::ClearAllMarkers => editor.clear_all_markers(),
         Command::ClearMarker => {
             if let Some(id) = editor.marker_at_playhead() {
                 editor.clear_marker(id);

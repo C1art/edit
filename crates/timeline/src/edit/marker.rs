@@ -79,6 +79,26 @@ impl Edit for RemoveMarker {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClearMarkers {
+    pub owner: MarkerOwner,
+}
+
+impl Edit for ClearMarkers {
+    fn name(&self) -> &'static str {
+        "Clear All Markers"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let markers = markers_mut(sequence, self.owner)?;
+        if markers.is_empty() {
+            return Err(TimelineError::NothingToEdit);
+        }
+        markers.clear();
+        Ok(())
+    }
+}
+
 /// Replaces a marker's position, name, comment and color, keeping markers in time order.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UpdateMarker {

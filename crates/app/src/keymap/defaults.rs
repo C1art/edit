@@ -8,6 +8,7 @@ impl Command {
         let ctrl = |key| Chord::new(true, false, false, key);
         let ctrl_shift = |key| Chord::new(true, true, false, key);
         let ctrl_alt = |key| Chord::new(true, false, true, key);
+        let ctrl_alt_shift = |key| Chord::new(true, true, true, key);
         let shift = |key| Chord::new(false, true, false, key);
         let plain = |key| Chord::new(false, false, false, key);
         let alt = |key| Chord::new(false, false, true, key);
@@ -105,6 +106,7 @@ impl Command {
             Self::NextMarker => vec![shift(Key::M)],
             Self::PreviousMarker => vec![ctrl_shift(Key::M)],
             Self::ClearMarker => vec![ctrl_alt(Key::M)],
+            Self::ClearAllMarkers => vec![ctrl_alt_shift(Key::M)],
             Self::SelectionTool => vec![plain(Key::V)],
             Self::TrackSelectForwardTool => vec![plain(Key::A)],
             Self::TrackSelectBackwardTool => vec![shift(Key::A)],

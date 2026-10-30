@@ -1,7 +1,7 @@
 use egui::Key;
 use timeline::{
-    AddMarker, Marker, MarkerColor, MarkerId, MarkerKind, MarkerOwner, RemoveMarker, Ticks,
-    Timecode, UpdateMarker,
+    AddMarker, ClearMarkers, Marker, MarkerColor, MarkerId, MarkerKind, MarkerOwner, RemoveMarker,
+    Ticks, Timecode, UpdateMarker,
 };
 
 use crate::editor::Editor;
@@ -52,6 +52,16 @@ impl Editor {
 
     pub(crate) fn clear_marker(&mut self, (owner, id): (MarkerOwner, MarkerId)) {
         self.apply(RemoveMarker { owner, id });
+    }
+
+    /// Clears the markers of the selected clip under the playhead, or else the sequence's.
+    pub(crate) fn clear_all_markers(&mut self) {
+        let (owner, _) = self.marker_target();
+        self.apply(ClearMarkers { owner });
+    }
+
+    fn has_markers(&self) -> bool {
+        !self.markers_of(self.marker_target().0).is_empty()
     }
 
     /// Moves the program playhead to the next sequence marker, or the previous one.
@@ -241,5 +251,10 @@ pub fn menu(editor: &mut Editor, ui: &mut egui::Ui) {
         if let Some(id) = here {
             editor.clear_marker(id);
         }
+    }
+    let clear_all = egui::Button::new("Clear All Markers")
+        .shortcut_text(editor.keymap.label(Command::ClearAllMarkers));
+    if ui.add_enabled(editor.has_markers(), clear_all).clicked() {
+        editor.clear_all_markers();
     }
 }

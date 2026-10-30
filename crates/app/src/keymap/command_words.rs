@@ -129,6 +129,7 @@ impl Command {
             Self::NextMarker => ("next_marker", "Go to Next Marker"),
             Self::PreviousMarker => ("previous_marker", "Go to Previous Marker"),
             Self::ClearMarker => ("clear_marker", "Clear Marker"),
+            Self::ClearAllMarkers => ("clear_all_markers", "Clear All Markers"),
             Self::SelectionTool => ("selection_tool", "Selection Tool"),
             Self::TrackSelectForwardTool => {
                 ("track_select_forward_tool", "Track Select Forward Tool")
