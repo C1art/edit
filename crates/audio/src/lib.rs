@@ -1,8 +1,10 @@
 mod dsp;
 mod error;
+mod input;
 mod output;
 mod remix;
 mod resampler;
+mod wav;
 
 pub use dsp::{
     distort, synthesize_impulse, widen, AnalogDelay, AnalogDelaySettings, Biquad, ClickRemover,
@@ -15,9 +17,11 @@ pub use dsp::{
     MAX_PHASER_STAGES, RETIME_HOP,
 };
 pub use error::AudioError;
+pub use input::{input_devices, AudioInput, InputDevice, InputLevel};
 pub use output::{output_devices, AudioOutput, AudioWriter, OutputDevice, OutputFormat};
 pub use remix::remix_stereo;
 pub use resampler::Resampler;
+pub use wav::WavWriter;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SampleRate(pub u32);

@@ -81,7 +81,7 @@ fn described(devices: &[cpal::Device]) -> Vec<OutputDevice> {
 
 /// The names in order, a later one already taken numbered " (2)", " (3)" and on, as
 /// Windows names devices of the same model alike.
-fn distinct_names(names: impl Iterator<Item = String>) -> Vec<String> {
+pub(crate) fn distinct_names(names: impl Iterator<Item = String>) -> Vec<String> {
     let mut distinct: Vec<String> = Vec::new();
     for name in names {
         let numbered = (2..).map(|number| format!("{name} ({number})"));
