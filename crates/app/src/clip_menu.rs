@@ -119,6 +119,9 @@ fn on_selection(editor: &mut Editor, ui: &mut Ui) {
     if ui.add(transitions).clicked() {
         crate::effects::apply_default_transitions_to_selection(editor);
     }
+    if ui.button("Remove Transitions").clicked() {
+        crate::effects::remove_transitions_from_selection(editor);
+    }
     if ui.button("Rename…").clicked() {
         editor.rename_clips();
     }

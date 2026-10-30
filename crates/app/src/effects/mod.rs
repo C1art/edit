@@ -67,7 +67,7 @@ pub(crate) use sound::track_effect_controls;
 pub(crate) use sound::{category as audio_category, CATEGORIES as AUDIO_CATEGORIES};
 pub use transitions::{
     add_transition, apply_default_transition, apply_default_transitions_to_selection,
-    apply_transition,
+    apply_transition, remove_transitions_from_selection,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

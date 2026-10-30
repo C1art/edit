@@ -1,7 +1,7 @@
 use egui::DragValue;
 use timeline::{
-    nearest_transition_edge, Alignment, ApplyTransitions, Clip, Edge, Rgb, Sequence, SetTransition,
-    Side, Sweep, Ticks, TrackKind, TrackRef, Transition, TransitionKind,
+    nearest_transition_edge, Alignment, ApplyTransitions, Clip, Edge, RemoveTransitions, Rgb,
+    Sequence, SetTransition, Side, Sweep, Ticks, TrackKind, TrackRef, Transition, TransitionKind,
 };
 
 use crate::editor::Editor;
@@ -204,6 +204,13 @@ pub fn apply_default_transitions_to_selection(editor: &mut Editor) {
     let transition = default_transition(editor.timeline.sequence());
     if !editor.apply(ApplyTransitions { clips, transition }) {
         editor.notice("Select clips with an edit point that has no transition yet");
+    }
+}
+
+pub fn remove_transitions_from_selection(editor: &mut Editor) {
+    let clips = editor.view.selection.clone();
+    if !editor.apply(RemoveTransitions { clips }) {
+        editor.notice("The selected clips have no transitions");
     }
 }
 
