@@ -10,7 +10,7 @@ use timeline::{Ticks, Timebase};
 /// Sharp on high-density displays at the timeline's row height.
 const THUMBNAIL_HEIGHT: u32 = 72;
 /// Open files kept for further requests; most timelines show a handful of sources.
-const OPEN_READERS: usize = 6;
+pub(crate) const OPEN_READERS: usize = 6;
 /// Open files are closed after this long without requests, as each decoder holds tens
 /// of megabytes of frames and threads.
 const IDLE_CLOSE: Duration = Duration::from_secs(3);

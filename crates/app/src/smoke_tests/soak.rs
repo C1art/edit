@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 use super::monkey::{crowded, frames, Monkey};
 use super::usage::usage;
 use super::{editor, gpu, Screen};
+use crate::clip_art::OPEN_READERS;
 use crate::keymap::Command;
 use crate::monitors::Focus;
 
@@ -21,15 +22,17 @@ const PLAYED_FRAMES: usize = 90;
 const SAMPLE_EVERY: Duration = Duration::from_secs(10);
 /// Resources held once the editor has warmed up may grow by this much at most. Media
 /// the gestures add later fill caches the same way, such as the thumbnail readers,
-/// each with a file and a decoder's threads.
+/// each with a file and a decoder's threads, but every cache is bounded, so none of
+/// this grows with the number of media.
 const MORE_THREADS: usize = 32;
 /// Open files on Linux. Windows counts handles of every kind, which come and go with
 /// the threads, about twenty a decoder thread.
 const MORE_HANDLES: usize = if cfg!(windows) { 64 } else { 8 };
 const HANDLES_PER_THREAD: usize = if cfg!(windows) { 24 } else { 0 };
 const MORE_MEGABYTES: u64 = 200;
-/// Each media added later keeps a decoder, with a frame pool per thread it decodes on.
-const MEGABYTES_PER_MEDIA: u64 = 64;
+/// Each thumbnail reader left open keeps a decoder, with a frame pool per thread it
+/// decodes on, which grows with the core count.
+const MEGABYTES_PER_READER: u64 = 64;
 
 fn soak(gpu: Option<&eframe::egui_wgpu::RenderState>) {
     let seconds = std::env::var("EDIT_SOAK_SECONDS")
@@ -79,23 +82,21 @@ fn soak(gpu: Option<&eframe::egui_wgpu::RenderState>) {
                     project.media.len(),
                     editor.timeline.done().count(),
                 );
-                samples.push((usage, project.media.len()));
+                samples.push(usage);
             }
         }
     }
     // The first fifth warms caches, worker pools and pipelines up.
-    let (Some(&(warm, warm_media)), Some(&(last, last_media))) =
-        (samples.get(samples.len() / 5), samples.last())
-    else {
+    let (Some(&warm), Some(&last)) = (samples.get(samples.len() / 5), samples.last()) else {
         return;
     };
     let thread_handles = HANDLES_PER_THREAD * last.threads.saturating_sub(warm.threads);
-    let media_megabytes = MEGABYTES_PER_MEDIA * last_media.saturating_sub(warm_media) as u64;
+    let reader_megabytes = MEGABYTES_PER_READER * OPEN_READERS as u64;
     assert!(
         last.threads <= warm.threads + MORE_THREADS
             && last.handles <= warm.handles + MORE_HANDLES + thread_handles
-            && last.megabytes <= warm.megabytes + MORE_MEGABYTES + media_megabytes,
-        "grew from {warm:?} with {warm_media} media to {last:?} with {last_media}"
+            && last.megabytes <= warm.megabytes + MORE_MEGABYTES + reader_megabytes,
+        "grew from {warm:?} to {last:?}"
     );
 }
 

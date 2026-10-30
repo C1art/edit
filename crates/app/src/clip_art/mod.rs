@@ -12,6 +12,8 @@ use media::{Peaks, VideoFrame};
 use timeline::{SourceId, Ticks, Timebase};
 
 pub use thumbnails::ThumbnailWorker;
+#[cfg(test)]
+pub(crate) use thumbnails::OPEN_READERS;
 use thumbnails::{Reply, Request};
 pub use waveforms::WaveformWorker;
 
