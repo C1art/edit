@@ -18,6 +18,7 @@ pub(crate) fn menus(editor: &mut Editor, ui: &mut Ui) {
     crate::theme::menu(ui, "Markers", |ui| markers(editor, ui));
     crate::theme::menu(ui, "Sequence", |ui| sequence(editor, ui));
     crate::theme::menu(ui, "Window", |ui| window(editor, ui));
+    crate::essential_keys::help_menu(editor, ui);
 }
 
 /// A menu entry for `command`, labelled `label` and run as its shortcut runs it.
@@ -238,6 +239,20 @@ fn sequence(editor: &mut Editor, ui: &mut Ui) {
     item(
         editor,
         ui,
+        Command::RippleTrimPrevious,
+        "Trim Start to Playhead",
+        has_clips,
+    );
+    item(
+        editor,
+        ui,
+        Command::RippleTrimNext,
+        "Trim End to Playhead",
+        has_clips,
+    );
+    item(
+        editor,
+        ui,
         Command::VideoTransition,
         "Apply Video Transition",
         has_clips,
@@ -256,6 +271,7 @@ fn sequence(editor: &mut Editor, ui: &mut Ui) {
     {
         editor.close_all_gaps();
     }
+    item(editor, ui, Command::ZoomToFit, "Zoom to Fit", has_clips);
     ui.separator();
     if ui.button("Add Video Track").clicked() {
         editor.add_track(TrackKind::Video);

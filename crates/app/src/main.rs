@@ -24,6 +24,7 @@ mod effect_presets;
 mod effects;
 mod effects_panel;
 mod error;
+mod essential_keys;
 mod essential_sound;
 mod export;
 mod export_captions;

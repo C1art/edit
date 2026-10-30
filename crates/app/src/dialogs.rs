@@ -33,6 +33,7 @@ pub(crate) fn show(editor: &mut Editor, ctx: &egui::Context) {
     crate::export::dialog(editor, ctx);
     crate::export_queue::window(editor, ctx);
     crate::keymap::window(editor, ctx);
+    crate::essential_keys::window(editor, ctx);
     crate::effect_presets::dialog(editor, ctx);
     crate::title_templates::dialog(editor, ctx);
     crate::text_styles::dialog(editor, ctx);

@@ -268,6 +268,7 @@ fn advanced_menus(editor: &mut Editor, ui: &mut egui::Ui) {
         crate::sequence_menu::sequence_menu(editor, ui)
     });
     crate::workspaces::window_menu(editor, ui);
+    crate::essential_keys::help_menu(editor, ui);
 }
 
 const TOOL: egui::Vec2 = egui::vec2(26.0, 22.0);

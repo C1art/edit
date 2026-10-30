@@ -222,7 +222,9 @@ fn paint_push(painter: &Painter, at: egui::Pos2, color: Color32) {
 /// What an empty sequence shows, so a first-time user knows how to start.
 pub(super) fn paint_empty(painter: &Painter, tracks: Rect) {
     let galley = painter.layout_no_wrap(
-        "Drag clips here from the Project panel or the Source monitor".into(),
+        "Drag clips here from the Project panel or the Source monitor\n\
+         Help > Essential Shortcuts lists the keys to start with"
+            .into(),
         egui::FontId::proportional(14.0),
         crate::theme::WEAK_TEXT,
     );
