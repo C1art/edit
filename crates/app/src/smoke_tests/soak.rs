@@ -1,5 +1,5 @@
 //! Keeps one editor busy for minutes in real time, playing and editing by turns, and
-//! checks that its threads, open files and memory level off rather than climb.
+//! checks that its threads, handles and memory level off rather than climb.
 //!
 //! On Linux, run it with `MALLOC_MMAP_THRESHOLD_=1048576`: glibc otherwise keeps the
 //! frame buffers it frees in its heaps, and the resident size climbs with fragmentation
@@ -8,6 +8,7 @@
 use std::time::{Duration, Instant};
 
 use super::monkey::{crowded, frames, Monkey};
+use super::usage::usage;
 use super::{editor, gpu, Screen};
 use crate::keymap::Command;
 use crate::monitors::Focus;
@@ -22,34 +23,13 @@ const SAMPLE_EVERY: Duration = Duration::from_secs(10);
 /// the gestures add later fill caches the same way, such as the thumbnail readers,
 /// each with a file and a decoder's threads.
 const MORE_THREADS: usize = 32;
-const MORE_FILES: usize = 8;
+/// Open files on Linux. Windows counts handles of every kind, which come and go with
+/// the threads, about twenty a decoder thread.
+const MORE_HANDLES: usize = if cfg!(windows) { 64 } else { 8 };
+const HANDLES_PER_THREAD: usize = if cfg!(windows) { 24 } else { 0 };
 const MORE_MEGABYTES: u64 = 200;
-
-#[derive(Debug, Clone, Copy)]
-struct Usage {
-    threads: usize,
-    files: usize,
-    megabytes: u64,
-}
-
-/// What the process holds, where the platform tells cheaply.
-fn usage() -> Option<Usage> {
-    let count = |dir| std::fs::read_dir(dir).ok().map(Iterator::count);
-    let status = std::fs::read_to_string("/proc/self/status").ok()?;
-    let kilobytes: u64 = status
-        .lines()
-        .find_map(|line| line.strip_prefix("VmRSS:"))?
-        .trim()
-        .trim_end_matches("kB")
-        .trim()
-        .parse()
-        .ok()?;
-    Some(Usage {
-        threads: count("/proc/self/task")?,
-        files: count("/proc/self/fd")?,
-        megabytes: kilobytes / 1024,
-    })
-}
+/// Each media added later keeps a decoder, with a frame pool per thread it decodes on.
+const MEGABYTES_PER_MEDIA: u64 = 64;
 
 fn soak(gpu: Option<&eframe::egui_wgpu::RenderState>) {
     let seconds = std::env::var("EDIT_SOAK_SECONDS")
@@ -99,19 +79,23 @@ fn soak(gpu: Option<&eframe::egui_wgpu::RenderState>) {
                     project.media.len(),
                     editor.timeline.done().count(),
                 );
-                samples.push(usage);
+                samples.push((usage, project.media.len()));
             }
         }
     }
     // The first fifth warms caches, worker pools and pipelines up.
-    let (Some(warm), Some(last)) = (samples.get(samples.len() / 5), samples.last()) else {
+    let (Some(&(warm, warm_media)), Some(&(last, last_media))) =
+        (samples.get(samples.len() / 5), samples.last())
+    else {
         return;
     };
+    let thread_handles = HANDLES_PER_THREAD * last.threads.saturating_sub(warm.threads);
+    let media_megabytes = MEGABYTES_PER_MEDIA * last_media.saturating_sub(warm_media) as u64;
     assert!(
         last.threads <= warm.threads + MORE_THREADS
-            && last.files <= warm.files + MORE_FILES
-            && last.megabytes <= warm.megabytes + MORE_MEGABYTES,
-        "grew from {warm:?} to {last:?}"
+            && last.handles <= warm.handles + MORE_HANDLES + thread_handles
+            && last.megabytes <= warm.megabytes + MORE_MEGABYTES + media_megabytes,
+        "grew from {warm:?} with {warm_media} media to {last:?} with {last_media}"
     );
 }
 
