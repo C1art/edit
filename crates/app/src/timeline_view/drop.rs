@@ -162,9 +162,10 @@ pub(super) fn handle_drop(
             };
             Some(DropHint::At(at))
         }
-        EffectItem::Video(_) | EffectItem::Audio(_) | EffectItem::Preset(_) => {
-            clips.clip_at(time).map(|clip| DropHint::On(track, clip.id))
-        }
+        EffectItem::Video(_)
+        | EffectItem::Audio(_)
+        | EffectItem::Preset(_)
+        | EffectItem::Motion(_) => clips.clip_at(time).map(|clip| DropHint::On(track, clip.id)),
     }
 }
 

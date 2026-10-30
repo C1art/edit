@@ -1,7 +1,7 @@
 use egui::{CollapsingHeader, Sense, TextEdit};
 use timeline::{
-    ApplyEffect, AudioEffect, ClipEffect, ClipId, EffectCategory, EffectPreset, Ticks, TrackKind,
-    TrackRef, TransitionKind, VideoEffect,
+    ApplyEffect, AudioEffect, ClipEffect, ClipId, EffectCategory, EffectPreset, MotionPreset,
+    Ticks, TrackKind, TrackRef, TransitionKind, VideoEffect,
 };
 
 use crate::editor::Editor;
@@ -25,6 +25,7 @@ pub(crate) enum EffectItem {
     Audio(Box<AudioEffect>),
     Transition(TrackKind, TransitionKind),
     Preset(EffectPreset),
+    Motion(MotionPreset),
 }
 
 impl EffectItem {
@@ -34,13 +35,14 @@ impl EffectItem {
             Self::Video(_) => Some(TrackKind::Video),
             Self::Audio(_) => Some(TrackKind::Audio),
             Self::Transition(kind, _) => Some(*kind),
-            Self::Preset(_) => None,
+            Self::Preset(_) | Self::Motion(_) => None,
         }
     }
 
     fn name(&self) -> &str {
         match self {
             Self::Preset(preset) => &preset.name,
+            Self::Motion(preset) => preset.name(),
             Self::Video(effect) => effect.name(),
             Self::Audio(effect) => effect.name(),
             Self::Transition(TrackKind::Video, kind) => kind.name(),
@@ -134,7 +136,8 @@ enum PresetAction {
     Delete(usize),
 }
 
-/// The saved presets, which can be renamed or deleted from their context menus.
+/// The built-in animations, then the saved presets, which can be renamed or deleted
+/// from their context menus.
 fn presets_folder(
     ui: &mut egui::Ui,
     presets: &[EffectPreset],
@@ -147,13 +150,30 @@ fn presets_folder(
         .map(|preset| EffectItem::Preset(preset.clone()))
         .enumerate();
     let matching: Vec<_> = items.filter(|(_, item)| shown(item)).collect();
-    if searching && matching.is_empty() {
+    let motions: Vec<_> = MotionPreset::ALL
+        .into_iter()
+        .map(EffectItem::Motion)
+        .filter(|item| shown(item))
+        .collect();
+    if searching && matching.is_empty() && motions.is_empty() {
         return None;
     }
     let mut action = None;
     CollapsingHeader::new("Presets")
         .open(searching.then_some(true))
         .show(ui, |ui| {
+            if !motions.is_empty() {
+                CollapsingHeader::new("Animation")
+                    .open(searching.then_some(true))
+                    .show(ui, |ui| {
+                        for item in &motions {
+                            let response = entry(ui, item, chosen);
+                            if let EffectItem::Motion(preset) = item {
+                                response.on_hover_text(preset.description());
+                            }
+                        }
+                    });
+            }
             if presets.is_empty() {
                 ui.weak("Keep a clip's effects with Save Preset… in Effect Controls");
             }
@@ -243,6 +263,7 @@ fn apply_to_selection(editor: &mut Editor, item: EffectItem) {
         EffectItem::Video(effect) => ClipEffect::Video(effect),
         EffectItem::Audio(effect) => ClipEffect::Audio(effect),
         EffectItem::Preset(preset) => ClipEffect::Preset(preset),
+        EffectItem::Motion(preset) => ClipEffect::Motion(preset),
         EffectItem::Transition(kind, transition) => {
             apply_transition(editor, kind, transition);
             return;
@@ -275,6 +296,7 @@ pub(crate) fn drop_effect(editor: &mut Editor, drop: EffectDrop) {
         EffectItem::Video(effect) => ClipEffect::Video(effect),
         EffectItem::Audio(effect) => ClipEffect::Audio(effect),
         EffectItem::Preset(preset) => ClipEffect::Preset(preset),
+        EffectItem::Motion(preset) => ClipEffect::Motion(preset),
         EffectItem::Transition(_, kind) => {
             add_transition(editor, drop.track, drop.at, kind);
             return;
