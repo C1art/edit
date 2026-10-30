@@ -1,9 +1,8 @@
 mod error;
 mod json;
 mod presets;
+mod replace;
 
-use std::fs::File;
-use std::io::Write;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -12,6 +11,7 @@ use timeline::Sequence;
 pub use error::ProjectError;
 use json::Value;
 pub use presets::PresetsFile;
+pub use replace::replace_file;
 
 /// Bump on every breaking change to the file layout and add a migration from the previous version.
 pub const FORMAT_VERSION: u32 = 1;
@@ -57,24 +57,6 @@ impl ProjectFile {
     pub fn load(path: &Path) -> Result<Self, ProjectError> {
         Self::from_text(&std::fs::read_to_string(path)?)
     }
-}
-
-/// Writes beside `path` first and then swaps it in, so a crash or failed write never
-/// leaves a half-written file where the last good one was.
-pub fn replace_file(path: &Path, contents: &[u8]) -> std::io::Result<()> {
-    let mut partial = path.as_os_str().to_owned();
-    partial.push(".saving");
-    let written = File::create(&partial).and_then(|mut file| {
-        file.write_all(contents)?;
-        // Without this a power cut can keep the rename yet lose the contents it names,
-        // leaving an empty file.
-        file.sync_all()
-    });
-    written
-        .and_then(|()| std::fs::rename(&partial, path))
-        .inspect_err(|_| {
-            let _ = std::fs::remove_file(&partial);
-        })
 }
 
 /// A digest of `value` as a project saves it, the same from run to run and build to
