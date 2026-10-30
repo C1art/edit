@@ -31,8 +31,8 @@ enum Span {
 
 /// The export dialog: settings while idle, progress while a job runs.
 pub struct ExportDialog {
-    path: String,
-    format: ExportFormat,
+    pub(crate) path: String,
+    pub(crate) format: ExportFormat,
     span: Span,
     /// Whether rendered previews stand in for what they cover, as Premiere's Use Previews.
     use_previews: bool,
@@ -47,48 +47,51 @@ pub struct ExportDialog {
 /// Opens the dialog, suggesting a file named after the sequence next to the first
 /// imported media.
 pub fn open(editor: &mut Editor) {
-    if editor.export.is_some() {
-        return;
+    if editor.export.is_none() {
+        editor.export = Some(ExportDialog::new(editor));
     }
-    let sequence = editor.timeline.sequence();
-    let span = if sequence.marks.is_set() {
-        Span::InToOut
-    } else {
-        Span::Sequence
-    };
-    let folder = editor
-        .browse_folders
-        .get(&FolderUse::Output)
-        .cloned()
-        .or_else(|| {
-            let first = sequence.media.first()?;
-            first.path.parent().map(PathBuf::from)
-        })
-        .unwrap_or_default();
-    let format = ExportFormat::default();
-    let file = format!("{}.{}", editor.output_stem(), format.format.extension());
-    let path = folder.join(file);
-    editor.export = Some(ExportDialog {
-        path: path.display().to_string(),
-        format,
-        span,
-        use_previews: false,
-        captions: CaptionExport::of(sequence),
-        overlays: ExportOverlays::default(),
-        running: None,
-        suggested: Some(path),
-        target: TargetCheck::new(editor.ctx.clone()).ok(),
-    });
 }
 
 impl ExportDialog {
+    pub(crate) fn new(editor: &Editor) -> Self {
+        let sequence = editor.timeline.sequence();
+        let span = if sequence.marks.is_set() {
+            Span::InToOut
+        } else {
+            Span::Sequence
+        };
+        let folder = editor
+            .browse_folders
+            .get(&FolderUse::Output)
+            .cloned()
+            .or_else(|| {
+                let first = sequence.media.first()?;
+                first.path.parent().map(PathBuf::from)
+            })
+            .unwrap_or_default();
+        let format = ExportFormat::default();
+        let file = format!("{}.{}", editor.output_stem(), format.format.extension());
+        let path = folder.join(file);
+        Self {
+            path: path.display().to_string(),
+            format,
+            span,
+            use_previews: false,
+            captions: CaptionExport::of(sequence),
+            overlays: ExportOverlays::default(),
+            running: None,
+            suggested: Some(path),
+            target: TargetCheck::new(editor.ctx.clone()).ok(),
+        }
+    }
+
     pub fn output(&self) -> PathBuf {
         PathBuf::from(self.path.trim().trim_matches('"'))
     }
 
     /// What exporting would replace, after swapping a suggested file that's taken for a
     /// free one.
-    fn target(&mut self, queued: impl FnOnce() -> Vec<PathBuf>) -> Option<Target> {
+    pub(crate) fn target(&mut self, queued: impl FnOnce() -> Vec<PathBuf>) -> Option<Target> {
         let output = self.output();
         let target = self.target.as_mut()?.target(&output, queued)?.clone();
         match target {
@@ -100,6 +103,15 @@ impl ExportDialog {
                 None
             }
             target => Some(target),
+        }
+    }
+
+    /// Gives the file the extension a newly chosen format makes.
+    pub(crate) fn follow_format(&mut self) {
+        let suggested = self.suggested.as_ref() == Some(&self.output());
+        self.set_output(&self.output());
+        if suggested {
+            self.suggested = Some(self.output());
         }
     }
 
@@ -212,11 +224,7 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                 }
             });
             if dialog.format.format != kind {
-                let suggested = dialog.suggested.as_ref() == Some(&dialog.output());
-                dialog.set_output(&dialog.output());
-                if suggested {
-                    dialog.suggested = Some(dialog.output());
-                }
+                dialog.follow_format();
             }
             ui.label(summary(&dialog.format, sequence_size));
             crate::dialog::footer(ui, |ui| {
@@ -263,10 +271,20 @@ fn replace_warning(ui: &mut egui::Ui, path: &mut String, by: Holder, free: Optio
     });
 }
 
-/// The sequence and settings the dialog would export, after telling the user what's
+/// The sequence and settings the open dialog would export.
+fn prepare_open(editor: &mut Editor) -> Option<(Arc<Sequence>, ExportSettings)> {
+    let dialog = editor.export.take()?;
+    let prepared = prepare(editor, &dialog);
+    editor.export = Some(dialog);
+    prepared
+}
+
+/// The sequence and settings `dialog` would export, after telling the user what's
 /// wrong if it can't.
-fn prepare(editor: &mut Editor) -> Option<(Arc<Sequence>, ExportSettings)> {
-    let dialog = editor.export.as_ref()?;
+pub(crate) fn prepare(
+    editor: &mut Editor,
+    dialog: &ExportDialog,
+) -> Option<(Arc<Sequence>, ExportSettings)> {
     let path = dialog.output();
     let sequence = editor.timeline.sequence();
     let sequence_size = (sequence.format.width, sequence.format.height);
@@ -324,7 +342,7 @@ fn prepare(editor: &mut Editor) -> Option<(Arc<Sequence>, ExportSettings)> {
 }
 
 fn start_job(editor: &mut Editor) {
-    let Some((sequence, settings)) = prepare(editor) else {
+    let Some((sequence, settings)) = prepare_open(editor) else {
         return;
     };
     let Some(render_state) = &editor.render_state else {
@@ -354,7 +372,7 @@ fn start_job(editor: &mut Editor) {
 
 /// Hands the export to the queue and closes the dialog, so another can be set up.
 fn queue_job(editor: &mut Editor) {
-    let Some((sequence, settings)) = prepare(editor) else {
+    let Some((sequence, settings)) = prepare_open(editor) else {
         return;
     };
     let summary = editor.export.as_ref().map_or_else(String::new, |dialog| {

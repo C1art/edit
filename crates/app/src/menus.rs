@@ -20,6 +20,7 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             crate::ui_mode::switch(editor, ui);
+            crate::quick_export::button(editor, ui);
             if !editor.simple() {
                 crate::workspaces::workspace_bar(editor, ui);
             }

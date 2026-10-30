@@ -44,16 +44,21 @@ impl ExportProgress {
         self.encoder = Some(encoder);
     }
 
+    /// How much of the export is written, measuring first counting as none.
+    pub fn fraction(&self) -> f32 {
+        if self.measuring.is_some() || self.total <= 0 {
+            0.0
+        } else {
+            self.done as f32 / self.total as f32
+        }
+    }
+
     pub fn bar(&self, width: f32) -> ProgressBar {
         if let Some(fraction) = self.measuring {
             let text = format!("Measuring loudness  ·  {:.0}%", fraction * 100.0);
             return ProgressBar::new(fraction).desired_width(width).text(text);
         }
-        let fraction = if self.total > 0 {
-            self.done as f32 / self.total as f32
-        } else {
-            0.0
-        };
+        let fraction = self.fraction();
         let elapsed = self.started.elapsed();
         let mut text = format!(
             "frame {} of {}  ·  {} elapsed",

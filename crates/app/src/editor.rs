@@ -156,6 +156,7 @@ pub struct Editor {
     pub(crate) window_title: String,
     pub(crate) ctx: egui::Context,
     pub(crate) export: Option<ExportDialog>,
+    pub(crate) quick_export: Option<crate::quick_export::QuickExport>,
     pub(crate) export_queue: crate::export_queue::ExportQueue,
     /// The sequences left to reach the open nest, outermost first.
     pub(crate) nest_trail: Vec<Level>,
@@ -333,6 +334,7 @@ impl Editor {
             window_title: String::new(),
             ctx: creation_context.egui_ctx.clone(),
             export: None,
+            quick_export: None,
             export_queue: Default::default(),
             nest_trail: Vec::new(),
             sequence_tabs: Vec::new(),

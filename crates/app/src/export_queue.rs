@@ -62,6 +62,26 @@ impl ExportQueue {
             .collect()
     }
 
+    /// Runs the waiting exports, one after another.
+    pub(crate) fn start(&mut self) {
+        self.started = true;
+    }
+
+    /// How far the running export has got, and how many wait after it.
+    pub(crate) fn progress(&self) -> Option<(f32, usize)> {
+        let (id, _) = self.running.as_ref()?;
+        let item = self.items.iter().find(|item| item.id == *id)?;
+        let Status::Exporting(progress) = &item.status else {
+            return None;
+        };
+        let waiting = self
+            .items
+            .iter()
+            .filter(|item| matches!(item.status, Status::Waiting))
+            .count();
+        Some((progress.fraction(), waiting))
+    }
+
     fn item_mut(&mut self, id: u64) -> Option<&mut Queued> {
         self.items.iter_mut().find(|item| item.id == id)
     }
@@ -225,7 +245,7 @@ pub fn window(editor: &mut Editor, ctx: &egui::Context) {
                     .add_enabled(waiting, egui::Button::new("Start Queue"))
                     .clicked()
                 {
-                    queue.started = true;
+                    queue.start();
                 }
                 if ui.button("Clear Finished").clicked() {
                     queue.items.retain(|item| {
