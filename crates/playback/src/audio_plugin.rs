@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use audio::SampleRate;
 use plugins::{ClassId, ParamId, Plugin};
-use timeline::{PluginEffect, Ticks};
+use timeline::{PluginEffect, PluginState, Ticks};
 
 /// Plenty for one chunk of the mix; longer runs are split by the plugin host.
 const MAX_BLOCK: usize = 4096;
@@ -34,6 +34,8 @@ pub(crate) struct PluginUnit {
     key: Key,
     /// None when the plugin couldn't be loaded; its sound then passes unchanged.
     loaded: Option<Loaded>,
+    /// The effect's saved state the plugin was last given; empty for its defaults.
+    restored: PluginState,
     /// The last value given to each of the effect's changed parameters.
     sent: Vec<f32>,
     input: [Vec<f32>; 2],
@@ -51,6 +53,7 @@ impl PluginUnit {
         Self {
             key,
             loaded,
+            restored: PluginState::default(),
             sent: Vec::new(),
             input: Default::default(),
             output: Default::default(),
@@ -79,6 +82,18 @@ impl PluginUnit {
         let Some(loaded) = &mut self.loaded else {
             return;
         };
+        if effect.state != self.restored {
+            let state = if effect.state.is_empty() {
+                &loaded.defaults
+            } else {
+                effect.state.bytes()
+            };
+            // A state the plugin refuses leaves it as it was, as other hosts do.
+            let _ = loaded.plugin.set_state(state);
+            self.restored = effect.state.clone();
+            // The state may have moved any parameter, so all are sent again.
+            self.sent.clear();
+        }
         if self.sent.len() != effect.params.len() {
             self.sent = effect
                 .params

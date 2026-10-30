@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::Param;
+use crate::{Param, PluginState};
 
 /// A VST3 audio effect. Its parameters start at the plugin's own defaults; only those
 /// the user has changed are kept, so a plugin update that adds parameters still loads.
@@ -17,6 +17,9 @@ pub struct PluginEffect {
     pub class_id: [u8; 16],
     #[serde(default)]
     pub params: Vec<PluginParam>,
+    /// What the plugin's own editor set beyond its parameters; empty until it's opened.
+    #[serde(default, skip_serializing_if = "PluginState::is_empty")]
+    pub state: PluginState,
 }
 
 /// A changed plugin parameter, normalized to `0..=1` as VST3 exchanges them.

@@ -1,7 +1,7 @@
 //! A VST3 plugin's parameters as rows, and the plugins to add.
 
 use egui::RichText;
-use timeline::{AudioEffect, Param, PluginEffect};
+use timeline::{AudioEffect, Param, PluginEffect, PluginState};
 
 use super::look::Rows;
 use crate::vst::{Described, PluginHost};
@@ -81,6 +81,7 @@ pub(super) fn add_menu(ui: &mut egui::Ui, host: &mut PluginHost) -> Option<Audio
                 path: info.path.clone(),
                 class_id: info.class_id.0,
                 params: Vec::new(),
+                state: PluginState::default(),
             })));
         }
     }

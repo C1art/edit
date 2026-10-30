@@ -7,6 +7,7 @@ mod convolution;
 mod dynamics;
 mod guitar;
 mod plugin;
+mod plugin_state;
 mod scientific;
 mod vocal;
 
@@ -14,6 +15,7 @@ pub use convolution::ReverbSpace;
 pub use dynamics::{CompressorSection, Dynamics, ExpanderSection, GateSection, LimiterSection};
 pub use guitar::{AmpModel, GuitarFilter};
 pub use plugin::{PluginEffect, PluginParam};
+pub use plugin_state::PluginState;
 pub use scientific::{FilterMode, FilterType};
 pub use vocal::VocalMode;
 

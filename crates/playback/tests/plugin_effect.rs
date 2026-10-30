@@ -12,7 +12,7 @@ use playback::MonoMix;
 use support::PluginFolder;
 use timeline::{
     AddGenerated, AudioEffect, Generator, Param, PlaceClip, PlaceMode, PluginEffect, PluginParam,
-    Sequence, Ticks, Timebase, Timeline, VideoFormat,
+    PluginState, Sequence, Ticks, Timebase, Timeline, VideoFormat,
 };
 
 const TB: Timebase = Timebase::HZ_90K;
@@ -60,13 +60,16 @@ fn peak(sequence: Arc<Sequence>) -> f32 {
 }
 
 #[test]
-fn a_plugin_on_the_master_track_plays_with_its_changed_parameters() {
+fn a_plugin_on_the_master_track_plays_with_its_saved_state_and_changed_parameters() {
     let folder = PluginFolder::new();
     let info = plugins::scan(&[folder.root().to_owned()])
         .into_iter()
         .find(|info| info.name == "Fixture Gain")
         .unwrap();
-    let gain = |value: Option<f32>| {
+    let mut saved = plugins::Plugin::from_info(&info, RATE.0, 512).unwrap();
+    saved.set_parameter(plugins::ParamId(0), 1.0).unwrap();
+    let doubling = PluginState::new(saved.state().unwrap());
+    let gain = |value: Option<f32>, state: &PluginState| {
         AudioEffect::Plugin(Box::new(PluginEffect {
             name: info.name.clone(),
             vendor: info.vendor.clone(),
@@ -79,12 +82,20 @@ fn a_plugin_on_the_master_track_plays_with_its_changed_parameters() {
                 })
                 .into_iter()
                 .collect(),
+            state: state.clone(),
         }))
     };
+    let plain = PluginState::default();
     let dry = peak(tone(Vec::new()));
-    let unity = peak(tone(vec![gain(None)]));
-    let doubled = peak(tone(vec![gain(Some(1.0))]));
+    let unity = peak(tone(vec![gain(None, &plain)]));
+    let doubled = peak(tone(vec![gain(Some(1.0), &plain)]));
+    let restored = peak(tone(vec![gain(None, &doubling)]));
+    let overridden = peak(tone(vec![gain(Some(0.5), &doubling)]));
+    let after = peak(tone(vec![gain(None, &plain)]));
     assert!(dry > 0.01, "{dry}");
     assert!((unity - dry).abs() < 1e-4, "{dry} then {unity}");
     assert!((doubled - 2.0 * dry).abs() < 1e-4, "{dry} then {doubled}");
+    assert!((restored - 2.0 * dry).abs() < 1e-4, "{dry} then {restored}");
+    assert!((overridden - dry).abs() < 1e-4, "{dry} then {overridden}");
+    assert!((after - dry).abs() < 1e-4, "{dry} then reused at {after}");
 }

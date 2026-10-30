@@ -5,9 +5,9 @@ use timeline::{
     AlphaInterpretation, AudioEffect, Bin, BinId, BinSearch, BoxStyle, Caption, Clip, ClipId,
     ColorSpace, CurvePoint, FillGradient, Gain, Generator, GradientKind, Interpolation, Keyframe,
     Marks, Mask, MaskShape, MediaItem, MediaLog, Nest, Pan, Param, PixelAspect, PluginEffect,
-    PluginParam, Rgb, Scroll, SearchField, ShadowStyle, SourceId, TextAlign, TextStroke, Ticks,
-    Timebase, Title, TitleFont, TitleMotion, Track, Transcript, Transition, TransitionKind,
-    VideoEffect, VideoFormat, Word,
+    PluginParam, PluginState, Rgb, Scroll, SearchField, ShadowStyle, SourceId, TextAlign,
+    TextStroke, Ticks, Timebase, Title, TitleFont, TitleMotion, Track, Transcript, Transition,
+    TransitionKind, VideoEffect, VideoFormat, Word,
 };
 
 use super::*;
@@ -155,6 +155,7 @@ fn sample() -> ProjectFile {
             id: 7,
             value: drive,
         }],
+        state: PluginState::new(vec![0, 1, 2, 250, 255]),
     }))];
     nest.master = Gain(-150);
     nest.marks = Marks::default().with_in(Ticks(10));
