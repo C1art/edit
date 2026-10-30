@@ -1,4 +1,5 @@
-//! Snapping a picture dragged in the Program monitor to the frame's edges and center.
+//! Snapping a picture dragged in the Program monitor to the frame's edges and center,
+//! and to the guides over it.
 
 use egui::{Pos2, Rect, Stroke, Vec2};
 
@@ -15,23 +16,35 @@ pub(super) struct Guides {
 }
 
 /// How far to nudge a picture with these `corners` on screen so that, along each axis,
-/// whichever of its edges or center is nearest one of `frame`'s within reach meets it.
-pub(super) fn snap(corners: [Pos2; 4], frame: Rect) -> (Vec2, Guides) {
+/// whichever of its edges or center is nearest one of `frame`'s, or one of the vertical
+/// and horizontal `guides`, within reach meets it.
+pub(super) fn snap(
+    corners: [Pos2; 4],
+    frame: Rect,
+    guides: &(Vec<f32>, Vec<f32>),
+) -> (Vec2, Guides) {
     let bounds = Rect::from_points(&corners);
-    let nearest = |picture: [f32; 3], lines: [f32; 3]| {
+    let nearest = |picture: [f32; 3], lines: [f32; 3], more: &[f32]| {
         picture
             .into_iter()
-            .flat_map(|edge| lines.map(|line| (line - edge, line)))
+            .flat_map(|edge| {
+                lines
+                    .into_iter()
+                    .chain(more.iter().copied())
+                    .map(move |line| (line - edge, line))
+            })
             .filter(|(gap, _)| gap.abs() <= SNAP_REACH)
             .min_by(|a, b| a.0.abs().total_cmp(&b.0.abs()))
     };
     let x = nearest(
         [bounds.left(), bounds.center().x, bounds.right()],
         [frame.left(), frame.center().x, frame.right()],
+        &guides.0,
     );
     let y = nearest(
         [bounds.top(), bounds.center().y, bounds.bottom()],
         [frame.top(), frame.center().y, frame.bottom()],
+        &guides.1,
     );
     let gap = |snapped: Option<(f32, f32)>| snapped.map_or(0.0, |(gap, _)| gap);
     let guides = Guides {

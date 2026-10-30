@@ -263,6 +263,7 @@ fn program(editor: &mut Editor, ui: &mut egui::Ui) {
             ui.checkbox(&mut editor.safe_margins, "Safe Margins");
             ui.checkbox(&mut editor.transparency_grid, "Transparency Grid")
                 .on_hover_text("A checkerboard where nothing covers the frame");
+            crate::guides::menu(ui, editor);
             let mut ganged = editor.ganged;
             let toggle = ui
                 .checkbox(&mut ganged, "Gang Source and Program")
@@ -427,6 +428,7 @@ fn program_overlays(
             crate::effects::mask_overlay(editor, ui, picture);
             crate::effects::matte_overlay(editor, ui, picture);
         }
+        crate::guides::overlay(editor, ui, picture);
     }
 }
 

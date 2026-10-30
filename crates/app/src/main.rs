@@ -43,6 +43,7 @@ mod gang;
 mod gap_navigation;
 mod gpu_setup;
 mod graphics_tools;
+mod guides;
 mod history_panel;
 mod icons;
 mod import;

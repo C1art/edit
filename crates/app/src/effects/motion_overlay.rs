@@ -63,6 +63,7 @@ pub fn motion_overlay(editor: &mut Editor, ui: &egui::Ui, area: egui::Rect) {
     };
     let per_pixel = frame.shown.width() / sequence.format.width.max(1) as f32;
     let corners = corners(&frame);
+    let guide_lines = crate::guides::snap_lines(editor, frame.shown);
     let id = ui.make_persistent_id(("motion_overlay", clip.id));
     let response = ui.interact(frame.shown.expand(ROTATE_REACH), id, Sense::drag());
     let mut held = ui.data(|data| data.get_temp::<Held>(id));
@@ -104,8 +105,11 @@ pub fn motion_overlay(editor: &mut Editor, ui: &egui::Ui, area: egui::Rect) {
                     let nudge = if free {
                         Vec2::ZERO
                     } else {
-                        let (nudge, lines) =
-                            snap(corners.map(|corner| corner + moved_by), frame.shown);
+                        let (nudge, lines) = snap(
+                            corners.map(|corner| corner + moved_by),
+                            frame.shown,
+                            &guide_lines,
+                        );
                         guides = lines;
                         nudge
                     };

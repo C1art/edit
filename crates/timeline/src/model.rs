@@ -3,9 +3,9 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AudioEffect, AudioType, Bin, Captions, ColorSpace, FieldOrder, FrameRate, Gain, GroupId, Label,
-    LinkedSelection, Look, Marker, Marks, MediaItem, Param, PixelAspect, SourceId, Speed, Submix,
-    Ticks, TimeDisplay, TimeInterpolation, TimeRemap, Timebase, Transition,
+    AudioEffect, AudioType, Bin, Captions, ColorSpace, FieldOrder, FrameRate, Gain, GroupId, Guide,
+    Label, LinkedSelection, Look, Marker, Marks, MediaItem, Param, PixelAspect, SourceId, Speed,
+    Submix, Ticks, TimeDisplay, TimeInterpolation, TimeRemap, Timebase, Transition,
 };
 
 pub use crate::track::Track;
@@ -354,6 +354,9 @@ pub struct Sequence {
     pub linked_selection: LinkedSelection,
     #[serde(default)]
     pub time_display: TimeDisplay,
+    /// Lines over the program frame, in the order they were added.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub guides: Vec<Guide>,
     #[serde(default)]
     pub(crate) ids: IdGenerator,
 }
@@ -376,6 +379,7 @@ impl Sequence {
             captions: Captions::default(),
             linked_selection: LinkedSelection::default(),
             time_display: TimeDisplay::default(),
+            guides: Vec::new(),
             ids: IdGenerator::default(),
         }
     }

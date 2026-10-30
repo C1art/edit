@@ -57,6 +57,7 @@ pub struct Editor {
     /// Outlines the action and title safe areas over the program picture.
     pub(crate) safe_margins: bool,
     pub(crate) transparency_grid: bool,
+    pub(crate) guide_view: crate::guides::GuideView,
     pub(crate) ganged: bool,
     pub(crate) gang: Option<crate::gang::Gang>,
     /// Items waiting on their files to say how many channels to break out.
@@ -245,6 +246,7 @@ impl Editor {
             selection_followed: None,
             safe_margins: false,
             transparency_grid: false,
+            guide_view: crate::guides::GuideView::default(),
             ganged: false,
             gang: None,
             breakouts: Vec::new(),

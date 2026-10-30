@@ -19,6 +19,7 @@ mod find;
 mod generator;
 mod graphic;
 mod group;
+mod guide;
 mod history;
 mod hue_curves;
 mod interpretation;
@@ -95,23 +96,23 @@ pub use edit::{
     AutomateToSequence, AutomatedPiece, BreakoutToMono, CaptionsToTitles, ClearMarkers, ClipEffect,
     ClipSound, Clipboard, CloseGap, CloseGaps, ConsolidateDuplicates, CreateMulticam,
     DeleteEmptyTracks, DeltaBounds, DuplicateMedia, Edge, ExtractMarked, FlattenMulticam, FrameFit,
-    HoldFrame, ImportMedia, InNest, InsertFrameHold, InterpretFootage, IntoSync, JoinThroughEdits,
-    Lift, LiftMarked, MakeOffline, MakeSubclip, MakeSubsequence, MarkerOwner, MergeClips,
-    MoveClips, MoveMode, MoveToBin, NestClips, NestFromMedia, NewTracks, NormalizeClipGains,
-    NudgeClipGain, PasteAttributes, PasteClips, PauseRules, PlaceClip, PlaceClips, PlaceMode,
-    RateStretch, Razor, RazorTarget, ReframeSequence, RelinkMedia, RemixClip, RemoveAttributes,
-    RemoveBin, RemoveMarker, RemoveMedia, RemovePauses, RemoveSpeedKeyframe, RemoveSubmix,
-    RemoveTimeRemap, RemoveTrack, RemoveTransitions, RemoveUnused, RenameBin, RenameClips,
-    RenameMedia, RenameTrack, RenderAndReplace, ReplaceClip, RestoreUnrendered, RippleDelete,
-    RippleTrimToPlayhead, Roll, SetBinSearch, SetCaptions, SetChannelMap, SetClipAudioEffects,
-    SetClipGain, SetClipLabel, SetClipLine, SetClipLook, SetClipPan, SetClipSpeed, SetClipVolume,
-    SetClipsEnabled, SetClipsSound, SetFrameHold, SetGenerator, SetGrouped, SetLinked,
-    SetLinkedSelection, SetMaintainPitch, SetMarks, SetMasterEffects, SetMasterGain, SetMediaLog,
-    SetProxy, SetRippleMarkers, SetSegmentSpeed, SetSequenceFormat, SetSubmix, SetTimeDisplay,
-    SetTimeInterpolation, SetToFrameSize, SetTrackAutomation, SetTrackEffects, SetTrackMix,
-    SetTrackOutput, SetTrackSends, SetTrackSwitch, SetTransition, SimplifySequence, Slide, Slip,
-    SwitchAngle, SyncMethod, SynchronizeClips, TrackSwitch, Trim, TrimMode, TrimToPlayhead,
-    Unlinked, Unnest, UpdateMarker,
+    GuideEdit, HoldFrame, ImportMedia, InNest, InsertFrameHold, InterpretFootage, IntoSync,
+    JoinThroughEdits, Lift, LiftMarked, MakeOffline, MakeSubclip, MakeSubsequence, MarkerOwner,
+    MergeClips, MoveClips, MoveMode, MoveToBin, NestClips, NestFromMedia, NewTracks,
+    NormalizeClipGains, NudgeClipGain, PasteAttributes, PasteClips, PauseRules, PlaceClip,
+    PlaceClips, PlaceMode, RateStretch, Razor, RazorTarget, ReframeSequence, RelinkMedia,
+    RemixClip, RemoveAttributes, RemoveBin, RemoveMarker, RemoveMedia, RemovePauses,
+    RemoveSpeedKeyframe, RemoveSubmix, RemoveTimeRemap, RemoveTrack, RemoveTransitions,
+    RemoveUnused, RenameBin, RenameClips, RenameMedia, RenameTrack, RenderAndReplace, ReplaceClip,
+    RestoreUnrendered, RippleDelete, RippleTrimToPlayhead, Roll, SetBinSearch, SetCaptions,
+    SetChannelMap, SetClipAudioEffects, SetClipGain, SetClipLabel, SetClipLine, SetClipLook,
+    SetClipPan, SetClipSpeed, SetClipVolume, SetClipsEnabled, SetClipsSound, SetFrameHold,
+    SetGenerator, SetGrouped, SetLinked, SetLinkedSelection, SetMaintainPitch, SetMarks,
+    SetMasterEffects, SetMasterGain, SetMediaLog, SetProxy, SetRippleMarkers, SetSegmentSpeed,
+    SetSequenceFormat, SetSubmix, SetTimeDisplay, SetTimeInterpolation, SetToFrameSize,
+    SetTrackAutomation, SetTrackEffects, SetTrackMix, SetTrackOutput, SetTrackSends,
+    SetTrackSwitch, SetTransition, SimplifySequence, Slide, Slip, SwitchAngle, SyncMethod,
+    SynchronizeClips, TrackSwitch, Trim, TrimMode, TrimToPlayhead, Unlinked, Unnest, UpdateMarker,
 };
 pub use edl::to_edl;
 pub use effect::{
@@ -136,6 +137,7 @@ pub use generator::{
 };
 pub use graphic::{Graphic, GraphicContent, GraphicLayer, Pin};
 pub use group::GroupId;
+pub use guide::{Guide, GuideAxis};
 pub use history::{preview, Edit, EditCommand, Timeline};
 pub use hue_curves::{HueCurve, HueCurves, HUE_CURVE_NEUTRAL};
 pub use interpretation::{
