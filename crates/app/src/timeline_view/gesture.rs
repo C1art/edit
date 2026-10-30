@@ -1,11 +1,12 @@
 use egui::Rangef;
 use timeline::{
     preview, ClipId, DeltaBounds, Edge, Edit, LinkedSelection, MoveClips, MoveMode, RateStretch,
-    Roll, Sequence, SetClipOpacity, SetClipVolume, SetTrackAutomation, Slide, Slip, Ticks,
-    Timeline, TimelineError, TrackKind, TrackRef, Trim, TrimMode, Unlinked,
+    Roll, Sequence, SetClipOpacity, SetClipVolume, SetTrackAutomation, SetTransition, Slide, Slip,
+    Ticks, Timeline, TimelineError, TrackKind, TrackRef, Trim, TrimMode, Unlinked,
 };
 
 use super::rubber_band::{self, BandHit, BandOwner, Envelope};
+use super::transition_grip::Grip;
 
 /// What a drag in the timeline is doing, fixed when the drag starts.
 #[derive(Debug, Clone)]
@@ -40,6 +41,8 @@ pub enum Gesture {
         band: Rangef,
         origin_y: f32,
     },
+    /// Drags an outer end of a transition to change how long it lasts.
+    TransitionLength(Grip),
 }
 
 /// An edit a gesture would make, previewed while dragging and applied on release.
@@ -54,6 +57,7 @@ pub enum PendingEdit {
     Volume(SetClipVolume),
     Opacity(SetClipOpacity),
     Automation(SetTrackAutomation),
+    Transition(SetTransition),
 }
 
 impl PendingEdit {
@@ -68,6 +72,7 @@ impl PendingEdit {
             Self::Volume(edit) => preview(sequence, edit),
             Self::Opacity(edit) => preview(sequence, edit),
             Self::Automation(edit) => preview(sequence, edit),
+            Self::Transition(edit) => preview(sequence, edit),
         }
     }
 
@@ -97,6 +102,7 @@ impl PendingEdit {
             Self::Volume(edit) => run(timeline, edit, links),
             Self::Opacity(edit) => run(timeline, edit, links),
             Self::Automation(edit) => run(timeline, edit, links),
+            Self::Transition(edit) => run(timeline, edit, links),
         }
     }
 }
@@ -137,6 +143,7 @@ impl Gesture {
                 .into_iter()
                 .collect(),
             Self::Volume { .. } => Vec::new(),
+            Self::TransitionLength(grip) => vec![grip.at],
         }
     }
 
@@ -148,7 +155,7 @@ impl Gesture {
             | Self::Stretch { clips, .. }
             | Self::Slip { clips }
             | Self::Slide { clips } => sequence.with_links(clips),
-            Self::Roll { .. } | Self::Volume { .. } => Vec::new(),
+            Self::Roll { .. } | Self::Volume { .. } | Self::TransitionLength(_) => Vec::new(),
         }
     }
 
@@ -234,6 +241,14 @@ impl Gesture {
                         automation: param,
                     }),
                 }
+            }
+            Self::TransitionLength(grip) => {
+                let frame = sequence.format.frame_rate.frame_start(1, sequence.timebase);
+                PendingEdit::Transition(SetTransition {
+                    clip: grip.clip,
+                    edge: grip.edge,
+                    transition: Some(grip.dragged(delta, frame)),
+                })
             }
         }
     }

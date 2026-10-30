@@ -10,6 +10,7 @@ use super::markers;
 use super::rubber_band::{self, BandHit, BandOwner, Envelope};
 use super::scale::{self, TimeScale};
 use super::track_select;
+use super::transition_grip;
 use super::{Drag, TimelineOutput, TimelineView, Tool, SNAP_POINTS};
 
 impl TimelineView {
@@ -126,17 +127,21 @@ impl TimelineView {
             {
                 self.selection = vec![clip];
             }
+            let selecting = self.tool.on_timeline() == Tool::Selection;
+            let grip = transition_grip::grip_at(sequence, &rows, &scale, origin)
+                .filter(|_| selecting && matches!(hit, Hit::Body { .. }));
             let band = self
                 .band_hit(sequence, &rows, &scale, hit, origin)
-                .filter(|_| self.tool.on_timeline() == Tool::Selection);
-            let gesture = match band {
-                Some((owner, grabbed, band)) => Some(Gesture::Volume {
+                .filter(|_| selecting);
+            let gesture = match (grip, band) {
+                (Some(grip), _) => Some(Gesture::TransitionLength(grip)),
+                (None, Some((owner, grabbed, band))) => Some(Gesture::Volume {
                     owner,
                     grabbed,
                     band,
                     origin_y: origin.y,
                 }),
-                None => self.gesture(sequence, hit),
+                (None, None) => self.gesture(sequence, hit),
             };
             self.drag = gesture.map(|gesture| Drag {
                 gesture,

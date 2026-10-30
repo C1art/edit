@@ -14,6 +14,9 @@ impl TimelineView {
         let Some(pending) = &drag.pending else {
             return;
         };
+        let timecode = |time: Ticks| {
+            Timecode::new(time, sequence.timebase, sequence.format.frame_rate).to_string()
+        };
         let (delta, resized) = match pending {
             PendingEdit::Move(edit) => (edit.delta, None),
             PendingEdit::Trim(edit) => (edit.delta, edit.clips.first()),
@@ -21,10 +24,16 @@ impl TimelineView {
             PendingEdit::Roll(edit) => (edit.delta, None),
             PendingEdit::Slip(edit) => (edit.delta, None),
             PendingEdit::Slide(edit) => (edit.delta, None),
+            PendingEdit::Transition(edit) => {
+                if let Some(transition) = edit.transition {
+                    readout(
+                        response,
+                        format!("Duration {}", timecode(transition.duration)),
+                    );
+                }
+                return;
+            }
             PendingEdit::Volume(_) | PendingEdit::Opacity(_) | PendingEdit::Automation(_) => return,
-        };
-        let timecode = |time: Ticks| {
-            Timecode::new(time, sequence.timebase, sequence.format.frame_rate).to_string()
         };
         let sign = if delta >= Ticks::ZERO { "+" } else { "" };
         let mut text = format!("{sign}{}", timecode(delta));
@@ -32,15 +41,19 @@ impl TimelineView {
         if let Some(duration) = duration {
             text.push_str(&format!("\nDuration {}", timecode(duration)));
         }
-        Tooltip::always_open(
-            response.ctx.clone(),
-            response.layer_id,
-            response.id,
-            egui::PopupAnchor::Pointer,
-        )
-        .gap(12.0)
-        .show(|ui| ui.monospace(text));
+        readout(response, text);
     }
+}
+
+fn readout(response: &Response, text: String) {
+    Tooltip::always_open(
+        response.ctx.clone(),
+        response.layer_id,
+        response.id,
+        egui::PopupAnchor::Pointer,
+    )
+    .gap(12.0)
+    .show(|ui| ui.monospace(text));
 }
 
 fn resized_duration(preview: Option<&Sequence>, clip: ClipId) -> Option<Ticks> {

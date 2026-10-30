@@ -1,10 +1,11 @@
 use std::ops::Range;
 
 use egui::{Align2, Color32, FontId, Painter, Rect, Stroke, StrokeKind};
-use timeline::{cut_window, is_through_edit, Clip, Sequence, Ticks, Track};
+use timeline::{is_through_edit, Clip, Sequence, Ticks, Track};
 
 use super::layout::{clip_rect, Row};
 use super::scale::TimeScale;
+use super::transition_grip;
 
 const OUT_OF_SYNC: Color32 = Color32::from_rgb(200, 30, 30);
 
@@ -108,28 +109,8 @@ pub(super) fn transition_marks(
     track: &Track,
     clip: &Clip,
 ) {
-    let mut spans = Vec::new();
-    if let Some(transition) = clip.transition_in {
-        let previous = track.clips.iter().find(|other| other.end() == clip.start);
-        let span = match previous {
-            Some(previous) => {
-                let (before, after) = cut_window(previous, clip, transition);
-                (clip.start - before, clip.start + after)
-            }
-            None => (
-                clip.start,
-                clip.start + transition.duration.min(clip.duration),
-            ),
-        };
-        spans.push((span, transition.kind));
-    }
-    if let Some(transition) = clip.transition_out {
-        if !track.clips.iter().any(|next| next.start == clip.end()) {
-            let duration = transition.duration.min(clip.duration);
-            spans.push(((clip.end() - duration, clip.end()), transition.kind));
-        }
-    }
-    for ((start, end), kind) in spans {
+    for shown in transition_grip::shown(track, clip) {
+        let (start, end, kind) = (shown.span.start, shown.span.end, shown.transition.kind);
         let rect = clip_rect(row, scale, start, end).shrink2(egui::vec2(0.0, 2.0));
         painter.rect_filled(rect, 2.0, Color32::from_white_alpha(50));
         painter.rect_stroke(

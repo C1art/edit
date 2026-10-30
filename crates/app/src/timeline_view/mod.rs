@@ -22,6 +22,7 @@ mod tool;
 mod track_heights;
 mod track_scroll;
 mod track_select;
+mod transition_grip;
 mod trim_view;
 mod zoom;
 
