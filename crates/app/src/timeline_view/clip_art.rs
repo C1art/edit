@@ -95,7 +95,8 @@ pub fn thumbnails(
     }
 }
 
-/// Draws an audio clip's loudness as bars mirrored about its middle, one per point.
+/// Draws an audio clip's loudness as bars, one per point, mirrored about its middle
+/// unless rectified.
 pub fn waveform(
     painter: &Painter,
     area: &ClipArea<'_>,
@@ -112,6 +113,7 @@ pub fn waveform(
     if !item.is_file() {
         return;
     }
+    let rectified = art.rectified_waveforms;
     let Some(peaks) = art.peaks(&item.path) else {
         return;
     };
@@ -133,10 +135,12 @@ pub fn waveform(
         let end = left.max(right).max(start + Ticks(1));
         let level = peaks.max_in(start, end, timebase) * gain;
         let height = (decibel_scale(level) * half).max(0.5);
-        mesh.add_colored_rect(
-            Rect::from_x_y_ranges(x..=x + 1.0, (middle - height)..=(middle + height)),
-            color,
-        );
+        let rows = if rectified {
+            (bars.bottom() - 2.0 * height)..=bars.bottom()
+        } else {
+            (middle - height)..=(middle + height)
+        };
+        mesh.add_colored_rect(Rect::from_x_y_ranges(x..=x + 1.0, rows), color);
         x += 1.0;
     }
     painter.with_clip_rect(visible).add(mesh);

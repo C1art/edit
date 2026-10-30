@@ -423,6 +423,14 @@ pub fn timeline_toolbar(editor: &mut Editor, ui: &mut egui::Ui) {
                     "Show Video Thumbnails",
                 );
                 ui.checkbox(&mut editor.clip_art.show_waveforms, "Show Audio Waveforms");
+                ui.add_enabled(
+                    editor.clip_art.show_waveforms,
+                    egui::Checkbox::new(
+                        &mut editor.clip_art.rectified_waveforms,
+                        "Rectified Audio Waveforms",
+                    ),
+                )
+                .on_hover_text("Bars rise from the foot of the clip, for a taller view");
                 ui.checkbox(
                     &mut editor.clip_art.show_duplicates,
                     "Show Duplicate Frame Markers",

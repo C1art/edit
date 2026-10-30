@@ -46,6 +46,8 @@ pub struct ClipArt {
     timebase: Timebase,
     frame: u64,
     pub show_waveforms: bool,
+    /// Waveforms rise from the clip's foot instead of mirroring about its middle.
+    pub rectified_waveforms: bool,
     pub show_thumbnails: bool,
     pub show_duplicates: bool,
     /// Media whose files are missing, drawn as offline instead.
@@ -62,6 +64,7 @@ impl ClipArt {
             timebase: Timebase::HZ_90K,
             frame: 0,
             show_waveforms: true,
+            rectified_waveforms: false,
             show_thumbnails: true,
             show_duplicates: false,
             offline: HashSet::new(),

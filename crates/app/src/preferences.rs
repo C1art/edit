@@ -28,6 +28,8 @@ pub(crate) struct Preferences {
     still_length: StillLength,
     media_scaling: MediaScaling,
     auto_scroll: AutoScroll,
+    waveforms: bool,
+    rectified_waveforms: bool,
 }
 
 impl Preferences {
@@ -48,6 +50,8 @@ impl Preferences {
             still_length: editor.still_length,
             media_scaling: editor.media_scaling,
             auto_scroll: editor.view.auto_scroll,
+            waveforms: editor.clip_art.show_waveforms,
+            rectified_waveforms: editor.clip_art.rectified_waveforms,
         }
     }
 
@@ -58,7 +62,7 @@ impl Preferences {
              audio_device\t{}\naudio_device_id\t{}\nvoiceover_input\t{}\n\
              voiceover_input_id\t{}\nvoiceover_countdown\t{}\nvoiceover_hear_sequence\t{}\n\
              default_transition\t{}\ndefault_transition_length\t{}\nstill_length\t{}\n\
-             media_scaling\t{}\nauto_scroll\t{}\n",
+             media_scaling\t{}\nauto_scroll\t{}\nwaveforms\t{}\nrectified_waveforms\t{}\n",
             self.hardware_decoding,
             self.autosave,
             self.autosave_minutes,
@@ -87,6 +91,8 @@ impl Preferences {
             self.still_length.0,
             self.media_scaling.key(),
             self.auto_scroll.key(),
+            self.waveforms,
+            self.rectified_waveforms,
         )
     }
 
@@ -138,6 +144,8 @@ impl Preferences {
                 "still_length" => set(&mut self.still_length.0, value.parse().ok()),
                 "media_scaling" => set(&mut self.media_scaling, MediaScaling::from_key(value)),
                 "auto_scroll" => set(&mut self.auto_scroll, AutoScroll::from_key(value)),
+                "waveforms" => set(&mut self.waveforms, flag),
+                "rectified_waveforms" => set(&mut self.rectified_waveforms, flag),
                 _ => {}
             }
         }
@@ -181,6 +189,8 @@ impl Editor {
         );
         self.media_scaling = preferences.media_scaling;
         self.view.auto_scroll = preferences.auto_scroll;
+        self.clip_art.show_waveforms = preferences.waveforms;
+        self.clip_art.rectified_waveforms = preferences.rectified_waveforms;
         self.saved_preferences = Some(Preferences::of(self));
     }
 
@@ -217,6 +227,8 @@ mod tests {
         still_length: StillLength::STANDARD,
         media_scaling: MediaScaling::None,
         auto_scroll: AutoScroll::Page,
+        waveforms: true,
+        rectified_waveforms: false,
     };
 
     #[test]
@@ -248,6 +260,8 @@ mod tests {
             still_length: StillLength(250),
             media_scaling: MediaScaling::SetToFillFrame,
             auto_scroll: AutoScroll::Smooth,
+            waveforms: false,
+            rectified_waveforms: true,
         };
         assert_eq!(DEFAULTS.read(&chosen.to_text()), chosen);
     }
