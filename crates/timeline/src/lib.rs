@@ -91,13 +91,13 @@ pub use edit::{
     RemoveMedia, RemoveSpeedKeyframe, RemoveSubmix, RemoveTimeRemap, RemoveTrack, RenameBin,
     RenameClips, RenameMedia, RenameTrack, RenderAndReplace, ReplaceClip, RestoreUnrendered,
     RippleDelete, RippleTrimToPlayhead, Roll, SetBinSearch, SetCaptions, SetChannelMap,
-    SetClipAudioEffects, SetClipGain, SetClipLabel, SetClipLook, SetClipPan, SetClipSpeed,
-    SetClipVolume, SetClipsEnabled, SetClipsSound, SetGenerator, SetGrouped, SetLinked,
-    SetLinkedSelection, SetMaintainPitch, SetMarks, SetMasterEffects, SetMasterGain, SetMediaLog,
-    SetProxy, SetSegmentSpeed, SetSequenceFormat, SetSubmix, SetTimeInterpolation, SetToFrameSize,
-    SetTrackAutomation, SetTrackEffects, SetTrackMix, SetTrackOutput, SetTrackSends,
-    SetTrackSwitch, SetTransition, Slide, Slip, SwitchAngle, SyncMethod, TrackSwitch, Trim,
-    TrimMode, TrimToPlayhead, Unlinked, UpdateMarker,
+    SetClipAudioEffects, SetClipGain, SetClipLabel, SetClipLook, SetClipOpacity, SetClipPan,
+    SetClipSpeed, SetClipVolume, SetClipsEnabled, SetClipsSound, SetGenerator, SetGrouped,
+    SetLinked, SetLinkedSelection, SetMaintainPitch, SetMarks, SetMasterEffects, SetMasterGain,
+    SetMediaLog, SetProxy, SetSegmentSpeed, SetSequenceFormat, SetSubmix, SetTimeInterpolation,
+    SetToFrameSize, SetTrackAutomation, SetTrackEffects, SetTrackMix, SetTrackOutput,
+    SetTrackSends, SetTrackSwitch, SetTransition, Slide, Slip, SwitchAngle, SyncMethod,
+    TrackSwitch, Trim, TrimMode, TrimToPlayhead, Unlinked, UpdateMarker,
 };
 pub use edl::to_edl;
 pub use effect::{

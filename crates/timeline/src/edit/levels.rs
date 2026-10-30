@@ -92,6 +92,34 @@ impl Edit for SetClipVolume {
     }
 }
 
+/// Replaces a video clip's opacity and its keyframes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetClipOpacity {
+    pub clip: ClipId,
+    pub opacity: Param,
+}
+
+impl Edit for SetClipOpacity {
+    fn name(&self) -> &'static str {
+        "Opacity"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        if sequence
+            .clip(self.clip)
+            .is_some_and(|(track, _)| track.kind != TrackKind::Video)
+        {
+            return Err(TimelineError::NothingToEdit);
+        }
+        let clip = ops::clip_mut(sequence, self.clip)?;
+        if clip.look.opacity == self.opacity {
+            return Err(TimelineError::NothingToEdit);
+        }
+        clip.look.opacity = self.opacity.clone();
+        Ok(())
+    }
+}
+
 /// Replaces an audio clip's balance and its keyframes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SetClipPan {
