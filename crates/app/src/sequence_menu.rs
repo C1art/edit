@@ -2,6 +2,7 @@ use egui::Button;
 use timeline::{Edge, TrackKind};
 
 use crate::editor::Editor;
+use crate::gap_navigation::GapScope;
 use crate::keymap::Command;
 use crate::monitors::Focus;
 use crate::project_files::PathPurpose;
@@ -33,6 +34,9 @@ pub(crate) fn sequence_menu(editor: &mut Editor, ui: &mut egui::Ui) {
     {
         editor.close_all_gaps();
     }
+    ui.add_enabled_ui(has_clips, |ui| {
+        ui.menu_button("Go to Gap", |ui| go_to_gap(editor, ui))
+    });
     ui.separator();
     let add_edit = Button::new("Add Edit").shortcut_text(editor.keymap.label(Command::AddEdit));
     if ui.add_enabled(has_clips, add_edit).clicked() {
@@ -188,6 +192,42 @@ pub(crate) fn in_out_items(editor: &mut Editor, ui: &mut egui::Ui) {
         let button = Button::new(command.name()).shortcut_text(editor.keymap.label(command));
         if ui.add_enabled(enabled, button).clicked() {
             crate::shortcuts::run(editor, command);
+        }
+    }
+}
+
+fn go_to_gap(editor: &mut Editor, ui: &mut egui::Ui) {
+    let choices = [
+        (
+            Command::NextGapInSequence,
+            "Next in Sequence",
+            GapScope::Sequence,
+            true,
+        ),
+        (
+            Command::PreviousGapInSequence,
+            "Previous in Sequence",
+            GapScope::Sequence,
+            false,
+        ),
+        (
+            Command::NextGapInTrack,
+            "Next in Track",
+            GapScope::Track,
+            true,
+        ),
+        (
+            Command::PreviousGapInTrack,
+            "Previous in Track",
+            GapScope::Track,
+            false,
+        ),
+    ];
+    for (command, name, scope, forward) in choices {
+        let button = Button::new(name).shortcut_text(editor.keymap.label(command));
+        if ui.add(button).clicked() {
+            editor.go_to_gap(scope, forward);
+            ui.close();
         }
     }
 }

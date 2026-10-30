@@ -124,6 +124,12 @@ impl Command {
             Self::ComparisonView => ("comparison_view", "Comparison View"),
             Self::RenderInToOut => ("render_in_to_out", "Render In to Out"),
             Self::DeleteRenderFiles => ("delete_render_files", "Delete Render Files"),
+            Self::NextGapInSequence => ("next_gap_in_sequence", "Go to Next Gap in Sequence"),
+            Self::PreviousGapInSequence => {
+                ("previous_gap_in_sequence", "Go to Previous Gap in Sequence")
+            }
+            Self::NextGapInTrack => ("next_gap_in_track", "Go to Next Gap in Track"),
+            Self::PreviousGapInTrack => ("previous_gap_in_track", "Go to Previous Gap in Track"),
             Self::MarkIn => ("mark_in", "Mark In"),
             Self::MarkOut => ("mark_out", "Mark Out"),
             Self::ClearInOut => ("clear_in_out", "Clear In and Out"),

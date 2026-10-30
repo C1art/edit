@@ -97,6 +97,9 @@ impl Command {
             Self::MinimizeAllTracks => vec![shift(Key::Minus)],
             Self::MulticamView => vec![shift(Key::Num0)],
             Self::RenderInToOut => vec![plain(Key::Enter)],
+            Self::NextGapInSequence => vec![shift(Key::Semicolon)],
+            Self::PreviousGapInSequence => vec![ctrl_shift(Key::Semicolon)],
+            Self::NextGapInTrack | Self::PreviousGapInTrack => Vec::new(),
             Self::DeleteRenderFiles
             | Self::ToggleLinkedSelection
             | Self::JoinThroughEdits

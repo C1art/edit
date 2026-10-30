@@ -4,7 +4,9 @@ use std::sync::Arc;
 use super::arrange::close_gaps;
 use super::media::renumber;
 use super::ops::{self, Relinks};
-use crate::{ClipId, Edit, MediaItem, Nest, Sequence, SourceId, Ticks, TimelineError, TrackRef};
+use crate::{
+    Clip, ClipId, Edit, MediaItem, Nest, Sequence, SourceId, Ticks, TimelineError, TrackRef,
+};
 
 /// Copies the clips between the in and out marks, or `clips` and those linked to them,
 /// into a new sequence in the pool, cut to that span and starting at zero, as
@@ -107,22 +109,11 @@ impl Edit for CloseGaps {
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
-        let filled = ops::merge_ranges(
+        let gaps = unused_time(
             sequence
                 .tracks()
-                .flat_map(|(_, track)| track.clips.iter().map(Arc::as_ref))
-                .map(|clip| clip.start..clip.end())
-                .collect(),
+                .flat_map(|(_, track)| track.clips.iter().map(Arc::as_ref)),
         );
-        let gaps: Vec<Range<Ticks>> = filled
-            .iter()
-            .scan(Ticks::ZERO, |end, range| {
-                let gap = *end..range.start;
-                *end = range.end;
-                Some(gap)
-            })
-            .filter(|gap| !gap.is_empty())
-            .collect();
         if gaps.is_empty() {
             return Err(TimelineError::NothingToEdit);
         }
@@ -130,6 +121,25 @@ impl Edit for CloseGaps {
         close_gaps(sequence, &gaps, &tracks);
         Ok(())
     }
+}
+
+/// The stretches from the sequence's start to the last of `clips` that none of them uses.
+pub fn unused_time<'a>(clips: impl IntoIterator<Item = &'a Clip>) -> Vec<Range<Ticks>> {
+    let filled = ops::merge_ranges(
+        clips
+            .into_iter()
+            .map(|clip| clip.start..clip.end())
+            .collect(),
+    );
+    filled
+        .iter()
+        .scan(Ticks::ZERO, |end, range| {
+            let gap = *end..range.start;
+            *end = range.end;
+            Some(gap)
+        })
+        .filter(|gap| !gap.is_empty())
+        .collect()
 }
 
 /// From the earliest clip's start to the latest's end.

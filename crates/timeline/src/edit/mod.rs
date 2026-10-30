@@ -84,7 +84,7 @@ pub use structure::{
     SetSequenceFormat, SetTimeDisplay, SetTrackSwitch, TrackSwitch,
 };
 pub use submix::{AddSubmix, RemoveSubmix, SetSubmix, SetTrackOutput, SetTrackSends};
-pub use subsequence::{CloseGaps, MakeSubsequence};
+pub use subsequence::{unused_time, CloseGaps, MakeSubsequence};
 pub use sync::{IntoSync, SyncMethod};
 pub use through::{is_through_edit, JoinThroughEdits};
 pub use trim::{Edge, Roll, Slide, Slip, Trim, TrimMode};

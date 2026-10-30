@@ -3,6 +3,7 @@ use timeline::{Edge, Generator, Marks, PlaceMode, Title, TrackKind};
 
 use crate::editor::Editor;
 use crate::effects::KeyAction;
+use crate::gap_navigation::GapScope;
 use crate::keymap::{take_press, Command, KeymapWindow, DIGIT_KEYS};
 use crate::monitors::Focus;
 use crate::placing;
@@ -203,6 +204,10 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         Command::GoToOut => editor.go_to_mark(Edge::Tail),
         Command::GoToSelectedClipStart => editor.go_to_selection_edge(Edge::Head),
         Command::GoToSelectedClipEnd => editor.go_to_selection_edge(Edge::Tail),
+        Command::NextGapInSequence => editor.go_to_gap(GapScope::Sequence, true),
+        Command::PreviousGapInSequence => editor.go_to_gap(GapScope::Sequence, false),
+        Command::NextGapInTrack => editor.go_to_gap(GapScope::Track, true),
+        Command::PreviousGapInTrack => editor.go_to_gap(GapScope::Track, false),
         Command::AddMarker => editor.add_marker(),
         Command::NextMarker => editor.jump_to_marker(true),
         Command::PreviousKeyframe => editor.jump_to_keyframe(false),

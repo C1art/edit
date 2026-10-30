@@ -88,6 +88,10 @@ pub enum Command {
     ComparisonView,
     RenderInToOut,
     DeleteRenderFiles,
+    NextGapInSequence,
+    PreviousGapInSequence,
+    NextGapInTrack,
+    PreviousGapInTrack,
     MarkIn,
     MarkOut,
     ClearInOut,
@@ -147,7 +151,7 @@ pub enum Command {
 pub const WORKSPACE_SLOTS: u8 = 9;
 
 impl Command {
-    pub const ALL: [Self; 147] = [
+    pub const ALL: [Self; 151] = [
         Self::NewProject,
         Self::OpenProject,
         Self::Save,
@@ -235,6 +239,10 @@ impl Command {
         Self::ComparisonView,
         Self::RenderInToOut,
         Self::DeleteRenderFiles,
+        Self::NextGapInSequence,
+        Self::PreviousGapInSequence,
+        Self::NextGapInTrack,
+        Self::PreviousGapInTrack,
         Self::MarkIn,
         Self::MarkOut,
         Self::ClearInOut,
@@ -381,7 +389,11 @@ impl Command {
             | MulticamView
             | ComparisonView
             | RenderInToOut
-            | DeleteRenderFiles => "Sequence",
+            | DeleteRenderFiles
+            | NextGapInSequence
+            | PreviousGapInSequence
+            | NextGapInTrack
+            | PreviousGapInTrack => "Sequence",
             MarkIn | MarkOut | ClearInOut | ClearIn | ClearOut | MarkClip | MarkSelection
             | GoToIn | GoToOut | AddMarker | NextMarker | PreviousMarker | ClearMarker
             | ClearAllMarkers => "Markers",
