@@ -18,6 +18,7 @@ fn wide_pictures_fit_by_width_and_fill_by_height() {
             has_audio: true,
             still: false,
             interpreted_rate: None,
+            placed: None,
         })
         .unwrap();
     let wide = timeline.sequence().media[1].id;

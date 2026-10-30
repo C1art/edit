@@ -10,6 +10,7 @@ fn rendered_title() -> (Timeline, SourceId, SourceId) {
         .apply(AddGenerated {
             name: "Title".into(),
             generator: Generator::Title(Title::default()),
+            placed: None,
         })
         .unwrap();
     let title = timeline.sequence().media[1].id;
@@ -28,6 +29,7 @@ fn rendered_title() -> (Timeline, SourceId, SourceId) {
             has_audio: false,
             still: false,
             interpreted_rate: None,
+            placed: None,
         })
         .unwrap();
     let rendered = timeline.sequence().media[2].id;
@@ -88,6 +90,7 @@ fn graphics_render_alone_but_adjustment_layers_do_not() {
         .apply(AddGenerated {
             name: "Adjustment".into(),
             generator: Generator::AdjustmentLayer,
+            placed: None,
         })
         .unwrap();
     let adjustment = timeline.sequence().media[3].id;
@@ -106,6 +109,7 @@ fn a_render_too_short_for_the_clip_is_refused() {
             has_audio: false,
             still: false,
             interpreted_rate: None,
+            placed: None,
         })
         .unwrap();
     let short = timeline.sequence().media[3].id;

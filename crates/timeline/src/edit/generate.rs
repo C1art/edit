@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::generator::seconds;
 use crate::{
-    Edit, Generator, MediaItem, Sequence, SourceId, TimelineError, GENERATED_SECONDS,
+    Edit, Generator, MediaItem, Sequence, SourceId, Ticks, TimelineError, GENERATED_SECONDS,
     LEADER_SECONDS,
 };
 
@@ -11,6 +11,8 @@ use crate::{
 pub struct AddGenerated {
     pub name: String,
     pub generator: Generator,
+    /// How long an edit places of it when nothing is marked, instead of the standard.
+    pub placed: Option<Ticks>,
 }
 
 impl Edit for AddGenerated {
@@ -58,6 +60,7 @@ impl Edit for AddGenerated {
             offline: false,
             still: false,
             channel_map: None,
+            placed: self.placed,
         });
         Ok(())
     }

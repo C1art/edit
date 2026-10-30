@@ -46,6 +46,7 @@ fn sequence() -> Arc<Sequence> {
         .apply(AddGenerated {
             name: "Box".into(),
             generator: Generator::Shape(shape),
+            placed: None,
         })
         .unwrap();
     timeline

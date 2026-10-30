@@ -190,7 +190,12 @@ pub fn place_generated(
     generator: Generator,
     length: Option<Ticks>,
 ) -> Option<ClipId> {
-    if !editor.apply(AddGenerated { name, generator }) {
+    let placed = editor.still_length.placed(editor.timeline.sequence());
+    if !editor.apply(AddGenerated {
+        name,
+        generator,
+        placed,
+    }) {
         return None;
     }
     let sequence = editor.timeline.sequence();

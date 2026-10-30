@@ -52,6 +52,7 @@ impl PreviewPictures {
                 offline: false,
                 still: false,
                 channel_map: None,
+                placed: None,
             });
             let clip = Clip::new(
                 ClipId(index),

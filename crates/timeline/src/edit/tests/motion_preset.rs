@@ -13,6 +13,7 @@ fn ten_frames() -> (Timeline, ClipId) {
             has_audio: false,
             still: false,
             interpreted_rate: None,
+            placed: None,
         })
         .unwrap();
     let long = timeline.sequence().media[1].id;

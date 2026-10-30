@@ -3,6 +3,7 @@ use audio::{InputDevice, OutputDevice};
 use crate::editor::Editor;
 use crate::project_store::Setting;
 use crate::proxy_offer::HeavyMedia;
+use crate::still_length::StillLength;
 use crate::transition_defaults::TransitionDefaults;
 
 /// The choices kept from one session to the next, written as `name<TAB>value` lines.
@@ -22,6 +23,7 @@ pub(crate) struct Preferences {
     voiceover_countdown: bool,
     voiceover_hear_sequence: bool,
     transitions: TransitionDefaults,
+    still_length: StillLength,
 }
 
 impl Preferences {
@@ -39,6 +41,7 @@ impl Preferences {
             voiceover_countdown: editor.voiceover.countdown,
             voiceover_hear_sequence: editor.voiceover.hear_sequence,
             transitions: editor.transition_defaults,
+            still_length: editor.still_length,
         }
     }
 
@@ -48,7 +51,7 @@ impl Preferences {
              selection_follows_playhead\t{}\ndropped_frame_indicator\t{}\nheavy_media\t{}\n\
              audio_device\t{}\naudio_device_id\t{}\nvoiceover_input\t{}\n\
              voiceover_input_id\t{}\nvoiceover_countdown\t{}\nvoiceover_hear_sequence\t{}\n\
-             default_transition\t{}\ndefault_transition_length\t{}\n",
+             default_transition\t{}\ndefault_transition_length\t{}\nstill_length\t{}\n",
             self.hardware_decoding,
             self.autosave,
             self.autosave_minutes,
@@ -74,6 +77,7 @@ impl Preferences {
             self.voiceover_hear_sequence,
             self.transitions.key(),
             self.transitions.length,
+            self.still_length.0,
         )
     }
 
@@ -122,6 +126,7 @@ impl Preferences {
                 "default_transition_length" => {
                     set(&mut self.transitions.length, value.parse().ok());
                 }
+                "still_length" => set(&mut self.still_length.0, value.parse().ok()),
                 _ => {}
             }
         }
@@ -157,6 +162,12 @@ impl Editor {
             ),
             ..preferences.transitions
         };
+        self.still_length = StillLength(
+            preferences
+                .still_length
+                .0
+                .clamp(*StillLength::LENGTHS.start(), *StillLength::LENGTHS.end()),
+        );
         self.saved_preferences = Some(Preferences::of(self));
     }
 
@@ -190,6 +201,7 @@ mod tests {
         voiceover_countdown: true,
         voiceover_hear_sequence: false,
         transitions: TransitionDefaults::STANDARD,
+        still_length: StillLength::STANDARD,
     };
 
     #[test]
@@ -218,6 +230,7 @@ mod tests {
                 video: timeline::TransitionKind::DipToBlack,
                 length: 45,
             },
+            still_length: StillLength(250),
         };
         assert_eq!(DEFAULTS.read(&chosen.to_text()), chosen);
     }

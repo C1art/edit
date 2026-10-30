@@ -100,6 +100,7 @@ impl Edit for NestClips {
             offline: false,
             still: false,
             channel_map: None,
+            placed: None,
         });
         let link = (video.is_some() && audio.is_some()).then(|| LinkId(sequence.ids.next()));
         let placements = [video.map(TrackRef::video), audio.map(TrackRef::audio)];
@@ -152,6 +153,7 @@ impl Edit for AddNest {
             offline: false,
             still: false,
             channel_map: None,
+            placed: None,
         });
         sequence.fit_nest(id);
         Ok(())

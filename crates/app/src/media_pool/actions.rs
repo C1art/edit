@@ -2,9 +2,9 @@ use std::path::{Path, PathBuf};
 
 use media::MediaError;
 use timeline::{
-    AddBin, BinSearch, CreateMulticam, DuplicateMedia, Edit, InterpretFootage, MakeOffline,
-    MakeSubclip, MergeClips, MoveToBin, RelinkMedia, RemoveBin, RenameBin, RenameMedia,
-    SetBinSearch, SetProxy, SourceId, Ticks, TimelineError,
+    AddBin, BinSearch, CreateMulticam, DuplicateMedia, Edit, ImportMedia, InterpretFootage,
+    MakeOffline, MakeSubclip, MergeClips, MoveToBin, RelinkMedia, RemoveBin, RenameBin,
+    RenameMedia, SetBinSearch, SetProxy, SourceId, Ticks, TimelineError,
 };
 
 use super::{PoolAction, PoolEntry};
@@ -112,7 +112,11 @@ impl Editor {
                     }
                 }
                 None => {
-                    if self.apply(media) {
+                    let placed = media
+                        .still
+                        .then(|| self.still_length.placed(self.timeline.sequence()))
+                        .flatten();
+                    if self.apply(ImportMedia { placed, ..media }) {
                         if let Some(item) = self.timeline.sequence().media.last() {
                             self.proxy_offer.imported(item);
                             let id = item.id;

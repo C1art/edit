@@ -13,6 +13,7 @@ fn multicam() -> (Timeline, SourceId) {
             has_audio: true,
             still: false,
             interpreted_rate: None,
+            placed: None,
         })
         .unwrap();
     let second = timeline.sequence().media[1].id;

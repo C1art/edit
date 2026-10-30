@@ -11,6 +11,7 @@ fn relink(source: SourceId, path: &str, duration: i64) -> RelinkMedia {
             has_audio: true,
             still: false,
             interpreted_rate: None,
+            placed: None,
         },
     }
 }
@@ -110,6 +111,7 @@ fn a_still_places_its_usual_length_but_holds_for_as_long_as_a_clip_runs() {
             has_audio: false,
             still: true,
             interpreted_rate: None,
+            placed: None,
         })
         .unwrap();
     let still = timeline.sequence().media.last().unwrap().clone();
@@ -118,4 +120,24 @@ fn a_still_places_its_usual_length_but_holds_for_as_long_as_a_clip_runs() {
         .apply(place(still.id, 0, 0, 900_000, PlaceMode::Overwrite))
         .unwrap();
     assert_eq!(spans(&timeline, V1), [(0, 900_000, 0)]);
+}
+
+#[test]
+fn a_still_imported_with_its_own_length_places_that_long() {
+    let (mut timeline, _) = timeline();
+    let timebase = Timebase::HZ_90K;
+    timeline
+        .apply(ImportMedia {
+            name: "logo.png".into(),
+            path: "logo.png".into(),
+            duration: crate::held_length(timebase),
+            video: Some(VideoFormat::default()),
+            has_audio: false,
+            still: true,
+            interpreted_rate: None,
+            placed: Some(Ticks(180_000)),
+        })
+        .unwrap();
+    let still = timeline.sequence().media.last().unwrap();
+    assert_eq!(still.default_range(timebase), Ticks::ZERO..Ticks(180_000));
 }

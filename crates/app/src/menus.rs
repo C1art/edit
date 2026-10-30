@@ -223,16 +223,19 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                 ui.horizontal(|ui| {
                     ui.label("Default Transition Duration");
                     let length = &mut editor.transition_defaults.length;
-                    ui.add(
-                        egui::DragValue::new(length)
-                            .range(crate::transition_defaults::TransitionDefaults::LENGTHS)
-                            .custom_formatter(|hundredths, _| format!("{:.2} s", hundredths / 100.0))
-                            .custom_parser(|text| {
-                                let seconds = text.trim().trim_end_matches('s').trim();
-                                seconds.parse::<f64>().ok().map(|seconds| seconds * 100.0)
-                            }),
-                    )
+                    ui.add(hundredths_field(
+                        length,
+                        crate::transition_defaults::TransitionDefaults::LENGTHS,
+                    ))
                     .on_hover_text("Right-click a video transition in the Effects panel to make it the default");
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Still Image Default Duration");
+                    ui.add(hundredths_field(
+                        &mut editor.still_length.0,
+                        crate::still_length::StillLength::LENGTHS,
+                    ))
+                    .on_hover_text("How long stills and titles brought in from now on place for");
                 });
                 ui.menu_button("Proxies for 4K and High Frame Rate Media", |ui| {
                     let choice = &mut editor.proxy_offer.choice;
@@ -421,4 +424,18 @@ pub fn timeline_toolbar(editor: &mut Editor, ui: &mut egui::Ui) {
             }
         });
     });
+}
+
+/// Hundredths of a second shown and typed as seconds.
+fn hundredths_field(
+    hundredths: &mut u32,
+    range: std::ops::RangeInclusive<u32>,
+) -> egui::DragValue<'_> {
+    egui::DragValue::new(hundredths)
+        .range(range)
+        .custom_formatter(|hundredths, _| format!("{:.2} s", hundredths / 100.0))
+        .custom_parser(|text| {
+            let seconds = text.trim().trim_end_matches('s').trim();
+            seconds.parse::<f64>().ok().map(|seconds| seconds * 100.0)
+        })
 }

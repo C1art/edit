@@ -296,6 +296,7 @@ mod tests {
             offline: false,
             still: false,
             channel_map: None,
+            placed: None,
         }
     }
 

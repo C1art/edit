@@ -54,6 +54,7 @@ fn fixture() -> (Timeline, Vec<SourceId>) {
                 has_audio,
                 still: false,
                 interpreted_rate: None,
+                placed: None,
             })
             .unwrap();
     }

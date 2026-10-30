@@ -21,6 +21,7 @@ fn reframing_a_sequence_reshapes_it_and_reframes_only_footage_once() {
         .apply(AddGenerated {
             name: "Title".into(),
             generator: Generator::Title(Title::default()),
+            placed: None,
         })
         .unwrap();
     let title = timeline.sequence().media[1].id;

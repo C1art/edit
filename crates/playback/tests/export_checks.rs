@@ -43,7 +43,13 @@ fn sequence() -> Arc<Sequence> {
     ];
     for generator in generators {
         let name = generator.kind_name().into();
-        timeline.apply(AddGenerated { name, generator }).unwrap();
+        timeline
+            .apply(AddGenerated {
+                name,
+                generator,
+                placed: None,
+            })
+            .unwrap();
     }
     let media: Vec<_> = timeline.sequence().media.iter().map(|m| m.id).collect();
     let places = [

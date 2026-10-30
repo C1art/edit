@@ -13,6 +13,7 @@ fn merging_a_camera_with_a_recorder_links_the_picture_to_the_recorded_sound_in_s
             has_audio: true,
             still: false,
             interpreted_rate: None,
+            placed: None,
         })
         .unwrap();
     let recorder = timeline.sequence().media[1].id;

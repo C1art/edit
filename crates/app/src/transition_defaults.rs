@@ -31,12 +31,8 @@ impl TransitionDefaults {
         Transition::new(kind, duration)
     }
 
-    /// The nearest whole number of frames at `num`/`den` per second, at least one.
     fn frames(self, num: u32, den: u32) -> i64 {
-        let per_hundred_seconds = i64::from(den) * 100;
-        let frames = (i64::from(self.length) * i64::from(num) + per_hundred_seconds / 2)
-            / per_hundred_seconds;
-        frames.max(1)
+        whole_frames(self.length, num, den)
     }
 
     /// The video kind's name, for the preferences file.
@@ -49,6 +45,15 @@ impl TransitionDefaults {
             .into_iter()
             .find(|kind| kind.name() == key)
     }
+}
+
+/// The nearest whole number of frames at `num`/`den` per second to `hundredths` of a
+/// second, at least one.
+pub(crate) fn whole_frames(hundredths: u32, num: u32, den: u32) -> i64 {
+    let per_hundred_seconds = i64::from(den) * 100;
+    let frames =
+        (i64::from(hundredths) * i64::from(num) + per_hundred_seconds / 2) / per_hundred_seconds;
+    frames.max(1)
 }
 
 #[cfg(test)]

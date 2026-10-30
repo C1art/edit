@@ -89,6 +89,7 @@ impl Edit for MakeSubsequence {
             offline: false,
             still: false,
             channel_map: None,
+            placed: None,
         });
         sequence.fit_nest(id);
         Ok(())

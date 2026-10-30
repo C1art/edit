@@ -140,6 +140,7 @@ mod tests {
                 has_audio: true,
                 still: false,
                 interpreted_rate: None,
+                placed: None,
             };
             timeline.apply(import).unwrap();
         }

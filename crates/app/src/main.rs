@@ -96,6 +96,7 @@ mod source;
 mod source_drag;
 mod source_waveform;
 mod speed_dialog;
+mod still_length;
 mod theme;
 mod timecode_field;
 mod timeline_view;

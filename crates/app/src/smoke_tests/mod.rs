@@ -130,6 +130,7 @@ pub(super) fn import(editor: &mut Editor, frames: i64) {
         has_audio: true,
         still: false,
         interpreted_rate: None,
+        placed: None,
     });
 }
 

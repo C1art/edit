@@ -42,6 +42,7 @@ fn timeline_of(placements: &[(i64, i64)]) -> Timeline {
             has_audio: true,
             still: false,
             interpreted_rate: None,
+            placed: None,
         })
         .unwrap();
     let source = timeline.sequence().media[0].id;

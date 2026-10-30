@@ -133,6 +133,8 @@ pub struct ImportMedia {
     pub still: bool,
     /// The frame rate to play the file at instead of its own, as Interpret Footage sets.
     pub interpreted_rate: Option<FrameRate>,
+    /// How long an edit places of a still when nothing is marked, instead of the standard.
+    pub placed: Option<Ticks>,
 }
 
 impl Edit for ImportMedia {
@@ -166,6 +168,7 @@ impl Edit for ImportMedia {
             offline: false,
             still: self.still,
             channel_map: None,
+            placed: self.placed,
         });
         Ok(())
     }

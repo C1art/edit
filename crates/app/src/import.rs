@@ -150,5 +150,6 @@ pub(crate) fn probe(
         has_audio: info.has_audio,
         still: info.still,
         interpreted_rate: info.sequence.then_some(sequence_rate),
+        placed: None,
     })
 }

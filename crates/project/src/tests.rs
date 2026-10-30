@@ -44,6 +44,7 @@ fn sample() -> ProjectFile {
         offline: false,
         still: false,
         channel_map: None,
+        placed: None,
     });
     Arc::make_mut(&mut sequence.media).push(MediaItem {
         id: SourceId(2),
@@ -94,6 +95,7 @@ fn sample() -> ProjectFile {
         offline: false,
         still: false,
         channel_map: None,
+        placed: None,
     });
     sequence.bins = vec![
         Bin {
@@ -146,6 +148,7 @@ fn sample() -> ProjectFile {
         offline: false,
         still: false,
         channel_map: None,
+        placed: None,
     });
     let mut clip = Clip::new(ClipId(7), SourceId(1), Ticks(0), Ticks(90_000), Ticks(3));
     clip.gain = Gain(-600);

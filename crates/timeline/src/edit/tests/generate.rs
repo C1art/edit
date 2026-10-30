@@ -9,6 +9,7 @@ fn generated_media_places_a_still_length_of_picture_and_edits_undo() {
         .apply(AddGenerated {
             name: "Title".into(),
             generator: title.clone(),
+            placed: None,
         })
         .unwrap();
     let item = timeline.sequence().media[1].clone();

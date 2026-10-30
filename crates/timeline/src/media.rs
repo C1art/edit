@@ -67,6 +67,10 @@ pub struct MediaItem {
     /// The file's channels played on each side instead of all of them mixed to stereo.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub channel_map: Option<ChannelMap>,
+    /// How long an edit places of a still or generated media when nothing is marked,
+    /// as the preference stood when it was imported; unset places the standard length.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub placed: Option<Ticks>,
 }
 
 /// Which of a file's audio channels, counting from zero, play on the left and the right;
@@ -104,11 +108,15 @@ impl MediaItem {
     /// What an edit places when no range is marked: all of a file or subclip, or the
     /// usual still length of a picture or generated media.
     pub fn default_range(&self, timebase: Timebase) -> Range<Ticks> {
+        let placed = || {
+            let length = self.placed.unwrap_or_else(|| placed_length(timebase));
+            Ticks::ZERO..length.min(self.duration)
+        };
         match (&self.generator, &self.subclip) {
             (Some(Generator::CountingLeader(_)), _) => Ticks::ZERO..self.duration,
-            (Some(_), _) => Ticks::ZERO..placed_length(timebase).min(self.duration),
+            (Some(_), _) => placed(),
             (None, Some(range)) => range.clone(),
-            (None, None) if self.still => Ticks::ZERO..placed_length(timebase).min(self.duration),
+            (None, None) if self.still => placed(),
             (None, None) => Ticks::ZERO..self.duration,
         }
     }

@@ -98,6 +98,7 @@ impl Sequence {
             offline: false,
             still: false,
             channel_map: None,
+            placed: None,
         });
         let mut whole = Clip::new(
             ClipId(view.ids.next()),
