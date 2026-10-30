@@ -2,7 +2,6 @@ mod picture;
 mod prepare;
 mod slots;
 
-use std::any::Any;
 use std::sync::Arc;
 
 use timeline::MatteChannel;
@@ -110,7 +109,7 @@ pub struct Compositor {
     /// Decoded pictures replaced since the last submit, kept until the GPU is done
     /// reading them so their decoder can't write over them first.
     #[cfg(windows)]
-    retired: Vec<Arc<dyn Any + Send + Sync>>,
+    retired: Vec<Arc<dyn std::any::Any + Send + Sync>>,
 }
 
 impl Compositor {
