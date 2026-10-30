@@ -40,10 +40,77 @@ impl Edit for RemoveTrack {
         match tracks.get(self.track.index) {
             Some(track) if track.locked => Err(TimelineError::TrackLocked(self.track)),
             Some(_) => {
-                tracks.remove(self.track.index);
+                remove_track(sequence, self.track);
                 Ok(())
             }
             None => Err(TimelineError::TrackNotFound(self.track)),
+        }
+    }
+}
+
+/// Deletes the tracks of `kinds` without clips, keeping the lowest of each kind when all
+/// are empty so there is still somewhere to edit into. Locked tracks stay.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeleteEmptyTracks {
+    pub kinds: Vec<TrackKind>,
+}
+
+impl Edit for DeleteEmptyTracks {
+    fn name(&self) -> &'static str {
+        "Delete Tracks"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let mut deleted = 0;
+        for &kind in &self.kinds {
+            let tracks = sequence.tracks_of(kind);
+            let all_empty = tracks.iter().all(|track| track.clips.is_empty());
+            let empty: Vec<usize> = tracks
+                .iter()
+                .enumerate()
+                .skip(usize::from(all_empty))
+                .filter(|(_, track)| track.clips.is_empty() && !track.locked)
+                .map(|(index, _)| index)
+                .collect();
+            for &index in empty.iter().rev() {
+                remove_track(sequence, TrackRef { kind, index });
+            }
+            deleted += empty.len();
+        }
+        if deleted == 0 {
+            return Err(TimelineError::NothingToEdit);
+        }
+        Ok(())
+    }
+}
+
+/// Removes a track, keeping effects that read other video tracks on the ones they read.
+fn remove_track(sequence: &mut Sequence, track: TrackRef) {
+    sequence.tracks_of_mut(track.kind).remove(track.index);
+    if track.kind != TrackKind::Video {
+        return;
+    }
+    let removed = track.index;
+    let shifted = |layer: Option<usize>| match layer {
+        Some(layer) if layer == removed => None,
+        Some(layer) if layer > removed => Some(layer - 1),
+        layer => layer,
+    };
+    for (_, track) in sequence.tracks_mut() {
+        for clip in &mut track.clips {
+            let reads_above = clip
+                .look
+                .effects
+                .iter()
+                .any(|effect| effect.other_track().is_some_and(|layer| layer >= removed));
+            if !reads_above {
+                continue;
+            }
+            for effect in &mut Arc::make_mut(clip).look.effects {
+                if let Some(layer) = effect.other_track_mut() {
+                    *layer = shifted(*layer);
+                }
+            }
         }
     }
 }

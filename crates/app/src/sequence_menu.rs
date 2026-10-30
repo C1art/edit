@@ -148,6 +148,18 @@ pub(crate) fn sequence_menu(editor: &mut Editor, ui: &mut egui::Ui) {
     if ui.button("Add Audio Track").clicked() {
         editor.add_track(TrackKind::Audio);
     }
+    ui.menu_button("Delete Empty Tracks", |ui| {
+        let choices = [
+            ("Video and Audio", &[TrackKind::Video, TrackKind::Audio][..]),
+            ("Video Only", &[TrackKind::Video]),
+            ("Audio Only", &[TrackKind::Audio]),
+        ];
+        for (label, kinds) in choices {
+            if ui.button(label).clicked() {
+                editor.delete_empty_tracks(kinds);
+            }
+        }
+    });
     if ui.button("Record Voiceover…").clicked() {
         editor.open_voiceover();
     }

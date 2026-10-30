@@ -1,11 +1,11 @@
 use std::collections::HashSet;
 
 use timeline::{
-    AddFrameHold, AddTrack, ClipId, Clipboard, CloseGap, CloseGaps, FrameFit, Gain, HoldFrame,
-    InsertFrameHold, JoinThroughEdits, Lift, LinkedSelection, MakeSubsequence, NudgeClipGain,
-    PasteClips, PlaceMode, Razor, RazorTarget, RippleDelete, Sequence, SetClipsEnabled,
-    SetFrameHold, SetGrouped, SetLinked, SetLinkedSelection, SetToFrameSize, Ticks, Timebase,
-    TrackKind, TrackRef,
+    AddFrameHold, AddTrack, ClipId, Clipboard, CloseGap, CloseGaps, DeleteEmptyTracks, FrameFit,
+    Gain, HoldFrame, InsertFrameHold, JoinThroughEdits, Lift, LinkedSelection, MakeSubsequence,
+    NudgeClipGain, PasteClips, PlaceMode, Razor, RazorTarget, RippleDelete, Sequence,
+    SetClipsEnabled, SetFrameHold, SetGrouped, SetLinked, SetLinkedSelection, SetToFrameSize,
+    Ticks, Timebase, TrackKind, TrackRef,
 };
 
 use crate::editor::Editor;
@@ -172,6 +172,13 @@ impl Editor {
 
     pub(crate) fn add_track(&mut self, kind: TrackKind) {
         self.apply(AddTrack { kind });
+    }
+
+    pub(crate) fn delete_empty_tracks(&mut self, kinds: &[TrackKind]) {
+        let kinds = kinds.to_vec();
+        if !self.apply(DeleteEmptyTracks { kinds }) {
+            self.notice("No empty, unlocked tracks to delete");
+        }
     }
 }
 

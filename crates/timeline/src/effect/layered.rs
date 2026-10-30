@@ -90,3 +90,27 @@ impl Default for Texturize {
         }
     }
 }
+
+impl crate::VideoEffect {
+    pub(crate) fn other_track(&self) -> Option<usize> {
+        match self {
+            Self::TrackMatteKey { matte, .. } | Self::SetMatte { matte, .. } => *matte,
+            Self::DifferenceMatte(effect) => effect.difference_layer,
+            Self::CompoundBlur(effect) => effect.blur_layer,
+            Self::Texturize(effect) => effect.texture_layer,
+            _ => None,
+        }
+    }
+
+    /// The video track this effect reads besides the clip's own, for keeping it pointed
+    /// at the same track as tracks below it come and go.
+    pub(crate) fn other_track_mut(&mut self) -> Option<&mut Option<usize>> {
+        match self {
+            Self::TrackMatteKey { matte, .. } | Self::SetMatte { matte, .. } => Some(matte),
+            Self::DifferenceMatte(effect) => Some(&mut effect.difference_layer),
+            Self::CompoundBlur(effect) => Some(&mut effect.blur_layer),
+            Self::Texturize(effect) => Some(&mut effect.texture_layer),
+            _ => None,
+        }
+    }
+}
