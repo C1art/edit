@@ -3,6 +3,7 @@ use timeline::{clamp_delta, ClipId, Edge, Roll, Sequence, TrackRef, Trim, TrimMo
 use crate::editor::Editor;
 use crate::keymap::Command;
 use crate::timeline_view::{EditPoint, TrimType};
+use crate::transport::TransportKey;
 
 /// Premiere's keyboard trimming: select a cut, then move it a frame or five at a time.
 impl Editor {
@@ -35,8 +36,55 @@ impl Editor {
             .edit_point
             .as_ref()
             .map_or(TrimType::default(), |point| point.trim);
-        self.view.edit_point = Some(EditPoint { at, tracks, trim });
+        self.view.edit_point = Some(EditPoint {
+            at,
+            tracks,
+            trim,
+            dynamic: false,
+        });
         self.seek_program(at);
+    }
+
+    /// Premiere's dynamic trimming: with an edit point selected, J and L play from it,
+    /// and K or Space stops and trims it to where playback stopped. True when `key` was
+    /// taken here rather than left to the program monitor.
+    pub(crate) fn dynamic_trim(&mut self, key: TransportKey) -> bool {
+        let sequence = self.timeline.sequence();
+        let (Some(point), Some(program)) = (
+            self.view
+                .edit_point
+                .as_mut()
+                .filter(|point| point.is_on(sequence)),
+            self.program.as_mut(),
+        ) else {
+            return false;
+        };
+        match key {
+            TransportKey::Forward | TransportKey::Reverse => {
+                // Playing on from the end, or in a loop, jumps away from the point.
+                let player = &program.player;
+                let leaps = player.is_looping()
+                    || (key == TransportKey::Forward && point.at >= player.duration());
+                if !point.dynamic && !leaps {
+                    point.dynamic = true;
+                    program.player.pause();
+                    program.player.seek(point.at);
+                }
+                false
+            }
+            TransportKey::Pause | TransportKey::Toggle if point.dynamic => {
+                point.dynamic = false;
+                program.player.pause();
+                let (rate, timebase) = (sequence.format.frame_rate, sequence.timebase);
+                let frames = rate.frame_at(program.player.position(), timebase)
+                    - rate.frame_at(point.at, timebase);
+                if frames != 0 {
+                    self.trim_edit_point(frames);
+                }
+                true
+            }
+            _ => false,
+        }
     }
 
     pub(crate) fn toggle_trim_type(&mut self) {

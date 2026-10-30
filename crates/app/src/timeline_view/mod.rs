@@ -323,7 +323,8 @@ impl TimelineView {
                 paint::gap(&painter, row, &scale, range);
             }
             if let Some(point) = edit_point {
-                edit_point::paint(&painter, row, &scale, point);
+                let at = if point.dynamic { playhead } else { point.at };
+                edit_point::paint(&painter, row, &scale, point, at);
             }
             if let Some(track) = sequence.track(row.track).filter(|_| automation) {
                 let end = scale.time(tracks.right());

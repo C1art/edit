@@ -32,6 +32,8 @@ pub struct EditPoint {
     pub at: Ticks,
     pub tracks: Vec<TrackRef>,
     pub trim: TrimType,
+    /// J or L played from the point, so stopping trims it to where playback stopped.
+    pub dynamic: bool,
 }
 
 impl EditPoint {
@@ -50,12 +52,12 @@ impl EditPoint {
 }
 
 /// Premiere's trim handles: red for a roll across the cut, yellow on the side a ripple
-/// trims.
-pub fn paint(painter: &Painter, row: &Row, scale: &TimeScale, point: &EditPoint) {
+/// trims; drawn at `at`, which is the playhead while a dynamic trim plays.
+pub fn paint(painter: &Painter, row: &Row, scale: &TimeScale, point: &EditPoint, at: Ticks) {
     if !point.tracks.contains(&row.track) {
         return;
     }
-    let x = scale.x(point.at);
+    let x = scale.x(at);
     let (top, bottom) = (row.top + 2.0, row.bottom() - 2.0);
     let (color, sides): (Color32, &[f32]) = match point.trim {
         TrimType::Roll => (Color32::from_rgb(230, 60, 60), &[-1.0, 1.0]),

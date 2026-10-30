@@ -49,6 +49,9 @@ pub fn handle(editor: &mut Editor, ctx: &egui::Context) {
 
 pub(crate) fn run(editor: &mut Editor, command: Command) {
     if let Some(key) = command.transport() {
+        if editor.focus == Focus::Program && editor.dynamic_trim(key) {
+            return;
+        }
         let player = match editor.focus {
             Focus::Source => editor
                 .source
