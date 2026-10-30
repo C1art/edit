@@ -14,7 +14,8 @@ fn default_transitions_go_on_cuts_between_chosen_clips_and_their_free_ends() {
     timeline
         .apply(ApplyTransitions {
             clips: vec![first, second],
-            transition: dissolve,
+            video: dissolve,
+            audio: dissolve,
         })
         .unwrap();
     let edges: Vec<_> = timeline.sequence().video[0]
@@ -47,7 +48,8 @@ fn removing_transitions_clears_the_cut_after_a_chosen_clip_but_not_before_it() {
     timeline
         .apply(ApplyTransitions {
             clips: clips.clone(),
-            transition: dissolve,
+            video: dissolve,
+            audio: dissolve,
         })
         .unwrap();
     timeline

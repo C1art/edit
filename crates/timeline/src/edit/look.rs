@@ -61,13 +61,14 @@ impl Edit for SetTransition {
     }
 }
 
-/// Puts `transition` at each edit point of `clips`: the cuts between two of them and
-/// the ends that meet no other clip. Transitions already there stay; none runs longer
-/// than the clips it joins.
+/// Puts `video` or `audio` at each edit point of `clips`, by the kind of track: the cuts
+/// between two of them and the ends that meet no other clip. Transitions already there
+/// stay; none runs longer than the clips it joins.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApplyTransitions {
     pub clips: Vec<ClipId>,
-    pub transition: Transition,
+    pub video: Transition,
+    pub audio: Transition,
 }
 
 impl Edit for ApplyTransitions {
@@ -78,7 +79,11 @@ impl Edit for ApplyTransitions {
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
         let chosen: HashSet<ClipId> = self.clips.iter().copied().collect();
         let mut edges = Vec::new();
-        for (_, track) in sequence.tracks().filter(|(_, track)| !track.locked) {
+        for (track_ref, track) in sequence.tracks().filter(|(_, track)| !track.locked) {
+            let transition = match track_ref.kind {
+                TrackKind::Video => self.video,
+                TrackKind::Audio => self.audio,
+            };
             let clips = &track.clips;
             for (index, clip) in clips.iter().enumerate() {
                 if !chosen.contains(&clip.id) {
@@ -91,25 +96,25 @@ impl Edit for ApplyTransitions {
                 let next = clips.get(index + 1).filter(|next| next.start == clip.end());
                 match previous {
                     _ if clip.transition_in.is_some() => {}
-                    None => edges.push((clip.id, Edge::Head, clip.duration)),
+                    None => edges.push((clip.id, Edge::Head, transition, clip.duration)),
                     Some(previous) if chosen.contains(&previous.id) => {
                         let shorter = clip.duration.min(previous.duration);
-                        edges.push((clip.id, Edge::Head, shorter));
+                        edges.push((clip.id, Edge::Head, transition, shorter));
                     }
                     Some(_) => {}
                 }
                 if next.is_none() && clip.transition_out.is_none() {
-                    edges.push((clip.id, Edge::Tail, clip.duration));
+                    edges.push((clip.id, Edge::Tail, transition, clip.duration));
                 }
             }
         }
         if edges.is_empty() {
             return Err(TimelineError::NothingToEdit);
         }
-        for (id, edge, longest) in edges {
+        for (id, edge, transition, longest) in edges {
             let transition = Some(Transition {
-                duration: self.transition.duration.min(longest),
-                ..self.transition
+                duration: transition.duration.min(longest),
+                ..transition
             });
             let clip = ops::clip_mut(sequence, id)?;
             match edge {
