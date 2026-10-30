@@ -120,3 +120,47 @@ impl Edit for ApplyTransitions {
         Ok(())
     }
 }
+
+/// Takes off every transition touching `clips`, including one held by the clip after a
+/// chosen clip on the cut they share.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoveTransitions {
+    pub clips: Vec<ClipId>,
+}
+
+impl Edit for RemoveTransitions {
+    fn name(&self) -> &'static str {
+        "Remove Transitions"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let chosen: HashSet<ClipId> = self.clips.iter().copied().collect();
+        let mut cleared = Vec::new();
+        for (_, track) in sequence.tracks().filter(|(_, track)| !track.locked) {
+            let mut previous_chosen_end = None;
+            for clip in &track.clips {
+                let picked = chosen.contains(&clip.id);
+                let clear_in = clip.transition_in.is_some()
+                    && (picked || previous_chosen_end == Some(clip.start));
+                let clear_out = picked && clip.transition_out.is_some();
+                if clear_in || clear_out {
+                    cleared.push((clip.id, clear_in, clear_out));
+                }
+                previous_chosen_end = picked.then(|| clip.end());
+            }
+        }
+        if cleared.is_empty() {
+            return Err(TimelineError::NothingToEdit);
+        }
+        for (id, clear_in, clear_out) in cleared {
+            let clip = ops::clip_mut(sequence, id)?;
+            if clear_in {
+                clip.transition_in = None;
+            }
+            if clear_out {
+                clip.transition_out = None;
+            }
+        }
+        Ok(())
+    }
+}
