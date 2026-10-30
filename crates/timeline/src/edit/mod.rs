@@ -48,7 +48,7 @@ pub use enable::SetClipsEnabled;
 pub use frame_size::{FrameFit, SetToFrameSize};
 pub use generate::{AddGenerated, SetGenerator};
 pub use group::SetGrouped;
-pub use hold::AddFrameHold;
+pub use hold::{AddFrameHold, InsertFrameHold};
 pub use interpret::InterpretFootage;
 pub use label::{RenameClips, SetClipLabel};
 pub use levels::{
