@@ -60,6 +60,21 @@ impl Viewer {
         }
     }
 
+    /// Shows the picture's transparent parts over a checkerboard, or over black.
+    pub fn set_transparency_grid(&mut self, shown: bool) {
+        let Some(monitor) = &mut self.monitor else {
+            return;
+        };
+        if !monitor.set_transparency_grid(shown) {
+            return;
+        }
+        let format = self.player.sequence().format;
+        if let Some(frame) = self.player.current_frame() {
+            // A failure shows on the next frame presented, which reports it.
+            let _ = monitor.present(frame, (format.width, format.height));
+        }
+    }
+
     pub fn scope(&self) -> Option<TextureId> {
         self.monitor.as_ref().and_then(Monitor::scope)
     }

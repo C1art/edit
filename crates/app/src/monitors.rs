@@ -203,9 +203,10 @@ fn program(editor: &mut Editor, ui: &mut egui::Ui) {
     let focused = editor.focus == Focus::Program;
     let name = format!("Program: {}", editor.shown_sequence_name());
     title(ui, &name, focused);
-    if editor.program.is_none() {
+    let Some(program) = &mut editor.program else {
         return;
-    }
+    };
+    program.set_transparency_grid(editor.transparency_grid);
     if trim_picture(editor, ui).is_none()
         && crate::comparison::ui(editor, ui, picture_size(ui)).is_none()
     {
@@ -258,6 +259,8 @@ fn program(editor: &mut Editor, ui: &mut egui::Ui) {
     if let Some(settings) = pressed.settings {
         egui::Popup::menu(&settings).show(|ui| {
             ui.checkbox(&mut editor.safe_margins, "Safe Margins");
+            ui.checkbox(&mut editor.transparency_grid, "Transparency Grid")
+                .on_hover_text("A checkerboard where nothing covers the frame");
             ui.checkbox(
                 &mut editor.dropped_frame_indicator,
                 "Show Dropped Frame Indicator",

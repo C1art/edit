@@ -57,6 +57,7 @@ pub struct Editor {
     pub(crate) selection_followed: Option<Ticks>,
     /// Outlines the action and title safe areas over the program picture.
     pub(crate) safe_margins: bool,
+    pub(crate) transparency_grid: bool,
     pub(crate) dropped_frame_indicator: bool,
     pub(crate) full_screen: bool,
     pub(crate) transition_defaults: crate::transition_defaults::TransitionDefaults,
@@ -230,6 +231,7 @@ impl Editor {
             selection_follows_playhead: false,
             selection_followed: None,
             safe_margins: false,
+            transparency_grid: false,
             dropped_frame_indicator: false,
             full_screen: false,
             transition_defaults: crate::transition_defaults::TransitionDefaults::STANDARD,

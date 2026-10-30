@@ -88,6 +88,9 @@ pub enum Background {
     Black,
     /// Kept clear, so the presented frame carries the layers' coverage as its alpha.
     Transparent,
+    /// Kept clear, with the presented colors multiplied by their alpha, as a UI blends a
+    /// picture over what it draws beneath.
+    UnderUi,
 }
 
 /// Uploads source frames, composites them in linear light and presents the result to a
@@ -206,6 +209,10 @@ impl Compositor {
     }
 
     pub fn set_background(&mut self, background: Background) {
+        if (background == Background::UnderUi) != (self.background == Background::UnderUi) {
+            // The frame is presented premultiplied or not by how its targets are made.
+            self.targets = None;
+        }
         self.background = background;
     }
 
@@ -329,7 +336,7 @@ impl Compositor {
             &self.placed(&top),
             match self.background {
                 Background::Black => wgpu::Color::BLACK,
-                Background::Transparent => wgpu::Color::TRANSPARENT,
+                Background::Transparent | Background::UnderUi => wgpu::Color::TRANSPARENT,
             },
         );
         let display = self
@@ -410,7 +417,7 @@ impl Compositor {
         // Layers blend into the working frame with their colors multiplied by their
         // alpha. Over black that alpha stays whole and dividing it out changes nothing.
         let working = Placement {
-            premultiplied: true,
+            premultiplied: self.background != Background::UnderUi,
             ..Placement::FULL
         };
         let working_features = self.blit.write_placement(&self.queue, &placement, working);

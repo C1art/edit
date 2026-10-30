@@ -3,7 +3,7 @@ use std::time::Duration;
 use eframe::egui_wgpu::{self, wgpu};
 use egui::{Color32, Rect, Response, Sense, TextureId, Vec2};
 use playback::ComposedFrame;
-use render::{Compositor, LayerImage, Presented, RenderError, Scope};
+use render::{Background, Compositor, LayerImage, Presented, RenderError, Scope};
 
 /// A video monitor: composites frames on the GPU and shows the result in the UI.
 pub struct Monitor {
@@ -13,6 +13,8 @@ pub struct Monitor {
     scope: Option<TextureId>,
     /// The last frame asked for, while a shader it needs is still being built.
     pending: Option<(ComposedFrame, (u32, u32))>,
+    /// Whether the picture's transparent parts show a checkerboard rather than black.
+    transparency_grid: bool,
 }
 
 /// How often a monitor looks again for a shader being built.
@@ -28,6 +30,7 @@ impl Monitor {
             texture: None,
             scope: None,
             pending: None,
+            transparency_grid: false,
         }
     }
 
@@ -104,6 +107,20 @@ impl Monitor {
         self.scope
     }
 
+    /// Returns whether it changed, and so whether the frame needs presenting again.
+    pub fn set_transparency_grid(&mut self, shown: bool) -> bool {
+        if self.transparency_grid == shown {
+            return false;
+        }
+        self.transparency_grid = shown;
+        self.compositor.set_background(if shown {
+            Background::UnderUi
+        } else {
+            Background::Black
+        });
+        true
+    }
+
     /// Draws the picture letterboxed to `size` on a black background.
     pub fn ui(&self, ui: &mut egui::Ui, size: Vec2) -> Response {
         let (rect, response) = ui.allocate_exact_size(size, Sense::click());
@@ -120,6 +137,9 @@ impl Monitor {
             let frame = Vec2::new(width as f32, height as f32);
             let scale = (rect.width() / frame.x).min(rect.height() / frame.y);
             let shown = Rect::from_center_size(rect.center(), frame * scale);
+            if self.transparency_grid {
+                crate::transparency_grid::paint(painter, shown);
+            }
             let uv = Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
             painter.image(texture, shown, uv, Color32::WHITE);
         }
