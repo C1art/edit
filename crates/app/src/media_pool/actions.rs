@@ -46,6 +46,7 @@ impl Editor {
             }
             PoolAction::Interpret(id) => self.open_interpret_footage(id),
             PoolAction::AudioChannels(id) => self.open_audio_channels(id),
+            PoolAction::Timecode(id) => self.open_media_timecode(id),
             PoolAction::BreakoutToMono(id) => self.breakout_to_mono(id),
             PoolAction::Import => self.prompt_path(PathPurpose::Import),
             PoolAction::NewBin(parent) => self.new_bin(parent, None),

@@ -75,6 +75,10 @@ pub struct MediaItem {
     /// preference stood when it was imported; unset places them at their own size.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub frame_fit: Option<FrameFit>,
+    /// The timecode of the first frame, counted in frames at the rate the item plays:
+    /// the file's own, or as Modify > Timecode sets it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timecode: Option<i64>,
 }
 
 /// Which of a file's audio channels, counting from zero, play on the left and the right;
@@ -148,6 +152,14 @@ impl MediaItem {
             pixel_aspect: PixelAspect::SQUARE,
             ..video
         })
+    }
+
+    /// How far into the timecode clock the item's first frame is; zero without one.
+    pub fn start_timecode(&self, timebase: Timebase) -> Ticks {
+        match (self.timecode, self.played_format()) {
+            (Some(frame), Some(format)) => format.frame_rate.frame_start(frame, timebase),
+            _ => Ticks::ZERO,
+        }
     }
 
     /// Whether the file is read otherwise than it describes itself.

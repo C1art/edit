@@ -132,6 +132,7 @@ pub(super) fn import(editor: &mut Editor, frames: i64) {
         interpreted_rate: None,
         placed: None,
         frame_fit: None,
+        timecode: None,
     });
 }
 

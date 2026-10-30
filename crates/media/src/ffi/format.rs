@@ -212,6 +212,28 @@ impl InputContext {
         name.is_some_and(|name| name == "image2" || name.ends_with("_pipe"))
     }
 
+    /// The `timecode` tag cameras and editors write, as "01:00:00:00", on the container
+    /// or on any of its streams, as a timecode track's.
+    pub(crate) fn timecode_tag(&self) -> Option<String> {
+        // SAFETY: the context is open, so its metadata and each stream's are null or
+        // valid dictionaries it owns for as long as `self`.
+        let dictionaries = std::iter::once(unsafe { self.0.as_ref() }.metadata).chain(
+            self.raw_streams()
+                .iter()
+                .map(|&stream| unsafe { (*stream).metadata }),
+        );
+        dictionaries
+            .filter(|dictionary| !dictionary.is_null())
+            .find_map(|dictionary| {
+                // SAFETY: `dictionary` is a valid dictionary and the key a NUL-terminated
+                // static string; the entry returned, if any, lives in the dictionary.
+                unsafe {
+                    let entry = sys::av_dict_get(dictionary, c"timecode".as_ptr(), ptr::null(), 0);
+                    entry.as_ref().and_then(|entry| text(entry.value))
+                }
+            })
+    }
+
     /// Bits per second over the whole file, when the container knows it.
     pub(crate) fn bit_rate(&self) -> Option<u64> {
         // SAFETY: the context is open.

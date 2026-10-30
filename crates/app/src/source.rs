@@ -130,6 +130,8 @@ fn source_sequence(item: &MediaItem, pool: &Sequence) -> Sequence {
     let range = item.default_range(timebase);
     let conform = item.conform();
     let duration = conform.sequence_span(range.end - range.start);
+    // The monitor reads the media's own timecode, from where a subclip starts.
+    sequence.start_time = item.start_timecode(timebase) + conform.sequence_span(range.start);
     let track = |id| Track {
         clips: vec![Clip {
             conform,

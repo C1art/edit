@@ -14,6 +14,7 @@ fn replacing_a_clip_moves_it_and_its_link_onto_the_new_media_in_sync() {
             interpreted_rate: None,
             placed: None,
             frame_fit: None,
+            timecode: None,
         })
         .unwrap();
     let second = timeline.sequence().media[1].id;

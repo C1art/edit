@@ -14,6 +14,7 @@ fn relink(source: SourceId, path: &str, duration: i64) -> RelinkMedia {
             interpreted_rate: None,
             placed: None,
             frame_fit: None,
+            timecode: None,
         },
     }
 }
@@ -148,6 +149,7 @@ fn a_still_places_its_usual_length_but_holds_for_as_long_as_a_clip_runs() {
             interpreted_rate: None,
             placed: None,
             frame_fit: None,
+            timecode: None,
         })
         .unwrap();
     let still = timeline.sequence().media.last().unwrap().clone();
@@ -173,6 +175,7 @@ fn a_still_imported_with_its_own_length_places_that_long() {
             interpreted_rate: None,
             placed: Some(Ticks(180_000)),
             frame_fit: None,
+            timecode: None,
         })
         .unwrap();
     let still = timeline.sequence().media.last().unwrap();

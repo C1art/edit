@@ -35,6 +35,7 @@ fn routed() -> Timeline {
             interpreted_rate: None,
             placed: None,
             frame_fit: None,
+            timecode: None,
         })
         .unwrap();
     let source = timeline.sequence().media[0].id;

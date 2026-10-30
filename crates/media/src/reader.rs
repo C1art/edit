@@ -1,6 +1,8 @@
 use std::path::Path;
 
-use timeline::{ChannelMap, ColorSpace, FieldOrder, FrameRate, PixelAspect, Ticks, Timebase};
+use timeline::{
+    ChannelMap, ColorSpace, FieldOrder, FrameRate, PixelAspect, Ticks, Timebase, TypedTimecode,
+};
 
 use crate::channel_map::mapped;
 use crate::ffi::{
@@ -32,6 +34,9 @@ pub struct SourceInfo {
     pub still: bool,
     /// Numbered pictures read as one video.
     pub sequence: bool,
+    /// The timecode of the first frame, in frames at the video's rate, when the file
+    /// carries one.
+    pub timecode: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -155,7 +160,7 @@ impl MediaReader {
                 .set_field_order(input.field_order(video.index));
             video.converter.set_turn(input.display_turn(video.index));
         }
-        let info = SourceInfo {
+        let mut info = SourceInfo {
             duration: input.duration().map(to_ticks),
             video: video.as_ref().map(|video| {
                 let turn = input.display_turn(video.index);
@@ -180,7 +185,11 @@ impl MediaReader {
             has_audio: audio.is_some(),
             still: input.is_image() && !sequence,
             sequence,
+            timecode: None,
         };
+        let rate = info.video.as_ref().and_then(|video| video.frame_rate);
+        let tag = rate.zip(input.timecode_tag());
+        info.timecode = tag.and_then(|(rate, tag)| TypedTimecode::frame_of_label(&tag, rate));
         let picture_step = info
             .video
             .as_ref()

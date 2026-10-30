@@ -56,6 +56,7 @@ fn fixture() -> (Timeline, Vec<SourceId>) {
                 interpreted_rate: None,
                 placed: None,
                 frame_fit: None,
+                timecode: None,
             })
             .unwrap();
     }

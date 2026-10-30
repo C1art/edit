@@ -83,6 +83,30 @@ impl Edit for SetMediaLog {
     }
 }
 
+/// Modify > Timecode: where a file's timecode starts, in frames at the rate it plays, or
+/// `None` to count from zero.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetMediaTimecode {
+    pub source: SourceId,
+    pub timecode: Option<i64>,
+}
+
+impl Edit for SetMediaTimecode {
+    fn name(&self) -> &'static str {
+        "Modify Timecode"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let item = media_item(sequence, self.source)?;
+        let timecode = self.timecode.filter(|&frame| frame > 0);
+        if !item.is_file() || item.video.is_none() || item.timecode == timecode {
+            return Err(TimelineError::NothingToEdit);
+        }
+        item.timecode = timecode;
+        Ok(())
+    }
+}
+
 /// Points a media item at another file, as when the original moved or a better render
 /// replaces it. Clips keep their source times, so the file must be long enough for them.
 #[derive(Debug, Clone, PartialEq, Eq)]

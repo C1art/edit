@@ -95,6 +95,7 @@ impl Edit for MergeClips {
             channel_map: None,
             placed: None,
             frame_fit: None,
+            timecode: None,
         });
         sequence.fit_nest(id);
         Ok(())

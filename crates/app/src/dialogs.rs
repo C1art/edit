@@ -14,6 +14,7 @@ pub(crate) fn show(editor: &mut Editor, ctx: &egui::Context) {
     crate::transition_duration_dialog::dialog(editor, ctx);
     crate::interpret_dialog::dialog(editor, ctx);
     crate::channels_dialog::dialog(editor, ctx);
+    crate::timecode_dialog::dialog(editor, ctx);
     crate::sequence_settings::dialog(editor, ctx);
     crate::automate_dialog::dialog(editor, ctx);
     crate::simplify_dialog::dialog(editor, ctx);

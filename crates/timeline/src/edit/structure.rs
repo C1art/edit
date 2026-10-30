@@ -187,6 +187,8 @@ pub struct ImportMedia {
     pub placed: Option<Ticks>,
     /// How clips of the pictures are scaled to the sequence frame when placed.
     pub frame_fit: Option<FrameFit>,
+    /// The file's start timecode, in frames at its rate.
+    pub timecode: Option<i64>,
 }
 
 impl Edit for ImportMedia {
@@ -222,6 +224,7 @@ impl Edit for ImportMedia {
             channel_map: None,
             placed: self.placed,
             frame_fit: self.frame_fit,
+            timecode: self.timecode,
         });
         Ok(())
     }

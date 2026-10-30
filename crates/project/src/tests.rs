@@ -46,6 +46,7 @@ fn sample() -> ProjectFile {
         channel_map: None,
         placed: None,
         frame_fit: None,
+        timecode: Some(90_000),
     });
     Arc::make_mut(&mut sequence.media).push(MediaItem {
         id: SourceId(2),
@@ -98,6 +99,7 @@ fn sample() -> ProjectFile {
         channel_map: None,
         placed: None,
         frame_fit: None,
+        timecode: None,
     });
     sequence.bins = vec![
         Bin {
@@ -152,6 +154,7 @@ fn sample() -> ProjectFile {
         channel_map: None,
         placed: None,
         frame_fit: None,
+        timecode: None,
     });
     let mut clip = Clip::new(ClipId(7), SourceId(1), Ticks(0), Ticks(90_000), Ticks(3));
     clip.gain = Gain(-600);

@@ -19,6 +19,7 @@ fn import_wide(timeline: &mut Timeline, frame_fit: Option<FrameFit>) -> SourceId
             interpreted_rate: None,
             placed: None,
             frame_fit,
+            timecode: None,
         })
         .unwrap();
     timeline.sequence().media.last().unwrap().id

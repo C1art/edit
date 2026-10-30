@@ -75,7 +75,7 @@ pub use look::{ApplyTransitions, RemoveTransitions, SetClipLook, SetTransition};
 pub use marker::{AddMarker, ClearMarkers, MarkerOwner, RemoveMarker, UpdateMarker};
 pub use media::{
     BreakoutToMono, DuplicateMedia, MakeOffline, MakeSubclip, RelinkMedia, RenameMedia,
-    SetChannelMap, SetMediaLog,
+    SetChannelMap, SetMediaLog, SetMediaTimecode,
 };
 pub use merge::MergeClips;
 pub use multicam::{CreateMulticam, FlattenMulticam, SwitchAngle};

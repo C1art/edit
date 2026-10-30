@@ -100,6 +100,7 @@ impl Sequence {
             channel_map: None,
             placed: None,
             frame_fit: None,
+            timecode: None,
         });
         let mut whole = Clip::new(
             ClipId(view.ids.next()),

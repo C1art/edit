@@ -138,6 +138,20 @@ pub enum TypedTimecode {
 }
 
 impl TypedTimecode {
+    /// The frame a written timecode such as a file's tag names; drop-frame when a `;`
+    /// splits its fields, as SMPTE writes it.
+    pub fn frame_of_label(label: &str, rate: FrameRate) -> Option<i64> {
+        let display = if label.contains(';') {
+            TimeDisplay::Timecode
+        } else {
+            TimeDisplay::NonDropTimecode
+        };
+        match Self::parse(label, rate, display)? {
+            Self::At(frame) => Some(frame),
+            Self::By(_) => None,
+        }
+    }
+
     /// Reads timecode as Premiere's fields take it: `HH:MM:SS:FF` with the leading
     /// fields optional, or bare digits read in pairs from the right, so `500` at any
     /// rate is five seconds. Shown as frames, bare digits count frames.
@@ -230,6 +244,24 @@ mod tests {
         Some(rate) => rate,
         None => unreachable!(),
     };
+
+    #[test]
+    fn file_timecode_labels_read_drop_frame_only_with_semicolons() {
+        let pal = FrameRate::new(25, 1).unwrap();
+        assert_eq!(
+            TypedTimecode::frame_of_label("01:00:00:00", pal),
+            Some(90_000)
+        );
+        assert_eq!(
+            TypedTimecode::frame_of_label("01:00:00;00", NTSC),
+            Some(107_892)
+        );
+        assert_eq!(
+            TypedTimecode::frame_of_label("01:00:00:00", NTSC),
+            Some(108_000)
+        );
+        assert_eq!(TypedTimecode::frame_of_label("-00:00:01:00", pal), None);
+    }
 
     #[test]
     fn frame_at_floors_within_a_frame() {

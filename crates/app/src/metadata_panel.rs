@@ -195,8 +195,11 @@ fn clip_section(editor: &Editor, ui: &mut egui::Ui, id: ClipId) {
                 row("Sequence In", timecode(clip.start + sequence.start_time));
                 row("Sequence Out", timecode(clip.end() + sequence.start_time));
                 row("Duration", timecode(clip.duration));
-                row("Media In", timecode(clip.source_in));
-                row("Media Out", timecode(clip.source_out()));
+                let media_start = sequence
+                    .media_item(clip.source)
+                    .map_or(Ticks::ZERO, |item| item.start_timecode(timebase));
+                row("Media In", timecode(media_start + clip.source_in));
+                row("Media Out", timecode(media_start + clip.source_out()));
                 let mut speed = format!("{:.2}%", clip.speed.percent());
                 if clip.reverse {
                     speed.push_str(", reversed");
@@ -244,6 +247,11 @@ fn file_section(editor: &mut Editor, ui: &mut egui::Ui, media: &MediaItem) {
                     "Duration",
                     duration(media.duration, timebase, rate, display),
                 );
+                if let (Some(_), Some(format)) = (media.timecode, media.played_format()) {
+                    let start = media.start_timecode(timebase);
+                    let shown = Timecode::shown(start, timebase, format.frame_rate, display);
+                    row("Media Start", shown.to_string());
+                }
                 if let Some(range) = &media.subclip {
                     let timecode =
                         |ticks| Timecode::shown(ticks, timebase, rate, display).to_string();

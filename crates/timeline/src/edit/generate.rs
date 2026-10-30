@@ -76,6 +76,7 @@ pub(super) fn generated_item(
         channel_map: None,
         placed: None,
         frame_fit: None,
+        timecode: None,
     }
 }
 

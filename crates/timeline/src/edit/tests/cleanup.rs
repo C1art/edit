@@ -12,6 +12,7 @@ fn import(timeline: &mut Timeline, name: &str, path: &str) -> SourceId {
             interpreted_rate: None,
             placed: None,
             frame_fit: None,
+            timecode: None,
         })
         .unwrap();
     timeline.sequence().media.last().unwrap().id

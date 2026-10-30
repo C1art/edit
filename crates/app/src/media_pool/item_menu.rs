@@ -127,6 +127,9 @@ impl Pool<'_> {
             if ui.button("Interpret Footage…").clicked() {
                 self.action = Some(PoolAction::Interpret(item.id));
             }
+            if ui.button("Modify Timecode…").clicked() {
+                self.action = Some(PoolAction::Timecode(item.id));
+            }
             ui.separator();
             let can_build = self.proxies.is_some() && building.is_none();
             proxy_menu(ui, item, can_build, &mut self.action);

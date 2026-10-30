@@ -174,10 +174,18 @@ impl Frames<'_> {
             .map_or(self.sequence.format.frame_rate, |video| video.frame_rate)
     }
 
+    /// The source frame on the file's own timecode clock.
     fn source(&self, clip: &Clip, position: Ticks) -> i64 {
         let time = clip.source_time(position).max(Ticks::ZERO);
-        self.source_rate(clip)
-            .frame_at(time, self.sequence.timebase)
+        let start = self
+            .sequence
+            .media_item(clip.source)
+            .and_then(|item| item.timecode)
+            .unwrap_or(0);
+        start
+            + self
+                .source_rate(clip)
+                .frame_at(time, self.sequence.timebase)
     }
 
     /// The line playing `clip` over `record`, its source running as long as the record

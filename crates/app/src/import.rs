@@ -152,5 +152,8 @@ pub(crate) fn probe(
         interpreted_rate: info.sequence.then_some(sequence_rate),
         placed: None,
         frame_fit: None,
+        timecode: info
+            .timecode
+            .filter(|_| info.video.is_some() && !info.still),
     })
 }

@@ -142,6 +142,7 @@ mod tests {
                 interpreted_rate: None,
                 placed: None,
                 frame_fit: None,
+                timecode: None,
             };
             timeline.apply(import).unwrap();
         }
