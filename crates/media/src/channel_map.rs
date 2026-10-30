@@ -55,6 +55,8 @@ mod tests {
         let Some(DecodedFrame::Audio(buffer)) = reader.next_frame().unwrap() else {
             panic!("no sound");
         };
+        // Windows won't remove a file that is still open.
+        drop(reader);
         std::fs::remove_file(&path).unwrap();
         assert_eq!(buffer.channels, 2);
         let level = |value: i16| f32::from(value) / 32_768.0;

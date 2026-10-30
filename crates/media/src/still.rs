@@ -76,6 +76,8 @@ mod tests {
             let Some(DecodedFrame::Video(frame)) = reader.next_frame().unwrap() else {
                 panic!("{} has no picture", format.name());
             };
+            // Windows won't remove a file that is still open.
+            drop(reader);
             std::fs::remove_file(&path).unwrap();
             assert_eq!((frame.width, frame.height), size);
             assert_eq!(frame.pixels, rgba, "{}", format.name());

@@ -354,6 +354,8 @@ mod tests {
             let off = got.iter().zip(wanted).map(|(&a, b)| a.abs_diff(b)).max();
             assert!(off < Some(4), "{got:?} for {wanted:?}");
         }
+        // Windows won't remove a file that is still open.
+        drop(reader);
         std::fs::remove_file(&path).unwrap();
     }
 
@@ -389,6 +391,8 @@ mod tests {
         let alpha = |x: usize| frame.pixels[(18 * 64 + x) * 4 + 3];
         assert!(alpha(8) < 4, "{}", alpha(8));
         assert!(alpha(56) > 251, "{}", alpha(56));
+        // Windows won't remove a file that is still open.
+        drop(reader);
         std::fs::remove_file(&path).unwrap();
     }
 }

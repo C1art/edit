@@ -134,8 +134,11 @@ mod tests {
         let path = dir.join("proxy.mp4");
         create_proxy(&fixture, &path, 120, |_| ControlFlow::Continue(())).unwrap();
 
-        let reader = MediaReader::open(&path, Timebase::HZ_90K).unwrap();
-        let info = reader.info().clone();
+        let info = MediaReader::open(&path, Timebase::HZ_90K)
+            .unwrap()
+            .info()
+            .clone();
+        // The reader is gone by now, as Windows won't remove a file that is still open.
         std::fs::remove_dir_all(&dir).unwrap();
         let video = info.video.unwrap();
         assert_eq!((video.width, video.height), (160, 120));

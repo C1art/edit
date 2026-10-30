@@ -110,5 +110,7 @@ fn prores_4444_export_is_clear_where_nothing_is_drawn() {
         "{:?}",
         rgba(32, 18)
     );
+    // Windows won't remove a file that is still open.
+    drop(reader);
     std::fs::remove_file(&path).unwrap();
 }
