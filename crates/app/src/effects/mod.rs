@@ -65,7 +65,10 @@ pub use matte_overlay::matte_overlay;
 pub use motion_overlay::motion_overlay;
 pub(crate) use sound::track_effect_controls;
 pub(crate) use sound::{category as audio_category, CATEGORIES as AUDIO_CATEGORIES};
-pub use transitions::{add_transition, apply_default_transition, apply_transition};
+pub use transitions::{
+    add_transition, apply_default_transition, apply_default_transitions_to_selection,
+    apply_transition,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SideTab {

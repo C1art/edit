@@ -46,6 +46,7 @@ pub enum Command {
     SelectAtPlayhead,
     VideoTransition,
     AudioTransition,
+    TransitionsToSelection,
     LiftMarked,
     ExtractMarked,
     RippleTrimPrevious,
@@ -130,7 +131,7 @@ pub enum Command {
 pub const WORKSPACE_SLOTS: u8 = 9;
 
 impl Command {
-    pub const ALL: [Self; 130] = [
+    pub const ALL: [Self; 131] = [
         Self::NewProject,
         Self::OpenProject,
         Self::Save,
@@ -176,6 +177,7 @@ impl Command {
         Self::SelectAtPlayhead,
         Self::VideoTransition,
         Self::AudioTransition,
+        Self::TransitionsToSelection,
         Self::LiftMarked,
         Self::ExtractMarked,
         Self::RippleTrimPrevious,
@@ -293,6 +295,7 @@ impl Command {
             | SelectAtPlayhead
             | VideoTransition
             | AudioTransition
+            | TransitionsToSelection
             | LiftMarked
             | ExtractMarked
             | RippleTrimPrevious

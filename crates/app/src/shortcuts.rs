@@ -128,6 +128,9 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         Command::AudioTransition => {
             crate::effects::apply_default_transition(editor, TrackKind::Audio);
         }
+        Command::TransitionsToSelection => {
+            crate::effects::apply_default_transitions_to_selection(editor);
+        }
         Command::LiftMarked => editor.lift_marked(),
         Command::ExtractMarked => editor.extract_marked(),
         Command::RippleTrimPrevious => editor.ripple_trim_to_playhead(Edge::Head),

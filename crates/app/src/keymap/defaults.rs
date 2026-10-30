@@ -57,6 +57,7 @@ impl Command {
             Self::SelectAtPlayhead => vec![plain(Key::D)],
             Self::VideoTransition => vec![ctrl(Key::D)],
             Self::AudioTransition => vec![ctrl_shift(Key::D)],
+            Self::TransitionsToSelection => vec![shift(Key::D)],
             Self::LiftMarked => vec![plain(Key::Semicolon)],
             Self::ExtractMarked => vec![plain(Key::Quote)],
             Self::RippleTrimPrevious => vec![plain(Key::Q)],

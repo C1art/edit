@@ -62,6 +62,10 @@ impl Command {
             Self::SelectAtPlayhead => ("select_at_playhead", "Select Clip at Playhead"),
             Self::VideoTransition => ("video_transition", "Apply Video Transition"),
             Self::AudioTransition => ("audio_transition", "Apply Audio Transition"),
+            Self::TransitionsToSelection => (
+                "default_transitions_to_selection",
+                "Apply Default Transitions to Selection",
+            ),
             Self::LiftMarked => ("lift_marked", "Lift"),
             Self::ExtractMarked => ("extract_marked", "Extract"),
             Self::RippleTrimPrevious => (

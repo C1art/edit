@@ -114,6 +114,11 @@ fn on_selection(editor: &mut Editor, ui: &mut Ui) {
     if ui.add(speed).clicked() {
         editor.speed_duration();
     }
+    let transitions = Button::new("Apply Default Transitions")
+        .shortcut_text(editor.keymap.label(Command::TransitionsToSelection));
+    if ui.add(transitions).clicked() {
+        crate::effects::apply_default_transitions_to_selection(editor);
+    }
     if ui.button("Rename…").clicked() {
         editor.rename_clips();
     }

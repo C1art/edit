@@ -1,7 +1,7 @@
 use egui::DragValue;
 use timeline::{
-    nearest_transition_edge, Alignment, Clip, Edge, Rgb, Sequence, SetTransition, Side, Sweep,
-    Ticks, TrackKind, TrackRef, Transition, TransitionKind,
+    nearest_transition_edge, Alignment, ApplyTransitions, Clip, Edge, Rgb, Sequence, SetTransition,
+    Side, Sweep, Ticks, TrackKind, TrackRef, Transition, TransitionKind,
 };
 
 use crate::editor::Editor;
@@ -195,6 +195,16 @@ pub fn apply_transition(editor: &mut Editor, kind: TrackKind, transition: Transi
         TrackKind::Audio => TrackRef::audio(targets.audio.unwrap_or(0)),
     };
     add_transition(editor, track, editor.playhead(), transition);
+}
+
+/// Puts the default transition at every cut between the selected clips and at their
+/// free ends, on video and audio alike.
+pub fn apply_default_transitions_to_selection(editor: &mut Editor) {
+    let clips = editor.view.selection.clone();
+    let transition = default_transition(editor.timeline.sequence());
+    if !editor.apply(ApplyTransitions { clips, transition }) {
+        editor.notice("Select clips with an edit point that has no transition yet");
+    }
 }
 
 /// Puts a `kind` transition at the cut or clip end on `track` nearest `at`, keeping the
