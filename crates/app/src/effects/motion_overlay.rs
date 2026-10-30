@@ -1,6 +1,7 @@
 use egui::{Color32, CursorIcon, Pos2, Sense, Shape, Stroke, Vec2};
 use timeline::{Clip, Motion, Param, SetClipLook, Ticks, TrackKind};
 
+use super::motion_path::MotionPath;
 use super::motion_snap::{snap, Guides};
 use super::picture_frame::PictureFrame;
 use super::{adjust_look, keyframe_time, shown_look, SideTab};
@@ -23,6 +24,8 @@ enum Grip {
     Rotate,
     /// Moves the anchor point, and the position with it so the picture stays put.
     Anchor,
+    /// Moves the position keyframe at this source time along the motion path.
+    Key(Ticks),
 }
 
 /// A drag in progress: what it holds, where it started and the motion it started from.
@@ -46,8 +49,9 @@ struct Start {
 /// Outlines the selected clip's picture over the program picture in `area` while the
 /// effect controls show, as Premiere does with Motion selected: dragging inside moves
 /// it, snapping its edges and center to the frame's unless Ctrl is held, a corner scales
-/// it, just past a corner turns it and the cross moves its anchor point. Masked clips
-/// leave the picture to their mask handles.
+/// it, just past a corner turns it and the cross moves its anchor point. An animated
+/// position shows its path, whose keyframes drag. Masked clips leave the picture to
+/// their mask handles.
 pub fn motion_overlay(editor: &mut Editor, ui: &egui::Ui, area: egui::Rect) {
     if editor.side_tab != SideTab::EffectControls {
         return;
@@ -64,8 +68,22 @@ pub fn motion_overlay(editor: &mut Editor, ui: &egui::Ui, area: egui::Rect) {
     let per_pixel = frame.shown.width() / sequence.format.width.max(1) as f32;
     let corners = corners(&frame);
     let guide_lines = crate::guides::snap_lines(editor, frame.shown);
+    let frames = (sequence.format.frame_rate, sequence.timebase);
+    let path_of =
+        |motion: &Motion| MotionPath::of(&clip, motion, frames, frame.shown.center(), per_pixel);
+    let path = path_of(&look.motion);
+    let mut reach = frame.shown.expand(ROTATE_REACH);
+    if let Some(path) = &path {
+        reach = reach.union(path.bounds());
+    }
+    let grip_at = |pointer| {
+        path.as_ref()
+            .and_then(|path| path.key_at(pointer))
+            .map(Grip::Key)
+            .or_else(|| grip_at(&frame, &corners, pointer))
+    };
     let id = ui.make_persistent_id(("motion_overlay", clip.id));
-    let response = ui.interact(frame.shown.expand(ROTATE_REACH), id, Sense::drag());
+    let response = ui.interact(reach, id, Sense::drag());
     let mut held = ui.data(|data| data.get_temp::<Held>(id));
     let (down, shift, free) = ui.input(|input| {
         let modifiers = input.modifiers;
@@ -80,11 +98,14 @@ pub fn motion_overlay(editor: &mut Editor, ui: &egui::Ui, area: egui::Rect) {
     if held.is_none() && response.drag_started() {
         let origin = ui.input(|input| input.pointer.press_origin());
         held = origin
-            .and_then(|origin| Some((origin, grip_at(&frame, &corners, origin)?)))
+            .and_then(|origin| Some((origin, grip_at(origin)?)))
             .map(|(from, grip)| Held {
                 grip,
                 from,
-                motion: Start::at(&look.motion, time),
+                motion: Start::at(
+                    &look.motion,
+                    if let Grip::Key(key) = grip { key } else { time },
+                ),
             });
     }
     if let Some(drag) = held {
@@ -115,6 +136,7 @@ pub fn motion_overlay(editor: &mut Editor, ui: &egui::Ui, area: egui::Rect) {
                     };
                     set_position(motion, time, wanted + nudge / per_pixel.max(f32::EPSILON));
                 }
+                Grip::Key(key) => move_path_key(motion, key, start.position + dragged),
                 Grip::Anchor => {
                     // The picture holds still, so its frame is the same as at the start.
                     let moved = frame.to_picture(pointer) - frame.to_picture(drag.from);
@@ -151,10 +173,10 @@ pub fn motion_overlay(editor: &mut Editor, ui: &egui::Ui, area: egui::Rect) {
     }
     let hovered = held
         .map(|drag| drag.grip)
-        .or_else(|| grip_at(&frame, &corners, response.hover_pos()?));
+        .or_else(|| grip_at(response.hover_pos()?));
     if let Some(grip) = hovered {
         ui.ctx().set_cursor_icon(match grip {
-            Grip::Move => CursorIcon::Move,
+            Grip::Move | Grip::Key(_) => CursorIcon::Move,
             Grip::Scale => CursorIcon::ResizeNwSe,
             Grip::Rotate => CursorIcon::Alias,
             Grip::Anchor => CursorIcon::Crosshair,
@@ -166,6 +188,9 @@ pub fn motion_overlay(editor: &mut Editor, ui: &egui::Ui, area: egui::Rect) {
         }
         None => data.remove::<Held>(id),
     });
+    if let Some(path) = path_of(&look.motion) {
+        path.paint(ui.painter(), time);
+    }
     paint(ui, &corners, &frame);
     guides.paint(ui, frame.shown);
     if change.is_some() {
@@ -201,6 +226,27 @@ impl Start {
             anchor: pair(&motion.anchor),
         }
     }
+}
+
+/// Position moves as one point, as in Premiere: an axis holding still is keyed where
+/// the other is first, so moving one keyframe leaves the rest of the path in place.
+fn move_path_key(motion: &mut Motion, key: Ticks, position: Vec2) {
+    let [x, y] = &mut motion.position;
+    let times: Vec<Ticks> = x.keys.iter().chain(&y.keys).map(|key| key.time).collect();
+    for param in [x, y] {
+        if param.is_animated() {
+            continue;
+        }
+        let value = param.value();
+        for &time in &times {
+            if param.is_animated() {
+                param.set_at(time, value);
+            } else {
+                param.toggle_animation(time);
+            }
+        }
+    }
+    set_position(motion, key, position);
 }
 
 fn set_position(motion: &mut Motion, time: Ticks, position: Vec2) {
@@ -264,4 +310,23 @@ fn paint(ui: &egui::Ui, corners: &[Pos2; 4], frame: &PictureFrame) {
         );
     }
     painter.circle_stroke(anchor, cross * 0.6, Stroke::new(1.0, OUTLINE));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn moving_a_path_key_keys_the_still_axis_and_leaves_the_other_keys() {
+        let mut motion = Motion::default();
+        let [x, y] = &mut motion.position;
+        x.toggle_animation(Ticks(0));
+        x.set_at(Ticks(1_000), 300.0);
+        *y = Param::from_value(5.0);
+        move_path_key(&mut motion, Ticks(0), Vec2::new(10.0, 20.0));
+        let [x, y] = &motion.position;
+        let at = |time| (x.value_at(Ticks(time)), y.value_at(Ticks(time)));
+        assert_eq!(at(0), (10.0, 20.0));
+        assert_eq!(at(1_000), (300.0, 5.0));
+    }
 }
