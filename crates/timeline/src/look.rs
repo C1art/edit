@@ -46,6 +46,21 @@ impl Motion {
         .into_iter()
     }
 
+    pub fn params(&self) -> impl Iterator<Item = &Param> {
+        let [x, y] = &self.position;
+        let [anchor_x, anchor_y] = &self.anchor;
+        [
+            x,
+            y,
+            &self.scale,
+            &self.scale_width,
+            &self.rotation,
+            anchor_x,
+            anchor_y,
+        ]
+        .into_iter()
+    }
+
     /// Percent of the width and of the height at source time `time`.
     pub fn scale_at(&self, time: Ticks) -> [f32; 2] {
         let height = self.scale.value_at(time);
@@ -175,13 +190,11 @@ impl Look {
 
 impl Look {
     pub fn params(&self) -> impl Iterator<Item = &Param> {
-        let motion = &self.motion;
         let crop = &self.crop;
         let effects = self.effects.iter().flat_map(VideoEffect::params);
-        motion
-            .position
-            .iter()
-            .chain([&motion.scale, &motion.rotation, &self.opacity])
+        self.motion
+            .params()
+            .chain([&self.opacity])
             .chain([&crop.left, &crop.top, &crop.right, &crop.bottom])
             .chain(self.masks.iter().flat_map(Mask::params))
             .chain(effects)
@@ -197,5 +210,20 @@ impl Look {
         times.sort_unstable();
         times.dedup();
         times
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reading_and_changing_visit_the_same_params() {
+        let mut look = Look::default();
+        for (index, param) in look.params_mut().enumerate() {
+            param.toggle_key(Ticks(i64::try_from(index).unwrap()));
+        }
+        let keyed = look.params().filter(|param| param.is_animated()).count();
+        assert_eq!(keyed, look.params_mut().count());
     }
 }
