@@ -117,6 +117,34 @@ impl Edit for RemoveTimeRemap {
     }
 }
 
+/// Keeps the pitch of a remapped clip's sound, and of the sound playing in step with
+/// it, as its speed changes, or lets the pitch follow the speed as on tape.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetMaintainPitch {
+    pub clip: ClipId,
+    pub maintain: bool,
+}
+
+impl Edit for SetMaintainPitch {
+    fn name(&self) -> &'static str {
+        "Maintain Audio Pitch"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let ids = in_step(sequence, self.clip);
+        let mut changed = false;
+        for id in ids {
+            let clip = ops::clip_mut(sequence, id)?;
+            changed |= clip.maintain_pitch != self.maintain;
+            clip.maintain_pitch = self.maintain;
+        }
+        if !changed {
+            return Err(TimelineError::NothingToEdit);
+        }
+        Ok(())
+    }
+}
+
 /// `id` and the clips linked to it that play the same source over the same span at the
 /// same speed, so a speed curve given to it keeps their sound with its picture.
 fn in_step(sequence: &Sequence, id: ClipId) -> Vec<ClipId> {
