@@ -118,11 +118,9 @@ pub struct EffectControls {
 pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
     let sequence = editor.timeline.sequence();
     // Linked video and audio are selected together and adjusted side by side.
-    let selected: Vec<(TrackRef, &Clip)> = editor
-        .view
-        .selection
-        .iter()
-        .filter_map(|&id| sequence.clip(id))
+    let selected: Vec<(TrackRef, &Clip)> = sequence
+        .clips_of(&editor.view.selection)
+        .into_iter()
         .collect();
     let first = |kind: TrackKind| {
         selected
@@ -131,7 +129,7 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
             .map(|&(track, clip)| (track, clip.clone()))
     };
     let (picture, sound) = (first(TrackKind::Video), first(TrackKind::Audio));
-    let ids: Vec<ClipId> = selected.iter().map(|(_, clip)| clip.id).collect();
+    let together = together::gather(editor, &selected);
     let Some(&(track, ref clip)) = picture.as_ref().or(sound.as_ref()) else {
         ui.label("Select a clip to adjust its motion, opacity, crop, effects and transitions.");
         return;
@@ -157,7 +155,9 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
     egui::ScrollArea::vertical().show(ui, |ui| {
         // Sections nest a level or two deep, and the panel is often narrow.
         ui.spacing_mut().indent = 10.0;
-        together::controls(editor, ui, &ids);
+        if let Some(together) = &together {
+            together::controls(editor, ui, together);
+        }
         if let Some((_, clip)) = &picture {
             picture_controls(editor, ui, clip, Sections::All);
             if !editor.simple() || clip.remap.is_some() {

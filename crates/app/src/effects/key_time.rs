@@ -32,11 +32,9 @@ impl Editor {
         let sequence = self.timeline.sequence();
         let playhead = self.playhead();
         let frames = (sequence.format.frame_rate, sequence.timebase);
-        let target = self
-            .view
-            .selection
-            .iter()
-            .filter_map(|&id| sequence.clip(id))
+        let target = sequence
+            .clips_of(&self.view.selection)
+            .into_iter()
             .flat_map(|(_, clip)| keyed_frames(clip, frames))
             .filter(|&at| {
                 if forward {
@@ -65,11 +63,17 @@ fn keyed_frames(clip: &Clip, frames: (FrameRate, Timebase)) -> impl Iterator<Ite
 fn key_time_at(clip: &Clip, playhead: Ticks, frames: (FrameRate, Timebase)) -> Ticks {
     let playhead = playhead.clamp(clip.start, clip.end() - Ticks(1));
     let time = clip.source_time(playhead);
-    let shown = frame_source(clip, frames.0.frame_at(playhead, frames.1), frames);
-    clip.look
+    let mut keys = clip
+        .look
         .params()
         .flat_map(|param| param.keys.iter().map(|key| key.time))
-        .filter(|key| shown.contains(key))
+        .peekable();
+    // Finding the frame shown is the costly part, with thousands of clips selected.
+    if keys.peek().is_none() {
+        return time;
+    }
+    let shown = frame_source(clip, frames.0.frame_at(playhead, frames.1), frames);
+    keys.filter(|key| shown.contains(key))
         .min_by_key(|&key| (key - time).0.abs())
         .unwrap_or(time)
 }

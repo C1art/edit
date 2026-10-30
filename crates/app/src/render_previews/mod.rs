@@ -1,4 +1,5 @@
 mod files;
+mod segments;
 
 use std::collections::{HashSet, VecDeque};
 use std::ops::Range;
@@ -7,13 +8,11 @@ use std::sync::Arc;
 use egui::{Key, ProgressBar, RichText};
 use media::{Acceleration, RateControl, VideoCodec};
 use playback::{ExportEvent, ExportJob, ExportSettings, Preview, VideoEncoding, VideoExport};
-use timeline::{render_segments, segment_content, Sequence, Ticks};
+use timeline::Ticks;
 
 use crate::editor::Editor;
 use files::{PreviewFiles, Reply};
-
-/// A segment to render, named by the fingerprint of what it shows.
-type Segment = (Range<Ticks>, u64);
+use segments::{fingerprint, Segment, SegmentWorker};
 
 /// Render previews of the costly parts of the sequence, as Premiere keeps: files that
 /// play in their place, found again by what they show for as long as it's unchanged.
@@ -24,6 +23,9 @@ pub(crate) struct RenderPreviews {
     /// The costly segments as of `revision`.
     segments: Vec<Segment>,
     revision: Option<u64>,
+    worker: SegmentWorker,
+    /// The newest revision the worker was asked about.
+    asked: Option<u64>,
     /// What the program player was last told to play.
     sent: Option<Vec<Preview>>,
     job: Option<RenderJob>,
@@ -50,6 +52,8 @@ impl RenderPreviews {
             rendered: HashSet::new(),
             segments: Vec::new(),
             revision: None,
+            worker: SegmentWorker::start()?,
+            asked: None,
             sent: None,
             job: None,
         })
@@ -58,6 +62,7 @@ impl RenderPreviews {
     /// For a timeline replaced by another, whose revisions start again.
     pub(crate) fn forget(&mut self) {
         self.revision = None;
+        self.asked = None;
         self.sent = None;
         self.job = None;
     }
@@ -81,12 +86,6 @@ impl RenderPreviews {
     }
 }
 
-/// What a segment shows, as a number; `None` when it can't be written out.
-fn fingerprint(sequence: &Sequence, range: &Range<Ticks>) -> Option<u64> {
-    let content = segment_content(sequence, range);
-    project::fingerprint(&(content, range.start, range.end)).ok()
-}
-
 impl Editor {
     pub(crate) fn poll_render_previews(&mut self, ctx: &egui::Context) {
         let Some(previews) = &mut self.render_previews else {
@@ -104,14 +103,16 @@ impl Editor {
             }
         }
         let revision = self.timeline.revision();
-        if previews.revision != Some(revision) {
-            let sequence = self.timeline.sequence();
-            previews.revision = Some(revision);
-            previews.segments = render_segments(sequence)
-                .into_iter()
-                .filter_map(|range| Some((range.clone(), fingerprint(sequence, &range)?)))
-                .collect();
+        if previews.asked != Some(revision) {
+            previews.asked = Some(revision);
+            let sequence = self.timeline.sequence().clone();
+            previews.worker.ask(revision, sequence, ctx);
         }
+        if let Some((worked_out, segments)) = previews.worker.poll() {
+            previews.revision = Some(worked_out);
+            previews.segments = segments;
+        }
+        let current = previews.revision == Some(revision);
         if previews.job.is_some() {
             ctx.request_repaint_after(crate::export_progress::REFRESH);
             notices.extend(self.advance_render());
@@ -119,8 +120,9 @@ impl Editor {
         let Some(previews) = &mut self.render_previews else {
             return;
         };
-        // The multi-camera view shows each camera, not the program alone.
-        let wanted = if self.multicam_layout.is_some() {
+        // The multi-camera view shows each camera, not the program alone; until the
+        // segments catch up with an edit, a preview could show what was there before.
+        let wanted = if self.multicam_layout.is_some() || !current {
             Vec::new()
         } else {
             previews.previews()
@@ -148,11 +150,9 @@ impl Editor {
     /// Renders the costly segments under the selected clips that have no preview yet.
     pub(crate) fn render_selection(&mut self) {
         let sequence = self.timeline.sequence();
-        let spans: Vec<_> = self
-            .view
-            .selection
-            .iter()
-            .filter_map(|&id| sequence.clip(id))
+        let spans: Vec<_> = sequence
+            .clips_of(&self.view.selection)
+            .into_iter()
             .map(|(_, clip)| clip.start..clip.end())
             .collect();
         if spans.is_empty() {

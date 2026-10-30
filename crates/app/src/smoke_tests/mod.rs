@@ -5,6 +5,7 @@ mod commands;
 mod layout;
 mod monkey;
 mod soak;
+mod timing;
 mod usage;
 
 use std::future::Future;

@@ -188,9 +188,8 @@ impl Editor {
     pub(crate) fn prompt_clip_gain(&mut self) {
         let sequence = self.timeline.sequence();
         let audio_gain = sequence
-            .with_links(&self.view.selection)
+            .clips_of(&sequence.with_links(&self.view.selection))
             .into_iter()
-            .filter_map(|id| sequence.clip(id))
             .find(|(track, _)| track.kind == TrackKind::Audio)
             .map(|(_, clip)| clip.gain);
         match audio_gain {
@@ -210,9 +209,8 @@ impl Editor {
         }
         let sequence = self.timeline.sequence();
         let selected_audio = sequence
-            .with_links(&self.view.selection)
+            .clips_of(&sequence.with_links(&self.view.selection))
             .into_iter()
-            .filter_map(|id| sequence.clip(id))
             .any(|(track, _)| track.kind == TrackKind::Audio);
         if !selected_audio {
             self.notice("Select a clip with audio first");
@@ -271,11 +269,9 @@ impl Editor {
     /// Disables the selected clips, or enables them when all are already disabled.
     pub(crate) fn toggle_enabled(&mut self) {
         let sequence = self.timeline.sequence();
-        let selected: Vec<_> = self
-            .view
-            .selection
-            .iter()
-            .filter_map(|&id| sequence.clip(id))
+        let selected: Vec<_> = sequence
+            .clips_of(&self.view.selection)
+            .into_iter()
             .collect();
         if selected.is_empty() {
             self.notice("Select clips to enable or disable");
@@ -291,11 +287,9 @@ impl Editor {
     /// Whether every selected clip is linked; `None` when none is selected.
     pub(crate) fn selection_linked(&self) -> Option<bool> {
         let sequence = self.timeline.sequence();
-        let mut selected = self
-            .view
-            .selection
-            .iter()
-            .filter_map(|&id| sequence.clip(id))
+        let mut selected = sequence
+            .clips_of(&self.view.selection)
+            .into_iter()
             .peekable();
         selected.peek()?;
         Some(selected.all(|(_, clip)| clip.link.is_some()))

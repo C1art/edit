@@ -165,11 +165,9 @@ fn on_selection(editor: &mut Editor, ui: &mut Ui) {
     }
     let sequence = editor.timeline.sequence();
     let mut enabled = !editor.view.selection.is_empty()
-        && editor
-            .view
-            .selection
-            .iter()
-            .filter_map(|&id| sequence.clip(id))
+        && sequence
+            .clips_of(&editor.view.selection)
+            .into_iter()
             .all(|(_, clip)| !clip.disabled);
     let shortcut = RichText::new(editor.keymap.label(Command::ToggleEnabled)).weak();
     if ui
@@ -219,9 +217,8 @@ fn on_selection(editor: &mut Editor, ui: &mut Ui) {
     }
     let sequence = editor.timeline.sequence();
     let has_audio = sequence
-        .with_links(&editor.view.selection)
+        .clips_of(&sequence.with_links(&editor.view.selection))
         .into_iter()
-        .filter_map(|id| sequence.clip(id))
         .any(|(track, _)| track.kind == TrackKind::Audio);
     if ui
         .add_enabled(has_audio, Button::new("Auto Duck…"))
@@ -313,9 +310,9 @@ fn time_interpolation(editor: &mut Editor, ui: &mut Ui) {
         })
         .copied()
         .collect();
-    let mut current = clips
-        .iter()
-        .filter_map(|&id| sequence.clip(id))
+    let mut current = sequence
+        .clips_of(&clips)
+        .into_iter()
         .map(|(_, clip)| clip.interpolation);
     let shared = current
         .next()
@@ -364,11 +361,9 @@ fn labels(editor: &mut Editor, ui: &mut Ui) {
 /// Selects every clip in the sequence labeled as one of the selected clips is.
 fn select_label_group(editor: &mut Editor) {
     let sequence = editor.timeline.sequence();
-    let labels: Vec<Option<Label>> = editor
-        .view
-        .selection
-        .iter()
-        .filter_map(|&id| sequence.clip(id))
+    let labels: Vec<Option<Label>> = sequence
+        .clips_of(&editor.view.selection)
+        .into_iter()
         .map(|(_, clip)| clip.label)
         .collect();
     editor.view.selection = sequence

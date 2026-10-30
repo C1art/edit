@@ -6,10 +6,9 @@ impl Editor {
     /// The first selected clip that has slipped out of sync with its link.
     pub(crate) fn out_of_sync_selection(&self) -> Option<ClipId> {
         let sequence = self.timeline.sequence();
-        self.view
-            .selection
-            .iter()
-            .filter_map(|&id| sequence.clip(id))
+        sequence
+            .clips_of(&self.view.selection)
+            .into_iter()
             .find(|(_, clip)| sequence.sync_offset(clip).is_some())
             .map(|(_, clip)| clip.id)
     }

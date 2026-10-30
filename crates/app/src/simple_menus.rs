@@ -124,11 +124,9 @@ fn clip(editor: &mut Editor, ui: &mut Ui) {
     };
     item(editor, ui, Command::ToggleLink, link, true);
     let sequence = editor.timeline.sequence();
-    let all_enabled = editor
-        .view
-        .selection
-        .iter()
-        .filter_map(|&id| sequence.clip(id))
+    let all_enabled = sequence
+        .clips_of(&editor.view.selection)
+        .into_iter()
         .all(|(_, clip)| !clip.disabled);
     let enable = if all_enabled { "Disable" } else { "Enable" };
     item(editor, ui, Command::ToggleEnabled, enable, true);

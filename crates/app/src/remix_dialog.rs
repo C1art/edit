@@ -31,9 +31,8 @@ impl Editor {
     pub(crate) fn open_remix(&mut self) {
         let sequence = self.timeline.sequence();
         let music = sequence
-            .with_links(&self.view.selection)
+            .clips_of(&sequence.with_links(&self.view.selection))
             .into_iter()
-            .filter_map(|id| sequence.clip(id))
             .find(|(track, _)| track.kind == TrackKind::Audio)
             .map(|(_, clip)| clip);
         match music {

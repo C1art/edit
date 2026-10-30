@@ -26,7 +26,7 @@ mod transition_grip;
 mod trim_view;
 mod zoom;
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 
 use egui::{Rect, Sense};
 use timeline::{
@@ -206,7 +206,12 @@ impl Default for TimelineView {
 impl TimelineView {
     /// Drops selected clips that no longer exist, e.g. after undo.
     pub fn prune_selection(&mut self, sequence: &Sequence) {
-        self.selection.retain(|&id| sequence.clip(id).is_some());
+        let present: HashSet<ClipId> = sequence
+            .clips_of(&self.selection)
+            .into_iter()
+            .map(|(_, clip)| clip.id)
+            .collect();
+        self.selection.retain(|id| present.contains(id));
         self.gap = self
             .gap
             .filter(|&(track, at)| gap(sequence, track, at).is_some());

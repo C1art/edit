@@ -102,9 +102,8 @@ impl Editor {
     pub(crate) fn can_restore_unrendered(&self) -> bool {
         let sequence = self.timeline.sequence();
         sequence
-            .links_of(&self.view.selection)
-            .iter()
-            .filter_map(|&id| sequence.clip(id))
+            .clips_of(&sequence.links_of(&self.view.selection))
+            .into_iter()
             .any(|(_, clip)| clip.unrendered.is_some())
     }
 

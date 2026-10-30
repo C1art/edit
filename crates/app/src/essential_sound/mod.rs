@@ -111,9 +111,8 @@ pub(crate) fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
 fn selected(editor: &Editor) -> Vec<ClipSound> {
     let sequence = editor.timeline.sequence();
     let sounds: Vec<ClipSound> = sequence
-        .with_links(&editor.view.selection)
+        .clips_of(&sequence.with_links(&editor.view.selection))
         .into_iter()
-        .filter_map(|id| sequence.clip(id))
         .filter(|(track, _)| track.kind == TrackKind::Audio)
         .map(|(_, clip)| ClipSound {
             clip: clip.id,

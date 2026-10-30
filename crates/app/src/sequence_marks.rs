@@ -53,11 +53,9 @@ impl Editor {
     /// Marks around the selected clips.
     pub(crate) fn mark_selection(&mut self) {
         let sequence = self.timeline.sequence();
-        let spans = self
-            .view
-            .selection
-            .iter()
-            .filter_map(|&id| sequence.clip(id))
+        let spans = sequence
+            .clips_of(&self.view.selection)
+            .into_iter()
             .map(|(_, clip)| (clip.start, clip.end()));
         let around = around(spans);
         self.mark_around(around, "Select clips to mark around them");
@@ -172,11 +170,9 @@ impl Editor {
     /// Moves the program playhead to where the selected clips start or end.
     pub(crate) fn go_to_selection_edge(&mut self, edge: Edge) {
         let sequence = self.timeline.sequence();
-        let spans = self
-            .view
-            .selection
-            .iter()
-            .filter_map(|&id| sequence.clip(id))
+        let spans = sequence
+            .clips_of(&self.view.selection)
+            .into_iter()
             .map(|(_, clip)| (clip.start, clip.end()));
         let Some((start, end)) = around(spans) else {
             self.notice("Select a clip first");

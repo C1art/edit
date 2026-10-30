@@ -13,10 +13,9 @@ impl Editor {
     fn marker_target(&self) -> (MarkerOwner, Ticks) {
         let playhead = self.playhead();
         let sequence = self.timeline.sequence();
-        self.view
-            .selection
-            .iter()
-            .filter_map(|&id| sequence.clip(id))
+        sequence
+            .clips_of(&self.view.selection)
+            .into_iter()
             .find(|(_, clip)| clip.covers(playhead))
             .map_or((MarkerOwner::Sequence, playhead), |(_, clip)| {
                 (MarkerOwner::Clip(clip.id), clip.source_time(playhead))

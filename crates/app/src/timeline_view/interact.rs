@@ -328,9 +328,8 @@ impl TimelineView {
             (Tool::RateStretch, Hit::Body { .. }) => None,
             (Tool::Roll, Hit::Edge { clip, at, .. }) => {
                 let mut tracks: Vec<TrackRef> = sequence
-                    .with_links(&[clip])
+                    .clips_of(&sequence.with_links(&[clip]))
                     .into_iter()
-                    .filter_map(|id| sequence.clip(id))
                     .filter(|(_, clip)| clip.start == at || clip.end() == at)
                     .map(|(track, _)| track)
                     .collect();
