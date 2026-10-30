@@ -1,8 +1,6 @@
 use std::path::Path;
 
-use timeline::{
-    ChannelMap, ColorSpace, FieldOrder, FrameRate, PixelAspect, Ticks, Timebase, TypedTimecode,
-};
+use timeline::{ChannelMap, FieldOrder, FrameRate, PixelAspect, Ticks, Timebase, TypedTimecode};
 
 use crate::channel_map::mapped;
 use crate::ffi::{
@@ -12,7 +10,10 @@ use crate::ffi::{
 use crate::seek_landing::Landing;
 use crate::seek_trim::{SeekTrim, Trimmed};
 use crate::sequence::open_input;
-use crate::{AudioBuffer, DecodedFrame, MediaError, PlanarFrame, StreamKind, VideoFrame};
+use crate::{
+    AudioBuffer, DecodedFrame, MediaError, PlanarFrame, SourceInfo, StreamKind, Streams,
+    VideoFrame, VideoInfo,
+};
 
 /// FFmpeg's `AV_TIME_BASE`, used for container-level start time, duration and seeking.
 const MICROSECONDS: Timebase = match Timebase::new(1, 1_000_000) {
@@ -23,40 +24,6 @@ const MICROSECONDS: Timebase = match Timebase::new(1, 1_000_000) {
 /// need the packets before the first sample they output (AAC overlaps frames, Opus
 /// declares 80 ms of pre-roll), and the trim drops what comes before the target anyway.
 const AUDIO_PREROLL: i64 = 250_000;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SourceInfo {
-    /// In the reader's output timebase; `None` when the container doesn't declare it.
-    pub duration: Option<Ticks>,
-    pub video: Option<VideoInfo>,
-    pub has_audio: bool,
-    /// A single picture rather than moving video.
-    pub still: bool,
-    /// Numbered pictures read as one video.
-    pub sequence: bool,
-    /// The timecode of the first frame, in frames at the video's rate, when the file
-    /// carries one.
-    pub timecode: Option<i64>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct VideoInfo {
-    pub width: u32,
-    pub height: u32,
-    pub frame_rate: Option<FrameRate>,
-    pub pixel_aspect: PixelAspect,
-    pub color_space: ColorSpace,
-    pub field_order: FieldOrder,
-}
-
-/// Which of a file's streams a reader decodes. Timeline playback opens one reader per
-/// stream kind so each can seek on its own.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Streams {
-    VideoAndAudio,
-    Video,
-    Audio,
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ReadState {

@@ -17,6 +17,7 @@ mod scenes;
 mod seek_landing;
 mod seek_trim;
 mod sequence;
+mod source_info;
 mod spare_pixels;
 mod still;
 mod subject;
@@ -54,12 +55,13 @@ pub use motion::{track_motion, Motion};
 pub use peaks::{read_peaks, Peaks};
 pub use probe::{probe, MediaInfo, StreamInfo, StreamKind};
 pub use proxy::{create_proxy, proxy_size};
-pub use reader::{MediaReader, Progress, SourceInfo, Streams, VideoInfo};
+pub use reader::{MediaReader, Progress};
 pub use region_track::{track_region, RegionTrack, TrackDirection, TrackedFrame};
 pub use scenes::detect_scenes;
 pub use sequence::{
     sequence_frame, sequence_frames, sequence_pattern, source_exists, source_files,
 };
+pub use source_info::{SourceInfo, Streams, VideoInfo};
 pub use still::{write_still, StillFormat};
 pub use subject::track_subject;
 pub use writer::{AudioSettings, EncodeProfile, MediaWriter, VideoSettings};
