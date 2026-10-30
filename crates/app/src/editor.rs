@@ -43,6 +43,7 @@ pub struct Editor {
     pub(crate) importer: Option<Importer>,
     pub(crate) proxies: Option<ProxyMaker>,
     pub(crate) proxy_offer: crate::proxy_offer::ProxyOffer,
+    pub(crate) voiceover: crate::voiceover::Voiceover,
     pub(crate) offline: Option<crate::offline::OfflineMedia>,
     pub(crate) render_previews: Option<crate::render_previews::RenderPreviews>,
     pub(crate) render_replace: Option<crate::render_replace::RenderReplace>,
@@ -214,6 +215,7 @@ impl Editor {
             importer,
             proxies,
             proxy_offer: Default::default(),
+            voiceover: Default::default(),
             offline,
             render_previews,
             render_replace: None,
@@ -464,35 +466,6 @@ impl eframe::App for Editor {
 
         self.lay_out_panels(ui);
 
-        crate::path_dialog::path_dialog(self, &ctx);
-        crate::project_files::discard_dialog(self, &ctx);
-        crate::recovery::dialog(self, &ctx);
-        crate::media_pool::remove::dialog(self, &ctx);
-        crate::marker_dialog::dialog(self, &ctx);
-        crate::gain_dialog::dialog(self, &ctx);
-        crate::duck_dialog::dialog(self, &ctx);
-        crate::remix_dialog::dialog(self, &ctx);
-        crate::interpret_dialog::dialog(self, &ctx);
-        crate::channels_dialog::dialog(self, &ctx);
-        crate::sequence_settings::dialog(self, &ctx);
-        crate::reframe_dialog::dialog(self, &ctx);
-        crate::fit_clip::dialog(self, &ctx);
-        crate::find_dialog::dialog(self, &ctx);
-        crate::attributes_dialog::dialog(self, &ctx);
-        crate::loudness_window::window(self, &ctx);
-        crate::speed_dialog::dialog(self, &ctx);
-        crate::rename_clip::dialog(self, &ctx);
-        crate::export::dialog(self, &ctx);
-        crate::export_queue::window(self, &ctx);
-        crate::keymap::window(self, &ctx);
-        crate::effect_presets::dialog(self, &ctx);
-        crate::workspaces::dialog(self, &ctx);
-        crate::link_media::dialog(self, &ctx);
-        crate::proxy_offer::dialog(self, &ctx);
-        crate::render_previews::window(self, &ctx);
-        crate::render_replace::window(self, &ctx);
-        crate::project_manager::window(self, &ctx);
-        crate::notifications::ui(self, &ctx);
-        crate::file_drop::ui(self, &ctx);
+        crate::dialogs::show(self, &ctx);
     }
 }

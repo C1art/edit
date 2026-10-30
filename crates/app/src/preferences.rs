@@ -1,4 +1,4 @@
-use audio::OutputDevice;
+use audio::{InputDevice, OutputDevice};
 
 use crate::editor::Editor;
 use crate::project_store::Setting;
@@ -16,6 +16,10 @@ pub(crate) struct Preferences {
     heavy_media: HeavyMedia,
     /// `None` follows the system default.
     audio_device: Option<OutputDevice>,
+    /// `None` records from the system default.
+    voiceover_input: Option<InputDevice>,
+    voiceover_countdown: bool,
+    voiceover_hear_sequence: bool,
 }
 
 impl Preferences {
@@ -29,6 +33,9 @@ impl Preferences {
             dropped_frame_indicator: editor.dropped_frame_indicator,
             heavy_media: editor.proxy_offer.choice,
             audio_device: editor.audio_switch.chosen.clone(),
+            voiceover_input: editor.voiceover.input.clone(),
+            voiceover_countdown: editor.voiceover.countdown,
+            voiceover_hear_sequence: editor.voiceover.hear_sequence,
         }
     }
 
@@ -36,7 +43,8 @@ impl Preferences {
         format!(
             "hardware_decoding\t{}\nautosave\t{}\nautosave_minutes\t{}\nscrub_audio\t{}\n\
              selection_follows_playhead\t{}\ndropped_frame_indicator\t{}\nheavy_media\t{}\n\
-             audio_device\t{}\naudio_device_id\t{}\n",
+             audio_device\t{}\naudio_device_id\t{}\nvoiceover_input\t{}\n\
+             voiceover_input_id\t{}\nvoiceover_countdown\t{}\nvoiceover_hear_sequence\t{}\n",
             self.hardware_decoding,
             self.autosave,
             self.autosave_minutes,
@@ -51,6 +59,15 @@ impl Preferences {
                 .as_ref()
                 .and_then(|device| device.id.as_deref())
                 .unwrap_or_default(),
+            self.voiceover_input
+                .as_ref()
+                .map_or("", |device| device.name.as_str()),
+            self.voiceover_input
+                .as_ref()
+                .and_then(|device| device.id.as_deref())
+                .unwrap_or_default(),
+            self.voiceover_countdown,
+            self.voiceover_hear_sequence,
         )
     }
 
@@ -79,6 +96,19 @@ impl Preferences {
                         device.id = (!value.is_empty()).then(|| value.to_owned());
                     }
                 }
+                "voiceover_input" => {
+                    self.voiceover_input = (!value.is_empty()).then(|| InputDevice {
+                        id: None,
+                        name: value.to_owned(),
+                    });
+                }
+                "voiceover_input_id" => {
+                    if let Some(device) = &mut self.voiceover_input {
+                        device.id = (!value.is_empty()).then(|| value.to_owned());
+                    }
+                }
+                "voiceover_countdown" => set(&mut self.voiceover_countdown, flag),
+                "voiceover_hear_sequence" => set(&mut self.voiceover_hear_sequence, flag),
                 _ => {}
             }
         }
@@ -104,6 +134,9 @@ impl Editor {
         self.dropped_frame_indicator = preferences.dropped_frame_indicator;
         self.proxy_offer.choice = preferences.heavy_media;
         self.audio_switch.chosen = preferences.audio_device;
+        self.voiceover.input = preferences.voiceover_input;
+        self.voiceover.countdown = preferences.voiceover_countdown;
+        self.voiceover.hear_sequence = preferences.voiceover_hear_sequence;
         self.saved_preferences = Some(Preferences::of(self));
     }
 
@@ -133,6 +166,9 @@ mod tests {
         dropped_frame_indicator: false,
         heavy_media: HeavyMedia::Ask,
         audio_device: None,
+        voiceover_input: None,
+        voiceover_countdown: true,
+        voiceover_hear_sequence: false,
     };
 
     #[test]
@@ -151,6 +187,12 @@ mod tests {
                 ),
                 name: "Speakers (USB Audio)".to_owned(),
             }),
+            voiceover_input: Some(InputDevice {
+                id: Some("wasapi:{0.0.1.00000000}.{1a2b3c4d}".to_owned()),
+                name: "Microphone (USB Audio)".to_owned(),
+            }),
+            voiceover_countdown: false,
+            voiceover_hear_sequence: true,
         };
         assert_eq!(DEFAULTS.read(&chosen.to_text()), chosen);
     }

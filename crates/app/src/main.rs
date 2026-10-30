@@ -11,6 +11,7 @@ mod color_match;
 mod commands;
 mod comparison;
 mod dialog;
+mod dialogs;
 mod dropped_frames;
 mod duck_dialog;
 mod editor;
@@ -100,6 +101,7 @@ mod timeline_view;
 mod transport;
 mod trim_monitor;
 mod viewer;
+mod voiceover;
 mod window_state;
 mod workspaces;
 
