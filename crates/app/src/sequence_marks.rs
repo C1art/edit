@@ -169,6 +169,25 @@ impl Editor {
         }
     }
 
+    /// Moves the program playhead to where the selected clips start or end.
+    pub(crate) fn go_to_selection_edge(&mut self, edge: Edge) {
+        let sequence = self.timeline.sequence();
+        let spans = self
+            .view
+            .selection
+            .iter()
+            .filter_map(|&id| sequence.clip(id))
+            .map(|(_, clip)| (clip.start, clip.end()));
+        let Some((start, end)) = around(spans) else {
+            self.notice("Select a clip first");
+            return;
+        };
+        self.seek_program(match edge {
+            Edge::Head => start,
+            Edge::Tail => end,
+        });
+    }
+
     /// Opens the media of the clip under the playhead in the source monitor on the same
     /// frame, marked with the clip's range: a selected clip first, then the top video.
     pub(crate) fn match_frame(&mut self) {

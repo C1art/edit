@@ -157,6 +157,10 @@ impl Command {
             Self::StepForwardFive => ("step_forward_five", "Step Forward Five Frames"),
             Self::GoToStart => ("go_to_start", "Go to Start"),
             Self::GoToEnd => ("go_to_end", "Go to End"),
+            Self::GoToSelectedClipStart => {
+                ("go_to_selected_clip_start", "Go to Selected Clip Start")
+            }
+            Self::GoToSelectedClipEnd => ("go_to_selected_clip_end", "Go to Selected Clip End"),
             Self::PreviousEdit => ("previous_edit", "Go to Previous Edit Point"),
             Self::NextEdit => ("next_edit", "Go to Next Edit Point"),
             Self::PlayInToOut => ("play_in_to_out", "Play In to Out"),

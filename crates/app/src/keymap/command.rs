@@ -117,6 +117,8 @@ pub enum Command {
     StepForwardFive,
     GoToStart,
     GoToEnd,
+    GoToSelectedClipStart,
+    GoToSelectedClipEnd,
     PreviousEdit,
     NextEdit,
     PreviousKeyframe,
@@ -136,7 +138,7 @@ pub enum Command {
 pub const WORKSPACE_SLOTS: u8 = 9;
 
 impl Command {
-    pub const ALL: [Self; 136] = [
+    pub const ALL: [Self; 138] = [
         Self::NewProject,
         Self::OpenProject,
         Self::Save,
@@ -253,6 +255,8 @@ impl Command {
         Self::StepForwardFive,
         Self::GoToStart,
         Self::GoToEnd,
+        Self::GoToSelectedClipStart,
+        Self::GoToSelectedClipEnd,
         Self::PreviousEdit,
         Self::NextEdit,
         Self::PreviousKeyframe,
@@ -368,9 +372,25 @@ impl Command {
             | TypeTool
             | RectangleTool
             | EllipseTool => "Tools",
-            PlayStop | ShuttleLeft | ShuttleStop | ShuttleRight | StepBack | StepForward
-            | StepBackFive | StepForwardFive | GoToStart | GoToEnd | PreviousEdit | NextEdit
-            | PreviousKeyframe | NextKeyframe | PlayInToOut | PlayAround | ToggleLoop
+            PlayStop
+            | ShuttleLeft
+            | ShuttleStop
+            | ShuttleRight
+            | StepBack
+            | StepForward
+            | StepBackFive
+            | StepForwardFive
+            | GoToStart
+            | GoToEnd
+            | GoToSelectedClipStart
+            | GoToSelectedClipEnd
+            | PreviousEdit
+            | NextEdit
+            | PreviousKeyframe
+            | NextKeyframe
+            | PlayInToOut
+            | PlayAround
+            | ToggleLoop
             | ToggleAudioScrubbing => "Playback",
             Workspace(_) | ResetWorkspace | MaximizePanel | FullScreen => "Window",
         }

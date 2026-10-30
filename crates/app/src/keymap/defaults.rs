@@ -128,6 +128,8 @@ impl Command {
             Self::StepForwardFive => vec![shift(Key::ArrowRight)],
             Self::GoToStart => vec![plain(Key::Home)],
             Self::GoToEnd => vec![plain(Key::End)],
+            Self::GoToSelectedClipStart => vec![shift(Key::Home)],
+            Self::GoToSelectedClipEnd => vec![shift(Key::End)],
             Self::PreviousEdit => vec![plain(Key::ArrowUp)],
             Self::NextEdit => vec![plain(Key::ArrowDown)],
             Self::PreviousKeyframe => vec![plain(Key::OpenBracket)],

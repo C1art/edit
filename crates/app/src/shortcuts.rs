@@ -193,6 +193,8 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         Command::MarkSelection => editor.mark_selection(),
         Command::GoToIn => editor.go_to_mark(Edge::Head),
         Command::GoToOut => editor.go_to_mark(Edge::Tail),
+        Command::GoToSelectedClipStart => editor.go_to_selection_edge(Edge::Head),
+        Command::GoToSelectedClipEnd => editor.go_to_selection_edge(Edge::Tail),
         Command::AddMarker => editor.add_marker(),
         Command::NextMarker => editor.jump_to_marker(true),
         Command::PreviousKeyframe => editor.jump_to_keyframe(false),
