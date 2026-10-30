@@ -135,6 +135,7 @@ mod trim_monitor;
 mod ui_mode;
 mod viewer;
 mod voiceover;
+mod vst;
 mod window_state;
 mod workspaces;
 

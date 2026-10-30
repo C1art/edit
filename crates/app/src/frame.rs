@@ -70,6 +70,9 @@ impl eframe::App for Editor {
         self.poll_export_frame(&ctx);
         self.poll_export_queue(&ctx);
         self.poll_transcribing(&ctx);
+        if self.vst.poll() {
+            ctx.request_repaint();
+        }
         if self.importer.as_ref().is_some_and(Importer::is_busy) {
             ctx.request_repaint_after(Duration::from_millis(100));
         }

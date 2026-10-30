@@ -229,6 +229,30 @@ impl Rows {
         range: RangeInclusive<f32>,
         suffix: &str,
     ) {
+        self.param_text(ui, label, param, range, suffix, None);
+    }
+
+    /// A value shown as `shown` says, as a plugin writes its own, with `range` steps.
+    pub(super) fn param_shown(
+        &mut self,
+        ui: &mut egui::Ui,
+        label: &str,
+        param: &mut Param,
+        range: RangeInclusive<f32>,
+        shown: Option<&str>,
+    ) {
+        self.param_text(ui, label, param, range, "", shown);
+    }
+
+    fn param_text(
+        &mut self,
+        ui: &mut egui::Ui,
+        label: &str,
+        param: &mut Param,
+        range: RangeInclusive<f32>,
+        suffix: &str,
+        shown: Option<&str>,
+    ) {
         let time = self.time;
         let graph = ui.make_persistent_id(("value graph", label));
         let mut open = ui.data(|data| data.get_temp(graph)).unwrap_or(false);
@@ -262,13 +286,18 @@ impl Rows {
             let text = if animated { text.color(ANIMATED) } else { text };
             ui.add_sized([72.0, 18.0], egui::Label::new(text));
             let mut value = param.value_at(time);
-            let response = ui.add(
-                DragValue::new(&mut value)
-                    .speed(drag_speed(&range))
-                    .range(range.clone())
-                    .max_decimals(2)
-                    .suffix(suffix),
-            );
+            let mut drag = DragValue::new(&mut value)
+                .speed(drag_speed(&range))
+                .range(range.clone())
+                .max_decimals(2)
+                .suffix(suffix);
+            if let Some(shown) = shown {
+                drag = drag
+                    .max_decimals(3)
+                    .custom_formatter(|_, _| shown.to_owned())
+                    .custom_parser(|text| text.trim().parse().ok());
+            }
+            let response = ui.add(drag);
             if response.changed() {
                 param.set_at(time, value);
             }

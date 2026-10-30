@@ -46,7 +46,9 @@ pub(super) fn panel(editor: &mut Editor, ui: &mut egui::Ui) {
     };
     ui.separator();
     ui.label(RichText::new(format!("{name} Effects")).strong());
-    let (change, seek) = crate::effects::track_effect_controls(ui, &mut effects, editor.playhead());
+    let playhead = editor.playhead();
+    let (change, seek) =
+        crate::effects::track_effect_controls(ui, &mut effects, playhead, &mut editor.vst);
     if let Some(key) = seek {
         editor.seek_program(key);
     }

@@ -40,6 +40,7 @@ mod shift;
 mod simple_text;
 mod sound;
 mod sound_more;
+mod sound_plugin;
 mod stabilizer;
 mod text_style_row;
 mod together;
@@ -369,7 +370,7 @@ fn audio_effect_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
     };
     let keys = std::mem::take(&mut editor.effects.keys);
     let rows = Rows::new(time, lane(editor, ui, clip), keys);
-    let mut output = sound::effect_controls(ui, &mut effects, rows);
+    let mut output = sound::effect_controls(ui, &mut effects, rows, &mut editor.vst);
     editor.effects.keys = std::mem::take(&mut output.keys);
     seek_to_key(editor, clip, output.seek);
     let edit = SetClipAudioEffects {

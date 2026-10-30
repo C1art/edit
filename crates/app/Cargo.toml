@@ -13,6 +13,7 @@ audio.workspace = true
 playback.workspace = true
 project.workspace = true
 speech.workspace = true
+plugins.workspace = true
 eframe.workspace = true
 egui.workspace = true
 crossbeam.workspace = true

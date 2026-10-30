@@ -3,6 +3,7 @@ use timeline::{AudioEffect, Gain, Param, Ticks};
 
 use super::look::{Output, Rows};
 use crate::mixer::Change;
+use crate::vst::PluginHost;
 
 const GAIN_DB: std::ops::RangeInclusive<f32> = -24.0..=24.0;
 const HEARING_HZ: std::ops::RangeInclusive<f32> = 20.0..=20_000.0;
@@ -65,7 +66,8 @@ pub(crate) fn category(effect: &AudioEffect) -> &'static str {
         AudioEffect::Distortion { .. }
         | AudioEffect::VocalEnhancer { .. }
         | AudioEffect::Mastering { .. }
-        | AudioEffect::GuitarSuite { .. } => CATEGORIES[8],
+        | AudioEffect::GuitarSuite { .. }
+        | AudioEffect::Plugin(_) => CATEGORIES[8],
         AudioEffect::StereoExpander { .. } => CATEGORIES[9],
     }
 }
@@ -96,6 +98,7 @@ pub(super) fn effect_controls(
     ui: &mut egui::Ui,
     effects: &mut Vec<AudioEffect>,
     mut rows: Rows,
+    host: &mut PluginHost,
 ) -> Output {
     egui::CollapsingHeader::new("Audio Effects")
         .default_open(true)
@@ -104,12 +107,17 @@ pub(super) fn effect_controls(
             for (index, effect) in effects.iter_mut().enumerate() {
                 ui.push_id(index, |ui| {
                     ui.horizontal(|ui| {
-                        ui.label(RichText::new(effect.name()).strong());
+                        ui.label(RichText::new(effect.title()).strong());
                         if ui.small_button("Remove").clicked() {
                             removed = Some(index);
                         }
                     });
-                    effect_rows(ui, &mut rows, effect);
+                    match effect {
+                        AudioEffect::Plugin(plugin) => {
+                            super::sound_plugin::rows(ui, &mut rows, plugin, host);
+                        }
+                        effect => effect_rows(ui, &mut rows, effect),
+                    }
                 });
             }
             if let Some(index) = removed {
@@ -130,6 +138,13 @@ pub(super) fn effect_controls(
                         }
                     });
                 }
+                ui.menu_button("VST3", |ui| {
+                    if let Some(effect) = super::sound_plugin::add_menu(ui, host) {
+                        effects.push(effect);
+                        rows.commit();
+                        ui.close();
+                    }
+                });
             });
         });
     rows.output
@@ -141,8 +156,10 @@ pub(crate) fn track_effect_controls(
     ui: &mut egui::Ui,
     effects: &mut Vec<AudioEffect>,
     time: Ticks,
+    host: &mut PluginHost,
 ) -> (Option<Change>, Option<Ticks>) {
-    let output = effect_controls(ui, effects, Rows::new(time, None, Default::default()));
+    let rows = Rows::new(time, None, Default::default());
+    let output = effect_controls(ui, effects, rows, host);
     (output.change, output.seek)
 }
 

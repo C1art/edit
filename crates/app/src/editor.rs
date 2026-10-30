@@ -115,6 +115,7 @@ pub struct Editor {
     pub(crate) text_panel: crate::transcribe::TextPanel,
     /// The Whisper model and language last transcribed with.
     pub(crate) speech_choice: (speech::Model, Option<String>),
+    pub(crate) vst: crate::vst::PluginHost,
     pub(crate) beats_dialog: Option<crate::beats_dialog::BeatsDialog>,
     pub(crate) remix_dialog: Option<crate::remix_dialog::RemixDialog>,
     pub(crate) transition_duration_dialog:
@@ -307,6 +308,7 @@ impl Editor {
             transcribing: None,
             text_panel: crate::transcribe::TextPanel::default(),
             speech_choice: (speech::Model::FastEnglish, None),
+            vst: crate::vst::PluginHost::start(),
             beats_dialog: None,
             remix_dialog: None,
             transition_duration_dialog: None,
