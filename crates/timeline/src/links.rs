@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Clip, ClipId, LinkId, Sequence, SourceId, Ticks, TrackRef};
+use crate::{Clip, ClipId, LinkId, Sequence, Ticks, TrackRef};
 
 /// Whether picking a clip picks the clips linked to it as well, as Premiere's Linked
 /// Selection. Apart, each is moved, trimmed and deleted alone, and may slip out of sync.
@@ -54,6 +54,24 @@ impl Sequence {
             .collect()
     }
 
+    /// The clips of `ids` still in the sequence, in the order `ids` names them. Unlike
+    /// asking [`Sequence::clip`] for each, which searches every track, this searches
+    /// them once, so a selection of thousands costs no more than one pass.
+    pub fn clips_of(&self, ids: &[ClipId]) -> Vec<(TrackRef, &Clip)> {
+        // A search per clip costs less than a set when there are only a few.
+        if ids.len() <= 4 {
+            return ids.iter().filter_map(|&id| self.clip(id)).collect();
+        }
+        let wanted: HashSet<ClipId> = ids.iter().copied().collect();
+        let found: HashMap<ClipId, (TrackRef, &Clip)> = self
+            .tracks()
+            .flat_map(|(track_ref, track)| track.clips.iter().map(move |clip| (track_ref, &**clip)))
+            .filter(|(_, clip)| wanted.contains(&clip.id))
+            .map(|(track_ref, clip)| (clip.id, (track_ref, clip)))
+            .collect();
+        ids.iter().filter_map(|id| found.get(id).copied()).collect()
+    }
+
     /// How much later `clip` plays its media than a clip linked to it plays the same
     /// media; `None` while they are in sync.
     pub fn sync_offset(&self, clip: &Clip) -> Option<Ticks> {
@@ -63,17 +81,17 @@ impl Sequence {
     /// Every out-of-sync clip's [`Sequence::sync_offset`], found in one pass rather than
     /// by searching the whole sequence for each clip's partners.
     pub fn sync_offsets(&self) -> HashMap<ClipId, Ticks> {
-        let mut partners: HashMap<(LinkId, SourceId), Vec<&Clip>> = HashMap::new();
-        for clip in self
+        // Sorted into runs of partners rather than gathered in a map of lists, as this
+        // runs every frame and a list per link costs an allocation each.
+        let partners = |clip: &Clip| clip.link.map(|link| (link.0, clip.source.0));
+        let mut linked: Vec<&Clip> = self
             .tracks()
             .flat_map(|(_, track)| track.clips.iter().map(Arc::as_ref))
-        {
-            if let Some(link) = clip.link {
-                partners.entry((link, clip.source)).or_default().push(clip);
-            }
-        }
-        partners
-            .values()
+            .filter(|clip| clip.link.is_some())
+            .collect();
+        linked.sort_unstable_by_key(|clip| partners(clip));
+        linked
+            .chunk_by(|a, b| partners(a) == partners(b))
             .flat_map(|group| {
                 group.iter().filter_map(move |clip| {
                     group

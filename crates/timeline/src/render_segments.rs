@@ -32,7 +32,10 @@ fn costly(sequence: &Sequence, visible: &[&Track], segment: &Range<Ticks>) -> bo
             }
         }
         // An incoming clip's transition starts before its cut.
-        let incoming = track.clips.iter().find(|clip| clip.start == segment.end);
+        let incoming = track
+            .clips
+            .get(track.clips.partition_point(|clip| clip.start < segment.end))
+            .filter(|clip| clip.start == segment.end);
         if incoming.is_some_and(|clip| clip.transition_in.is_some()) {
             return true;
         }
