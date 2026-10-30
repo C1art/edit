@@ -198,6 +198,10 @@ impl Editor {
         if let Some(drop) = output.effect_drop {
             crate::effects_panel::drop_effect(self, drop);
         }
+        if let Some((pick, landing)) = output.template_drop {
+            self.focus = Focus::Program;
+            self.add_template(pick, landing);
+        }
         if let Some(clip) = output.open_clip {
             self.open_clip(clip);
         }

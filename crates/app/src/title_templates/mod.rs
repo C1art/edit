@@ -6,7 +6,7 @@ mod headings;
 mod overlays;
 mod previews;
 
-pub(crate) use browser::{ui as browser_ui, GraphicsBrowser};
+pub(crate) use browser::{ui as browser_ui, GraphicsBrowser, Pick as TemplatePick};
 
 use egui::Key;
 use project::TemplatesFile;
@@ -15,7 +15,7 @@ use timeline::{ClipId, Param, SetClipLook, Ticks, Timebase, TitleTemplate};
 use catalog::{Builtin, Category, BUILTINS};
 
 use crate::editor::Editor;
-use crate::placing;
+use crate::placing::{self, Landing};
 use crate::project_store::Setting;
 
 pub(crate) struct TemplateDialog {
@@ -25,24 +25,36 @@ pub(crate) struct TemplateDialog {
 }
 
 impl Editor {
-    fn new_from_builtin(&mut self, builtin: &Builtin) {
+    pub(crate) fn add_template(&mut self, pick: TemplatePick, landing: Landing) {
+        match pick {
+            TemplatePick::Builtin(index) => {
+                if let Some(builtin) = BUILTINS.get(index) {
+                    self.new_from_builtin(builtin, landing);
+                }
+            }
+            TemplatePick::Saved(index) => self.new_from_saved(index, landing),
+        }
+    }
+
+    fn new_from_builtin(&mut self, builtin: &Builtin, landing: Landing) {
         let sequence = self.timeline.sequence();
         let built = builtin.build(sequence.format.width, sequence.format.height);
         let length = built
             .seconds
             .and_then(|seconds| seconds_in(seconds, sequence.timebase));
-        let clip = placing::place_generated(self, builtin.name.to_owned(), built.generator, length);
+        let name = builtin.name.to_owned();
+        let clip = placing::place_generated(self, name, built.generator, length, landing);
         if let (Some(clip), Some(position)) = (clip, built.position) {
             self.move_new_clip(clip, position);
         }
     }
 
-    fn new_from_saved(&mut self, index: usize) {
+    fn new_from_saved(&mut self, index: usize, landing: Landing) {
         let Some(template) = self.title_templates.get(index).cloned() else {
             return;
         };
         let length = template.length_in(self.timeline.sequence().timebase);
-        placing::place_generated(self, template.name, template.generator, length);
+        placing::place_generated(self, template.name, template.generator, length, landing);
     }
 
     /// Places a just-made clip's picture `position` pixels from the frame's center.
@@ -133,7 +145,7 @@ pub(crate) fn menu(ui: &mut egui::Ui, editor: &mut Editor) {
             ui.menu_button(category.name(), |ui| {
                 for builtin in BUILTINS.iter().filter(|b| b.category == category) {
                     if ui.button(builtin.name).clicked() {
-                        editor.new_from_builtin(builtin);
+                        editor.new_from_builtin(builtin, Landing::Playhead);
                         ui.close();
                     }
                 }
@@ -148,7 +160,7 @@ pub(crate) fn menu(ui: &mut egui::Ui, editor: &mut Editor) {
             for index in 0..editor.title_templates.len() {
                 let response = ui.button(&editor.title_templates[index].name);
                 if response.clicked() {
-                    editor.new_from_saved(index);
+                    editor.new_from_saved(index, Landing::Playhead);
                     ui.close();
                 }
                 response.context_menu(|ui| {

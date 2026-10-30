@@ -258,7 +258,16 @@ pub fn new_generated(editor: &mut Editor, generator: Generator) -> Option<ClipId
         })
         .count();
     let name = format!("{} {:02}", generator.kind_name(), count + 1);
-    place_generated(editor, name, generator, None)
+    place_generated(editor, name, generator, None, Landing::Playhead)
+}
+
+/// Where a new clip goes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Landing {
+    /// At the playhead, on the first free video track from the targeted one up.
+    Playhead,
+    /// Where it was dropped, over what's there.
+    Dropped { at: Ticks, video_track: usize },
 }
 
 /// As [`new_generated`], naming the media and placing `length` of it rather than the
@@ -268,6 +277,7 @@ pub fn place_generated(
     name: String,
     generator: Generator,
     length: Option<Ticks>,
+    landing: Landing,
 ) -> Option<ClipId> {
     let placed = editor.still_length.placed(editor.timeline.sequence());
     if !editor.apply(AddGenerated {
@@ -286,9 +296,17 @@ pub fn place_generated(
         .has_audio
         .then(|| editor.view.targets.audio.unwrap_or(0))
         .filter(|&track| track < sequence.audio.len());
-    let at = editor.playhead();
-    let first = editor.view.targets.video.unwrap_or(0);
-    let track = free_or_new_track(editor, TrackKind::Video, first, &(at..at + duration));
+    let (at, track) = match landing {
+        Landing::Playhead => {
+            let at = editor.playhead();
+            let first = editor.view.targets.video.unwrap_or(0);
+            (
+                at,
+                free_or_new_track(editor, TrackKind::Video, first, &(at..at + duration)),
+            )
+        }
+        Landing::Dropped { at, video_track } => (at, video_track),
+    };
     let placed = editor.apply(PlaceClip {
         source,
         source_in: range.start,

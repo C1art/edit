@@ -106,6 +106,10 @@ pub struct TimelineOutput {
     pub clear_marker: Option<(MarkerOwner, MarkerId)>,
     pub drop: Option<MediaDrop>,
     pub effect_drop: Option<EffectDrop>,
+    pub template_drop: Option<(
+        crate::title_templates::TemplatePick,
+        crate::placing::Landing,
+    )>,
     /// A double-clicked clip, whose media to open.
     pub open_clip: Option<ClipId>,
     /// A double-clicked transition, whose duration to ask for, and the longest it can be.

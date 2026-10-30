@@ -8,6 +8,8 @@ use super::layout::{self, Row};
 use super::scale::{self, TimeScale};
 use super::{paint, TimelineOutput, SNAP_POINTS};
 use crate::effects_panel::{EffectDrop, EffectItem};
+use crate::placing::Landing;
+use crate::title_templates::TemplatePick;
 
 /// Media dropped from the pool or the source monitor onto a track, laid end to end
 /// when several items were dragged.
@@ -138,6 +140,21 @@ pub(super) fn handle_drop(
             tracks: [video.map(TrackRef::video), audio.map(TrackRef::audio)],
             mode,
         });
+    }
+    if response.dnd_hover_payload::<TemplatePick>().is_some() {
+        let track = row?.track;
+        if track.kind != TrackKind::Video {
+            return None;
+        }
+        let at = scale::nearest_frame(time, sequence.format.frame_rate, sequence.timebase);
+        if let Some(pick) = response.dnd_release_payload::<TemplatePick>() {
+            let landing = Landing::Dropped {
+                at,
+                video_track: track.index,
+            };
+            output.template_drop = Some((*pick, landing));
+        }
+        return Some(DropHint::At(at));
     }
     let item = response.dnd_hover_payload::<EffectItem>()?;
     let track = row?.track;

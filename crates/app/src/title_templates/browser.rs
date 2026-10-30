@@ -1,5 +1,5 @@
 //! The Graphics panel, as Essential Graphics' Browse tab: every template as a picture,
-//! by kind, added at the playhead with a double-click.
+//! by kind, added at the playhead with a double-click or dragged onto a video track.
 
 use egui::{Align2, Color32, FontId, Rect, RichText, Sense, Stroke, StrokeKind, TextEdit};
 use timeline::Generator;
@@ -7,6 +7,7 @@ use timeline::Generator;
 use super::catalog::{Category, BUILTINS};
 use super::previews::{Previews, PREVIEW_SIZE};
 use crate::editor::Editor;
+use crate::placing::Landing;
 use crate::theme;
 
 /// Cards grow from this to fill the panel's width.
@@ -33,8 +34,9 @@ impl Shelf {
     }
 }
 
+/// A template being dragged from the panel is carried as this.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Pick {
+pub(crate) enum Pick {
     Builtin(usize),
     Saved(usize),
 }
@@ -89,7 +91,7 @@ pub(crate) fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
             ui.selectable_value(&mut browser.shelf, shelf, shelf.name());
         }
     });
-    ui.weak("Double-click to add at the playhead; edit the text in Effect Controls");
+    ui.weak("Double-click to add at the playhead, or drag onto a video track; edit the text in Effect Controls");
     ui.separator();
 
     let search = browser.search.trim().to_lowercase();
@@ -158,6 +160,7 @@ pub(crate) fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
                     if response.double_clicked() {
                         action = Some(Action::Add(*pick));
                     }
+                    response.dnd_set_drag_payload(*pick);
                     response.context_menu(|ui| {
                         if ui.button("Add to Timeline").clicked() {
                             action = Some(Action::Add(*pick));
@@ -172,12 +175,7 @@ pub(crate) fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
             });
         });
     match action {
-        Some(Action::Add(Pick::Builtin(index))) => {
-            if let Some(builtin) = BUILTINS.get(index) {
-                editor.new_from_builtin(builtin);
-            }
-        }
-        Some(Action::Add(Pick::Saved(index))) => editor.new_from_saved(index),
+        Some(Action::Add(pick)) => editor.add_template(pick, Landing::Playhead),
         Some(Action::Delete(index)) => {
             editor.graphics.selected = None;
             editor.delete_title_template(index);
@@ -207,7 +205,7 @@ fn card(
     let aspect = canvas[1] as f32 / canvas[0].max(1) as f32;
     let picture_height = (width * aspect).min(width * 1.2);
     let size = egui::vec2(width, picture_height + CAPTION_HEIGHT);
-    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click_and_drag());
     if !ui.is_rect_visible(rect) {
         return response;
     }
