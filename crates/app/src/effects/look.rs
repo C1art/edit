@@ -224,6 +224,14 @@ impl Rows {
         let time = self.time;
         let graph = ui.make_persistent_id(("value graph", label));
         let mut open = ui.data(|data| data.get_temp(graph)).unwrap_or(false);
+        if self.output.keys.toggles(graph) {
+            if param.is_animated() {
+                param.toggle_key(time);
+            } else {
+                param.toggle_animation(time);
+            }
+            self.commit();
+        }
         ui.horizontal(|ui| {
             let animated = param.is_animated();
             // The graph only shows with the lane, which a narrow panel has no room for.
@@ -242,6 +250,7 @@ impl Rows {
                 self.commit();
             }
             let text = RichText::new(label);
+            let touched = stopwatch.clicked();
             let text = if animated { text.color(ANIMATED) } else { text };
             ui.add_sized([72.0, 18.0], egui::Label::new(text));
             let mut value = param.value_at(time);
@@ -256,8 +265,9 @@ impl Rows {
                 param.set_at(time, value);
             }
             self.output.change = response_state(&response, self.output.change);
-            if animated {
-                self.key_buttons(ui, param);
+            let keyed = animated && self.key_buttons(ui, param);
+            if touched || keyed || response.changed() || response.clicked() {
+                self.output.keys.touch(graph);
             }
             if let Some(lane) = &self.lane {
                 lane.show(ui, graph, param, time, &mut self.output);
@@ -269,8 +279,9 @@ impl Rows {
         }
     }
 
-    /// Steps between keyframes and adds or removes the one at the playhead.
-    fn key_buttons(&mut self, ui: &mut egui::Ui, param: &mut Param) {
+    /// Steps between keyframes and adds or removes the one at the playhead; whether
+    /// one of them was clicked.
+    fn key_buttons(&mut self, ui: &mut egui::Ui, param: &mut Param) -> bool {
         let time = self.time;
         ui.scope(|ui| {
             ui.spacing_mut().item_spacing.x = 2.0;
@@ -305,7 +316,9 @@ impl Rows {
             if forward.clicked() {
                 self.output.seek = next;
             }
-        });
+            back.clicked() || key.clicked() || forward.clicked()
+        })
+        .inner
     }
 }
 

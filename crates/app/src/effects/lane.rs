@@ -66,6 +66,7 @@ impl Lane {
         let keys = &mut output.keys;
         if response.is_pointer_button_down_on() || response.clicked() {
             keys.press();
+            keys.touch(id);
         }
         let adding = ui.input(|input| input.modifiers.command || input.modifiers.shift);
         if response.drag_started() {

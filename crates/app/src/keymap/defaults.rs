@@ -150,6 +150,7 @@ impl Command {
             Self::NextEdit => vec![plain(Key::ArrowDown)],
             Self::PreviousKeyframe => vec![plain(Key::OpenBracket)],
             Self::NextKeyframe => vec![plain(Key::CloseBracket)],
+            Self::AddRemoveKeyframe => vec![ctrl(Key::OpenBracket)],
             Self::PlayInToOut => vec![ctrl_shift(Key::Space)],
             Self::PlayAround => vec![shift(Key::K)],
             Self::ToggleLoop => vec![ctrl_shift(Key::L)],

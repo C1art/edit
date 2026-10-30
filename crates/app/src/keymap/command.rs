@@ -139,6 +139,7 @@ pub enum Command {
     NextEdit,
     PreviousKeyframe,
     NextKeyframe,
+    AddRemoveKeyframe,
     PlayInToOut,
     PlayAround,
     ToggleLoop,
@@ -154,7 +155,7 @@ pub enum Command {
 pub const WORKSPACE_SLOTS: u8 = 9;
 
 impl Command {
-    pub const ALL: [Self; 154] = [
+    pub const ALL: [Self; 155] = [
         Self::NewProject,
         Self::OpenProject,
         Self::Save,
@@ -293,6 +294,7 @@ impl Command {
         Self::NextEdit,
         Self::PreviousKeyframe,
         Self::NextKeyframe,
+        Self::AddRemoveKeyframe,
         Self::PlayInToOut,
         Self::PlayAround,
         Self::ToggleLoop,
@@ -359,7 +361,8 @@ impl Command {
             | SlideLeft
             | SlideRight
             | SlideLeftFive
-            | SlideRightFive => "Clip",
+            | SlideRightFive
+            | AddRemoveKeyframe => "Clip",
             AddEdit
             | AddEditToAllTracks
             | ExtendEdit

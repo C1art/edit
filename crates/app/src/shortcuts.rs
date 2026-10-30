@@ -216,6 +216,7 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         Command::NextMarker => editor.jump_to_marker(true),
         Command::PreviousKeyframe => editor.jump_to_keyframe(false),
         Command::NextKeyframe => editor.jump_to_keyframe(true),
+        Command::AddRemoveKeyframe => editor.toggle_focused_keyframe(),
         Command::PreviousMarker => editor.jump_to_marker(false),
         Command::ClearAllMarkers => editor.clear_all_markers(),
         Command::ClearMarker => {

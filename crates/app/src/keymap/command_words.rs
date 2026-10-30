@@ -184,6 +184,7 @@ impl Command {
             Self::PlayInToOut => ("play_in_to_out", "Play In to Out"),
             Self::PreviousKeyframe => ("previous_keyframe", "Go to Previous Keyframe"),
             Self::NextKeyframe => ("next_keyframe", "Go to Next Keyframe"),
+            Self::AddRemoveKeyframe => ("add_remove_keyframe", "Add/Remove Keyframe"),
             Self::PlayAround => ("play_around", "Play Around"),
             Self::ToggleLoop => ("toggle_loop", "Loop Playback"),
             Self::ToggleAudioScrubbing => ("toggle_audio_scrubbing", "Audio During Scrubbing"),
