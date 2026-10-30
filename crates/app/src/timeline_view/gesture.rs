@@ -1,7 +1,7 @@
 use egui::Rangef;
 use timeline::{
     preview, ClipId, DeltaBounds, Edge, Edit, LinkedSelection, MoveClips, MoveMode, RateStretch,
-    Roll, Sequence, SetClipOpacity, SetClipVolume, SetTrackAutomation, SetTransition, Slide, Slip,
+    Roll, Sequence, SetClipLine, SetClipVolume, SetTrackAutomation, SetTransition, Slide, Slip,
     Ticks, Timeline, TimelineError, TrackKind, TrackRef, Trim, TrimMode, Unlinked,
 };
 
@@ -55,7 +55,7 @@ pub enum PendingEdit {
     Slip(Slip),
     Slide(Slide),
     Volume(SetClipVolume),
-    Opacity(SetClipOpacity),
+    Look(SetClipLine),
     Automation(SetTrackAutomation),
     Transition(SetTransition),
 }
@@ -70,7 +70,7 @@ impl PendingEdit {
             Self::Slip(edit) => preview(sequence, edit),
             Self::Slide(edit) => preview(sequence, edit),
             Self::Volume(edit) => preview(sequence, edit),
-            Self::Opacity(edit) => preview(sequence, edit),
+            Self::Look(edit) => preview(sequence, edit),
             Self::Automation(edit) => preview(sequence, edit),
             Self::Transition(edit) => preview(sequence, edit),
         }
@@ -100,7 +100,7 @@ impl PendingEdit {
             Self::Slip(edit) => run(timeline, edit, links),
             Self::Slide(edit) => run(timeline, edit, links),
             Self::Volume(edit) => run(timeline, edit, links),
-            Self::Opacity(edit) => run(timeline, edit, links),
+            Self::Look(edit) => run(timeline, edit, links),
             Self::Automation(edit) => run(timeline, edit, links),
             Self::Transition(edit) => run(timeline, edit, links),
         }
@@ -232,10 +232,9 @@ impl Gesture {
                         clip,
                         volume: param,
                     }),
-                    BandOwner::Opacity(clip) => PendingEdit::Opacity(SetClipOpacity {
-                        clip,
-                        opacity: param,
-                    }),
+                    BandOwner::Look(clip, line) => {
+                        PendingEdit::Look(SetClipLine { clip, line, param })
+                    }
                     BandOwner::Track(track) => PendingEdit::Automation(SetTrackAutomation {
                         track,
                         automation: param,

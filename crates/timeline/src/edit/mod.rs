@@ -54,7 +54,7 @@ pub use hold::{AddFrameHold, HoldFrame, InsertFrameHold, SetFrameHold};
 pub use interpret::InterpretFootage;
 pub use label::{RenameClips, SetClipLabel};
 pub use levels::{
-    AutoDuck, NormalizeClipGains, NudgeClipGain, SetClipAudioEffects, SetClipGain, SetClipOpacity,
+    AutoDuck, NormalizeClipGains, NudgeClipGain, SetClipAudioEffects, SetClipGain, SetClipLine,
     SetClipPan, SetClipVolume, SetMasterEffects, SetMasterGain, SetTrackAutomation,
     SetTrackEffects, SetTrackMix,
 };

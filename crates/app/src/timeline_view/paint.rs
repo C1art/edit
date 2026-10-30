@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
 use egui::{Align2, Color32, FontId, Painter, Rect, Stroke, StrokeKind};
-use timeline::{Clip, ClipId, Gain, Label, Sequence, Ticks, TrackKind};
+use timeline::{Clip, ClipId, ClipLine, Gain, Label, Sequence, Ticks, TrackKind};
 
 use super::clip_art::{self, ClipArea};
 use super::clip_marks::{
@@ -31,10 +31,11 @@ pub struct ClipStates {
     selected: HashSet<ClipId>,
     sync_offsets: HashMap<ClipId, Ticks>,
     duplicates: HashMap<ClipId, Vec<Range<Ticks>>>,
+    line: ClipLine,
 }
 
 impl ClipStates {
-    pub fn new(sequence: &Sequence, selection: &[ClipId], art: &ClipArt) -> Self {
+    pub fn new(sequence: &Sequence, selection: &[ClipId], art: &ClipArt, line: ClipLine) -> Self {
         Self {
             selected: selection.iter().copied().collect(),
             sync_offsets: sequence.sync_offsets(),
@@ -43,6 +44,7 @@ impl ClipStates {
             } else {
                 HashMap::new()
             },
+            line,
         }
     }
 }
@@ -283,8 +285,9 @@ pub fn clips(
                 if let Some(ranges) = states.duplicates.get(&clip.id) {
                     duplicate_marks(painter, body, scale, clip, ranges);
                 }
-                if rubber_band::opacity_shown(rect) {
-                    let envelope = rubber_band::Envelope::opacity(clip);
+                if rubber_band::video_line_shown(rect) {
+                    let format = &sequence.format;
+                    let envelope = rubber_band::Envelope::look(clip, states.line, format);
                     rubber_band::paint(painter, rect.shrink(1.0), scale, &envelope);
                 }
             }

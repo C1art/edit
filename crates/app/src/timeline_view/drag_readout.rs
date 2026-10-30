@@ -1,7 +1,8 @@
 use egui::{Response, Tooltip};
 use timeline::{ClipId, Sequence, Ticks};
 
-use super::gesture::PendingEdit;
+use super::gesture::{Gesture, PendingEdit};
+use super::rubber_band::Envelope;
 use super::TimelineView;
 
 impl TimelineView {
@@ -31,7 +32,12 @@ impl TimelineView {
                 }
                 return;
             }
-            PendingEdit::Volume(_) | PendingEdit::Opacity(_) | PendingEdit::Automation(_) => return,
+            PendingEdit::Volume(_) | PendingEdit::Look(_) | PendingEdit::Automation(_) => {
+                if let Some(text) = self.level_readout(drag.preview.as_ref()) {
+                    readout(response, text);
+                }
+                return;
+            }
         };
         let sign = if delta >= Ticks::ZERO { "+" } else { "" };
         let mut text = format!("{sign}{}", timecode(delta));
@@ -40,6 +46,17 @@ impl TimelineView {
             text.push_str(&format!("\nDuration {}", timecode(duration)));
         }
         readout(response, text);
+    }
+}
+
+impl TimelineView {
+    /// The level a line is dragged to, read from the previewed sequence.
+    fn level_readout(&self, preview: Option<&Sequence>) -> Option<String> {
+        let Gesture::Volume { owner, grabbed, .. } = self.drag.as_ref()?.gesture else {
+            return None;
+        };
+        let preview = preview?;
+        Envelope::of(preview, owner, preview.duration())?.readout(grabbed)
     }
 }
 

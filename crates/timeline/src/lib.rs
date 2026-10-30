@@ -4,6 +4,7 @@ mod audio_type;
 mod bin;
 mod blend;
 mod caption;
+mod clip_line;
 mod collect;
 mod color;
 mod curves;
@@ -78,6 +79,7 @@ pub use audio_type::AudioType;
 pub use bin::{Bin, BinId, BinSearch, SearchField};
 pub use blend::BlendMode;
 pub use caption::{captions_from_cues, Caption, CaptionStyle, Captions};
+pub use clip_line::ClipLine;
 pub use collect::{collect_files, Collect, FileCopy};
 pub use color::{ColorCorrection, ColorVignette, ColorWheel};
 pub use curves::{Curve, CurvePoint, Curves, CURVE_RANGE};
@@ -96,7 +98,7 @@ pub use edit::{
     RemoveSpeedKeyframe, RemoveSubmix, RemoveTimeRemap, RemoveTrack, RemoveTransitions, RenameBin,
     RenameClips, RenameMedia, RenameTrack, RenderAndReplace, ReplaceClip, RestoreUnrendered,
     RippleDelete, RippleTrimToPlayhead, Roll, SetBinSearch, SetCaptions, SetChannelMap,
-    SetClipAudioEffects, SetClipGain, SetClipLabel, SetClipLook, SetClipOpacity, SetClipPan,
+    SetClipAudioEffects, SetClipGain, SetClipLabel, SetClipLine, SetClipLook, SetClipPan,
     SetClipSpeed, SetClipVolume, SetClipsEnabled, SetClipsSound, SetFrameHold, SetGenerator,
     SetGrouped, SetLinked, SetLinkedSelection, SetMaintainPitch, SetMarks, SetMasterEffects,
     SetMasterGain, SetMediaLog, SetProxy, SetRippleMarkers, SetSegmentSpeed, SetSequenceFormat,

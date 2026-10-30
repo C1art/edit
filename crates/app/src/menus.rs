@@ -403,6 +403,12 @@ pub fn timeline_toolbar(editor: &mut Editor, ui: &mut egui::Ui) {
                 .on_hover_text(
                     "A colored strip where a clip shows footage another clip also shows",
                 );
+                ui.menu_button("Show Video Clip Keyframes", |ui| {
+                    for line in timeline::ClipLine::ALL {
+                        ui.radio_value(&mut editor.view.clip_line, line, line.name());
+                    }
+                    ui.weak("Drag the line on a tall enough clip; Ctrl-click adds a keyframe");
+                });
             });
         });
         theme::segmented(ui, |ui| {

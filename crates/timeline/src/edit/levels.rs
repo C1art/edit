@@ -1,6 +1,7 @@
 use crate::edit::ops;
 use crate::{
-    AudioEffect, ClipId, Edit, Gain, Pan, Param, Sequence, TimelineError, TrackKind, TrackRef,
+    AudioEffect, ClipId, ClipLine, Edit, Gain, Pan, Param, Sequence, TimelineError, TrackKind,
+    TrackRef,
 };
 
 /// Sets the gain of the audio clips among `clips` and the clips linked to them.
@@ -131,16 +132,17 @@ impl Edit for SetClipVolume {
     }
 }
 
-/// Replaces a video clip's opacity and its keyframes.
+/// Replaces one of a video clip's keyed properties, the one its timeline line shows.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SetClipOpacity {
+pub struct SetClipLine {
     pub clip: ClipId,
-    pub opacity: Param,
+    pub line: ClipLine,
+    pub param: Param,
 }
 
-impl Edit for SetClipOpacity {
+impl Edit for SetClipLine {
     fn name(&self) -> &'static str {
-        "Opacity"
+        self.line.name()
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
@@ -151,10 +153,11 @@ impl Edit for SetClipOpacity {
             return Err(TimelineError::NothingToEdit);
         }
         let clip = ops::clip_mut(sequence, self.clip)?;
-        if clip.look.opacity == self.opacity {
+        let param = self.line.param_mut(&mut clip.look);
+        if *param == self.param {
             return Err(TimelineError::NothingToEdit);
         }
-        clip.look.opacity = self.opacity.clone();
+        param.clone_from(&self.param);
         Ok(())
     }
 }

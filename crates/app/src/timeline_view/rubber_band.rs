@@ -1,5 +1,7 @@
 use egui::{Color32, Painter, Pos2, Rangef, Rect, Stroke};
-use timeline::{Clip, ClipId, Gain, Param, Sequence, Ticks, Track, TrackRef};
+use timeline::{
+    Clip, ClipId, ClipLine, Gain, Param, Sequence, Ticks, Track, TrackRef, VideoFormat,
+};
 
 use super::scale::TimeScale;
 
@@ -10,8 +12,8 @@ const CEILING_DB: f32 = 15.0;
 const LABEL_HEIGHT: f32 = 15.0;
 /// How close, in points, the pointer must be to grab the line or a keyframe.
 const GRAB: f32 = 4.0;
-/// Video clips shorter than this, in points, leave their opacity line out of the way.
-const OPACITY_MIN_HEIGHT: f32 = 40.0;
+/// Video clips shorter than this, in points, leave their line out of the way.
+const VIDEO_LINE_MIN_HEIGHT: f32 = 40.0;
 /// Points between samples of an animated line.
 const SAMPLE_SPACING: f32 = 3.0;
 const LINE: Color32 = Color32::from_rgb(250, 210, 60);
@@ -23,33 +25,54 @@ const TRACK_LINE: Color32 = Color32::from_rgb(255, 135, 60);
 pub enum BandOwner {
     /// An audio clip's volume.
     Clip(ClipId),
-    /// A video clip's opacity.
-    Opacity(ClipId),
+    /// The property of a video clip its line shows.
+    Look(ClipId, ClipLine),
     /// The track's automation, shown across its whole row.
     Track(TrackRef),
 }
 
 /// What a line's height stands for.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Level {
-    Decibels,
-    Percent,
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Level {
+    /// The values the band spans, bottom to top; values past them sit on its edge.
+    shown: (f32, f32),
+    /// The hundredths a value may take.
+    limits: (i32, i32),
+    unit: &'static str,
 }
 
-impl Level {
-    /// The values the band spans, bottom to top; values past them sit on its edge.
-    fn shown(self) -> (f32, f32) {
-        match self {
-            Self::Decibels => (FLOOR_DB, CEILING_DB),
-            Self::Percent => (0.0, 100.0),
-        }
-    }
+/// Hundredths far past any setting a motion property is given, bounding a drag.
+const MOTION_LIMIT: i32 = 100_000_000;
 
-    /// The hundredths a value may take.
-    fn limits(self) -> (i32, i32) {
-        match self {
-            Self::Decibels => (Gain::SILENT.0, Gain::MAX.0),
-            Self::Percent => (0, 10_000),
+impl Level {
+    const DECIBELS: Self = Self {
+        shown: (FLOOR_DB, CEILING_DB),
+        limits: (Gain::SILENT.0, Gain::MAX.0),
+        unit: " dB",
+    };
+    const PERCENT: Self = Self {
+        shown: (0.0, 100.0),
+        limits: (0, 10_000),
+        unit: "%",
+    };
+
+    /// A video clip's `line`, spanning the settings it's usually given in `format`.
+    fn of(line: ClipLine, format: &VideoFormat) -> Self {
+        let either_way = |extent: f32, unit| Self {
+            shown: (-extent, extent),
+            limits: (-MOTION_LIMIT, MOTION_LIMIT),
+            unit,
+        };
+        match line {
+            ClipLine::Opacity => Self::PERCENT,
+            ClipLine::Scale => Self {
+                shown: (0.0, 200.0),
+                limits: (0, MOTION_LIMIT),
+                unit: "%",
+            },
+            ClipLine::Rotation => either_way(180.0, "\u{B0}"),
+            ClipLine::PositionX => either_way(format.width as f32, " px"),
+            ClipLine::PositionY => either_way(format.height as f32, " px"),
         }
     }
 }
@@ -68,16 +91,16 @@ impl<'a> Envelope<'a> {
     pub fn clip(clip: &'a Clip) -> Self {
         Self {
             param: &clip.volume,
-            level: Level::Decibels,
+            level: Level::DECIBELS,
             span: (clip.start, clip.end()),
             clip: Some(clip),
         }
     }
 
-    pub fn opacity(clip: &'a Clip) -> Self {
+    pub fn look(clip: &'a Clip, line: ClipLine, format: &VideoFormat) -> Self {
         Self {
-            param: &clip.look.opacity,
-            level: Level::Percent,
+            param: line.param(&clip.look),
+            level: Level::of(line, format),
             span: (clip.start, clip.end()),
             clip: Some(clip),
         }
@@ -87,7 +110,7 @@ impl<'a> Envelope<'a> {
     pub fn track(track: &'a Track, end: Ticks) -> Self {
         Self {
             param: &track.automation,
-            level: Level::Decibels,
+            level: Level::DECIBELS,
             span: (Ticks::ZERO, end),
             clip: None,
         }
@@ -135,9 +158,23 @@ impl<'a> Envelope<'a> {
         self.param
     }
 
+    /// The value at what the pointer grabbed, with its unit, for showing while dragged.
+    pub fn readout(&self, grabbed: BandHit) -> Option<String> {
+        let value = match grabbed {
+            BandHit::Key(index) => self.param.keys.get(index)?.hundredths as f32 / 100.0,
+            BandHit::Line(at) => self.param.value_at(at),
+        };
+        let silent = self.level == Level::DECIBELS && value * 100.0 <= Gain::SILENT.0 as f32;
+        Some(if silent {
+            "\u{2212}\u{221E} dB".to_owned()
+        } else {
+            format!("{value:.1}{}", self.level.unit)
+        })
+    }
+
     /// The change in value for moving the pointer `dy` points down `band`.
     pub fn change_for_drag(&self, band: Rangef, dy: f32) -> f32 {
-        let (bottom, top) = self.level.shown();
+        let (bottom, top) = self.level.shown;
         -dy * (top - bottom) / band.span().max(1.0)
     }
 
@@ -145,7 +182,9 @@ impl<'a> Envelope<'a> {
     pub fn of(sequence: &'a Sequence, owner: BandOwner, end: Ticks) -> Option<Self> {
         match owner {
             BandOwner::Clip(id) => sequence.clip(id).map(|(_, clip)| Self::clip(clip)),
-            BandOwner::Opacity(id) => sequence.clip(id).map(|(_, clip)| Self::opacity(clip)),
+            BandOwner::Look(id, line) => sequence
+                .clip(id)
+                .map(|(_, clip)| Self::look(clip, line, &sequence.format)),
             BandOwner::Track(track) => sequence.track(track).map(|track| Self::track(track, end)),
         }
     }
@@ -159,9 +198,9 @@ pub enum BandHit {
     Line(Ticks),
 }
 
-/// Whether a video clip drawn in `rect` shows its opacity line.
-pub fn opacity_shown(rect: Rect) -> bool {
-    rect.height() >= OPACITY_MIN_HEIGHT
+/// Whether a video clip drawn in `rect` shows its line.
+pub fn video_line_shown(rect: Rect) -> bool {
+    rect.height() >= VIDEO_LINE_MIN_HEIGHT
 }
 
 /// Where the line moves within a clip's rectangle or a track's row.
@@ -170,7 +209,7 @@ pub fn band(rect: Rect) -> Rangef {
 }
 
 fn level_y(band: Rangef, level: Level, value: f32) -> f32 {
-    let (bottom, top) = level.shown();
+    let (bottom, top) = level.shown;
     let fraction = ((value - bottom) / (top - bottom)).clamp(0.0, 1.0);
     band.max - fraction * band.span()
 }
@@ -263,7 +302,7 @@ pub fn hit(rect: Rect, scale: &TimeScale, envelope: &Envelope, pointer: Pos2) ->
 /// or the keyframes either side of the grab when animated.
 pub fn dragged(envelope: &Envelope, grabbed: BandHit, delta: Ticks, change: f32) -> Param {
     let mut param = envelope.param.clone();
-    let (least, most) = envelope.level.limits();
+    let (least, most) = envelope.level.limits;
     let shift = |hundredths: i32| (hundredths + (change * 100.0).round() as i32).clamp(least, most);
     match grabbed {
         BandHit::Key(index) => {

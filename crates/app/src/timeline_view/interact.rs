@@ -1,7 +1,7 @@
 use egui::{Pos2, Rangef};
 use timeline::{
     ClipId, DeltaBounds, LinkedSelection, MarkerOwner, MoveMode, Razor, RazorTarget, Sequence,
-    SetClipOpacity, SetClipVolume, SetTrackAutomation, Ticks, Timeline, TrackKind, TrackRef,
+    SetClipLine, SetClipVolume, SetTrackAutomation, Ticks, Timeline, TrackKind, TrackRef,
 };
 
 use super::gesture::{self, Gesture};
@@ -204,7 +204,7 @@ impl TimelineView {
 
     /// The level line the pointer is on, what it grabs there and the band the line
     /// moves in: a shown track's automation anywhere along its row, else a clip's own
-    /// volume or opacity line.
+    /// volume line or the line a video clip shows.
     pub(super) fn band_hit(
         &self,
         sequence: &Sequence,
@@ -234,9 +234,10 @@ impl TimelineView {
         let rect = layout::clip_rect(row, scale, clip.start, clip.end()).shrink(1.0);
         let (owner, envelope) = match track.kind {
             TrackKind::Audio => (BandOwner::Clip(clip.id), Envelope::clip(clip)),
-            TrackKind::Video if rubber_band::opacity_shown(rect.expand(1.0)) => {
-                (BandOwner::Opacity(clip.id), Envelope::opacity(clip))
-            }
+            TrackKind::Video if rubber_band::video_line_shown(rect.expand(1.0)) => (
+                BandOwner::Look(clip.id, self.clip_line),
+                Envelope::look(clip, self.clip_line, &sequence.format),
+            ),
             TrackKind::Video => return None,
         };
         let grabbed = rubber_band::hit(rect, scale, &envelope, pointer)?;
@@ -376,10 +377,7 @@ fn toggle_level_key(
             clip,
             volume: param,
         }),
-        BandOwner::Opacity(clip) => timeline.apply(SetClipOpacity {
-            clip,
-            opacity: param,
-        }),
+        BandOwner::Look(clip, line) => timeline.apply(SetClipLine { clip, line, param }),
         BandOwner::Track(track) => timeline.apply(SetTrackAutomation {
             track,
             automation: param,

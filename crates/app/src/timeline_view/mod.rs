@@ -30,7 +30,7 @@ use std::collections::BTreeSet;
 
 use egui::{Rect, Sense};
 use timeline::{
-    AddTrack, ClipId, DeltaBounds, LinkedSelection, MarkerId, MarkerOwner, RemoveTrack,
+    AddTrack, ClipId, ClipLine, DeltaBounds, LinkedSelection, MarkerId, MarkerOwner, RemoveTrack,
     RenameTrack, Sequence, SetTrackSwitch, Ticks, TimeDisplay, Timeline, TrackKind, TrackRef,
 };
 
@@ -152,6 +152,8 @@ pub struct TimelineView {
     context_gap: bool,
     /// Audio tracks showing their automation in place of their clips' volume lines.
     automation_shown: BTreeSet<TrackRef>,
+    /// The property video clips show the keyframes of.
+    pub clip_line: ClipLine,
     renaming: Option<header::Renaming>,
     pub heights: TrackHeights,
     /// The costly segments, each with whether a render preview of it is ready.
@@ -184,6 +186,7 @@ impl Default for TimelineView {
             context_clip: false,
             context_gap: false,
             automation_shown: BTreeSet::new(),
+            clip_line: ClipLine::default(),
             renaming: None,
             heights: TrackHeights::default(),
             render_bar: Vec::new(),
@@ -301,7 +304,7 @@ impl TimelineView {
             .as_ref()
             .filter(|point| point.is_on(sequence));
         let shown = painter.clip_rect().y_range();
-        let states = paint::ClipStates::new(sequence, &self.selection, art);
+        let states = paint::ClipStates::new(sequence, &self.selection, art, self.clip_line);
         for row in rows.iter().filter(|row| row.y_range().intersects(shown)) {
             paint::row_background(
                 &painter,
