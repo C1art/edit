@@ -100,6 +100,7 @@ fn cut_media_keeps_its_picture_and_sound_together() {
             }),
             range: None,
             previews: Vec::new(),
+            loudness: None,
         };
         export(&sequence, &gpu, settings).unwrap();
         let decoded = decode(&path).unwrap();

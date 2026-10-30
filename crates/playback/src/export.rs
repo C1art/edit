@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::ops::{ControlFlow, Range};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -14,6 +14,7 @@ use render::{Background, Compositor, LayerImage, Readback};
 use timeline::{Sequence, Ticks};
 
 use crate::export_sink::{Sink, Stills, Work};
+use crate::loudness::{measure_span, LoudnessTarget};
 use crate::previews::{self, Preview, PreviewPictures};
 use crate::sequence_mix::{SequenceMix, CHUNK_FRAMES};
 use crate::{compose, Layer, PlaybackError, Resolution};
@@ -30,6 +31,8 @@ pub struct ExportSettings {
     /// Rendered previews whose pictures are taken where they cover, instead of composing
     /// the sequence again; ignored for an export that keeps alpha, which they lack.
     pub previews: Vec<Preview>,
+    /// Where the sound is brought to, measured over the whole export first.
+    pub loudness: Option<LoudnessTarget>,
 }
 
 /// Pictures at the sequence's frame rate, scaled from its frame size to `size`.
@@ -57,6 +60,9 @@ pub enum ExportEvent {
     },
     /// A piece of media could not be read; the export carries on without it.
     Warning(PlaybackError),
+    /// How much of the sound has been measured before anything is written, for an
+    /// export brought to a loudness.
+    Measuring(f32),
     /// What encodes the video, such as "NVIDIA NVENC (hardware)", sent once it opens.
     Encoder(String),
     Finished,
@@ -184,6 +190,32 @@ impl Worker {
         }
     }
 
+    /// How loud the exported span is; `None` if cancelled while measuring.
+    fn measure(
+        &self,
+        sequence: &Sequence,
+        exported: Range<Ticks>,
+        rate: SampleRate,
+    ) -> Option<crate::Loudness> {
+        let mut mix = SequenceMix::new(rate);
+        let total = (exported.end - exported.start)
+            .rescale(sequence.timebase, mix.rate())
+            .0;
+        let mut done = 0;
+        measure_span(&mut mix, sequence, exported, |length, warnings| {
+            if self.cancel.load(Ordering::Relaxed) {
+                return ControlFlow::Break(());
+            }
+            // Writing reads the same media again and reports what fails then.
+            warnings.clear();
+            done += length;
+            let _ = self
+                .events
+                .send(ExportEvent::Measuring(done as f32 / total.max(1) as f32));
+            ControlFlow::Continue(())
+        })
+    }
+
     fn render(&mut self) -> Result<Outcome, PlaybackError> {
         let sequence = Arc::clone(&self.sequence);
         let format = sequence.format;
@@ -218,6 +250,16 @@ impl Worker {
         let frames = frame_span(&sequence, self.settings.range.clone());
         let exported =
             rate.frame_start(frames.start, timebase)..rate.frame_start(frames.end, timebase);
+        let gain = match (self.settings.loudness, audio) {
+            (Some(target), Some(audio)) if stills.is_none() => {
+                let rate = SampleRate(audio.sample_rate);
+                match self.measure(&sequence, exported.clone(), rate) {
+                    Some(measured) => target.gain(measured),
+                    None => return Ok(Outcome::Cancelled),
+                }
+            }
+            _ => 1.0,
+        };
         let chapters = timeline::chapters(&sequence.markers, exported);
         let path = self.settings.path.clone();
         let writer = match stills {
@@ -296,7 +338,8 @@ impl Worker {
                         mix.mix_chunk(&sequence, audio_written, &mut warnings);
                         let frames = (audio_total - audio_written).min(CHUNK_FRAMES as i64);
                         let samples = usize::try_from(frames).unwrap_or(0) * 2;
-                        sink.send(Work::Sound(mix.mix[..samples].to_vec()))?;
+                        let sound = mix.mix[..samples].iter().map(|sample| sample * gain);
+                        sink.send(Work::Sound(sound.collect()))?;
                         audio_written += frames;
                     }
                 }

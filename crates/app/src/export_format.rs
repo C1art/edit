@@ -1,7 +1,7 @@
 use media::{
     Acceleration, AudioCodec, AudioSettings, DnxhrQuality, RateControl, StillFormat, VideoCodec,
 };
-use playback::{VideoEncoding, VideoExport};
+use playback::{LoudnessTarget, VideoEncoding, VideoExport};
 
 /// What kind of file an export makes: its codecs and container.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -126,6 +126,8 @@ pub struct ExportFormat {
     pub with_audio: bool,
     pub audio_kbps: u32,
     pub sample_rate: u32,
+    /// Kept when a preset is picked, as it says how loud rather than what to make.
+    pub loudness: Option<LoudnessTarget>,
 }
 
 pub struct Preset {
@@ -143,6 +145,7 @@ const MATCH_SOURCE: ExportFormat = ExportFormat {
     with_audio: true,
     audio_kbps: 320,
     sample_rate: 48_000,
+    loudness: None,
 };
 
 const fn video_preset(name: &'static str, height: u32, mbps: u32) -> Preset {
@@ -251,6 +254,7 @@ impl ExportFormat {
                 unused.rate_control
             },
             acceleration: unused.acceleration,
+            loudness: unused.loudness,
             with_audio: !self.format.has_video() || self.with_audio,
             audio_kbps: if self.has_audio() && self.audio_is_lossy() {
                 self.audio_kbps

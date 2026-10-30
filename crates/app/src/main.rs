@@ -27,6 +27,7 @@ mod essential_sound;
 mod export;
 mod export_format;
 mod export_frame;
+mod export_loudness;
 mod export_progress;
 mod export_queue;
 mod export_summary;

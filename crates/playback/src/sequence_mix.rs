@@ -12,6 +12,7 @@ pub(crate) const CHUNK_FRAMES: usize = 1024;
 /// stereo at one output rate.
 pub(crate) struct SequenceMix {
     tracks: TracksMix,
+    sample_rate: SampleRate,
     /// The last chunk mixed.
     pub(crate) mix: Vec<f32>,
 }
@@ -20,6 +21,7 @@ impl SequenceMix {
     pub(crate) fn new(sample_rate: SampleRate) -> Self {
         Self {
             tracks: TracksMix::new(sample_rate),
+            sample_rate,
             mix: vec![0.0; CHUNK_FRAMES * 2],
         }
     }
@@ -27,6 +29,10 @@ impl SequenceMix {
     /// One tick per output frame.
     pub(crate) fn rate(&self) -> Timebase {
         self.tracks.rate()
+    }
+
+    pub(crate) fn sample_rate(&self) -> SampleRate {
+        self.sample_rate
     }
 
     /// Forgets decode positions, so the next chunk seeks.

@@ -201,7 +201,7 @@ impl Editor {
                             frames_done: done,
                             frames_total: total,
                         } => (*frames_done, *frames_total) = (done, total),
-                        ExportEvent::Encoder(_) => {}
+                        ExportEvent::Measuring(_) | ExportEvent::Encoder(_) => {}
                         ExportEvent::Warning(warning) => self.notice(format!("Render: {warning}")),
                         ExportEvent::Finished => {
                             let sequence = self.timeline.sequence();
@@ -250,6 +250,7 @@ impl Editor {
             }),
             range: Some(Ticks::ZERO..pending.end),
             previews: Vec::new(),
+            loudness: None,
         };
         ExportJob::start(
             Arc::new(view),

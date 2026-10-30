@@ -67,7 +67,7 @@ pub use error::PlaybackError;
 pub use export::{ExportEvent, ExportJob, ExportSettings, VideoEncoding, VideoExport};
 pub use frame_probe::FrameProbe;
 pub use generated::generated_frame;
-pub use loudness::{clip_alone, Loudness, LoudnessEvent, LoudnessJob, Piece};
+pub use loudness::{clip_alone, Loudness, LoudnessEvent, LoudnessJob, LoudnessTarget, Piece};
 pub use player::Player;
 pub use previews::Preview;
 pub use remix::{RemixEvent, RemixJob};

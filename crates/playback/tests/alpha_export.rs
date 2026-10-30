@@ -84,6 +84,7 @@ fn prores_4444_export_is_clear_where_nothing_is_drawn() {
         audio: None,
         range: None,
         previews: Vec::new(),
+        loudness: None,
     };
     let job = ExportJob::start(sequence(), device, queue, settings).unwrap();
     let deadline = Instant::now() + Duration::from_secs(30);

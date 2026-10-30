@@ -9,7 +9,7 @@ use crate::editor::Editor;
 use crate::gain_dialog::db;
 
 /// Common delivery targets in LUFS.
-const TARGETS: [(&str, f32); 3] = [
+pub(crate) const TARGETS: [(&str, f32); 3] = [
     ("EBU R128", -23.0),
     ("ATSC A/85", -24.0),
     ("Streaming", -14.0),

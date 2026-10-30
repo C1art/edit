@@ -46,7 +46,13 @@ pub fn summary(format: &ExportFormat, sequence_size: (u32, u32)) -> String {
             codec.to_owned()
         }
     });
-    match (format.video(sequence_size), audio) {
+    let loudness = format
+        .loudness
+        .filter(|_| format.has_audio())
+        .map_or_else(String::new, |target| {
+            format!(" Sound brought to {} LUFS.", target.lufs)
+        });
+    let what = match (format.video(sequence_size), audio) {
         (Some(video), Some(audio)) => format!(
             "{} at {}×{}, with {audio} sound.",
             format.format.name(),
@@ -61,7 +67,8 @@ pub fn summary(format: &ExportFormat, sequence_size: (u32, u32)) -> String {
         ),
         (None, Some(audio)) => format!("Sound only, {audio}."),
         (None, None) => String::new(),
-    }
+    };
+    what + &loudness
 }
 
 fn audio_codec_name(codec: AudioCodec) -> &'static str {

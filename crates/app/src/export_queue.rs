@@ -80,12 +80,14 @@ impl Editor {
             let mut ended = None;
             let mut progress = None;
             let mut encoder = None;
+            let mut measuring = None;
             for event in events {
                 match event {
                     ExportEvent::Progress {
                         frames_done,
                         frames_total,
                     } => progress = Some((frames_done, frames_total)),
+                    ExportEvent::Measuring(fraction) => measuring = Some(fraction),
                     ExportEvent::Encoder(name) => encoder = Some(name),
                     ExportEvent::Warning(error) => notices.push(format!("Export: {error}")),
                     ExportEvent::Finished => ended = Some(Status::Done),
@@ -98,6 +100,10 @@ impl Editor {
                     (progress, &mut item.status)
                 {
                     running.update(done, total);
+                }
+                if let (Some(fraction), Status::Exporting(running)) = (measuring, &mut item.status)
+                {
+                    running.measuring(fraction);
                 }
                 if let (Some(encoder), Status::Exporting(running)) = (encoder, &mut item.status) {
                     running.set_encoder(encoder);

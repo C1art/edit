@@ -285,6 +285,7 @@ fn prepare(editor: &mut Editor) -> Option<(Arc<Sequence>, ExportSettings)> {
         audio: dialog.format.audio(),
         range,
         previews,
+        loudness: dialog.format.loudness.filter(|_| dialog.format.has_audio()),
     };
     Some((Arc::new(sequence.clone()), settings))
 }
@@ -358,6 +359,7 @@ fn settings(
                         {
                             *format = ExportFormat {
                                 acceleration: format.acceleration,
+                                loudness: format.loudness,
                                 ..preset.format
                             };
                         }
@@ -398,6 +400,7 @@ fn settings(
                     });
                     ui.end_row();
                 }
+                crate::export_loudness::row(ui, &mut format.loudness);
             }
             more(ui, format);
         });
@@ -421,6 +424,7 @@ fn poll(editor: &mut Editor) {
             } => {
                 running.progress.update(frames_done, frames_total);
             }
+            ExportEvent::Measuring(fraction) => running.progress.measuring(fraction),
             ExportEvent::Encoder(encoder) => running.progress.set_encoder(encoder),
             ExportEvent::Warning(error) => notices.push(format!("Export: {error}")),
             ExportEvent::Finished => {

@@ -12,6 +12,8 @@ pub struct ExportProgress {
     done: i64,
     total: i64,
     encoder: Option<String>,
+    /// How much of the sound has been measured, until the first frame is written.
+    measuring: Option<f32>,
 }
 
 impl ExportProgress {
@@ -21,12 +23,21 @@ impl ExportProgress {
             done: 0,
             total: 0,
             encoder: None,
+            measuring: None,
         }
     }
 
     pub fn update(&mut self, done: i64, total: i64) {
+        if self.measuring.take().is_some() {
+            // Measuring goes faster than writing, so its time would skew the estimate.
+            self.started = Instant::now();
+        }
         self.done = done;
         self.total = total;
+    }
+
+    pub fn measuring(&mut self, fraction: f32) {
+        self.measuring = Some(fraction);
     }
 
     pub fn set_encoder(&mut self, encoder: String) {
@@ -34,6 +45,10 @@ impl ExportProgress {
     }
 
     pub fn bar(&self, width: f32) -> ProgressBar {
+        if let Some(fraction) = self.measuring {
+            let text = format!("Measuring loudness  ·  {:.0}%", fraction * 100.0);
+            return ProgressBar::new(fraction).desired_width(width).text(text);
+        }
         let fraction = if self.total > 0 {
             self.done as f32 / self.total as f32
         } else {

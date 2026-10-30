@@ -286,6 +286,7 @@ fn run_case(
         }),
         range: (!whole).then(|| Ticks(range.start * FRAME)..Ticks(range.end * FRAME)),
         previews: Vec::new(),
+        loudness: None,
     };
     if let Err(error) = export(sequence, gpu, settings) {
         return vec![format!("export failed: {error}")];
@@ -325,6 +326,7 @@ fn still_frames(sequence: &Arc<Sequence>, gpu: &Gpu, directory: &Path) -> Vec<St
             audio: None,
             range: None,
             previews: Vec::new(),
+            loudness: None,
         };
         if let Err(error) = export(sequence, gpu, settings) {
             problems.push(format!("{format:?}: export failed: {error}"));
