@@ -11,7 +11,8 @@ struct Yuv {
     cr_mask: vec4<f32>,
     // Chroma texels per luma pixel, then how far right of that the chroma was sited.
     chroma: vec4<f32>,
-    // Luma pixels across one output pixel.
+    // Luma pixels across one output pixel, then the picture's size in them, which a
+    // decoder's padded texture is larger than.
     footprint: vec4<f32>,
 };
 
@@ -42,7 +43,7 @@ fn chroma_at(at: vec2<f32>) -> vec2<f32> {
     let corner = at - 0.5;
     let base = floor(corner);
     let weight = corner - base;
-    let last = vec2<i32>(textureDimensions(cb_plane)) - 1;
+    let last = vec2<i32>(ceil(yuv.footprint.zw * yuv.chroma.xy)) - 1;
     let low = clamp(vec2<i32>(base), vec2<i32>(0), last);
     let high = clamp(vec2<i32>(base) + 1, vec2<i32>(0), last);
     let top = mix(chroma_texel(low), chroma_texel(vec2<i32>(high.x, low.y)), weight.x);
@@ -58,7 +59,7 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let taps = clamp(round(footprint), vec2<f32>(1.0), vec2<f32>(8.0));
     let step = footprint / taps;
     let first = (position.xy - 0.5) * footprint + 0.5 * step;
-    let last = vec2<i32>(textureDimensions(luma)) - 1;
+    let last = vec2<i32>(yuv.footprint.zw) - 1;
     var y = 0.0;
     for (var row = 0.0; row < taps.y; row += 1.0) {
         for (var column = 0.0; column < taps.x; column += 1.0) {

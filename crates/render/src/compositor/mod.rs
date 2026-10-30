@@ -1,21 +1,22 @@
+mod picture;
 mod prepare;
 mod slots;
 
 use std::any::Any;
 use std::sync::Arc;
 
-use timeline::{MatteChannel, PlaneFormat, YuvColor};
+use timeline::MatteChannel;
 
 use crate::backdrop::{Backdrop, Drawn};
 use crate::blit::{self, Blit, DISPLAY_FORMAT};
-use crate::combine::Combine;
 use crate::grade::Grade;
 use crate::layer_pipelines::LayerPass;
 use crate::layer_shader::Features;
 use crate::placement::{LayerLook, Placement};
 use crate::scope::{Scope, ScopeTrace};
-use crate::yuv::{ChromaRows, PlaneRows, YuvConverter};
+use crate::yuv::YuvConverter;
 use crate::{RenderError, WORKING_FORMAT};
+pub use picture::Picture;
 use slots::Slot;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,49 +38,6 @@ pub struct LayerImage<'a> {
     pub look: LayerLook,
     /// Shared between frames, so its textures are only uploaded when it changes.
     pub grade: Option<Arc<Grade>>,
-}
-
-#[derive(Debug, Clone)]
-pub enum Picture<'a> {
-    /// Tightly packed RGBA8 in the source transfer function.
-    Pixels {
-        width: u32,
-        height: u32,
-        rgba: &'a [u8],
-        /// What holds `rgba`, unchanged for as long as it lives. A layer showing the
-        /// same source as last time keeps its texture instead of uploading it again.
-        source: Option<Arc<dyn Any + Send + Sync>>,
-    },
-    /// A picture's planes, in the source transfer function, turned into RGB on the
-    /// GPU.
-    Planes {
-        width: u32,
-        height: u32,
-        /// The size to turn them into: theirs, or smaller to shrink them on the way.
-        output: (u32, u32),
-        luma: PlaneRows<'a>,
-        chroma: ChromaRows<'a>,
-        color: YuvColor,
-        format: PlaneFormat,
-        /// As for [`Picture::Pixels`].
-        source: Option<Arc<dyn Any + Send + Sync>>,
-    },
-    /// Layers composited bottom first onto a transparent canvas of their own, so the
-    /// look applies to them as one picture, as to a nested sequence.
-    Group(Vec<LayerImage<'a>>),
-    /// `fill` composited as a group, shown only where the group `matte` lets it.
-    Matted {
-        fill: Vec<LayerImage<'a>>,
-        matte: Vec<LayerImage<'a>>,
-        channel: MatteChannel,
-        reverse: bool,
-    },
-    /// `layer` composited as a group, combined with the group `other`.
-    Combined {
-        layer: Vec<LayerImage<'a>>,
-        other: Vec<LayerImage<'a>>,
-        combine: Combine,
-    },
 }
 
 /// GPU work that must run before the layers that use it are drawn.
@@ -147,6 +105,12 @@ pub struct Compositor {
     /// Whether the output texture was recreated for a frame left pending, so the next
     /// frame shown must report it.
     unshown_target: bool,
+    #[cfg(windows)]
+    shared: crate::shared::SharedTextures,
+    /// Decoded pictures replaced since the last submit, kept until the GPU is done
+    /// reading them so their decoder can't write over them first.
+    #[cfg(windows)]
+    retired: Vec<Arc<dyn Any + Send + Sync>>,
 }
 
 impl Compositor {
@@ -167,6 +131,10 @@ impl Compositor {
             scope: None,
             background: Background::Black,
             unshown_target: false,
+            #[cfg(windows)]
+            shared: crate::shared::SharedTextures::default(),
+            #[cfg(windows)]
+            retired: Vec::new(),
         }
     }
 
@@ -379,18 +347,30 @@ impl Compositor {
         }
         // The encoder is dropped unsubmitted: a frame with layers left out isn't shown.
         if self.blit.layers.take_missed() | unconverted {
-            self.queue.submit([conversions.finish()]);
+            self.submit([conversions.finish()]);
             self.unshown_target |= presented == Presented::NewTarget;
             return Ok(Presented::Pending);
         }
         if let Some(trace) = &self.scope {
             trace.record(&mut encoder);
         }
-        self.queue.submit([conversions.finish(), encoder.finish()]);
+        self.submit([conversions.finish(), encoder.finish()]);
         if std::mem::take(&mut self.unshown_target) {
             return Ok(Presented::NewTarget);
         }
         Ok(presented)
+    }
+
+    fn submit<const N: usize>(&mut self, buffers: [wgpu::CommandBuffer; N]) {
+        self.queue.submit(buffers);
+        #[cfg(windows)]
+        {
+            self.shared.finish_composite();
+            let retired = std::mem::take(&mut self.retired);
+            if !retired.is_empty() {
+                self.queue.on_submitted_work_done(move || drop(retired));
+            }
+        }
     }
 
     fn placed(&self, slots: &[usize]) -> Vec<Drawn<'_>> {

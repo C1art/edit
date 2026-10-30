@@ -24,6 +24,9 @@ pub(super) enum SlotKind {
     Group,
     /// A working texture that uploaded planes of this size are turned into.
     Planes(ChromaLayout, PlaneFormat, (u32, u32)),
+    /// A working texture that a decoder's texture is turned into.
+    #[cfg(windows)]
+    Surface(PlaneFormat),
 }
 
 /// Texture and placement for one layer, reused while the layer's size and kind hold.
@@ -71,11 +74,25 @@ impl Compositor {
         if !fits {
             let slot = self.create_slot(size, kind);
             match self.slots.get_mut(index) {
-                Some(existing) => *existing = slot,
+                Some(existing) => {
+                    let replaced = std::mem::replace(existing, slot);
+                    self.retire(replaced.kind, replaced.uploaded);
+                }
                 None => self.slots.push(slot),
             }
         }
         index
+    }
+
+    /// Keeps what a slot let go of until the GPU has finished the work queued so far,
+    /// when that work may read the decoder's texture it holds.
+    fn retire(&mut self, kind: SlotKind, replaced: Option<Arc<dyn Any + Send + Sync>>) {
+        #[cfg(windows)]
+        if matches!(kind, SlotKind::Surface(_)) {
+            self.retired.extend(replaced);
+        }
+        #[cfg(not(windows))]
+        let _ = (kind, replaced);
     }
 
     /// Whether the slot must take a picture from `source`, which it then holds.
@@ -87,7 +104,9 @@ impl Compositor {
         if slot.uploaded.as_ref().is_some_and(same) {
             return false;
         }
-        slot.uploaded = source.cloned();
+        let replaced = std::mem::replace(&mut slot.uploaded, source.cloned());
+        let kind = slot.kind;
+        self.retire(kind, replaced);
         true
     }
 
@@ -132,6 +151,40 @@ impl Compositor {
         if let Some(planes) = &self.slots[index].planes {
             let output = (self.slots[index].width, self.slots[index].height);
             planes.upload(&self.queue, (luma, chroma), color, output);
+        }
+        true
+    }
+
+    /// Reads a picture of `size` from the decoder's texture; true if it must then be
+    /// converted.
+    #[cfg(windows)]
+    pub(super) fn upload_surface(
+        &mut self,
+        index: usize,
+        (texture, size): (
+            &windows::Win32::Graphics::Direct3D12::ID3D12Resource,
+            (u32, u32),
+        ),
+        (color, format): (timeline::YuvColor, PlaneFormat),
+        source: Option<&Arc<dyn Any + Send + Sync>>,
+    ) -> bool {
+        if !self.takes(index, source) {
+            return false;
+        }
+        let opened = self
+            .shared
+            .open(&self.device, texture, format)
+            .map(|opened| (&opened.luma, &opened.chroma));
+        let slot = &mut self.slots[index];
+        let output = (slot.width, slot.height);
+        if let Some(planes) = &mut slot.planes {
+            planes.bind_shared(
+                (&self.device, &self.queue),
+                &self.yuv,
+                opened,
+                color,
+                (size, output),
+            );
         }
         true
     }
@@ -182,6 +235,8 @@ impl Compositor {
         let (format, written) = match kind {
             SlotKind::Picture => (SOURCE_FORMAT, wgpu::TextureUsages::COPY_DST),
             SlotKind::Planes(..) => (WORKING_FORMAT, wgpu::TextureUsages::RENDER_ATTACHMENT),
+            #[cfg(windows)]
+            SlotKind::Surface(_) => (WORKING_FORMAT, wgpu::TextureUsages::RENDER_ATTACHMENT),
             // Copied to the backdrop under members with a blend mode.
             SlotKind::Group => (
                 WORKING_FORMAT,
@@ -203,6 +258,8 @@ impl Compositor {
                 size,
                 (layout, format),
             )),
+            #[cfg(windows)]
+            SlotKind::Surface(format) => Some(PlaneTextures::shared(&self.device, format)),
             SlotKind::Picture | SlotKind::Group => None,
         };
         Slot {

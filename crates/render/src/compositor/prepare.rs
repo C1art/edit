@@ -44,6 +44,16 @@ impl Compositor {
                         });
                     }
                 }
+                #[cfg(windows)]
+                Picture::Surface {
+                    width,
+                    height,
+                    output,
+                    ..
+                } => {
+                    self.check_size(*width, *height)?;
+                    self.check_size(output.0, output.1)?;
+                }
                 Picture::Group(members) => self.check_layers(members)?,
                 Picture::Matted {
                     fill: first,
@@ -99,6 +109,24 @@ impl Compositor {
                     let output = converted_size(*output, canvas, &layer.look);
                     let index = self.claim(next, output, kind);
                     if self.upload_planes(index, (*luma, chroma), *color, source.as_ref()) {
+                        steps.push(Step::Convert(index));
+                    }
+                    index
+                }
+                #[cfg(windows)]
+                Picture::Surface {
+                    width,
+                    height,
+                    output,
+                    texture,
+                    color,
+                    format,
+                    source,
+                } => {
+                    let output = converted_size(*output, canvas, &layer.look);
+                    let index = self.claim(next, output, SlotKind::Surface(*format));
+                    let picture = (*texture, (*width, *height));
+                    if self.upload_surface(index, picture, (*color, *format), source.as_ref()) {
                         steps.push(Step::Convert(index));
                     }
                     index

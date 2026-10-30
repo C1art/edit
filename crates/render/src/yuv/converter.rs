@@ -182,10 +182,12 @@ fn pipeline(
 pub(crate) struct PlaneTextures {
     samples: Samples,
     format: PlaneFormat,
-    luma: wgpu::Texture,
-    chroma: Vec<wgpu::Texture>,
+    /// The luma and chroma textures planes are uploaded to; none for a decoder's
+    /// texture, bound as each picture arrives.
+    uploaded: Option<(wgpu::Texture, Vec<wgpu::Texture>)>,
     uniform: wgpu::Buffer,
-    binding: wgpu::BindGroup,
+    /// `None` while there's no picture to read, which converts to nothing.
+    binding: Option<wgpu::BindGroup>,
 }
 
 impl PlaneTextures {
@@ -222,31 +224,56 @@ impl PlaneTextures {
         let luma_view = view(&luma);
         let cb = view(&chroma[0]);
         let cr = view(chroma.last().unwrap_or(&chroma[0]));
-        let uniform = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("yuv"),
-            size: UNIFORM_BYTES as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let entry = |binding, resource| wgpu::BindGroupEntry { binding, resource };
-        let binding = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("yuv"),
-            layout: &converter.layouts[samples as usize],
-            entries: &[
-                entry(0, wgpu::BindingResource::TextureView(&luma_view)),
-                entry(1, wgpu::BindingResource::TextureView(&cb)),
-                entry(2, wgpu::BindingResource::TextureView(&cr)),
-                entry(3, uniform.as_entire_binding()),
-            ],
-        });
+        let uniform = uniform_buffer(device);
+        let binding = bind(device, converter, samples, [&luma_view, &cb, &cr], &uniform);
         Self {
             samples,
             format,
-            luma,
-            chroma,
+            uploaded: Some((luma, chroma)),
             uniform,
-            binding,
+            binding: Some(binding),
         }
+    }
+
+    /// For a decoder's NV12 or P010 texture, whose planes read as 0 to 1.
+    #[cfg(windows)]
+    pub(crate) fn shared(device: &wgpu::Device, format: PlaneFormat) -> Self {
+        Self {
+            samples: Samples::Bytes,
+            format,
+            uploaded: None,
+            uniform: uniform_buffer(device),
+            binding: None,
+        }
+    }
+
+    /// Reads the next picture from the planes of a decoder's texture, holding a picture
+    /// of `size` at its top left, or reads nothing when it couldn't be opened.
+    #[cfg(windows)]
+    pub(crate) fn bind_shared(
+        &mut self,
+        (device, queue): (&wgpu::Device, &wgpu::Queue),
+        converter: &YuvConverter,
+        planes: Option<(&wgpu::TextureView, &wgpu::TextureView)>,
+        color: YuvColor,
+        (size, output): ((u32, u32), (u32, u32)),
+    ) {
+        self.binding = planes.map(|(luma, chroma)| {
+            bind(
+                device,
+                converter,
+                self.samples,
+                [luma, chroma, chroma],
+                &self.uniform,
+            )
+        });
+        let uniform = uniform(
+            color,
+            self.format,
+            (size, output),
+            (ChromaLayout::Interleaved, true),
+        );
+        queue.write_buffer(&self.uniform, 0, &uniform);
     }
 
     /// Uploads the planes, to be converted into a texture of `output` size.
@@ -270,13 +297,22 @@ impl PlaneTextures {
                 size,
             );
         };
-        write(&self.luma, luma);
-        for (texture, (plane, _)) in self.chroma.iter().zip(chroma.planes()) {
+        let Some((luma_texture, chroma_textures)) = &self.uploaded else {
+            return;
+        };
+        write(luma_texture, luma);
+        for (texture, (plane, _)) in chroma_textures.iter().zip(chroma.planes()) {
             write(texture, plane);
         }
-        let luma_size = self.luma.size();
+        let luma_size = luma_texture.size();
         let size = (luma_size.width, luma_size.height);
-        let uniform = uniform(color, self.format, (size, output), chroma.layout());
+        let normalized = self.samples == Samples::Bytes;
+        let uniform = uniform(
+            color,
+            self.format,
+            (size, output),
+            (chroma.layout(), normalized),
+        );
         queue.write_buffer(&self.uniform, 0, &uniform);
     }
 
@@ -288,6 +324,10 @@ impl PlaneTextures {
         converter: &YuvConverter,
         target: &wgpu::TextureView,
     ) -> bool {
+        let Some(binding) = &self.binding else {
+            clear(encoder, target);
+            return true;
+        };
         let Some(pipeline) = converter.pipeline(self.samples) else {
             return false;
         };
@@ -295,9 +335,56 @@ impl PlaneTextures {
             encoder,
             target,
             &pipeline,
-            &[[&self.binding]],
+            &[[binding]],
             wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
         );
         true
     }
+}
+
+fn uniform_buffer(device: &wgpu::Device) -> wgpu::Buffer {
+    device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("yuv"),
+        size: UNIFORM_BYTES as u64,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    })
+}
+
+/// Binds the luma, blue- and red-difference planes, the last two the same texture
+/// when interleaved.
+fn bind(
+    device: &wgpu::Device,
+    converter: &YuvConverter,
+    samples: Samples,
+    [luma, cb, cr]: [&wgpu::TextureView; 3],
+    uniform: &wgpu::Buffer,
+) -> wgpu::BindGroup {
+    let entry = |binding, resource| wgpu::BindGroupEntry { binding, resource };
+    device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("yuv"),
+        layout: &converter.layouts[samples as usize],
+        entries: &[
+            entry(0, wgpu::BindingResource::TextureView(luma)),
+            entry(1, wgpu::BindingResource::TextureView(cb)),
+            entry(2, wgpu::BindingResource::TextureView(cr)),
+            entry(3, uniform.as_entire_binding()),
+        ],
+    })
+}
+
+fn clear(encoder: &mut wgpu::CommandEncoder, target: &wgpu::TextureView) {
+    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: Some("yuv clear"),
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view: target,
+            depth_slice: None,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                store: wgpu::StoreOp::Store,
+            },
+        })],
+        ..Default::default()
+    });
 }

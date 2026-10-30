@@ -5,19 +5,21 @@ use timeline::{
 use super::ChromaLayout;
 
 /// The matrix columns, offset and sample scale, two chroma masks, chroma scale and
-/// shift, and footprint.
+/// shift, and footprint and picture size.
 pub(super) const UNIFORM_BYTES: usize = 8 * 16;
 
 pub(super) fn uniform(
     color: YuvColor,
     format: PlaneFormat,
     (size, output): ((u32, u32), (u32, u32)),
-    layout: ChromaLayout,
+    (layout, normalized): (ChromaLayout, bool),
 ) -> [u8; UNIFORM_BYTES] {
     let (columns, offset) = conversion(color, format.depth);
-    let sample_scale = match format.depth {
-        SampleDepth::Eight => 1.0,
-        depth => 1.0 / most(depth),
+    // Normalized textures already read as 0 to 1; integer ones read what was stored.
+    let sample_scale = if normalized {
+        1.0
+    } else {
+        1.0 / most(format.depth)
     };
     let (cb_mask, cr_mask) = match layout {
         ChromaLayout::Separate => ([1.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]),
@@ -37,8 +39,8 @@ pub(super) fn uniform(
     let footprint = [
         size.0 as f32 / output.0.max(1) as f32,
         size.1 as f32 / output.1.max(1) as f32,
-        0.0,
-        0.0,
+        size.0 as f32,
+        size.1 as f32,
     ];
     let [first, second, third] = columns.map(|[r, g, b]| [r, g, b, 0.0]);
     let values: [[f32; 4]; 8] = [

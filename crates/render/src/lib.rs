@@ -30,6 +30,8 @@ mod reframe;
 mod reshape;
 mod scope;
 mod secondary;
+#[cfg(windows)]
+mod shared;
 mod shift;
 mod style;
 mod tone;
@@ -67,6 +69,8 @@ pub use reframe::Reframe;
 pub use reshape::{Mirror, PageFold, Reshape};
 pub use scope::Scope;
 pub use secondary::SecondaryAdjust;
+#[cfg(windows)]
+pub use shared::{decode_adapter, texture_sharing_features};
 pub use shift::{ColorShift, ShiftColor, ShiftMatch, ToneBalance};
 pub use style::PictureStyle;
 pub use tone::{
