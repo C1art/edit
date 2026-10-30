@@ -1,7 +1,7 @@
 use egui::{Pos2, Rangef};
 use timeline::{
     ClipId, DeltaBounds, LinkedSelection, MarkerOwner, MoveMode, Razor, RazorTarget, Sequence,
-    SetClipVolume, SetTrackAutomation, Ticks, Timeline, TrackKind, TrackRef,
+    SetClipOpacity, SetClipVolume, SetTrackAutomation, Ticks, Timeline, TrackKind, TrackRef,
 };
 
 use super::gesture::{self, Gesture};
@@ -83,7 +83,7 @@ impl TimelineView {
                     .band_hit(sequence, &rows, &scale, hit, pos)
                     .filter(|_| command && self.tool.on_timeline() == Tool::Selection)
                 {
-                    toggle_volume_key(timeline, owner, grabbed, output);
+                    toggle_level_key(timeline, owner, grabbed, output);
                 } else {
                     self.click(sequence, hit, shift, alt);
                     self.select_gap(sequence, hit, scale.time(pos.x));
@@ -197,9 +197,9 @@ impl TimelineView {
         }
     }
 
-    /// The volume line the pointer is on, what it grabs there and the band the line
-    /// moves in: a shown track's automation anywhere along its row, else an audio
-    /// clip's own line.
+    /// The level line the pointer is on, what it grabs there and the band the line
+    /// moves in: a shown track's automation anywhere along its row, else a clip's own
+    /// volume or opacity line.
     pub(super) fn band_hit(
         &self,
         sequence: &Sequence,
@@ -224,14 +224,18 @@ impl TimelineView {
         let Hit::Body { clip, track } = hit else {
             return None;
         };
-        if track.kind != TrackKind::Audio {
-            return None;
-        }
         let row = rows.iter().find(|row| row.track == track)?;
         let (_, clip) = sequence.clip(clip)?;
         let rect = layout::clip_rect(row, scale, clip.start, clip.end()).shrink(1.0);
-        let grabbed = rubber_band::hit(rect, scale, &Envelope::clip(clip), pointer)?;
-        Some((BandOwner::Clip(clip.id), grabbed, rubber_band::band(rect)))
+        let (owner, envelope) = match track.kind {
+            TrackKind::Audio => (BandOwner::Clip(clip.id), Envelope::clip(clip)),
+            TrackKind::Video if rubber_band::opacity_shown(rect.expand(1.0)) => {
+                (BandOwner::Opacity(clip.id), Envelope::opacity(clip))
+            }
+            TrackKind::Video => return None,
+        };
+        let grabbed = rubber_band::hit(rect, scale, &envelope, pointer)?;
+        Some((owner, grabbed, rubber_band::band(rect)))
     }
 
     /// Selects the gap a click on an empty stretch of a track lands in.
@@ -343,7 +347,7 @@ fn hit_track(hit: Hit) -> Option<TrackRef> {
 }
 
 /// Adds a keyframe where the line was clicked, or removes the one clicked.
-fn toggle_volume_key(
+fn toggle_level_key(
     timeline: &mut Timeline,
     owner: BandOwner,
     grabbed: BandHit,
@@ -353,20 +357,27 @@ fn toggle_volume_key(
     let Some(envelope) = Envelope::of(sequence, owner, sequence.duration()) else {
         return;
     };
-    let mut volume = envelope.volume().clone();
+    let mut param = envelope.param().clone();
     let time = match grabbed {
-        BandHit::Key(index) => volume.keys.get(index).map(|key| key.time),
+        BandHit::Key(index) => param.keys.get(index).map(|key| key.time),
         BandHit::Line(at) => Some(at),
     };
     let Some(time) = time else {
         return;
     };
-    volume.toggle_key(time);
+    param.toggle_key(time);
     let applied = match owner {
-        BandOwner::Clip(clip) => timeline.apply(SetClipVolume { clip, volume }),
+        BandOwner::Clip(clip) => timeline.apply(SetClipVolume {
+            clip,
+            volume: param,
+        }),
+        BandOwner::Opacity(clip) => timeline.apply(SetClipOpacity {
+            clip,
+            opacity: param,
+        }),
         BandOwner::Track(track) => timeline.apply(SetTrackAutomation {
             track,
-            automation: volume,
+            automation: param,
         }),
     };
     if let Err(error) = applied {

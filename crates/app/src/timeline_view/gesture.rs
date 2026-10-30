@@ -1,8 +1,8 @@
 use egui::Rangef;
 use timeline::{
     preview, ClipId, DeltaBounds, Edge, Edit, LinkedSelection, MoveClips, MoveMode, RateStretch,
-    Roll, Sequence, SetClipVolume, SetTrackAutomation, Slide, Slip, Ticks, Timeline, TimelineError,
-    TrackKind, TrackRef, Trim, TrimMode, Unlinked,
+    Roll, Sequence, SetClipOpacity, SetClipVolume, SetTrackAutomation, Slide, Slip, Ticks,
+    Timeline, TimelineError, TrackKind, TrackRef, Trim, TrimMode, Unlinked,
 };
 
 use super::rubber_band::{self, BandHit, BandOwner, Envelope};
@@ -52,6 +52,7 @@ pub enum PendingEdit {
     Slip(Slip),
     Slide(Slide),
     Volume(SetClipVolume),
+    Opacity(SetClipOpacity),
     Automation(SetTrackAutomation),
 }
 
@@ -65,6 +66,7 @@ impl PendingEdit {
             Self::Slip(edit) => preview(sequence, edit),
             Self::Slide(edit) => preview(sequence, edit),
             Self::Volume(edit) => preview(sequence, edit),
+            Self::Opacity(edit) => preview(sequence, edit),
             Self::Automation(edit) => preview(sequence, edit),
         }
     }
@@ -93,6 +95,7 @@ impl PendingEdit {
             Self::Slip(edit) => run(timeline, edit, links),
             Self::Slide(edit) => run(timeline, edit, links),
             Self::Volume(edit) => run(timeline, edit, links),
+            Self::Opacity(edit) => run(timeline, edit, links),
             Self::Automation(edit) => run(timeline, edit, links),
         }
     }
@@ -210,16 +213,25 @@ impl Gesture {
                 band,
                 origin_y,
             } => {
-                let db = rubber_band::db_for_drag(*band, y - origin_y);
-                let volume = Envelope::of(sequence, *owner, sequence.duration())
-                    .map_or_else(Default::default, |envelope| {
-                        rubber_band::dragged(&envelope, *grabbed, delta, db)
-                    });
+                let param = Envelope::of(sequence, *owner, sequence.duration()).map_or_else(
+                    Default::default,
+                    |envelope| {
+                        let change = envelope.change_for_drag(*band, y - origin_y);
+                        rubber_band::dragged(&envelope, *grabbed, delta, change)
+                    },
+                );
                 match *owner {
-                    BandOwner::Clip(clip) => PendingEdit::Volume(SetClipVolume { clip, volume }),
+                    BandOwner::Clip(clip) => PendingEdit::Volume(SetClipVolume {
+                        clip,
+                        volume: param,
+                    }),
+                    BandOwner::Opacity(clip) => PendingEdit::Opacity(SetClipOpacity {
+                        clip,
+                        opacity: param,
+                    }),
                     BandOwner::Track(track) => PendingEdit::Automation(SetTrackAutomation {
                         track,
-                        automation: volume,
+                        automation: param,
                     }),
                 }
             }

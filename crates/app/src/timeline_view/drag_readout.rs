@@ -21,7 +21,7 @@ impl TimelineView {
             PendingEdit::Roll(edit) => (edit.delta, None),
             PendingEdit::Slip(edit) => (edit.delta, None),
             PendingEdit::Slide(edit) => (edit.delta, None),
-            PendingEdit::Volume(_) | PendingEdit::Automation(_) => return,
+            PendingEdit::Volume(_) | PendingEdit::Opacity(_) | PendingEdit::Automation(_) => return,
         };
         let timecode = |time: Ticks| {
             Timecode::new(time, sequence.timebase, sequence.format.frame_rate).to_string()

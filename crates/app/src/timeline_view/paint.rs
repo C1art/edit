@@ -272,6 +272,10 @@ pub fn clips(
             TrackKind::Video => {
                 keyframe_marks(painter, rect, scale, clip);
                 speed_marks(painter, rect, scale, clip);
+                if rubber_band::opacity_shown(rect) {
+                    let envelope = rubber_band::Envelope::opacity(clip);
+                    rubber_band::paint(painter, rect.shrink(1.0), scale, &envelope);
+                }
             }
             TrackKind::Audio if volume_lines => {
                 let envelope = rubber_band::Envelope::clip(clip);
