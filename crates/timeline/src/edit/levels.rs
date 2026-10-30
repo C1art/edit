@@ -35,6 +35,45 @@ impl Edit for SetClipGain {
     }
 }
 
+/// Raises or lowers the gain of the audio clips among `clips` and the clips linked to
+/// them by `by`, each from where it was.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NudgeClipGain {
+    pub clips: Vec<ClipId>,
+    pub by: Gain,
+}
+
+impl Edit for NudgeClipGain {
+    fn name(&self) -> &'static str {
+        "Audio Gain"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let nudged: Vec<(ClipId, Gain)> = sequence
+            .with_links(&self.clips)
+            .into_iter()
+            .filter_map(|id| sequence.clip(id))
+            .filter(|(track, _)| track.kind == TrackKind::Audio)
+            .map(|(_, clip)| {
+                (
+                    clip.id,
+                    Gain((clip.gain.0 + self.by.0).clamp(Gain::SILENT.0, Gain::MAX.0)),
+                )
+            })
+            .collect();
+        if nudged
+            .iter()
+            .all(|&(id, gain)| sequence.clip(id).is_some_and(|(_, clip)| clip.gain == gain))
+        {
+            return Err(TimelineError::NothingToEdit);
+        }
+        for (id, gain) in nudged {
+            ops::clip_mut(sequence, id)?.gain = gain;
+        }
+        Ok(())
+    }
+}
+
 /// Sets each listed audio clip's gain on its own, as normalizing clips to a common
 /// peak or loudness does.
 #[derive(Debug, Clone, PartialEq, Eq)]
