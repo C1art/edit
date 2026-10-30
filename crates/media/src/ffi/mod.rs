@@ -18,6 +18,7 @@ mod still;
 mod sws_flags;
 mod to_palette;
 mod to_yuv;
+mod video_encoders;
 
 #[cfg(windows)]
 pub use d3d12::GpuSurface;

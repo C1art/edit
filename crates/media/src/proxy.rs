@@ -4,8 +4,8 @@ use std::path::Path;
 use timeline::{FrameRate, Ticks, Timebase};
 
 use crate::{
-    DecodedFrame, EncodeProfile, MediaError, MediaReader, MediaWriter, RateControl, Streams,
-    VideoCodec, VideoFrame, VideoSettings,
+    Acceleration, DecodedFrame, EncodeProfile, MediaError, MediaReader, MediaWriter, RateControl,
+    Streams, VideoCodec, VideoFrame, VideoSettings,
 };
 
 /// Good enough to judge framing and motion; the original is used for export.
@@ -60,6 +60,7 @@ fn transcode(
         codec: VideoCodec::H264,
         rate_control: RateControl::Quality(PROXY_CRF),
         profile: EncodeProfile::Editing,
+        acceleration: Acceleration::Hardware,
     };
     let mut writer = MediaWriter::create(destination, Some(settings), None)?;
     let mut out = Retimer {

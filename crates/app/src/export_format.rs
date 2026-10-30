@@ -1,4 +1,6 @@
-use media::{AudioCodec, AudioSettings, DnxhrQuality, RateControl, StillFormat, VideoCodec};
+use media::{
+    Acceleration, AudioCodec, AudioSettings, DnxhrQuality, RateControl, StillFormat, VideoCodec,
+};
 use playback::{VideoEncoding, VideoExport};
 
 /// What kind of file an export makes: its codecs and container.
@@ -118,6 +120,8 @@ pub struct ExportFormat {
     /// sequence's own size when `None`.
     pub height: Option<u32>,
     pub rate_control: RateControl,
+    /// Kept when a preset is picked, as it says how to encode rather than what.
+    pub acceleration: Acceleration,
     /// Whether a video export carries sound; audio formats always do.
     pub with_audio: bool,
     pub audio_kbps: u32,
@@ -133,6 +137,7 @@ const MATCH_SOURCE: ExportFormat = ExportFormat {
     format: Format::H264,
     height: None,
     rate_control: RateControl::Quality(18),
+    acceleration: Acceleration::Hardware,
     with_audio: true,
     audio_kbps: 320,
     sample_rate: 48_000,
@@ -226,6 +231,7 @@ impl ExportFormat {
             } else {
                 unused.rate_control
             },
+            acceleration: unused.acceleration,
             with_audio: !self.format.has_video() || self.with_audio,
             audio_kbps: if self.has_audio() && self.audio_is_lossy() {
                 self.audio_kbps
@@ -258,6 +264,7 @@ impl ExportFormat {
         Some(VideoExport {
             encoding,
             size: self.size(sequence_size),
+            acceleration: self.acceleration,
         })
     }
 

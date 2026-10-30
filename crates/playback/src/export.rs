@@ -7,7 +7,8 @@ use std::thread;
 use audio::SampleRate;
 use crossbeam::channel::{Receiver, Sender};
 use media::{
-    AudioSettings, EncodeProfile, MediaWriter, RateControl, StillFormat, VideoCodec, VideoSettings,
+    Acceleration, AudioSettings, EncodeProfile, MediaWriter, RateControl, StillFormat, VideoCodec,
+    VideoSettings,
 };
 use render::{Background, Compositor, LayerImage, Readback};
 use timeline::{Sequence, Ticks};
@@ -31,6 +32,8 @@ pub struct ExportSettings {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct VideoExport {
     pub encoding: VideoEncoding,
+    /// Ignored by codecs no GPU encodes.
+    pub acceleration: Acceleration,
     /// Both even.
     pub size: (u32, u32),
 }
@@ -50,6 +53,8 @@ pub enum ExportEvent {
     },
     /// A piece of media could not be read; the export carries on without it.
     Warning(PlaybackError),
+    /// What encodes the video, such as "NVIDIA NVENC (hardware)", sent once it opens.
+    Encoder(String),
     Finished,
     /// The partial file has been removed and anything already at the path left alone.
     Cancelled,
@@ -183,6 +188,7 @@ impl Worker {
             Some(VideoExport {
                 encoding: VideoEncoding::Movie(codec, rate_control),
                 size,
+                acceleration,
             }) => {
                 let settings = VideoSettings {
                     input_size,
@@ -192,12 +198,14 @@ impl Worker {
                     codec,
                     rate_control,
                     profile: EncodeProfile::Delivery,
+                    acceleration,
                 };
                 (Some(settings), None)
             }
             Some(VideoExport {
                 encoding: VideoEncoding::Stills(still),
                 size,
+                ..
             }) => (None, Some((still, size))),
             None => (None, None),
         };
@@ -217,6 +225,9 @@ impl Worker {
                 timebase,
             )?),
         };
+        if let Some(encoder) = writer.as_ref().and_then(MediaWriter::video_encoder) {
+            let _ = self.events.send(ExportEvent::Encoder(encoder));
+        }
         let writes_audio = writer.is_some() && audio.is_some();
         let stills_to = stills.map(|(format, size)| Stills {
             format,

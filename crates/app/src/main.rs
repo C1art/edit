@@ -26,6 +26,7 @@ mod export_progress;
 mod export_queue;
 mod export_summary;
 mod export_target;
+mod export_video;
 mod file_browser;
 mod file_drop;
 mod find_dialog;

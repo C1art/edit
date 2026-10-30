@@ -8,6 +8,16 @@ pub enum RateControl {
     Bitrate(u32),
 }
 
+/// Which encoders an H.264 or HEVC export may use.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Acceleration {
+    /// The GPU's encoder (NVIDIA NVENC, AMD AMF or Intel Quick Sync) when one opens,
+    /// otherwise software.
+    #[default]
+    Hardware,
+    Software,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum VideoCodec {
     #[default]

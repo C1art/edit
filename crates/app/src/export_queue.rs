@@ -79,12 +79,14 @@ impl Editor {
             let (id, events) = (*id, job.poll());
             let mut ended = None;
             let mut progress = None;
+            let mut encoder = None;
             for event in events {
                 match event {
                     ExportEvent::Progress {
                         frames_done,
                         frames_total,
                     } => progress = Some((frames_done, frames_total)),
+                    ExportEvent::Encoder(name) => encoder = Some(name),
                     ExportEvent::Warning(error) => notices.push(format!("Export: {error}")),
                     ExportEvent::Finished => ended = Some(Status::Done),
                     ExportEvent::Cancelled => ended = Some(Status::Cancelled),
@@ -96,6 +98,9 @@ impl Editor {
                     (progress, &mut item.status)
                 {
                     running.update(done, total);
+                }
+                if let (Some(encoder), Status::Exporting(running)) = (encoder, &mut item.status) {
+                    running.set_encoder(encoder);
                 }
                 if let Some(status) = ended {
                     if matches!(status, Status::Done) {

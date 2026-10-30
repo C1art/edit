@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use common::{decode, export, gpu, TB};
-use media::{AudioCodec, AudioSettings, MediaReader, RateControl, VideoCodec};
+use media::{Acceleration, AudioCodec, AudioSettings, MediaReader, RateControl, VideoCodec};
 use playback::{ExportSettings, VideoEncoding, VideoExport};
 use timeline::{
     FrameRate, ImportMedia, PlaceClip, PlaceMode, Sequence, Ticks, Timeline, VideoFormat,
@@ -89,6 +89,7 @@ fn cut_media_keeps_its_picture_and_sound_together() {
             video: Some(VideoExport {
                 encoding: VideoEncoding::Movie(video, RateControl::Quality(18)),
                 size,
+                acceleration: Acceleration::Software,
             }),
             audio: Some(AudioSettings {
                 codec: audio,

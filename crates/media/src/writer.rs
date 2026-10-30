@@ -3,7 +3,7 @@ use std::path::Path;
 use timeline::{Chapter, FrameRate, Timebase};
 
 use crate::ffi::{Converter, Encoder, Frame, OutputContext, Packet, Received};
-use crate::{AudioCodec, MediaError, RateControl, VideoCodec};
+use crate::{Acceleration, AudioCodec, MediaError, RateControl, VideoCodec};
 
 const STEREO: usize = 2;
 
@@ -19,6 +19,7 @@ pub struct VideoSettings {
     pub codec: VideoCodec,
     pub rate_control: RateControl,
     pub profile: EncodeProfile,
+    pub acceleration: Acceleration,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -27,7 +28,7 @@ pub enum EncodeProfile {
     #[default]
     Delivery,
     /// Encodes quickly and seeks cheaply, with a keyframe every half second, for proxies.
-    /// Applies to H.264 only.
+    /// Applies to H.264 and HEVC only.
     Editing,
 }
 
@@ -128,6 +129,11 @@ impl MediaWriter {
             video,
             audio,
         })
+    }
+
+    /// What encodes the video, such as "NVIDIA NVENC (hardware)".
+    pub fn video_encoder(&self) -> Option<String> {
+        self.video.as_ref().map(|stream| stream.encoder.describe())
     }
 
     /// Encodes the next picture: tightly packed, sRGB-encoded RGBA8 at the export size.
@@ -264,6 +270,7 @@ mod tests {
             codec,
             rate_control: RateControl::Bitrate(500_000),
             profile: EncodeProfile::Delivery,
+            acceleration: Acceleration::Software,
         };
         let audio = |codec| AudioSettings {
             codec,
@@ -329,6 +336,7 @@ mod tests {
             codec: VideoCodec::Gif,
             rate_control: RateControl::Quality(0),
             profile: EncodeProfile::Delivery,
+            acceleration: Acceleration::Software,
         };
         let path = std::env::temp_dir().join(format!("media-gif-{}.gif", std::process::id()));
         let mut writer = MediaWriter::create(&path, Some(video), None).unwrap();
@@ -370,6 +378,7 @@ mod tests {
             codec: VideoCodec::ProRes4444,
             rate_control: RateControl::Quality(0),
             profile: EncodeProfile::Delivery,
+            acceleration: Acceleration::Software,
         };
         let path = std::env::temp_dir().join(format!("media-alpha-{}.mov", std::process::id()));
         let mut writer = MediaWriter::create(&path, Some(video), None).unwrap();

@@ -5,7 +5,7 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use egui::{Key, ProgressBar, RichText};
-use media::{RateControl, VideoCodec};
+use media::{Acceleration, RateControl, VideoCodec};
 use playback::{ExportEvent, ExportJob, ExportSettings, Preview, VideoEncoding, VideoExport};
 use timeline::{render_segments, segment_content, Sequence, Ticks};
 
@@ -221,6 +221,7 @@ impl Editor {
                 video: Some(VideoExport {
                     encoding: VideoEncoding::Movie(VideoCodec::ProRes422, RateControl::Quality(18)),
                     size: (format.width, format.height),
+                    acceleration: Acceleration::Hardware,
                 }),
                 audio: None,
                 range: Some(range),
@@ -257,6 +258,7 @@ impl Editor {
                     running.frames_done = frames_done;
                     running.frames_total = frames_total;
                 }
+                ExportEvent::Encoder(_) => {}
                 ExportEvent::Warning(warning) => notices.push(format!("Render: {warning}")),
                 ExportEvent::Finished => {
                     let fingerprint = running.fingerprint;

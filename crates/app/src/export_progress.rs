@@ -11,6 +11,7 @@ pub struct ExportProgress {
     started: Instant,
     done: i64,
     total: i64,
+    encoder: Option<String>,
 }
 
 impl ExportProgress {
@@ -19,12 +20,17 @@ impl ExportProgress {
             started: Instant::now(),
             done: 0,
             total: 0,
+            encoder: None,
         }
     }
 
     pub fn update(&mut self, done: i64, total: i64) {
         self.done = done;
         self.total = total;
+    }
+
+    pub fn set_encoder(&mut self, encoder: String) {
+        self.encoder = Some(encoder);
     }
 
     pub fn bar(&self, width: f32) -> ProgressBar {
@@ -42,6 +48,9 @@ impl ExportProgress {
         );
         if let Some(left) = remaining(elapsed, self.done, self.total) {
             text.push_str(&format!("  ·  {} left", clock(left)));
+        }
+        if let Some(encoder) = &self.encoder {
+            text.push_str(&format!("  ·  {encoder}"));
         }
         ProgressBar::new(fraction).desired_width(width).text(text)
     }

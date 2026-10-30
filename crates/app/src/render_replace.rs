@@ -5,7 +5,7 @@ use std::thread;
 
 use crossbeam::channel::{self, Receiver};
 use egui::{Key, ProgressBar, RichText};
-use media::{AudioCodec, AudioSettings, MediaError, RateControl, VideoCodec};
+use media::{Acceleration, AudioCodec, AudioSettings, MediaError, RateControl, VideoCodec};
 use playback::{ExportEvent, ExportJob, ExportSettings, VideoEncoding, VideoExport};
 use timeline::{
     ClipId, FrameRate, ImportMedia, RenderAndReplace, RestoreUnrendered, SourceId, Ticks, Timebase,
@@ -201,6 +201,7 @@ impl Editor {
                             frames_done: done,
                             frames_total: total,
                         } => (*frames_done, *frames_total) = (done, total),
+                        ExportEvent::Encoder(_) => {}
                         ExportEvent::Warning(warning) => self.notice(format!("Render: {warning}")),
                         ExportEvent::Finished => {
                             let sequence = self.timeline.sequence();
@@ -240,6 +241,7 @@ impl Editor {
             video: Some(VideoExport {
                 encoding: VideoEncoding::Movie(VideoCodec::ProRes4444, RateControl::Quality(18)),
                 size: (format.width, format.height),
+                acceleration: Acceleration::Hardware,
             }),
             audio: has_audio.then_some(AudioSettings {
                 codec: AudioCodec::Pcm24,

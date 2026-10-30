@@ -12,7 +12,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use common::{decode, export, gpu, Decoded, Gpu, TB};
-use media::{AudioCodec, AudioSettings, DnxhrQuality, RateControl, StillFormat, VideoCodec};
+use media::{
+    Acceleration, AudioCodec, AudioSettings, DnxhrQuality, RateControl, StillFormat, VideoCodec,
+};
 use playback::{ExportSettings, VideoEncoding, VideoExport};
 use timeline::{
     AddGenerated, FrameRate, Generator, PlaceClip, PlaceMode, Rgb, Sequence, Ticks, Timeline,
@@ -269,6 +271,7 @@ fn run_case(
         video: case.video.map(|encoding| VideoExport {
             encoding,
             size: SIZE,
+            acceleration: Acceleration::Software,
         }),
         audio: case.audio.map(|codec| AudioSettings {
             codec,
@@ -310,6 +313,7 @@ fn still_frames(sequence: &Arc<Sequence>, gpu: &Gpu, directory: &Path) -> Vec<St
             video: Some(VideoExport {
                 encoding: VideoEncoding::Stills(format),
                 size: SIZE,
+                acceleration: Acceleration::Software,
             }),
             audio: None,
             range: None,

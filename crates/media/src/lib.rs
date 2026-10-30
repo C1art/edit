@@ -25,7 +25,7 @@ mod test_picture;
 mod turn;
 mod writer;
 
-pub use codec::{AudioCodec, DnxhrQuality, RateControl, VideoCodec};
+pub use codec::{Acceleration, AudioCodec, DnxhrQuality, RateControl, VideoCodec};
 pub use error::MediaError;
 #[cfg(windows)]
 pub use ffi::GpuSurface;
