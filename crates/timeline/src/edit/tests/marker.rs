@@ -129,3 +129,25 @@ fn rippling_markers_follow_an_insert_and_go_with_a_ripple_deleted_span() {
         Some(Ticks(0))
     );
 }
+
+#[test]
+fn many_markers_go_in_as_one_step_around_existing_ones() {
+    let (mut timeline, _) = timeline();
+    timeline
+        .apply(AddMarker {
+            owner: MarkerOwner::Sequence,
+            at: Ticks(300),
+        })
+        .unwrap();
+    let beats = AddMarkers {
+        owner: MarkerOwner::Sequence,
+        at: vec![Ticks(500), Ticks(100), Ticks(300)],
+        color: MarkerColor::Blue,
+    };
+    timeline.apply(beats.clone()).unwrap();
+    assert_eq!(marker_times(timeline.sequence()), vec![100, 300, 500]);
+    assert_eq!(timeline.sequence().markers[1].color, MarkerColor::Green);
+    assert_eq!(timeline.apply(beats), Err(TimelineError::NothingToEdit));
+    timeline.undo();
+    assert_eq!(marker_times(timeline.sequence()), vec![300]);
+}

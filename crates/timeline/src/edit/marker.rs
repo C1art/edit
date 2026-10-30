@@ -39,22 +39,62 @@ impl Edit for AddMarker {
         }
         let id = MarkerId(sequence.ids.next());
         let markers = markers_mut(sequence, self.owner)?;
-        if markers.iter().any(|marker| marker.at == self.at) {
-            return Err(TimelineError::NothingToEdit);
+        if insert(markers, id, self.at, MarkerColor::default()) {
+            Ok(())
+        } else {
+            Err(TimelineError::NothingToEdit)
         }
-        let marker = Marker {
-            id,
-            at: self.at,
-            duration: Ticks::ZERO,
-            name: String::new(),
-            comment: String::new(),
-            color: MarkerColor::default(),
-            kind: MarkerKind::default(),
-        };
-        let index = markers.partition_point(|m| m.at < self.at);
-        markers.insert(index, marker);
-        Ok(())
     }
+}
+
+/// Adds an unnamed marker at each of `at` as one step, skipping times that already
+/// have one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AddMarkers {
+    pub owner: MarkerOwner,
+    pub at: Vec<Ticks>,
+    pub color: MarkerColor,
+}
+
+impl Edit for AddMarkers {
+    fn name(&self) -> &'static str {
+        "Add Markers"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        if self.at.iter().any(|&at| at < Ticks::ZERO) {
+            return Err(TimelineError::BeforeSequenceStart);
+        }
+        let mut added = false;
+        for &at in &self.at {
+            let id = MarkerId(sequence.ids.next());
+            added |= insert(markers_mut(sequence, self.owner)?, id, at, self.color);
+        }
+        if added {
+            Ok(())
+        } else {
+            Err(TimelineError::NothingToEdit)
+        }
+    }
+}
+
+/// Whether there was room for a marker at `at`.
+fn insert(markers: &mut Vec<Marker>, id: MarkerId, at: Ticks, color: MarkerColor) -> bool {
+    if markers.iter().any(|marker| marker.at == at) {
+        return false;
+    }
+    let marker = Marker {
+        id,
+        at,
+        duration: Ticks::ZERO,
+        name: String::new(),
+        comment: String::new(),
+        color,
+        kind: MarkerKind::default(),
+    };
+    let index = markers.partition_point(|m| m.at < at);
+    markers.insert(index, marker);
+    true
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

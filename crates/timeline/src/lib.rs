@@ -1,6 +1,7 @@
 mod audio_effect;
 mod audio_plan;
 mod audio_type;
+mod beats;
 mod bin;
 mod blend;
 mod caption;
@@ -87,6 +88,7 @@ pub use audio_effect::{
 };
 pub use audio_plan::{audio_fade, audio_span, clip_balance, clip_level, track_automation};
 pub use audio_type::AudioType;
+pub use beats::{beats, Beats};
 pub use bin::{Bin, BinId, BinSearch, SearchField};
 pub use blend::BlendMode;
 pub use caption::{captions_from_cues, Caption, CaptionStyle, Captions, CAPTION_MARGIN};
@@ -98,7 +100,7 @@ pub use curves::{Curve, CurvePoint, Curves, CURVE_RANGE};
 pub use ducking::{active_spans, ducked_volume};
 pub use edit::{
     clamp_delta, is_through_edit, pauses, synchronized_clips, unused_time, AddBin,
-    AddBlurredBackground, AddEdits, AddFrameHold, AddGenerated, AddMarker, AddNest,
+    AddBlurredBackground, AddEdits, AddFrameHold, AddGenerated, AddMarker, AddMarkers, AddNest,
     AddSpeedKeyframe, AddSubmix, AddTrack, AddTracks, ApplyEffect, ApplySpeedRamp,
     ApplyTransitions, Attribute, AutoDuck, AutomateToSequence, AutomatedPiece, BreakoutToMono,
     CaptionsToTitles, ClearMarkers, ClipEffect, ClipSound, Clipboard, CloseGap, CloseGaps,
