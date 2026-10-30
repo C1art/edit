@@ -95,10 +95,14 @@ impl PluginUnit {
             self.sent.clear();
         }
         if self.sent.len() != effect.params.len() {
+            // Rounded as the model holds values, so a parameter that matches the restored
+            // state to the hundredth leaves the state's finer value alone.
             self.sent = effect
                 .params
                 .iter()
-                .map(|param| loaded.plugin.parameter(ParamId(param.id)) as f32)
+                .map(|param| {
+                    (loaded.plugin.parameter(ParamId(param.id)) * 100.0).round() as f32 / 100.0
+                })
                 .collect();
         }
         for (param, sent) in effect.params.iter().zip(&mut self.sent) {
