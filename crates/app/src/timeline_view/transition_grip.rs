@@ -201,6 +201,23 @@ pub(super) fn fade_at(
     })
 }
 
+/// The clip under `pointer` whose fade-in handle shows.
+pub(super) fn fade_in_shown(
+    sequence: &Sequence,
+    rows: &[Row],
+    scale: &TimeScale,
+    pointer: Pos2,
+) -> Option<ClipId> {
+    let row = row_at(rows, pointer.y)?;
+    let track = sequence.track(row.track)?;
+    let clip = track.clip_at(scale.time(pointer.x))?;
+    let handles = fade_handles(&row, scale, track, clip);
+    handles
+        .iter()
+        .any(|(edge, _)| *edge == Edge::Head)
+        .then_some(clip.id)
+}
+
 /// Draws the fade handles of the clip under `pointer`.
 pub(super) fn paint_fade_handles(
     painter: &Painter,

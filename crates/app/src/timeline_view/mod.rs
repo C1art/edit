@@ -310,7 +310,15 @@ impl TimelineView {
             .as_ref()
             .filter(|point| point.is_on(sequence));
         let shown = painter.clip_rect().y_range();
-        let states = paint::ClipStates::new(sequence, &self.selection, art, self.clip_line);
+        let hover = ui
+            .ctx()
+            .pointer_hover_pos()
+            .filter(|pos| tracks.contains(*pos));
+        let fade_pointer =
+            hover.filter(|_| self.drag.is_none() && self.tool.on_timeline() == Tool::Selection);
+        let mut states = paint::ClipStates::new(sequence, &self.selection, art, self.clip_line);
+        states.fade_in_shown = fade_pointer
+            .and_then(|pointer| transition_grip::fade_in_shown(sequence, &rows, &scale, pointer));
         for row in rows.iter().filter(|row| row.y_range().intersects(shown)) {
             paint::row_background(
                 &painter,
@@ -344,13 +352,7 @@ impl TimelineView {
         if let Some(at) = self.drag.as_ref().and_then(|drag| drag.snapped_to) {
             paint::guide(&painter, scale.x(at), tracks.top(), tracks.bottom());
         }
-        let hover = ui
-            .ctx()
-            .pointer_hover_pos()
-            .filter(|pos| tracks.contains(*pos));
-        if let Some(pointer) =
-            hover.filter(|_| self.drag.is_none() && self.tool.on_timeline() == Tool::Selection)
-        {
+        if let Some(pointer) = fade_pointer {
             transition_grip::paint_fade_handles(&painter, sequence, &rows, &scale, pointer);
         }
         paint::ruler(&ui.painter_at(ruler), ruler, &scale, sequence);

@@ -19,6 +19,8 @@ const VIDEO_CLIP: Color32 = Color32::from_rgb(64, 104, 160);
 const AUDIO_CLIP: Color32 = Color32::from_rgb(58, 128, 92);
 const CLIP_RADIUS: f32 = 4.0;
 const NAME_STRIP: f32 = 17.0;
+/// How far a clip's name starts from its left edge while its fade-in handle shows there.
+const FADE_HANDLE_ROOM: f32 = 12.0;
 const DETAIL_WIDTH: f32 = 8.0;
 /// Clips narrower than this, zoomed far out, are drawn as one band per run of them.
 const BAND_WIDTH: f32 = 2.0;
@@ -32,6 +34,8 @@ pub struct ClipStates {
     sync_offsets: HashMap<ClipId, Ticks>,
     duplicates: HashMap<ClipId, Vec<Range<Ticks>>>,
     line: ClipLine,
+    /// The clip whose fade-in handle shows, which its name moves aside for.
+    pub fade_in_shown: Option<ClipId>,
 }
 
 impl ClipStates {
@@ -45,6 +49,7 @@ impl ClipStates {
                 HashMap::new()
             },
             line,
+            fade_in_shown: None,
         }
     }
 }
@@ -332,7 +337,10 @@ pub fn clips(
             _ => String::new(),
         };
         // Held at the view's edge while the clip's start is scrolled out of it.
-        let name_left = strip.left().max(visible.min);
+        let mut name_left = strip.left().max(visible.min);
+        if states.fade_in_shown == Some(clip.id) {
+            name_left = name_left.max(strip.left() + FADE_HANDLE_ROOM);
+        }
         let shown = rect.with_min_x(rect.left().max(visible.min));
         let badge = sync_badge(painter, shown, sequence, states.sync_offsets.get(&clip.id));
         let badge = badge + fx_badge(painter, shown, badge, row.track.kind, clip);
