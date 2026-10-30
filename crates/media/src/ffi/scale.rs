@@ -22,6 +22,25 @@ struct ScalerKey {
     output_height: i32,
 }
 
+impl ScalerKey {
+    fn new(
+        format: sys::AVPixelFormat,
+        frame: &Frame,
+        (output_width, output_height): (i32, i32),
+    ) -> Self {
+        let raw = frame.raw();
+        Self {
+            width: raw.width,
+            height: raw.height,
+            format,
+            colorspace: raw.colorspace,
+            range: raw.color_range,
+            output_width,
+            output_height,
+        }
+    }
+}
+
 /// Converts decoded frames to tightly packed, gamma-encoded RGBA8, rebuilding the
 /// swscale context whenever the source geometry or color description changes.
 #[derive(Default)]
@@ -76,6 +95,14 @@ impl Scaler {
         self.planar && self.fields.is_progressive() && self.turn == Turn::None
     }
 
+    /// Whether converting `picture` at its decoded size would reuse the current context.
+    pub(crate) fn is_set_up_for(&self, picture: &Picture) -> bool {
+        let raw = picture.frame().raw();
+        self.context.is_some_and(|(_, current)| {
+            current == ScalerKey::new(picture.format(), picture.frame(), (raw.width, raw.height))
+        })
+    }
+
     pub(crate) fn convert(&mut self, picture: &Picture) -> Result<(u32, u32, Vec<u8>), MediaError> {
         let (width, height, pixels) = self.convert_unturned(picture)?;
         Ok(self.turn.apply(width, height, pixels))
@@ -110,16 +137,7 @@ impl Scaler {
         frame: &Frame,
         (output_width, output_height): (i32, i32),
     ) -> Result<(u32, u32, Vec<u8>), MediaError> {
-        let raw = frame.raw();
-        let key = ScalerKey {
-            width: raw.width,
-            height: raw.height,
-            format,
-            colorspace: raw.colorspace,
-            range: raw.color_range,
-            output_width,
-            output_height,
-        };
+        let key = ScalerKey::new(format, frame, (output_width, output_height));
         let context = self.context_for(key)?;
 
         let width = u32::try_from(output_width).map_err(|_| MediaError::InvalidFrame)?;

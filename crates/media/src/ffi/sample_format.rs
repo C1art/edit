@@ -77,7 +77,9 @@ impl SampleConverter {
         let converted = check(unsafe {
             sys::swr_convert(
                 context.as_ptr(),
-                &mut output,
+                // A raw pointer fits both the `uint8_t **` older FFmpeg takes and
+                // the `uint8_t *const *` of newer ones.
+                &raw mut output,
                 capacity,
                 raw.extended_data as *mut *const u8,
                 raw.nb_samples,

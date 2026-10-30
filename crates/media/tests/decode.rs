@@ -84,8 +84,36 @@ fn a_planar_picture_converts_to_the_one_the_reader_gives_as_rgba() {
     };
     let planes = planar.planes();
     assert_eq!((planes.luma.width, planes.luma.height), (320, 240));
-    assert!(matches!(planes.chroma, Chroma::Separate(u, _) if (u.width, u.height) == (160, 120)));
+    // Hardware decoders hand back NV12, software ones separate planes.
+    let chroma = match planes.chroma {
+        Chroma::Separate(u, _) | Chroma::Interleaved(u) => u,
+    };
+    assert_eq!((chroma.width, chroma.height), (160, 120));
     let converted = planar.to_rgba().unwrap();
     assert_eq!(converted.pts, rgba.pts);
     assert_eq!(converted.pixels, rgba.pixels);
+}
+
+#[test]
+#[ignore = "decodes a real file with FFmpeg"]
+fn threads_that_converted_a_planar_picture_can_exit() {
+    let converter = std::thread::spawn(|| {
+        let mut reader = MediaReader::open_streams(&fixture(), TB, Streams::Video).unwrap();
+        reader.set_planar(true);
+        let Some(DecodedFrame::Planar(planar)) = reader.next_frame().unwrap() else {
+            panic!("expected a planar picture");
+        };
+        planar.to_rgba().unwrap();
+    });
+    // Waits from another thread: one stuck exiting under the loader lock would leave
+    // the joining thread stuck too.
+    let (done, finished) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        converter.join().unwrap();
+        std::thread::spawn(|| ()).join().unwrap();
+        done.send(()).unwrap();
+    });
+    finished
+        .recv_timeout(std::time::Duration::from_secs(20))
+        .expect("a thread that converted a picture never finished exiting");
 }

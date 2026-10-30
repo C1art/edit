@@ -1,5 +1,5 @@
-use std::cell::RefCell;
 use std::fmt;
+use std::sync::{Mutex, PoisonError};
 
 use ffmpeg_sys_next as sys;
 use timeline::{
@@ -52,8 +52,27 @@ enum Layout {
     Interleaved,
 }
 
-thread_local! {
-    static SCALER: RefCell<Scaler> = RefCell::default();
+/// Scalers lent to whichever thread converts, rather than kept per thread: a thread's
+/// own would be freed as it exits, and freeing a threaded swscale context joins its
+/// slice threads, which on Windows deadlocks under the loader lock that thread-local
+/// destructors run in. Statics are never dropped, so these are never freed that way.
+static SCALERS: Mutex<Vec<Scaler>> = Mutex::new(Vec::new());
+
+/// A scaler already set up for `picture` if one is idle, else any idle one or a new one.
+fn borrow_scaler(picture: &Picture) -> Scaler {
+    let mut idle = SCALERS.lock().unwrap_or_else(PoisonError::into_inner);
+    let ready = idle.iter().position(|scaler| scaler.is_set_up_for(picture));
+    match ready {
+        Some(index) => idle.swap_remove(index),
+        None => idle.pop().unwrap_or_default(),
+    }
+}
+
+fn return_scaler(scaler: Scaler) {
+    SCALERS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .push(scaler);
 }
 
 impl PlanarFrame {
@@ -153,8 +172,10 @@ impl PlanarFrame {
 
     /// The picture as tightly packed RGBA8, converted on this thread.
     pub fn to_rgba(&self) -> Result<VideoFrame, MediaError> {
-        let (width, height, pixels) =
-            SCALER.with_borrow_mut(|scaler| scaler.convert(&self.picture))?;
+        let mut scaler = borrow_scaler(&self.picture);
+        let converted = scaler.convert(&self.picture);
+        return_scaler(scaler);
+        let (width, height, pixels) = converted?;
         Ok(VideoFrame {
             pts: self.pts,
             width,
