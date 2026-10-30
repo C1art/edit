@@ -148,6 +148,12 @@ impl Lane {
         let painter = ui.painter_at(rect.expand2(egui::vec2(REACH, 0.0)));
         let visuals = ui.visuals();
         painter.rect_filled(rect, 2.0, visuals.extreme_bg_color);
+        let pinned = visuals.selection.bg_fill.gamma_multiply(0.3);
+        for span in self.pinned_spans() {
+            let [from, to] = span.map(|source| self.x_of(rect, source));
+            let shaded = Rect::from_x_y_ranges(from.min(to)..=from.max(to), rect.y_range());
+            painter.rect_filled(shaded.intersect(rect), 0.0, pinned);
+        }
         let middle = rect.center().y;
         let line = Stroke::new(1.0, visuals.widgets.noninteractive.bg_stroke.color);
         if param.is_animated() {
@@ -180,6 +186,21 @@ impl Lane {
                 outline,
             );
         }
+    }
+
+    /// The source the intro and outro hold, whose keyframes move with the clip's ends.
+    fn pinned_spans(&self) -> Vec<[Ticks; 2]> {
+        let clip = &self.clip;
+        let (start, end) = (clip.source_in, clip.source_out());
+        let pinned = clip.pinned;
+        [
+            (pinned.intro, [start, start + pinned.intro]),
+            (pinned.outro, [end - pinned.outro, end]),
+        ]
+        .into_iter()
+        .filter(|(length, _)| *length > Ticks::ZERO)
+        .map(|(_, span)| span)
+        .collect()
     }
 
     /// The keyframe drawn nearest `x`, if it is within reach.
