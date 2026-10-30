@@ -4,6 +4,7 @@
 #![allow(dead_code)]
 
 use std::future::Future;
+use std::sync::OnceLock;
 use std::task::{Context, Poll, Waker};
 
 use render::{Compositor, LayerImage, LayerLook, Picture};
@@ -23,14 +24,22 @@ pub fn block_on<F: Future>(future: F) -> F::Output {
     }
 }
 
+/// One for the whole test binary, as AMD's Vulkan driver can fail, or crash, while
+/// two threads set up or use devices of their own at once.
+fn device() -> &'static (wgpu::Device, wgpu::Queue) {
+    static DEVICE: OnceLock<(wgpu::Device, wgpu::Queue)> = OnceLock::new();
+    DEVICE.get_or_init(|| {
+        let instance =
+            wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
+        let adapter = block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
+            .expect("a GPU adapter");
+        block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).expect("a GPU device")
+    })
+}
+
 pub fn compositor() -> Compositor {
-    let instance =
-        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-    let adapter = block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
-        .expect("a GPU adapter");
-    let (device, queue) =
-        block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).expect("a GPU device");
-    Compositor::new(&device, &queue)
+    let (device, queue) = device();
+    Compositor::new(device, queue)
 }
 
 pub fn solid(rgb: [u8; 3]) -> Vec<u8> {

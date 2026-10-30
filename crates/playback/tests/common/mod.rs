@@ -6,7 +6,7 @@
 
 use std::future::Future;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::task::{Context, Poll, Waker};
 use std::time::{Duration, Instant};
 
@@ -29,12 +29,18 @@ fn block_on<F: Future>(future: F) -> F::Output {
     }
 }
 
+/// One for the whole test binary, as AMD's Vulkan driver can fail, or crash, while
+/// two threads set up or use devices of their own at once.
 pub fn gpu() -> Gpu {
-    let instance =
-        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-    let adapter = block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
-        .expect("a GPU adapter");
-    block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).expect("a GPU device")
+    static GPU: OnceLock<Gpu> = OnceLock::new();
+    GPU.get_or_init(|| {
+        let instance =
+            wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
+        let adapter = block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
+            .expect("a GPU adapter");
+        block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).expect("a GPU device")
+    })
+    .clone()
 }
 
 pub fn export(sequence: &Arc<Sequence>, gpu: &Gpu, settings: ExportSettings) -> Result<(), String> {

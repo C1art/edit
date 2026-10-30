@@ -5,10 +5,11 @@ mod commands;
 mod layout;
 mod monkey;
 mod soak;
+mod usage;
 
 use std::future::Future;
 use std::path::PathBuf;
-use std::sync::Once;
+use std::sync::{Once, OnceLock};
 use std::task::{Context, Poll, Waker};
 
 use eframe::egui_wgpu;
@@ -46,15 +47,21 @@ fn block_on<F: Future>(future: F) -> F::Output {
 }
 
 pub(super) fn gpu() -> egui_wgpu::RenderState {
-    let config = egui_wgpu::WgpuConfiguration::default();
-    let instance = block_on(config.wgpu_setup.new_instance());
-    block_on(egui_wgpu::RenderState::create(
-        &config,
-        &instance,
-        None,
-        egui_wgpu::RendererOptions::default(),
-    ))
-    .expect("a GPU")
+    // One for the whole test binary, as AMD's Vulkan driver can fail, or crash, while
+    // two threads set up or use devices of their own at once.
+    static GPU: OnceLock<egui_wgpu::RenderState> = OnceLock::new();
+    GPU.get_or_init(|| {
+        let config = egui_wgpu::WgpuConfiguration::default();
+        let instance = block_on(config.wgpu_setup.new_instance());
+        block_on(egui_wgpu::RenderState::create(
+            &config,
+            &instance,
+            None,
+            egui_wgpu::RendererOptions::default(),
+        ))
+        .expect("a GPU")
+    })
+    .clone()
 }
 
 /// The window the editor draws into, with a clock that moves a frame at a time.
