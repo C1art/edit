@@ -285,6 +285,7 @@ fn presets_round_trip_through_text() {
     let file = PresetsFile::new(vec![timeline::EffectPreset {
         name: "Soft \"look\"".to_owned(),
         video: vec![VideoEffect::GaussianBlur { blurriness }],
+        video_masks: vec![vec![Mask::new(MaskShape::Rectangle)]],
         audio: vec![AudioEffect::SwapChannels],
     }]);
     let text = file.to_text().unwrap();

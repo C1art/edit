@@ -1,5 +1,5 @@
 use crate::edit::ops;
-use crate::{Clip, ClipId, Edit, Look, Mask, Param, Sequence, TimelineError, TrackKind};
+use crate::{Clip, ClipId, Edit, Look, Param, Sequence, TimelineError, TrackKind};
 
 /// A group of clip settings that Paste Attributes and Remove Attributes treat as one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -165,16 +165,8 @@ fn paste(attribute: Attribute, from: &Clip, to: &mut Clip) {
             look.crop.params_mut().into_iter().for_each(retime);
         }
         Attribute::Effects => {
-            let mut pasted = Look {
-                effects: from.look.effects.clone(),
-                effect_masks: from.look.effect_masks.clone(),
-                ..Look::default()
-            };
-            let masks = pasted.effect_masks.iter_mut().flatten();
-            (pasted.effects.iter_mut())
-                .flat_map(|effect| effect.params_mut())
-                .chain(masks.flat_map(Mask::params_mut))
-                .for_each(retime);
+            let mut pasted = from.look.effects_only();
+            pasted.params_of_effects_mut().for_each(retime);
             look.append_effects(&pasted);
         }
         Attribute::Color => {

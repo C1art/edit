@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{AudioEffect, Clip, ClipId, Param, Sequence, TrackKind, VideoEffect};
+use crate::{AudioEffect, Clip, ClipId, Look, Mask, Param, Sequence, TrackKind, VideoEffect};
 
 /// Effects saved from one clip to apply to others. Keyframes keep their distance from
 /// the clip's start, so they land as far into whichever clip gets the preset.
@@ -9,6 +9,9 @@ pub struct EffectPreset {
     pub name: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub video: Vec<VideoEffect>,
+    /// The masks keeping each video effect to part of the picture, beside `video`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub video_masks: Vec<Vec<Mask>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub audio: Vec<AudioEffect>,
 }
@@ -19,6 +22,7 @@ impl EffectPreset {
         let mut preset = Self {
             name,
             video: Vec::new(),
+            video_masks: Vec::new(),
             audio: Vec::new(),
         };
         for id in sequence.with_links(&[clip]) {
@@ -32,12 +36,11 @@ impl EffectPreset {
             };
             match track.kind {
                 TrackKind::Video => {
-                    let mut effects = clip.look.effects.clone();
-                    effects
-                        .iter_mut()
-                        .flat_map(VideoEffect::params_mut)
-                        .for_each(from_clip);
-                    preset.video.extend(effects);
+                    let mut saved = preset.video_look();
+                    let mut effects = clip.look.effects_only();
+                    effects.params_of_effects_mut().for_each(from_clip);
+                    saved.append_effects(&effects);
+                    (preset.video, preset.video_masks) = (saved.effects, saved.effect_masks);
                 }
                 TrackKind::Audio => {
                     let mut effects = clip.audio_effects.clone();
@@ -50,6 +53,14 @@ impl EffectPreset {
             }
         }
         (!preset.is_empty()).then_some(preset)
+    }
+
+    fn video_look(&self) -> Look {
+        Look {
+            effects: self.video.clone(),
+            effect_masks: self.video_masks.clone(),
+            ..Look::default()
+        }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -68,12 +79,9 @@ impl EffectPreset {
         };
         match kind {
             TrackKind::Video => {
-                let mut effects = self.video.clone();
-                effects
-                    .iter_mut()
-                    .flat_map(VideoEffect::params_mut)
-                    .for_each(onto_clip);
-                clip.look.effects.extend(effects);
+                let mut effects = self.video_look();
+                effects.params_of_effects_mut().for_each(onto_clip);
+                clip.look.append_effects(&effects);
             }
             TrackKind::Audio => {
                 let mut effects = self.audio.clone();

@@ -1,5 +1,8 @@
 use super::*;
-use crate::{AudioEffect, EffectPreset, Keyframe, Param, VideoEffect};
+use crate::{
+    AudioEffect, EffectPreset, Keyframe, Mask, MaskOwner, MaskShape, Param, SetClipLook,
+    VideoEffect,
+};
 
 #[test]
 fn pasted_keyframes_keep_their_distance_from_the_clip_start() {
@@ -84,6 +87,11 @@ fn a_preset_keys_its_effects_as_far_into_the_clip_it_lands_on() {
     };
     timeline.apply(amplify).unwrap();
     let saved = clip_on(&timeline, V1, 0);
+    let mut look = timeline.sequence().clip(saved).unwrap().1.look.clone();
+    look.masks_of_mut(MaskOwner::Effect(0))
+        .unwrap()
+        .push(Mask::new(MaskShape::Ellipse));
+    timeline.apply(SetClipLook { clip: saved, look }).unwrap();
     let preset = EffectPreset::from_clip("Blurred".into(), timeline.sequence(), saved).unwrap();
 
     let apply = ApplyEffect {
@@ -99,5 +107,6 @@ fn a_preset_keys_its_effects_as_far_into_the_clip_it_lands_on() {
         panic!("the preset's blur is missing");
     };
     assert_eq!(blurriness.keys[0].time, Ticks(510));
+    assert_eq!(clip(V1).look.masks_of(MaskOwner::Effect(0)).len(), 1);
     assert_eq!(clip(A1).audio_effects.len(), 1);
 }

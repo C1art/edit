@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Look, Mask};
+use crate::{Look, Mask, Param, VideoEffect};
 
 /// Whose mask list a mask is in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -82,6 +82,22 @@ impl Look {
         }
         self.effects.extend(look.effects.iter().cloned());
         self.tidy_effect_masks();
+    }
+
+    /// The look with only its effects and their masks, everything else at its default.
+    pub fn effects_only(&self) -> Look {
+        Look {
+            effects: self.effects.clone(),
+            effect_masks: self.effect_masks.clone(),
+            ..Look::default()
+        }
+    }
+
+    pub fn params_of_effects_mut(&mut self) -> impl Iterator<Item = &mut Param> {
+        let masks = self.effect_masks.iter_mut().flatten();
+        (self.effects.iter_mut())
+            .flat_map(VideoEffect::params_mut)
+            .chain(masks.flat_map(Mask::params_mut))
     }
 
     /// Whether any effect reaches only inside its masks.
