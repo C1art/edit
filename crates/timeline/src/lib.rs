@@ -101,7 +101,7 @@ pub use ducking::{active_spans, ducked_volume};
 pub use edit::{
     clamp_delta, is_through_edit, pauses, synchronized_clips, unused_time, AddBin,
     AddBlurredBackground, AddEdits, AddFrameHold, AddGenerated, AddMarker, AddMarkers, AddNest,
-    AddSpeedKeyframe, AddSubmix, AddTrack, AddTracks, ApplyEffect, ApplySpeedRamp,
+    AddSpeedKeyframe, AddSubmix, AddTrack, AddTracks, AdjustClips, ApplyEffect, ApplySpeedRamp,
     ApplyTransitions, Attribute, AutoDuck, AutomateToSequence, AutomatedPiece, BreakoutToMono,
     CaptionsToTitles, ClearMarkers, ClipEffect, ClipSound, Clipboard, CloseGap, CloseGaps,
     ConsolidateDuplicates, CreateMulticam, DeleteEmptyTracks, DeltaBounds, DuplicateMedia, Edge,

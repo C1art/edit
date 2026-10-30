@@ -41,6 +41,7 @@ mod sound;
 mod sound_more;
 mod stabilizer;
 mod text_style_row;
+mod together;
 mod tone;
 mod transitions;
 mod video_effects;
@@ -102,6 +103,8 @@ pub struct EffectControls {
     /// The clip, segment and speed in percent of a time remapping drag.
     remapping: Option<(ClipId, usize, f64)>,
     keys: KeySelection,
+    /// The property of several clips being dragged together, and its value.
+    together: Option<(together::Property, f32)>,
     /// Whether the source monitor shows where the selected clip's picture starts and ends.
     ken_burns: bool,
 }
@@ -122,6 +125,7 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
             .map(|&(track, clip)| (track, clip.clone()))
     };
     let (picture, sound) = (first(TrackKind::Video), first(TrackKind::Audio));
+    let ids: Vec<ClipId> = selected.iter().map(|(_, clip)| clip.id).collect();
     let Some(&(track, ref clip)) = picture.as_ref().or(sound.as_ref()) else {
         ui.label("Select a clip to adjust its motion, opacity, crop, effects and transitions.");
         return;
@@ -147,6 +151,7 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
     egui::ScrollArea::vertical().show(ui, |ui| {
         // Sections nest a level or two deep, and the panel is often narrow.
         ui.spacing_mut().indent = 10.0;
+        together::controls(editor, ui, &ids);
         if let Some((_, clip)) = &picture {
             picture_controls(editor, ui, clip, Sections::All);
             if !editor.simple() || clip.remap.is_some() {

@@ -1,4 +1,5 @@
 mod add_tracks;
+mod adjust;
 mod apply_effect;
 mod arrange;
 mod attributes;
@@ -51,6 +52,7 @@ mod unnest;
 mod tests;
 
 pub use add_tracks::{AddTracks, NewTracks};
+pub use adjust::AdjustClips;
 pub use apply_effect::{ApplyEffect, ClipEffect};
 pub use arrange::{CloseGap, Lift, MoveClips, MoveMode, RippleDelete};
 pub use attributes::{Attribute, PasteAttributes, RemoveAttributes};
