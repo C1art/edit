@@ -141,6 +141,7 @@ fn source(editor: &mut Editor, ui: &mut egui::Ui) {
             &mut editor.clip_art,
         );
     }
+    let picture_rect = picture.rect;
     let picture = source_drag::picture(ui, source, &picture);
     if sound_only.is_some() {
         source_waveform::seek_on_click(&picture, source);
@@ -197,6 +198,7 @@ fn source(editor: &mut Editor, ui: &mut egui::Ui) {
     if subclip {
         editor.make_subclip();
     }
+    crate::effects::ken_burns_overlay(editor, ui, picture_rect);
 }
 
 fn program(editor: &mut Editor, ui: &mut egui::Ui) {

@@ -22,6 +22,7 @@ mod group;
 mod history;
 mod hue_curves;
 mod interpretation;
+mod ken_burns;
 mod keyframe;
 mod label;
 mod layer_motion;
@@ -140,6 +141,7 @@ pub use hue_curves::{HueCurve, HueCurves, HUE_CURVE_NEUTRAL};
 pub use interpretation::{
     AlphaInterpretation, ColorSpace, FieldOrder, PixelAspect, Primaries, Transfer,
 };
+pub use ken_burns::{FrameRegion, KenBurns, MoveEnd};
 pub use keyframe::{HandleSide, Handles, Interpolation, Keyframe};
 pub use label::Label;
 pub use layer_motion::{Appear, FrameSide, LayerAnimation, LayerPose};

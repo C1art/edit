@@ -33,6 +33,9 @@ pub(super) struct Output {
     /// What to set the Basic Correction for from the picture.
     pub(super) analyze_tone: Option<ToneGoal>,
     pub(super) keys: KeySelection,
+    /// Ken Burns boxes turned on or off.
+    pub(super) ken_burns: Option<bool>,
+    pub(super) swap_ken_burns: bool,
 }
 
 /// Edits `look` in `rows`, of a clip among `video_tracks` video tracks.
@@ -72,6 +75,18 @@ pub(super) fn controls(
             let [x, y] = &mut motion.anchor;
             rows.param(ui, "Anchor X", x, -10_000.0..=10_000.0, "");
             rows.param(ui, "Anchor Y", y, -10_000.0..=10_000.0, "");
+            ui.horizontal(|ui| {
+                let on = rows.ken_burns;
+                let toggle = ui.selectable_label(on, "Ken Burns").on_hover_text(
+                    "Drag where the picture starts and ends over it in the source monitor",
+                );
+                if toggle.clicked() {
+                    rows.output.ken_burns = Some(!on);
+                }
+                if on && ui.button("Swap Start and End").clicked() {
+                    rows.output.swap_ken_burns = true;
+                }
+            });
         });
     egui::CollapsingHeader::new("Opacity")
         .default_open(true)
@@ -156,6 +171,7 @@ pub(super) struct Rows {
     pub(super) tone: ToneState,
     /// Whether the effect being shown asked for its matte picture.
     pub(super) browse_matte: bool,
+    pub(super) ken_burns: bool,
     pub(super) output: Output,
 }
 
@@ -169,6 +185,7 @@ impl Rows {
             tracking: None,
             tone: ToneState::default(),
             browse_matte: false,
+            ken_burns: false,
             output: Output {
                 change: None,
                 seek: None,
@@ -180,6 +197,8 @@ impl Rows {
                 stop_tracking: false,
                 analyze_tone: None,
                 keys,
+                ken_burns: None,
+                swap_ken_burns: false,
             },
         }
     }

@@ -10,6 +10,7 @@ mod generated;
 mod graphic_layers;
 mod hue_curves;
 mod image;
+mod ken_burns;
 mod key_selection;
 mod key_time;
 mod keying;
@@ -58,6 +59,7 @@ use lane::Lane;
 use look::Rows;
 
 pub use color::LutSlot;
+pub use ken_burns::ken_burns_overlay;
 pub(crate) use key_selection::KeyAction;
 pub(crate) use key_time::keyframe_time;
 use key_time::seek_to_key;
@@ -96,6 +98,8 @@ pub struct EffectControls {
     /// The clip, segment and speed in percent of a time remapping drag.
     remapping: Option<(ClipId, usize, f64)>,
     keys: KeySelection,
+    /// Whether the source monitor shows where the selected clip's picture starts and ends.
+    ken_burns: bool,
 }
 
 pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
@@ -193,6 +197,7 @@ fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip, section
     rows.analyzing = editor.motion_analysis_progress(clip.id);
     rows.reframing = editor.reframe_analysis_progress(clip.id);
     rows.tracking = editor.mask_tracking(clip.id);
+    rows.ken_burns = editor.effects.ken_burns;
     rows.tone = match (editor.analyzing_tone(clip.id), &editor.comparison) {
         (true, _) => ToneState::Analyzing,
         (false, Some(_)) => ToneState::ReadyToMatch,
@@ -212,6 +217,12 @@ fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip, section
         reframe::retune(&mut look, timebase);
     }
     seek_to_key(editor, clip, output.seek);
+    if let Some(on) = output.ken_burns {
+        editor.set_ken_burns(clip, on);
+    }
+    if output.swap_ken_burns && ken_burns::swap(editor, clip, &mut look) {
+        output.change = Some(Change::Commit);
+    }
     if let Some(slot) = output.choose_lut {
         editor.prompt_path(PathPurpose::Lut(clip.id, slot));
     }
