@@ -5,6 +5,7 @@ mod audio_effects;
 mod audio_effects_more;
 mod audio_guitar;
 mod audio_mastering;
+mod audio_plugin;
 mod audio_worker;
 mod clip_audio;
 mod clip_decoders;

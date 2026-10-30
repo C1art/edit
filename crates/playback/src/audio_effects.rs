@@ -8,6 +8,7 @@ use audio::{
 use timeline::{AudioEffect, ClipId, Ticks};
 
 use crate::audio_effects_more::MoreUnit;
+use crate::audio_plugin::PluginUnit;
 
 /// Corner frequencies of the equalizer's shelves.
 const LOW_SHELF_HZ: f32 = 100.0;
@@ -39,6 +40,7 @@ enum Unit {
     DeNoise(Box<DeNoise>),
     DeHum(Box<DeHum>),
     More(MoreUnit),
+    Plugin(Box<PluginUnit>),
     /// For effects that keep nothing from one sample to the next.
     Stateless,
 }
@@ -81,6 +83,7 @@ impl EffectChain {
                 Unit::DeNoise(denoise) => denoise.reset(),
                 Unit::DeHum(dehum) => dehum.reset(),
                 Unit::More(unit) => unit.reset(),
+                Unit::Plugin(unit) => unit.reset(),
                 Unit::Stateless => {}
             }
         }
@@ -363,6 +366,9 @@ impl EffectChain {
                     samples,
                 ),
                 (effect, Unit::More(unit)) => unit.process(effect, time, rate, samples),
+                (AudioEffect::Plugin(effect), Unit::Plugin(unit)) => {
+                    unit.process(effect, time, rate, samples);
+                }
                 _ => {}
             }
         }
@@ -406,6 +412,9 @@ impl EffectChain {
             AudioEffect::PitchShifter { .. } => Unit::Pitch(Box::new(PitchShifter::new(self.rate))),
             AudioEffect::DeNoise { .. } => Unit::DeNoise(Box::new(DeNoise::new(self.rate))),
             AudioEffect::DeHum { .. } => Unit::DeHum(Box::default()),
+            AudioEffect::Plugin(effect) => {
+                Unit::Plugin(Box::new(PluginUnit::new(effect, self.rate)))
+            }
             AudioEffect::Amplify { .. }
             | AudioEffect::Balance { .. }
             | AudioEffect::ChannelVolume { .. }
