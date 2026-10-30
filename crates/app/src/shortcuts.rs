@@ -37,6 +37,10 @@ pub fn handle(editor: &mut Editor, ctx: &egui::Context) {
             editor.switch_angle(angle);
         }
     }
+    if editor.full_screen && ctx.input_mut(|input| input.consume_key(Modifiers::NONE, Key::Escape))
+    {
+        editor.full_screen = false;
+    }
     while let Some(command) = take_press(ctx, |chord| editor.keymap.command(chord)) {
         run(editor, command);
     }
@@ -177,6 +181,7 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         Command::Workspace(slot) => editor.switch_workspace(usize::from(slot)),
         Command::ResetWorkspace => editor.reset_workspace(),
         Command::MaximizePanel => editor.toggle_maximized_panel(),
+        Command::FullScreen => editor.toggle_full_screen(),
         Command::RenderInToOut => editor.render_in_to_out(),
         Command::DeleteRenderFiles => editor.delete_render_files(),
         Command::MarkIn

@@ -129,13 +129,14 @@ pub enum Command {
     Workspace(u8),
     ResetWorkspace,
     MaximizePanel,
+    FullScreen,
 }
 
 /// Workspaces after these have no command of their own.
 pub const WORKSPACE_SLOTS: u8 = 9;
 
 impl Command {
-    pub const ALL: [Self; 135] = [
+    pub const ALL: [Self; 136] = [
         Self::NewProject,
         Self::OpenProject,
         Self::Save,
@@ -271,6 +272,7 @@ impl Command {
         Self::Workspace(8),
         Self::ResetWorkspace,
         Self::MaximizePanel,
+        Self::FullScreen,
     ];
 
     pub fn id(self) -> &'static str {
@@ -370,7 +372,7 @@ impl Command {
             | StepBackFive | StepForwardFive | GoToStart | GoToEnd | PreviousEdit | NextEdit
             | PreviousKeyframe | NextKeyframe | PlayInToOut | PlayAround | ToggleLoop
             | ToggleAudioScrubbing => "Playback",
-            Workspace(_) | ResetWorkspace | MaximizePanel => "Window",
+            Workspace(_) | ResetWorkspace | MaximizePanel | FullScreen => "Window",
         }
     }
 }

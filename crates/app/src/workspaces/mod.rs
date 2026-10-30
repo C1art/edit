@@ -248,6 +248,9 @@ impl Editor {
     /// Shows every panel at the active workspace's sizes, and remembers the sizes
     /// they are dragged to.
     pub(crate) fn lay_out_panels(&mut self, ui: &mut egui::Ui) {
+        if crate::full_screen::show(self, ui) {
+            return;
+        }
         // First, as its menus can switch workspaces.
         let menu_bar = Frame::new()
             .fill(theme::GUTTER)

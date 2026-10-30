@@ -31,6 +31,11 @@ pub(crate) fn window_menu(editor: &mut Editor, ui: &mut egui::Ui) {
             }
         }
         ui.separator();
+        let full_screen =
+            Button::new("Full Screen").shortcut_text(editor.keymap.label(Command::FullScreen));
+        if ui.add(full_screen).clicked() {
+            editor.toggle_full_screen();
+        }
         let messages = &mut editor.notifications.history_open;
         if ui.selectable_label(*messages, "Messages").clicked() {
             *messages = !*messages;

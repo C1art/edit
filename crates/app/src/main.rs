@@ -32,6 +32,7 @@ mod file_browser;
 mod file_drop;
 mod find_dialog;
 mod fit_clip;
+mod full_screen;
 mod gain_dialog;
 mod gpu_setup;
 mod graphics_tools;

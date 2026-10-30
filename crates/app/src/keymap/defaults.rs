@@ -142,6 +142,7 @@ impl Command {
                 .unwrap_or_default(),
             Self::ResetWorkspace => vec![alt_shift(Key::Num0)],
             Self::MaximizePanel => vec![plain(Key::Backtick)],
+            Self::FullScreen => vec![ctrl(Key::Backtick)],
         }
     }
 }

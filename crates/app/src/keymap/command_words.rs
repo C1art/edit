@@ -171,6 +171,7 @@ impl Command {
                 .unwrap_or(("workspace", "Workspace")),
             Self::ResetWorkspace => ("reset_workspace", "Reset to Saved Layout"),
             Self::MaximizePanel => ("maximize_panel", "Maximize or Restore Panel Under Cursor"),
+            Self::FullScreen => ("toggle_full_screen", "Toggle Full Screen"),
         }
     }
 }
