@@ -2,7 +2,8 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Ticks, Timebase};
+use crate::time_display::{drop_frame_label, drop_frame_of_label};
+use crate::{Ticks, TimeDisplay, Timebase};
 
 /// Frames per second as the exact fraction `num / den` (e.g. `30000/1001` for 29.97 fps).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -68,30 +69,62 @@ impl FrameRate {
     }
 }
 
-/// Non-drop-frame `HH:MM:SS:FF` timecode, as shown in the transport and timeline ruler.
+/// A position or length as a sequence shows it: `HH:MM:SS:FF` timecode, `HH;MM;SS;FF`
+/// drop-frame timecode, or a count of frames.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Timecode {
     negative: bool,
-    hours: i64,
-    minutes: i64,
-    seconds: i64,
-    frames: i64,
+    shown: Shown,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Shown {
+    Clock {
+        hours: u64,
+        minutes: u64,
+        seconds: u64,
+        frames: u64,
+        drop_frame: bool,
+    },
+    Frames(u64),
 }
 
 impl Timecode {
+    /// Non-drop-frame timecode, as interchange formats count.
     pub fn new(position: Ticks, timebase: Timebase, rate: FrameRate) -> Self {
+        Self::shown(position, timebase, rate, TimeDisplay::NonDropTimecode)
+    }
+
+    pub fn shown(
+        position: Ticks,
+        timebase: Timebase,
+        rate: FrameRate,
+        display: TimeDisplay,
+    ) -> Self {
         let frame = rate.frame_at(position, timebase);
-        let nominal = rate.nominal();
+        let negative = frame < 0;
         let total = frame.unsigned_abs();
-        let per_second = nominal.unsigned_abs();
-        let seconds_total = total / per_second;
-        let to_i64 = |value: u64| i64::try_from(value).unwrap_or(i64::MAX);
+        if display == TimeDisplay::Frames {
+            return Self {
+                negative,
+                shown: Shown::Frames(total),
+            };
+        }
+        let per_second = rate.nominal().unsigned_abs();
+        let dropped = display.dropped(rate);
+        let label = dropped.map_or(total, |dropped| {
+            drop_frame_label(total, dropped, per_second)
+        });
+        let seconds_total = label / per_second;
         Self {
-            negative: frame < 0,
-            hours: to_i64(seconds_total / 3600),
-            minutes: to_i64(seconds_total / 60 % 60),
-            seconds: to_i64(seconds_total % 60),
-            frames: to_i64(total % per_second),
+            negative,
+            shown: Shown::Clock {
+                hours: seconds_total / 3600,
+                minutes: seconds_total / 60 % 60,
+                seconds: seconds_total % 60,
+                frames: label % per_second,
+                drop_frame: dropped.is_some(),
+            },
         }
     }
 }
@@ -107,8 +140,8 @@ pub enum TypedTimecode {
 impl TypedTimecode {
     /// Reads timecode as Premiere's fields take it: `HH:MM:SS:FF` with the leading
     /// fields optional, or bare digits read in pairs from the right, so `500` at any
-    /// rate is five seconds.
-    pub fn parse(text: &str, rate: FrameRate) -> Option<Self> {
+    /// rate is five seconds. Shown as frames, bare digits count frames.
+    pub fn parse(text: &str, rate: FrameRate, display: TimeDisplay) -> Option<Self> {
         let text = text.trim();
         let (sign, body) = match text.strip_prefix('+') {
             Some(body) => (Some(1), body),
@@ -119,7 +152,15 @@ impl TypedTimecode {
         };
         let body = body.trim();
         let all_digits = |field: &str| field.bytes().all(|byte| byte.is_ascii_digit());
-        let fields: Vec<&str> = if body.contains([':', ';', '.']) {
+        let separated = body.contains([':', ';', '.']);
+        if display == TimeDisplay::Frames && !separated {
+            let frames: i64 = body.parse().ok().filter(|_| all_digits(body))?;
+            return Some(match sign {
+                Some(sign) => Self::By(sign * frames),
+                None => Self::At(frames),
+            });
+        }
+        let fields: Vec<&str> = if separated {
             body.split([':', ';', '.']).collect()
         } else if !body.is_empty() {
             let pairs = body.as_bytes().rchunks(2).rev();
@@ -147,9 +188,14 @@ impl TypedTimecode {
                 };
                 sum.checked_add(value.checked_mul(unit)?)
             })?;
-        Some(match sign {
-            Some(sign) => Self::By(sign * frames),
-            None => Self::At(frames),
+        Some(match (sign, display.dropped(rate)) {
+            (Some(sign), _) => Self::By(sign * frames),
+            (None, None) => Self::At(frames),
+            (None, Some(dropped)) => {
+                let label = frames.unsigned_abs();
+                let frame = drop_frame_of_label(label, dropped, nominal.unsigned_abs());
+                Self::At(i64::try_from(frame).ok()?)
+            }
         })
     }
 }
@@ -157,11 +203,22 @@ impl TypedTimecode {
 impl fmt::Display for Timecode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let sign = if self.negative { "-" } else { "" };
-        write!(
-            f,
-            "{sign}{:02}:{:02}:{:02}:{:02}",
-            self.hours, self.minutes, self.seconds, self.frames
-        )
+        match self.shown {
+            Shown::Clock {
+                hours,
+                minutes,
+                seconds,
+                frames,
+                drop_frame,
+            } => {
+                let colon = if drop_frame { ';' } else { ':' };
+                write!(
+                    f,
+                    "{sign}{hours:02}{colon}{minutes:02}{colon}{seconds:02}{colon}{frames:02}"
+                )
+            }
+            Shown::Frames(frames) => write!(f, "{sign}{frames}"),
+        }
     }
 }
 
@@ -203,19 +260,19 @@ mod tests {
     fn typed_timecode_fills_fields_from_the_right() {
         let pal = FrameRate::FPS_25;
         assert_eq!(
-            TypedTimecode::parse("00:00:05:00", pal),
+            TypedTimecode::parse("00:00:05:00", pal, TimeDisplay::NonDropTimecode),
             Some(TypedTimecode::At(125))
         );
         assert_eq!(
-            TypedTimecode::parse("1:00", pal),
+            TypedTimecode::parse("1:00", pal, TimeDisplay::NonDropTimecode),
             Some(TypedTimecode::At(25))
         );
         assert_eq!(
-            TypedTimecode::parse("500", pal),
+            TypedTimecode::parse("500", pal, TimeDisplay::NonDropTimecode),
             Some(TypedTimecode::At(125))
         );
         assert_eq!(
-            TypedTimecode::parse("1000000", NTSC),
+            TypedTimecode::parse("1000000", NTSC, TimeDisplay::NonDropTimecode),
             Some(TypedTimecode::At(30 * 3600))
         );
     }
@@ -224,11 +281,11 @@ mod tests {
     fn typed_timecode_with_a_sign_is_a_move() {
         let pal = FrameRate::FPS_25;
         assert_eq!(
-            TypedTimecode::parse("+10", pal),
+            TypedTimecode::parse("+10", pal, TimeDisplay::NonDropTimecode),
             Some(TypedTimecode::By(10))
         );
         assert_eq!(
-            TypedTimecode::parse("-1.00", pal),
+            TypedTimecode::parse("-1.00", pal, TimeDisplay::NonDropTimecode),
             Some(TypedTimecode::By(-25))
         );
     }
@@ -237,8 +294,53 @@ mod tests {
     fn typed_timecode_rejects_what_is_not_timecode() {
         let pal = FrameRate::FPS_25;
         for text in ["", "abc", "1:2:3:4:5", "1:-2", "+", "99999999999999999999"] {
-            assert_eq!(TypedTimecode::parse(text, pal), None, "{text:?}");
+            assert_eq!(
+                TypedTimecode::parse(text, pal, TimeDisplay::NonDropTimecode),
+                None,
+                "{text:?}"
+            );
         }
+    }
+
+    #[test]
+    fn drop_frame_timecode_skips_two_labels_a_minute_but_every_tenth() {
+        let tb = Timebase::HZ_90K;
+        let shown = |frame| {
+            let position = NTSC.frame_start(frame, tb);
+            Timecode::shown(position, tb, NTSC, TimeDisplay::Timecode).to_string()
+        };
+        assert_eq!(shown(1799), "00;00;59;29");
+        assert_eq!(shown(1800), "00;01;00;02");
+        assert_eq!(shown(17_981), "00;09;59;29");
+        assert_eq!(shown(17_982), "00;10;00;00");
+        // An hour of 29.97 fps is 107,892 frames, which drop-frame labels an hour.
+        assert_eq!(shown(107_892), "01;00;00;00");
+    }
+
+    #[test]
+    fn typed_drop_frame_timecode_finds_the_frame_it_labels() {
+        let parse = |text: &str| TypedTimecode::parse(text, NTSC, TimeDisplay::Timecode);
+        assert_eq!(parse("00;01;00;02"), Some(TypedTimecode::At(1800)));
+        assert_eq!(parse("01:00:00:00"), Some(TypedTimecode::At(107_892)));
+        // Labels drop-frame skips mean the first frame shown after them.
+        assert_eq!(parse("00;01;00;00"), Some(TypedTimecode::At(1800)));
+        for frame in (0..40_000).step_by(7) {
+            let tb = Timebase::HZ_90K;
+            let position = NTSC.frame_start(frame, tb);
+            let shown = Timecode::shown(position, tb, NTSC, TimeDisplay::Timecode).to_string();
+            assert_eq!(parse(&shown), Some(TypedTimecode::At(frame)), "{shown}");
+        }
+    }
+
+    #[test]
+    fn shown_as_frames_counts_and_reads_frames() {
+        let tb = Timebase::HZ_90K;
+        let position = NTSC.frame_start(1234, tb);
+        let shown = Timecode::shown(position, tb, NTSC, TimeDisplay::Frames);
+        assert_eq!(shown.to_string(), "1234");
+        let parse = |text| TypedTimecode::parse(text, NTSC, TimeDisplay::Frames);
+        assert_eq!(parse("1234"), Some(TypedTimecode::At(1234)));
+        assert_eq!(parse("+100"), Some(TypedTimecode::By(100)));
     }
 
     #[test]

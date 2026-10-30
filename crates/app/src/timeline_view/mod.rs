@@ -31,7 +31,7 @@ use std::collections::BTreeSet;
 use egui::{Rect, Sense};
 use timeline::{
     AddTrack, ClipId, DeltaBounds, LinkedSelection, MarkerId, MarkerOwner, RemoveTrack,
-    RenameTrack, Sequence, SetTrackSwitch, Ticks, Timeline, TrackKind, TrackRef,
+    RenameTrack, Sequence, SetTrackSwitch, Ticks, TimeDisplay, Timeline, TrackKind, TrackRef,
 };
 
 use crate::clip_art::ClipArt;
@@ -110,6 +110,8 @@ pub struct TimelineOutput {
     pub clip_menu: Option<egui::Response>,
     /// The clip area while a right-click on a gap has its menu open.
     pub gap_menu: Option<egui::Response>,
+    /// How the sequence's times should show, chosen from the timecode's menu.
+    pub time_display: Option<TimeDisplay>,
     pub errors: Vec<String>,
 }
 

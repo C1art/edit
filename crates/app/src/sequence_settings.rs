@@ -1,5 +1,5 @@
 use egui::{ComboBox, DragValue, Key};
-use timeline::{SetSequenceFormat, Ticks, VideoFormat};
+use timeline::{FrameRate, SetSequenceFormat, SetTimeDisplay, Ticks, TimeDisplay, VideoFormat};
 
 use crate::editor::Editor;
 
@@ -21,6 +21,7 @@ const MAX_SIDE: u32 = 8192;
 /// The sequence's frame size and rate, as Premiere's Sequence Settings dialog sets them.
 pub(crate) struct SequenceSettings {
     format: VideoFormat,
+    display: TimeDisplay,
 }
 
 impl Editor {
@@ -29,9 +30,19 @@ impl Editor {
             self.notice("A nested sequence uses the project's settings");
             return;
         }
+        let sequence = self.timeline.sequence();
         self.sequence_settings = Some(SequenceSettings {
-            format: self.timeline.sequence().format,
+            format: sequence.format,
+            display: sequence.time_display,
         });
+    }
+
+    pub(crate) fn set_time_display(&mut self, display: TimeDisplay) {
+        if self.timeline.open_nest().is_some() {
+            self.notice("A nested sequence shows times as the project does");
+            return;
+        }
+        self.apply_levels(SetTimeDisplay { display });
     }
 }
 
@@ -44,7 +55,7 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     let mut done = false;
     let mut cancelled = false;
     crate::dialog::window(ctx, "Sequence Settings").show(ctx, |ui| {
-        let format = &mut settings.format;
+        let SequenceSettings { format, display } = settings;
         egui::Grid::new("sequence settings")
             .num_columns(2)
             .spacing([12.0, 8.0])
@@ -60,6 +71,9 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                 })
                 .response
                 .on_disabled_hover_text("The timebase can't change once the sequence has clips");
+                ui.end_row();
+                ui.label("Display format");
+                display_format(ui, display, format.frame_rate);
                 ui.end_row();
             });
         ui.weak("Pictures of another shape fit inside the frame, with bars.");
@@ -80,7 +94,25 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
         editor.apply(SetSequenceFormat {
             format: settings.format,
         });
+        editor.apply_levels(SetTimeDisplay {
+            display: settings.display,
+        });
     }
+}
+
+/// Picks how times show at `rate`; a choice the rate makes no different from another,
+/// as non-drop-frame is where nothing drops, shows as that other.
+pub(crate) fn display_format(ui: &mut egui::Ui, display: &mut TimeDisplay, rate: FrameRate) {
+    if !TimeDisplay::choices(rate).any(|choice| choice == *display) {
+        *display = TimeDisplay::Timecode;
+    }
+    ComboBox::from_id_salt("display format")
+        .selected_text(display.name(rate))
+        .show_ui(ui, |ui| {
+            for choice in TimeDisplay::choices(rate) {
+                ui.selectable_value(display, choice, choice.name(rate));
+            }
+        });
 }
 
 fn frame_size(ui: &mut egui::Ui, format: &mut VideoFormat) {

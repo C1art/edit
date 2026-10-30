@@ -57,7 +57,11 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
     );
     let search = filter.search.to_lowercase();
     let sequence = editor.timeline.sequence();
-    let (timebase, rate) = (sequence.timebase, sequence.format.frame_rate);
+    let (timebase, rate, display) = (
+        sequence.timebase,
+        sequence.format.frame_rate,
+        sequence.time_display,
+    );
     let mut action = None;
     egui::ScrollArea::vertical()
         .auto_shrink([false, true])
@@ -80,9 +84,10 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
                         marker_color(marker.color),
                         Stroke::new(1.0, egui::Color32::from_black_alpha(160)),
                     );
-                    let mut timecode = Timecode::new(marker.at, timebase, rate).to_string();
+                    let mut timecode =
+                        Timecode::shown(marker.at, timebase, rate, display).to_string();
                     if marker.duration > Ticks::ZERO {
-                        let length = Timecode::new(marker.duration, timebase, rate);
+                        let length = Timecode::shown(marker.duration, timebase, rate, display);
                         timecode.push_str(&format!(" · {length}"));
                     }
                     ui.vertical(|ui| {

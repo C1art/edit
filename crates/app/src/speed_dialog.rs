@@ -50,7 +50,11 @@ impl Editor {
 
 pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     let sequence = editor.timeline.sequence();
-    let (timebase, rate) = (sequence.timebase, sequence.format.frame_rate);
+    let (timebase, rate, display) = (
+        sequence.timebase,
+        sequence.format.frame_rate,
+        sequence.time_display,
+    );
     let Some(prompt) = &mut editor.speed_prompt else {
         return;
     };
@@ -80,7 +84,7 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                 ui.label("Duration");
                 let mut frames = rate.frame_at(prompt.duration, timebase).max(1);
                 let duration = ui.add(
-                    crate::timecode_field::frames(&mut frames, (timebase, rate))
+                    crate::timecode_field::frames(&mut frames, (timebase, rate, display))
                         .range(1..=i64::MAX),
                 );
                 if duration.changed() {

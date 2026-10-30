@@ -114,7 +114,11 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     let sequence = editor.timeline.sequence();
     let marked = sequence.marks.is_set();
     let (marks, duration) = (sequence.marks, sequence.duration());
-    let timing = (sequence.timebase, sequence.format.frame_rate);
+    let timing = (
+        sequence.timebase,
+        sequence.format.frame_rate,
+        sequence.time_display,
+    );
     let sequence_size = (sequence.format.width, sequence.format.height);
     // Escape in the file browser closes only that.
     let browsing = editor.path_prompt.is_some();

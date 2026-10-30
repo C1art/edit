@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     AudioEffect, AudioType, Bin, Captions, ColorSpace, FieldOrder, FrameRate, Gain, GroupId, Label,
     LinkedSelection, Look, Marker, Marks, MediaItem, Param, PixelAspect, SourceId, Speed, Submix,
-    Ticks, TimeInterpolation, TimeRemap, Timebase, Transition,
+    Ticks, TimeDisplay, TimeInterpolation, TimeRemap, Timebase, Transition,
 };
 
 pub use crate::track::Track;
@@ -350,6 +350,8 @@ pub struct Sequence {
     #[serde(default)]
     pub linked_selection: LinkedSelection,
     #[serde(default)]
+    pub time_display: TimeDisplay,
+    #[serde(default)]
     pub(crate) ids: IdGenerator,
 }
 
@@ -369,6 +371,7 @@ impl Sequence {
             marks: Marks::default(),
             captions: Captions::default(),
             linked_selection: LinkedSelection::default(),
+            time_display: TimeDisplay::default(),
             ids: IdGenerator::default(),
         }
     }

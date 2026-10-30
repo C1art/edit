@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use egui::{Key, ProgressBar};
 use playback::{RemixEvent, RemixJob};
-use timeline::{ClipId, RemixClip, Ticks, Timebase, Timecode, TrackKind};
+use timeline::{ClipId, RemixClip, Ticks, Timebase, TrackKind};
 
 use crate::editor::Editor;
 
@@ -52,7 +52,11 @@ impl Editor {
 
 pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     let sequence = editor.timeline.sequence();
-    let (timebase, rate) = (sequence.timebase, sequence.format.frame_rate);
+    let (timebase, rate, display) = (
+        sequence.timebase,
+        sequence.format.frame_rate,
+        sequence.time_display,
+    );
     let Some(dialog) = &mut editor.remix_dialog else {
         return;
     };
@@ -76,7 +80,7 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
             ui.horizontal(|ui| {
                 ui.label("Target Duration");
                 let mut frames = rate.frame_at(dialog.target, timebase).max(1);
-                let field = crate::timecode_field::frames(&mut frames, (timebase, rate))
+                let field = crate::timecode_field::frames(&mut frames, (timebase, rate, display))
                     .range(1..=i64::MAX);
                 if ui.add(field).changed() {
                     dialog.target = rate.frame_start(frames, timebase);
@@ -139,8 +143,10 @@ fn remix(editor: &mut Editor, pieces: Vec<std::ops::Range<Ticks>>) {
         crossfade,
     });
     if remixed {
-        let rate = editor.timeline.sequence().format.frame_rate;
-        let missed = Timecode::new(Ticks((length - dialog.target).0.abs()), timebase, rate);
+        let missed = editor
+            .timeline
+            .sequence()
+            .timecode(Ticks((length - dialog.target).0.abs()));
         let side = if length > dialog.target {
             "longer"
         } else {

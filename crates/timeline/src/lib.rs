@@ -55,6 +55,7 @@ mod stabilize;
 mod submix;
 mod three_point;
 mod time;
+mod time_display;
 mod timecode;
 mod title_motion;
 mod title_template;
@@ -97,10 +98,10 @@ pub use edit::{
     SetClipAudioEffects, SetClipGain, SetClipLabel, SetClipLook, SetClipOpacity, SetClipPan,
     SetClipSpeed, SetClipVolume, SetClipsEnabled, SetClipsSound, SetGenerator, SetGrouped,
     SetLinked, SetLinkedSelection, SetMaintainPitch, SetMarks, SetMasterEffects, SetMasterGain,
-    SetMediaLog, SetProxy, SetSegmentSpeed, SetSequenceFormat, SetSubmix, SetTimeInterpolation,
-    SetToFrameSize, SetTrackAutomation, SetTrackEffects, SetTrackMix, SetTrackOutput,
-    SetTrackSends, SetTrackSwitch, SetTransition, Slide, Slip, SwitchAngle, SyncMethod,
-    TrackSwitch, Trim, TrimMode, TrimToPlayhead, Unlinked, UpdateMarker,
+    SetMediaLog, SetProxy, SetSegmentSpeed, SetSequenceFormat, SetSubmix, SetTimeDisplay,
+    SetTimeInterpolation, SetToFrameSize, SetTrackAutomation, SetTrackEffects, SetTrackMix,
+    SetTrackOutput, SetTrackSends, SetTrackSwitch, SetTransition, Slide, Slip, SwitchAngle,
+    SyncMethod, TrackSwitch, Trim, TrimMode, TrimToPlayhead, Unlinked, UpdateMarker,
 };
 pub use edl::to_edl;
 pub use effect::{
@@ -169,6 +170,7 @@ pub use stabilize::{CameraPath, Framing, Pose, Similarity, StabilizeMethod, Stab
 pub use submix::{SendTap, Submix, SubmixId, TrackSend};
 pub use three_point::{edit_points, EditPoints, FourPoint};
 pub use time::{Ticks, Timebase};
+pub use time_display::TimeDisplay;
 pub use timecode::{FrameRate, Timecode, TypedTimecode};
 pub use title_motion::{Scroll, TitleMotion};
 pub use title_template::{TemplateLength, TitleTemplate};

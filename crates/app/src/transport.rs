@@ -51,11 +51,16 @@ pub fn ui<A: Copy>(
     }
     scrub_bar(ui, player, marks);
     let sequence = player.sequence();
-    let (timebase, rate) = (sequence.timebase, sequence.format.frame_rate);
-    let timecode = RichText::new(Timecode::new(player.position(), timebase, rate).to_string())
-        .monospace()
-        .size(14.0)
-        .color(theme::ACCENT);
+    let (timebase, rate, display) = (
+        sequence.timebase,
+        sequence.format.frame_rate,
+        sequence.time_display,
+    );
+    let timecode =
+        RichText::new(Timecode::shown(player.position(), timebase, rate, display).to_string())
+            .monospace()
+            .size(14.0)
+            .color(theme::ACCENT);
     let spacing = ui.spacing().item_spacing.x;
     let width_of =
         |count: usize| count as f32 * BUTTON.x + count.saturating_sub(1) as f32 * spacing;
@@ -74,12 +79,14 @@ pub fn ui<A: Copy>(
             ui,
             ui.scope_id().with("timecode"),
             player.position(),
-            (timebase, rate),
+            (timebase, rate, display),
             14.0,
-        ) {
+        )
+        .seek
+        {
             player.seek(position);
         }
-        let duration = Timecode::new(player.duration(), timebase, rate);
+        let duration = Timecode::shown(player.duration(), timebase, rate, display);
         let mut times = vec![(
             RichText::new(duration.to_string())
                 .monospace()
@@ -91,7 +98,7 @@ pub fn ui<A: Copy>(
             mark_out: Some(mark_out),
         } = marks
         {
-            let marked = Timecode::new(mark_out - mark_in, timebase, rate);
+            let marked = Timecode::shown(mark_out - mark_in, timebase, rate, display);
             let text = RichText::new(format!("In-Out {marked}")).monospace().weak();
             times.push((text, "Duration of the marked range"));
         }

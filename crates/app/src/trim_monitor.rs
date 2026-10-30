@@ -3,7 +3,7 @@ use std::sync::Arc;
 use eframe::egui_wgpu::RenderState;
 use egui::{Align2, Color32, FontId, Rect, Vec2};
 use playback::FrameProbe;
-use timeline::{Ticks, Timecode};
+use timeline::Ticks;
 
 use crate::monitor::Monitor;
 use crate::timeline_view::TrimView;
@@ -69,7 +69,7 @@ impl TrimMonitor {
             painter.text(
                 cell.center_bottom() - Vec2::new(0.0, 6.0),
                 Align2::CENTER_BOTTOM,
-                Timecode::new(time, timebase, rate).to_string(),
+                view.sequence.timecode(time).to_string(),
                 FontId::monospace(12.0),
                 Color32::WHITE,
             );

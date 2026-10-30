@@ -1,5 +1,5 @@
 use egui::Response;
-use timeline::{Sequence, Ticks, Timecode};
+use timeline::{Sequence, Ticks};
 
 use super::layout::{self, Hit};
 use super::scale::TimeScale;
@@ -30,9 +30,7 @@ impl TimelineView {
         let Some((_, clip)) = sequence.clip(clip) else {
             return;
         };
-        let timecode = |time: Ticks| {
-            Timecode::new(time, sequence.timebase, sequence.format.frame_rate).to_string()
-        };
+        let timecode = |time: Ticks| sequence.timecode(time).to_string();
         let text = format!(
             "Start     {}\nEnd       {}\nDuration  {}",
             timecode(clip.start),

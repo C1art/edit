@@ -6,7 +6,8 @@ use crossbeam::channel::{self, Receiver, Sender};
 use egui::{Grid, RichText};
 use media::{MediaInfo, StreamInfo, StreamKind};
 use timeline::{
-    ClipId, FrameRate, MediaItem, MediaLog, SetMediaLog, SourceId, Ticks, Timebase, Timecode,
+    ClipId, FrameRate, MediaItem, MediaLog, SetMediaLog, SourceId, Ticks, TimeDisplay, Timebase,
+    Timecode,
 };
 
 use crate::editor::Editor;
@@ -150,8 +151,12 @@ fn clip_section(editor: &Editor, ui: &mut egui::Ui, id: ClipId) {
     let Some((track, clip)) = sequence.clip(id) else {
         return;
     };
-    let (timebase, rate) = (sequence.timebase, sequence.format.frame_rate);
-    let timecode = |ticks: Ticks| Timecode::new(ticks, timebase, rate).to_string();
+    let (timebase, rate, display) = (
+        sequence.timebase,
+        sequence.format.frame_rate,
+        sequence.time_display,
+    );
+    let timecode = |ticks: Ticks| Timecode::shown(ticks, timebase, rate, display).to_string();
     let track_name = match sequence
         .track(track)
         .and_then(|named| named.name.as_deref())
@@ -181,7 +186,11 @@ fn clip_section(editor: &Editor, ui: &mut egui::Ui, id: ClipId) {
 
 fn file_section(editor: &mut Editor, ui: &mut egui::Ui, media: &MediaItem) {
     let project = editor.timeline.project();
-    let (timebase, rate) = (project.timebase, project.format.frame_rate);
+    let (timebase, rate, display) = (
+        project.timebase,
+        project.format.frame_rate,
+        project.time_display,
+    );
     ui.add(egui::Label::new(RichText::new(&media.name).heading()).truncate());
     let probe = media.is_file().then(|| editor.metadata.probe(&media.path));
     egui::CollapsingHeader::new("File")
@@ -208,9 +217,13 @@ fn file_section(editor: &mut Editor, ui: &mut egui::Ui, media: &MediaItem) {
                 if !media.alpha.is_straight() {
                     row("Alpha", media.alpha.name().to_owned());
                 }
-                row("Duration", duration(media.duration, timebase, rate));
+                row(
+                    "Duration",
+                    duration(media.duration, timebase, rate, display),
+                );
                 if let Some(range) = &media.subclip {
-                    let timecode = |ticks| Timecode::new(ticks, timebase, rate).to_string();
+                    let timecode =
+                        |ticks| Timecode::shown(ticks, timebase, rate, display).to_string();
                     row(
                         "Subclip",
                         format!("{} – {}", timecode(range.start), timecode(range.end)),
@@ -326,11 +339,11 @@ fn fps(rate: FrameRate) -> String {
 }
 
 /// Generated media is endless until placed.
-fn duration(ticks: Ticks, timebase: Timebase, rate: FrameRate) -> String {
+fn duration(ticks: Ticks, timebase: Timebase, rate: FrameRate, display: TimeDisplay) -> String {
     if ticks.0 == i64::MAX {
         "Unlimited".to_owned()
     } else {
-        Timecode::new(ticks, timebase, rate).to_string()
+        Timecode::shown(ticks, timebase, rate, display).to_string()
     }
 }
 

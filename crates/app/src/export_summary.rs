@@ -1,5 +1,5 @@
 use media::{AudioCodec, RateControl};
-use timeline::{FrameRate, Ticks, Timebase, Timecode};
+use timeline::{FrameRate, Ticks, TimeDisplay, Timebase, Timecode};
 
 use crate::export_format::ExportFormat;
 
@@ -12,9 +12,9 @@ pub fn span_length(range: std::ops::Range<Ticks>) -> Ticks {
 pub fn length_text(
     format: &ExportFormat,
     length: Ticks,
-    (timebase, rate): (Timebase, FrameRate),
+    (timebase, rate, display): (Timebase, FrameRate, TimeDisplay),
 ) -> String {
-    let timecode = Timecode::new(length, timebase, rate);
+    let timecode = Timecode::shown(length, timebase, rate, display);
     let video_bits = match (format.format.video_codec(), format.rate_control) {
         (None, _) => Some(0),
         (Some(codec), RateControl::Bitrate(bits)) if codec.is_rate_controlled() => {

@@ -90,7 +90,11 @@ impl Editor {
 
 pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     let sequence = editor.timeline.sequence();
-    let (timebase, rate) = (sequence.timebase, sequence.format.frame_rate);
+    let (timebase, rate, display) = (
+        sequence.timebase,
+        sequence.format.frame_rate,
+        sequence.time_display,
+    );
     let Some((owner, marker)) = &mut editor.marker_dialog else {
         return;
     };
@@ -110,12 +114,13 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                     MarkerOwner::Sequence => "Time",
                     MarkerOwner::Clip(_) => "Source Time",
                 });
-                ui.monospace(Timecode::new(marker.at, timebase, rate).to_string());
+                ui.monospace(Timecode::shown(marker.at, timebase, rate, display).to_string());
                 ui.end_row();
                 ui.label("Duration");
                 let mut frames = rate.frame_at(marker.duration, timebase).max(0);
-                let duration = crate::timecode_field::frames(&mut frames, (timebase, rate))
-                    .range(0..=i64::MAX);
+                let duration =
+                    crate::timecode_field::frames(&mut frames, (timebase, rate, display))
+                        .range(0..=i64::MAX);
                 if ui.add(duration).changed() {
                     marker.duration = rate.frame_start(frames, timebase);
                 }

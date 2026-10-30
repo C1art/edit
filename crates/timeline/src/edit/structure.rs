@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use crate::edit::ops;
 use crate::{
-    Edit, FrameRate, MediaItem, Sequence, SourceId, Ticks, TimelineError, Track, TrackKind,
-    TrackRef, VideoFormat,
+    Edit, FrameRate, MediaItem, Sequence, SourceId, Ticks, TimeDisplay, TimelineError, Track,
+    TrackKind, TrackRef, VideoFormat,
 };
 
 /// Adds a track above the existing ones of its kind.
@@ -261,6 +261,26 @@ impl Edit for SetSequenceFormat {
             return Err(TimelineError::NothingToEdit);
         }
         sequence.format = self.format;
+        Ok(())
+    }
+}
+
+/// Changes how the sequence shows times.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetTimeDisplay {
+    pub display: TimeDisplay,
+}
+
+impl Edit for SetTimeDisplay {
+    fn name(&self) -> &'static str {
+        "Display Format"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        if sequence.time_display == self.display {
+            return Err(TimelineError::NothingToEdit);
+        }
+        sequence.time_display = self.display;
         Ok(())
     }
 }

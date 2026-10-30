@@ -1,5 +1,5 @@
 use egui::{Response, Tooltip};
-use timeline::{ClipId, Sequence, Ticks, Timecode};
+use timeline::{ClipId, Sequence, Ticks};
 
 use super::gesture::PendingEdit;
 use super::TimelineView;
@@ -14,9 +14,7 @@ impl TimelineView {
         let Some(pending) = &drag.pending else {
             return;
         };
-        let timecode = |time: Ticks| {
-            Timecode::new(time, sequence.timebase, sequence.format.frame_rate).to_string()
-        };
+        let timecode = |time: Ticks| sequence.timecode(time).to_string();
         let (delta, resized) = match pending {
             PendingEdit::Move(edit) => (edit.delta, None),
             PendingEdit::Trim(edit) => (edit.delta, edit.clips.first()),

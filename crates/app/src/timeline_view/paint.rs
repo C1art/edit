@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
 use egui::{Align2, Color32, FontId, Painter, Rect, Stroke, StrokeKind};
-use timeline::{Clip, ClipId, Gain, Label, Sequence, Ticks, Timecode, TrackKind};
+use timeline::{Clip, ClipId, Gain, Label, Sequence, Ticks, TrackKind};
 
 use super::clip_art::{self, ClipArea};
 use super::clip_marks::{
@@ -100,7 +100,7 @@ pub fn ruler(painter: &Painter, rect: Rect, scale: &TimeScale, sequence: &Sequen
             painter.text(
                 egui::pos2(x + 3.0, rect.top() + 2.0),
                 Align2::LEFT_TOP,
-                Timecode::new(time, timebase, rate).to_string(),
+                sequence.timecode(time).to_string(),
                 FontId::monospace(10.0),
                 color,
             );

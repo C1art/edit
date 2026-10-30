@@ -1,5 +1,5 @@
 use egui::{Id, RichText, TextEdit};
-use timeline::{FrameRate, Ticks, Timebase, Timecode, TypedTimecode};
+use timeline::{FrameRate, Ticks, TimeDisplay, Timebase, Timecode, TypedTimecode};
 
 use crate::theme;
 
@@ -9,16 +9,24 @@ struct Typing {
     focused: bool,
 }
 
+/// What a playhead's timecode did this frame.
+pub struct Playhead {
+    /// Where typing said to go.
+    pub seek: Option<Ticks>,
+    /// The timecode, or the field typing in it, for hanging a context menu from.
+    pub response: egui::Response,
+}
+
 /// A playhead's timecode, which a click turns into a field for typing where to go:
-/// Enter goes there, Escape or clicking away leaves it be. Hands back the new position.
+/// Enter goes there, Escape or clicking away leaves it be.
 pub fn playhead(
     ui: &mut egui::Ui,
     id: Id,
     position: Ticks,
-    (timebase, rate): (Timebase, FrameRate),
+    (timebase, rate, display): (Timebase, FrameRate, TimeDisplay),
     size: f32,
-) -> Option<Ticks> {
-    let shown = Timecode::new(position, timebase, rate).to_string();
+) -> Playhead {
+    let shown = Timecode::shown(position, timebase, rate, display).to_string();
     let font = egui::FontId::monospace(size);
     let typing = ui.data(|data| data.get_temp::<Typing>(id));
     let Some(Typing { mut text, focused }) = typing else {
@@ -36,7 +44,10 @@ pub fn playhead(
             };
             ui.data_mut(|data| data.insert_temp(id, typing));
         }
-        return None;
+        return Playhead {
+            seek: None,
+            response: label,
+        };
     };
 
     let width = egui::WidgetText::from(RichText::new(&shown).font(font.clone()))
@@ -69,17 +80,25 @@ pub fn playhead(
             focused: true,
         };
         ui.data_mut(|data| data.insert_temp(id, typing));
-        return None;
+        return Playhead {
+            seek: None,
+            response: field,
+        };
     }
     ui.data_mut(|data| data.remove::<Typing>(id));
-    if !ui.input(|input| input.key_pressed(egui::Key::Enter)) {
-        return None;
+    let entered = ui.input(|input| input.key_pressed(egui::Key::Enter));
+    let seek = entered
+        .then(|| TypedTimecode::parse(&text, rate, display))
+        .flatten()
+        .map(|typed| match typed {
+            TypedTimecode::At(frame) => frame,
+            TypedTimecode::By(frames) => rate.frame_at(position, timebase).saturating_add(frames),
+        })
+        .map(|frame| rate.frame_start(frame.max(0), timebase));
+    Playhead {
+        seek,
+        response: field,
     }
-    let frame = match TypedTimecode::parse(&text, rate)? {
-        TypedTimecode::At(frame) => frame,
-        TypedTimecode::By(frames) => rate.frame_at(position, timebase).saturating_add(frames),
-    };
-    Some(rate.frame_start(frame.max(0), timebase))
 }
 
 /// Selects the whole timecode as typing starts, so what's typed replaces it.
@@ -91,15 +110,20 @@ fn select_all(ui: &egui::Ui, id: Id, text: &str) {
 }
 
 /// A count of frames shown as timecode, which takes timecode when typed into too.
-pub fn frames(frames: &mut i64, (timebase, rate): (Timebase, FrameRate)) -> egui::DragValue<'_> {
+pub fn frames(
+    frames: &mut i64,
+    (timebase, rate, display): (Timebase, FrameRate, TimeDisplay),
+) -> egui::DragValue<'_> {
     egui::DragValue::new(frames)
         .speed(0.5)
         .custom_formatter(move |frames, _| {
             let ticks = rate.frame_start(frames as i64, timebase);
-            Timecode::new(ticks, timebase, rate).to_string()
+            Timecode::shown(ticks, timebase, rate, display).to_string()
         })
-        .custom_parser(move |text| match TypedTimecode::parse(text, rate)? {
-            TypedTimecode::At(frames) => Some(frames as f64),
-            TypedTimecode::By(_) => None,
-        })
+        .custom_parser(
+            move |text| match TypedTimecode::parse(text, rate, display)? {
+                TypedTimecode::At(frames) => Some(frames as f64),
+                TypedTimecode::By(_) => None,
+            },
+        )
 }

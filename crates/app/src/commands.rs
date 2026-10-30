@@ -4,7 +4,7 @@ use timeline::{
     AddFrameHold, AddTrack, ClipId, Clipboard, CloseGap, CloseGaps, FrameFit, Gain,
     InsertFrameHold, JoinThroughEdits, Lift, LinkedSelection, MakeSubsequence, NudgeClipGain,
     PasteClips, PlaceMode, Razor, RazorTarget, RippleDelete, Sequence, SetClipsEnabled, SetGrouped,
-    SetLinked, SetLinkedSelection, SetToFrameSize, Ticks, Timebase, Timecode, TrackKind, TrackRef,
+    SetLinked, SetLinkedSelection, SetToFrameSize, Ticks, Timebase, TrackKind, TrackRef,
 };
 
 use crate::editor::Editor;
@@ -130,11 +130,7 @@ impl Editor {
             return;
         };
         // Paste only arrives as an event while the system clipboard holds text.
-        let timecode = Timecode::new(
-            clipboard.duration(),
-            sequence.timebase,
-            sequence.format.frame_rate,
-        );
+        let timecode = sequence.timecode(clipboard.duration());
         self.ctx
             .copy_text(format!("{} clips, {timecode}", clipboard.clip_count()));
         self.clipboard = Some(clipboard);

@@ -1,5 +1,5 @@
 use egui::{Rect, UiBuilder};
-use timeline::{Sequence, Ticks};
+use timeline::{Sequence, Ticks, TimeDisplay};
 
 use super::{TimelineOutput, TimelineView};
 use crate::timecode_field;
@@ -20,9 +20,22 @@ impl TimelineView {
             .layout(egui::Layout::left_to_right(egui::Align::Center));
         let mut corner = ui.new_child(builder);
         let id = corner.scope_id().with("playhead timecode");
-        let format = (sequence.timebase, sequence.format.frame_rate);
-        if let Some(time) = timecode_field::playhead(&mut corner, id, playhead, format, 15.0) {
-            output.seek = Some(time);
-        }
+        let format = (
+            sequence.timebase,
+            sequence.format.frame_rate,
+            sequence.time_display,
+        );
+        let field = timecode_field::playhead(&mut corner, id, playhead, format, 15.0);
+        output.seek = field.seek.or(output.seek);
+        field.response.context_menu(|ui| {
+            let rate = sequence.format.frame_rate;
+            for choice in TimeDisplay::choices(rate) {
+                let chosen = sequence.time_display == choice;
+                if ui.radio(chosen, choice.name(rate)).clicked() {
+                    output.time_display = Some(choice);
+                    ui.close();
+                }
+            }
+        });
     }
 }

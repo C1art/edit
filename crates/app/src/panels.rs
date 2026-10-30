@@ -149,6 +149,9 @@ impl Editor {
             self.focus = Focus::Program;
             self.scrub_program(position);
         }
+        if let Some(display) = output.time_display {
+            self.set_time_display(display);
+        }
         if let Some(id) = output.edit_marker {
             self.edit_marker(id);
         }

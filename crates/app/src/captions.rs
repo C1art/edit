@@ -21,7 +21,11 @@ pub struct CaptionPanel {
 pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
     let revision = editor.timeline.revision();
     let sequence = editor.timeline.sequence();
-    let (timebase, rate) = (sequence.timebase, sequence.format.frame_rate);
+    let (timebase, rate, display) = (
+        sequence.timebase,
+        sequence.format.frame_rate,
+        sequence.time_display,
+    );
     let mut captions = match &editor.captions.draft {
         // An undo or another edit since the draft began wins over it.
         Some((taken, draft)) if *taken == revision => draft.clone(),
@@ -76,7 +80,7 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
                 egui::Frame::group(ui.style()).fill(fill).show(ui, |ui| {
                     ui.push_id(index, |ui| {
                         let row = caption_row(ui, caption, playhead, |time| {
-                            Timecode::new(time, timebase, rate).to_string()
+                            Timecode::shown(time, timebase, rate, display).to_string()
                         });
                         match row {
                             Some(RowAction::Seek(time)) => seek = Some(time),

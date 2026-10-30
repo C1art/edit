@@ -1,7 +1,7 @@
 use egui::DragValue;
 use timeline::{
     AddSpeedKeyframe, Clip, RemoveSpeedKeyframe, RemoveTimeRemap, SetMaintainPitch,
-    SetSegmentSpeed, Speed, Ticks, Timecode,
+    SetSegmentSpeed, Speed, Ticks,
 };
 
 use crate::editor::Editor;
@@ -21,9 +21,7 @@ enum Action {
 /// keyframes in between, and keyframes the speed at the playhead.
 pub(super) fn controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
     let sequence = editor.timeline.sequence();
-    let timecode = |position| {
-        Timecode::new(position, sequence.timebase, sequence.format.frame_rate).to_string()
-    };
+    let timecode = |position| sequence.timecode(position).to_string();
     let playhead = editor.playhead();
     let dragging = editor.effects.remapping;
     let mut action = None;

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use eframe::egui_wgpu::RenderState;
 use egui::{Align2, Color32, CursorIcon, FontId, Pos2, Rect, Sense, Stroke, Vec2};
 use playback::FrameProbe;
-use timeline::{Sequence, Ticks, Timecode};
+use timeline::{Sequence, Ticks};
 
 use crate::editor::Editor;
 use crate::monitor::Monitor;
@@ -136,8 +136,7 @@ impl Comparison {
         }
         let painter = ui.painter_at(area);
         painter.rect_filled(area, 0.0, Color32::BLACK);
-        let (rate, timebase) = (sequence.format.frame_rate, sequence.timebase);
-        let timecode = |time| Timecode::new(time, timebase, rate).to_string();
+        let timecode = |time| sequence.timecode(time).to_string();
         let reference_label = format!("Reference {}", timecode(self.shown.unwrap_or(self.time)));
         let current_label = format!("Current {}", timecode(playhead));
         let (first, second) = match self.side {
