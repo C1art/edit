@@ -43,7 +43,7 @@ impl FrameSource for TrackAudio {
 
 /// Where a clip's audio comes from, in frames at the output rate.
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct ClipRead {
+pub(crate) struct ClipRead<'a> {
     /// The first source frame of the clip's range, which a reversed clip plays last.
     pub source_in: i64,
     /// Output frames in the clip; a reversed clip counts back from its end.
@@ -51,21 +51,33 @@ pub(crate) struct ClipRead {
     pub speed: Speed,
     pub reverse: bool,
     pub maintain_pitch: bool,
+    /// A time-remapped clip's speed keyframes as `[offset, source]` frames, which
+    /// replace `speed` and `source_in` when there are at least two.
+    pub curve: &'a [[i64; 2]],
 }
 
-impl ClipRead {
+impl ClipRead<'_> {
     /// The source position heard `frame` output frames into the clip, as a whole frame
     /// and the fraction past it.
     pub(crate) fn position(&self, frame: i64) -> (i64, f32) {
-        let (num, den) = (i128::from(self.speed.num()), i128::from(self.speed.den()));
-        let (travelled, before) = if self.reverse {
-            (i128::from(self.length - frame) * num, 1)
+        if self.curve.len() >= 2 {
+            // Beyond the first and last keyframes the nearest segment's speed carries on.
+            let after = self.curve.partition_point(|&[offset, _]| offset <= frame);
+            let after = after.clamp(1, self.curve.len() - 1);
+            let ([from, source], [to, until]) = (self.curve[after - 1], self.curve[after]);
+            return travel(source, frame - from, until - source, (to - from).max(1), 0);
+        }
+        let (num, den) = (self.speed.num(), self.speed.den());
+        if self.reverse {
+            travel(self.source_in, self.length - frame, num, den, 1)
         } else {
-            (i128::from(frame) * num, 0)
-        };
-        let whole = i128::from(self.source_in) + travelled.div_euclid(den) - before;
-        let fraction = travelled.rem_euclid(den) as f64 / den as f64;
-        (i64::try_from(whole).unwrap_or(i64::MAX), fraction as f32)
+            travel(self.source_in, frame, num, den, 0)
+        }
+    }
+
+    /// Whether the source plays at anything but normal speed.
+    pub(crate) fn is_varied(&self) -> bool {
+        !self.speed.is_normal() || self.curve.len() >= 2
     }
 
     pub(crate) fn direction(&self) -> i64 {
@@ -75,6 +87,22 @@ impl ClipRead {
             1
         }
     }
+}
+
+/// The source frame `frames * num / den` on from `from`, less `before`, and the fraction
+/// past it.
+fn travel(
+    from: i64,
+    frames: i64,
+    num: impl Into<i128>,
+    den: impl Into<i128>,
+    before: i128,
+) -> (i64, f32) {
+    let (num, den) = (num.into(), den.into());
+    let travelled = i128::from(frames) * num;
+    let whole = i128::from(from) + travelled.div_euclid(den) - before;
+    let fraction = travelled.rem_euclid(den) as f64 / den as f64;
+    (i64::try_from(whole).unwrap_or(i64::MAX), fraction as f32)
 }
 
 /// One clip's audio at its speed and direction. Off normal speed the source is
@@ -118,13 +146,13 @@ impl<S: FrameSource> ClipAudio<S> {
         if frames == 0 {
             return Ok(());
         }
-        if read.speed.is_normal() && !read.reverse {
+        if !read.is_varied() && !read.reverse {
             let first = read.position(offset).0;
             let skip = (-first).clamp(0, frames);
             let out = &mut out[usize::try_from(skip).unwrap_or(0) * CHANNELS..];
             return self.source.read(pool, media, first + skip, out);
         }
-        if read.maintain_pitch && !read.speed.is_normal() {
+        if read.maintain_pitch && read.is_varied() {
             let needed = Wsola::needed(read, offset..offset + frames);
             self.fill(pool, media, needed, read.reverse)?;
             let (window, start) = (&self.window, self.window_start);
@@ -275,13 +303,14 @@ mod tests {
         Sequence::new(Timebase::HZ_90K, Default::default())
     }
 
-    fn forward(source_in: i64, speed: Speed) -> ClipRead {
+    fn forward(source_in: i64, speed: Speed) -> ClipRead<'static> {
         ClipRead {
             source_in,
             length: 1_000,
             speed,
             reverse: false,
             maintain_pitch: false,
+            curve: &[],
         }
     }
 
@@ -337,5 +366,22 @@ mod tests {
         let expected: Vec<f32> = (0..12).map(|k| 1_099.0 - k as f32).collect();
         assert_eq!(heard, expected);
         assert_eq!(clip.source.reads, [0]);
+    }
+
+    #[test]
+    fn a_remapped_clip_plays_each_segment_at_its_own_speed() {
+        let curve = [[0, 100], [4, 104], [8, 112]];
+        let read = ClipRead {
+            curve: &curve,
+            ..forward(100, Speed::NORMAL)
+        };
+        let mut clip = ClipAudio::new(Ramp::default());
+        let mut out = vec![0.0; 10 * CHANNELS];
+        clip.mix_into(&pool(), &media(), &read, 0, &mut out)
+            .unwrap();
+        let expected = [
+            100.0, 101.0, 102.0, 103.0, 104.0, 106.0, 108.0, 110.0, 112.0, 114.0,
+        ];
+        assert_eq!(left(&out), expected);
     }
 }

@@ -28,6 +28,8 @@ pub(crate) struct TracksMix {
     master_inserts: EffectChain,
     track_mix: Vec<f32>,
     clip_mix: Vec<f32>,
+    /// The time-remapped clip being mixed's speed keyframes, in frames.
+    curve: Vec<[i64; 2]>,
     /// Media already reported as unreadable.
     warned: Vec<SourceId>,
 }
@@ -83,6 +85,7 @@ impl TracksMix {
             master_inserts: EffectChain::new(sample_rate),
             track_mix: Vec::new(),
             clip_mix: Vec::new(),
+            curve: Vec::new(),
             warned: Vec::new(),
         }
     }
@@ -176,12 +179,23 @@ impl TracksMix {
                 let clip_mix = &mut self.clip_mix[..length];
                 clip_mix.fill(0.0);
                 let voice = decoders.for_clip(clip.id, &keep);
+                self.curve.clear();
+                if let Some(remap) = &clip.remap {
+                    let clip_start = to_frames(clip.start);
+                    self.curve.extend(remap.anchors().iter().map(|anchor| {
+                        [
+                            to_frames(clip.start + anchor.offset) - clip_start,
+                            to_frames(anchor.source),
+                        ]
+                    }));
+                }
                 let read = ClipRead {
                     source_in: to_frames(clip.source_in),
                     length: to_frames(clip.end()) - to_frames(clip.start),
                     speed: clip.rate(),
                     reverse: clip.reverse,
                     maintain_pitch: clip.maintain_pitch,
+                    curve: &self.curve,
                 };
                 let into_clip = from - to_frames(clip.start);
                 if let Err(error) = voice
