@@ -98,6 +98,7 @@ mod sequence_menu;
 mod sequence_settings;
 mod sequence_tabs;
 mod shortcuts;
+mod simplify_dialog;
 #[cfg(test)]
 mod smoke_tests;
 mod source;

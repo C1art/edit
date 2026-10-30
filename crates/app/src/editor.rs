@@ -113,6 +113,7 @@ pub struct Editor {
     pub(crate) project_manager: Option<crate::project_manager::ProjectManager>,
     pub(crate) sequence_settings: Option<crate::sequence_settings::SequenceSettings>,
     pub(crate) automate_dialog: Option<crate::automate_dialog::AutomateDialog>,
+    pub(crate) simplify_dialog: Option<timeline::SimplifySequence>,
     pub(crate) reframe_dialog: Option<crate::reframe_dialog::ReframeDialog>,
     /// An edit from the source waiting on how to fit its clip to the sequence marks.
     pub(crate) fit_clip: Option<timeline::PlaceMode>,
@@ -286,6 +287,7 @@ impl Editor {
             project_manager: None,
             sequence_settings: None,
             automate_dialog: None,
+            simplify_dialog: None,
             reframe_dialog: None,
             fit_clip: None,
             attributes_dialog: None,

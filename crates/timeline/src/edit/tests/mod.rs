@@ -471,6 +471,7 @@ mod remix;
 mod rename;
 mod render_replace;
 mod replace;
+mod simplify;
 mod speed;
 mod submix;
 mod subsequence;
