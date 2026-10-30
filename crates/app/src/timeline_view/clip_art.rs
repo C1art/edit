@@ -122,12 +122,16 @@ pub fn waveform(
     }
     let (middle, half) = (bars.center().y, bars.height() / 2.0);
     let gain = clip.gain.amplitude();
-    let column = clip.rate().source_span(scale.span(1.0));
+    // Read from the source time at each edge, so a column follows speed keyframes and
+    // reversal.
+    let heard_at = |x: f32| clip.source_time(clip.start + scale.span(x - rect.left()));
     let mut mesh = Mesh::default();
     let mut x = visible.left().floor();
     while x < visible.right() {
-        let start = clip.source_time(clip.start + scale.span(x - rect.left()));
-        let level = peaks.max_in(start, start + column, timebase) * gain;
+        let (left, right) = (heard_at(x), heard_at(x + 1.0));
+        let start = left.min(right);
+        let end = left.max(right).max(start + Ticks(1));
+        let level = peaks.max_in(start, end, timebase) * gain;
         let height = (decibel_scale(level) * half).max(0.5);
         mesh.add_colored_rect(
             Rect::from_x_y_ranges(x..=x + 1.0, (middle - height)..=(middle + height)),
