@@ -42,6 +42,14 @@ pub enum Command {
     NudgeRightFive,
     NudgeUp,
     NudgeDown,
+    SlipLeft,
+    SlipRight,
+    SlipLeftFive,
+    SlipRightFive,
+    SlideLeft,
+    SlideRight,
+    SlideLeftFive,
+    SlideRightFive,
     Insert,
     Overwrite,
     AddEdit,
@@ -139,7 +147,7 @@ pub enum Command {
 pub const WORKSPACE_SLOTS: u8 = 9;
 
 impl Command {
-    pub const ALL: [Self; 139] = [
+    pub const ALL: [Self; 147] = [
         Self::NewProject,
         Self::OpenProject,
         Self::Save,
@@ -181,6 +189,14 @@ impl Command {
         Self::NudgeRightFive,
         Self::NudgeUp,
         Self::NudgeDown,
+        Self::SlipLeft,
+        Self::SlipRight,
+        Self::SlipLeftFive,
+        Self::SlipRightFive,
+        Self::SlideLeft,
+        Self::SlideRight,
+        Self::SlideLeftFive,
+        Self::SlideRightFive,
         Self::Insert,
         Self::Overwrite,
         Self::AddEdit,
@@ -321,7 +337,15 @@ impl Command {
             | NudgeLeftFive
             | NudgeRightFive
             | NudgeUp
-            | NudgeDown => "Clip",
+            | NudgeDown
+            | SlipLeft
+            | SlipRight
+            | SlipLeftFive
+            | SlipRightFive
+            | SlideLeft
+            | SlideRight
+            | SlideLeftFive
+            | SlideRightFive => "Clip",
             AddEdit
             | AddEditToAllTracks
             | ExtendEdit

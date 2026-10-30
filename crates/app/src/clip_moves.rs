@@ -1,4 +1,7 @@
-use timeline::{clamp_delta, Edge, MoveClips, MoveMode, Ticks, TrackKind, Trim, TrimMode};
+use timeline::{
+    clamp_delta, ClipId, Edge, Edit, MoveClips, MoveMode, Slide, Slip, Ticks, TrackKind, Trim,
+    TrimMode,
+};
 
 use crate::editor::Editor;
 
@@ -22,6 +25,34 @@ impl Editor {
             mode: MoveMode::Overwrite,
         };
         let delta = clamp_delta(sequence, target - first.start, make);
+        if delta != Ticks::ZERO {
+            self.apply(make(delta));
+        }
+    }
+
+    /// Shows source material `frames` sequence frames later in the selected clips, as far
+    /// as their media reaches; a negative count shows earlier material.
+    pub(crate) fn slip_selection(&mut self, frames: i64) {
+        self.step_selection(frames, |clips, delta| Slip { clips, delta });
+    }
+
+    /// Moves the selection `frames` frames later while its neighbours give and take the
+    /// difference, as far as their media and lengths allow.
+    pub(crate) fn slide_selection(&mut self, frames: i64) {
+        self.step_selection(frames, |clips, delta| Slide { clips, delta });
+    }
+
+    fn step_selection<E: Edit>(&mut self, frames: i64, edit: impl Fn(Vec<ClipId>, Ticks) -> E) {
+        if self.view.selection.is_empty() {
+            self.notice("Select a clip first");
+            return;
+        }
+        let sequence = self.timeline.sequence();
+        let (rate, timebase) = (sequence.format.frame_rate, sequence.timebase);
+        let desired = rate.frame_start(frames, timebase) - rate.frame_start(0, timebase);
+        let clips = self.view.selection.clone();
+        let make = |delta| edit(clips.clone(), delta);
+        let delta = clamp_delta(sequence, desired, make);
         if delta != Ticks::ZERO {
             self.apply(make(delta));
         }
