@@ -338,6 +338,29 @@ impl Edit for SetTimeDisplay {
     }
 }
 
+/// Sets the timecode the sequence's first frame shows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetStartTime {
+    pub start: Ticks,
+}
+
+impl Edit for SetStartTime {
+    fn name(&self) -> &'static str {
+        "Start Time"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let rate = sequence.format.frame_rate;
+        let frame = rate.frame_at(self.start.max(Ticks::ZERO), sequence.timebase);
+        let start = rate.frame_start(frame, sequence.timebase);
+        if sequence.start_time == start {
+            return Err(TimelineError::NothingToEdit);
+        }
+        sequence.start_time = start;
+        Ok(())
+    }
+}
+
 /// Sets whether the sequence's markers move with insert and ripple edits.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SetRippleMarkers {

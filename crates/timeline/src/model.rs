@@ -354,6 +354,10 @@ pub struct Sequence {
     pub linked_selection: LinkedSelection,
     #[serde(default)]
     pub time_display: TimeDisplay,
+    /// The timecode the sequence's first frame shows, as broadcast masters start at an
+    /// hour; on the frame grid.
+    #[serde(default)]
+    pub start_time: Ticks,
     /// Lines over the program frame, in the order they were added.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub guides: Vec<Guide>,
@@ -379,6 +383,7 @@ impl Sequence {
             captions: Captions::default(),
             linked_selection: LinkedSelection::default(),
             time_display: TimeDisplay::default(),
+            start_time: Ticks::ZERO,
             guides: Vec::new(),
             ids: IdGenerator::default(),
         }
@@ -470,31 +475,5 @@ impl Sequence {
             .map(|(_, track)| track.end())
             .max()
             .unwrap_or(Ticks::ZERO)
-    }
-
-    /// The first marker strictly after `position`.
-    pub fn marker_after(&self, position: Ticks) -> Option<&Marker> {
-        self.markers.iter().find(|marker| marker.at > position)
-    }
-
-    /// The last marker strictly before `position`.
-    pub fn marker_before(&self, position: Ticks) -> Option<&Marker> {
-        self.markers
-            .iter()
-            .rev()
-            .find(|marker| marker.at < position)
-    }
-
-    /// Clip starts and ends on all tracks, sorted and deduplicated, for snapping and
-    /// jumping between edits.
-    pub fn edit_points(&self) -> Vec<Ticks> {
-        let mut points: Vec<Ticks> = self
-            .tracks()
-            .flat_map(|(_, track)| track.clips.iter().map(Arc::as_ref))
-            .flat_map(|clip| [clip.start, clip.end()])
-            .collect();
-        points.sort_unstable();
-        points.dedup();
-        points
     }
 }

@@ -136,7 +136,7 @@ impl Comparison {
         }
         let painter = ui.painter_at(area);
         painter.rect_filled(area, 0.0, Color32::BLACK);
-        let timecode = |time| sequence.timecode(time).to_string();
+        let timecode = |time| sequence.timecode_at(time).to_string();
         let reference_label = format!("Reference {}", timecode(self.shown.unwrap_or(self.time)));
         let current_label = format!("Current {}", timecode(playhead));
         let (first, second) = match self.side {

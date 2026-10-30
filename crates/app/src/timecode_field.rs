@@ -17,16 +17,16 @@ pub struct Playhead {
     pub response: egui::Response,
 }
 
-/// A playhead's timecode, which a click turns into a field for typing where to go:
-/// Enter goes there, Escape or clicking away leaves it be.
+/// A playhead's timecode, counted from `start`, which a click turns into a field for
+/// typing where to go: Enter goes there, Escape or clicking away leaves it be.
 pub fn playhead(
     ui: &mut egui::Ui,
     id: Id,
-    position: Ticks,
+    (position, start): (Ticks, Ticks),
     (timebase, rate, display): (Timebase, FrameRate, TimeDisplay),
     size: f32,
 ) -> Playhead {
-    let shown = Timecode::shown(position, timebase, rate, display).to_string();
+    let shown = Timecode::shown(position + start, timebase, rate, display).to_string();
     let font = egui::FontId::monospace(size);
     let typing = ui.data(|data| data.get_temp::<Typing>(id));
     let Some(Typing { mut text, focused }) = typing else {
@@ -91,7 +91,7 @@ pub fn playhead(
         .then(|| TypedTimecode::parse(&text, rate, display))
         .flatten()
         .map(|typed| match typed {
-            TypedTimecode::At(frame) => frame,
+            TypedTimecode::At(frame) => frame - rate.frame_at(start, timebase),
             TypedTimecode::By(frames) => rate.frame_at(position, timebase).saturating_add(frames),
         })
         .map(|frame| rate.frame_start(frame.max(0), timebase));

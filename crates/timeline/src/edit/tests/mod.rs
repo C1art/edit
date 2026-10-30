@@ -475,6 +475,7 @@ mod render_replace;
 mod replace;
 mod simplify;
 mod speed;
+mod start_time;
 mod submix;
 mod subsequence;
 mod synchronize;

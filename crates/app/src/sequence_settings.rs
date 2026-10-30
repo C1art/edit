@@ -1,5 +1,8 @@
 use egui::{ComboBox, DragValue, Key};
-use timeline::{FrameRate, SetSequenceFormat, SetTimeDisplay, Ticks, TimeDisplay, VideoFormat};
+use timeline::{
+    FrameRate, SetSequenceFormat, SetStartTime, SetTimeDisplay, Ticks, TimeDisplay, Timebase,
+    TypedTimecode, VideoFormat,
+};
 
 use crate::editor::Editor;
 
@@ -22,6 +25,8 @@ const MAX_SIDE: u32 = 8192;
 pub(crate) struct SequenceSettings {
     format: VideoFormat,
     display: TimeDisplay,
+    /// The frame count the first frame's timecode shows.
+    start: i64,
 }
 
 impl Editor {
@@ -34,6 +39,10 @@ impl Editor {
         self.sequence_settings = Some(SequenceSettings {
             format: sequence.format,
             display: sequence.time_display,
+            start: sequence
+                .format
+                .frame_rate
+                .frame_at(sequence.start_time, sequence.timebase),
         });
     }
 
@@ -51,11 +60,16 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
         return;
     };
     // Clips sit on the frame grid, which a new rate would move out from under them.
+    let timebase = editor.timeline.sequence().timebase;
     let rate_locked = editor.timeline.sequence().duration() > Ticks::ZERO;
     let mut done = false;
     let mut cancelled = false;
     crate::dialog::window(ctx, "Sequence Settings").show(ctx, |ui| {
-        let SequenceSettings { format, display } = settings;
+        let SequenceSettings {
+            format,
+            display,
+            start,
+        } = settings;
         egui::Grid::new("sequence settings")
             .num_columns(2)
             .spacing([12.0, 8.0])
@@ -74,6 +88,9 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                 ui.end_row();
                 ui.label("Display format");
                 display_format(ui, display, format.frame_rate);
+                ui.end_row();
+                ui.label("Start time");
+                start_time(ui, start, (timebase, format.frame_rate, *display));
                 ui.end_row();
             });
         ui.weak("Pictures of another shape fit inside the frame, with bars.");
@@ -97,7 +114,30 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
         editor.apply_levels(SetTimeDisplay {
             display: settings.display,
         });
+        let start = settings
+            .format
+            .frame_rate
+            .frame_start(settings.start, timebase);
+        editor.apply_levels(SetStartTime { start });
     }
+}
+
+/// The first frame's timecode, typed or picked from where masters usually start.
+fn start_time(ui: &mut egui::Ui, start: &mut i64, format: (Timebase, FrameRate, TimeDisplay)) {
+    let (_, rate, display) = format;
+    ui.horizontal(|ui| {
+        let field = crate::timecode_field::frames(start, format).range(0..=i64::MAX);
+        ui.add(field)
+            .on_hover_text("The timecode the sequence's first frame shows");
+        for name in ["00:00:00:00", "01:00:00:00"] {
+            let Some(TypedTimecode::At(at)) = TypedTimecode::parse(name, rate, display) else {
+                continue;
+            };
+            if ui.selectable_label(*start == at, name).clicked() {
+                *start = at;
+            }
+        }
+    });
 }
 
 /// Picks how times show at `rate`; a choice the rate makes no different from another,

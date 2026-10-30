@@ -192,8 +192,8 @@ fn clip_section(editor: &Editor, ui: &mut egui::Ui, id: ClipId) {
         .show(ui, |ui| {
             properties(ui, "metadata_clip", |row| {
                 row("Track", track_name);
-                row("Sequence In", timecode(clip.start));
-                row("Sequence Out", timecode(clip.end()));
+                row("Sequence In", timecode(clip.start + sequence.start_time));
+                row("Sequence Out", timecode(clip.end() + sequence.start_time));
                 row("Duration", timecode(clip.duration));
                 row("Media In", timecode(clip.source_in));
                 row("Media Out", timecode(clip.source_out()));

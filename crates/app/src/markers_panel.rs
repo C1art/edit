@@ -84,8 +84,7 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
                         marker_color(marker.color),
                         Stroke::new(1.0, egui::Color32::from_black_alpha(160)),
                     );
-                    let mut timecode =
-                        Timecode::shown(marker.at, timebase, rate, display).to_string();
+                    let mut timecode = sequence.timecode_at(marker.at).to_string();
                     if marker.duration > Ticks::ZERO {
                         let length = Timecode::shown(marker.duration, timebase, rate, display);
                         timecode.push_str(&format!(" · {length}"));

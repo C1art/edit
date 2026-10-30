@@ -97,7 +97,7 @@ pub use sound::{ClipSound, SetClipsSound};
 pub use speed::{RateStretch, SetClipSpeed, SetTimeInterpolation};
 pub use structure::{
     AddTrack, DeleteEmptyTracks, ImportMedia, RemoveMedia, RemoveTrack, RenameTrack, SetProxy,
-    SetRippleMarkers, SetSequenceFormat, SetTimeDisplay, SetTrackSwitch, TrackSwitch,
+    SetRippleMarkers, SetSequenceFormat, SetStartTime, SetTimeDisplay, SetTrackSwitch, TrackSwitch,
 };
 pub use submix::{AddSubmix, RemoveSubmix, SetSubmix, SetTrackOutput, SetTrackSends};
 pub use subsequence::{unused_time, CloseGaps, MakeSubsequence};

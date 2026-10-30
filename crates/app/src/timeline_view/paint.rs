@@ -102,7 +102,7 @@ pub fn ruler(painter: &Painter, rect: Rect, scale: &TimeScale, sequence: &Sequen
             painter.text(
                 egui::pos2(x + 3.0, rect.top() + 2.0),
                 Align2::LEFT_TOP,
-                sequence.timecode(time).to_string(),
+                sequence.timecode_at(time).to_string(),
                 FontId::monospace(10.0),
                 color,
             );

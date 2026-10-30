@@ -95,6 +95,7 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
         sequence.format.frame_rate,
         sequence.time_display,
     );
+    let start = sequence.start_time;
     let Some((owner, marker)) = &mut editor.marker_dialog else {
         return;
     };
@@ -110,11 +111,12 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                     name.request_focus();
                 }
                 ui.end_row();
-                ui.label(match owner {
-                    MarkerOwner::Sequence => "Time",
-                    MarkerOwner::Clip(_) => "Source Time",
-                });
-                ui.monospace(Timecode::shown(marker.at, timebase, rate, display).to_string());
+                let (label, shown) = match owner {
+                    MarkerOwner::Sequence => ("Time", marker.at + start),
+                    MarkerOwner::Clip(_) => ("Source Time", marker.at),
+                };
+                ui.label(label);
+                ui.monospace(Timecode::shown(shown, timebase, rate, display).to_string());
                 ui.end_row();
                 ui.label("Duration");
                 let mut frames = rate.frame_at(marker.duration, timebase).max(0);

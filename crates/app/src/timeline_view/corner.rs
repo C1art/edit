@@ -25,7 +25,8 @@ impl TimelineView {
             sequence.format.frame_rate,
             sequence.time_display,
         );
-        let field = timecode_field::playhead(&mut corner, id, playhead, format, 15.0);
+        let at = (playhead, sequence.start_time);
+        let field = timecode_field::playhead(&mut corner, id, at, format, 15.0);
         output.seek = field.seek.or(output.seek);
         field.response.context_menu(|ui| {
             let rate = sequence.format.frame_rate;

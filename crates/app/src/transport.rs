@@ -56,11 +56,13 @@ pub fn ui<A: Copy>(
         sequence.format.frame_rate,
         sequence.time_display,
     );
-    let timecode =
-        RichText::new(Timecode::shown(player.position(), timebase, rate, display).to_string())
-            .monospace()
-            .size(14.0)
-            .color(theme::ACCENT);
+    let start = sequence.start_time;
+    let timecode = RichText::new(
+        Timecode::shown(player.position() + start, timebase, rate, display).to_string(),
+    )
+    .monospace()
+    .size(14.0)
+    .color(theme::ACCENT);
     let spacing = ui.spacing().item_spacing.x;
     let width_of =
         |count: usize| count as f32 * BUTTON.x + count.saturating_sub(1) as f32 * spacing;
@@ -78,7 +80,7 @@ pub fn ui<A: Copy>(
         if let Some(position) = crate::timecode_field::playhead(
             ui,
             ui.scope_id().with("timecode"),
-            player.position(),
+            (player.position(), start),
             (timebase, rate, display),
             14.0,
         )

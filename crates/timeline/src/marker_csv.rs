@@ -18,8 +18,8 @@ pub fn markers_csv(sequence: &Sequence) -> String {
         let fields = [
             field(&marker.name),
             field(&marker.comment),
-            sequence.timecode(marker.at).to_string(),
-            sequence.timecode(marker.end()).to_string(),
+            sequence.timecode_at(marker.at).to_string(),
+            sequence.timecode_at(marker.end()).to_string(),
             sequence.timecode(marker.duration).to_string(),
             marker.kind.name().to_owned(),
             marker.color.name().to_owned(),

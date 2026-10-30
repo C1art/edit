@@ -37,10 +37,15 @@ impl TimeDisplay {
 }
 
 impl Sequence {
-    /// `position`, or a length, as this sequence shows times.
-    pub fn timecode(&self, position: Ticks) -> Timecode {
+    /// A length as the sequence shows times; see `timecode_at` for a position.
+    pub fn timecode(&self, length: Ticks) -> Timecode {
         let rate = self.format.frame_rate;
-        Timecode::shown(position, self.timebase, rate, self.time_display)
+        Timecode::shown(length, self.timebase, rate, self.time_display)
+    }
+
+    /// A position as the sequence shows times, counted from its start time.
+    pub fn timecode_at(&self, position: Ticks) -> Timecode {
+        self.timecode(position + self.start_time)
     }
 }
 

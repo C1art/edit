@@ -69,7 +69,7 @@ impl TrimMonitor {
             painter.text(
                 cell.center_bottom() - Vec2::new(0.0, 6.0),
                 Align2::CENTER_BOTTOM,
-                view.sequence.timecode(time).to_string(),
+                view.sequence.timecode_at(time).to_string(),
                 FontId::monospace(12.0),
                 Color32::WHITE,
             );

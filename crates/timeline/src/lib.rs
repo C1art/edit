@@ -51,6 +51,7 @@ mod render_segments;
 mod reveal;
 mod rolling_shutter;
 mod secondary;
+mod sequence_points;
 mod shadow;
 mod speed;
 mod speed_ramp;
@@ -109,10 +110,11 @@ pub use edit::{
     SetClipPan, SetClipSpeed, SetClipVolume, SetClipsEnabled, SetClipsSound, SetFrameHold,
     SetGenerator, SetGrouped, SetLinked, SetLinkedSelection, SetMaintainPitch, SetMarks,
     SetMasterEffects, SetMasterGain, SetMediaLog, SetProxy, SetRippleMarkers, SetSegmentSpeed,
-    SetSequenceFormat, SetSubmix, SetTimeDisplay, SetTimeInterpolation, SetToFrameSize,
-    SetTrackAutomation, SetTrackEffects, SetTrackMix, SetTrackOutput, SetTrackSends,
-    SetTrackSwitch, SetTransition, SimplifySequence, Slide, Slip, SwitchAngle, SyncMethod,
-    SynchronizeClips, TrackSwitch, Trim, TrimMode, TrimToPlayhead, Unlinked, Unnest, UpdateMarker,
+    SetSequenceFormat, SetStartTime, SetSubmix, SetTimeDisplay, SetTimeInterpolation,
+    SetToFrameSize, SetTrackAutomation, SetTrackEffects, SetTrackMix, SetTrackOutput,
+    SetTrackSends, SetTrackSwitch, SetTransition, SimplifySequence, Slide, Slip, SwitchAngle,
+    SyncMethod, SynchronizeClips, TrackSwitch, Trim, TrimMode, TrimToPlayhead, Unlinked, Unnest,
+    UpdateMarker,
 };
 pub use edl::to_edl;
 pub use effect::{

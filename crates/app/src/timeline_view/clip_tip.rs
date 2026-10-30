@@ -30,12 +30,12 @@ impl TimelineView {
         let Some((_, clip)) = sequence.clip(clip) else {
             return;
         };
-        let timecode = |time: Ticks| sequence.timecode(time).to_string();
+        let timecode = |time: Ticks| sequence.timecode_at(time).to_string();
         let text = format!(
             "Start     {}\nEnd       {}\nDuration  {}",
             timecode(clip.start),
             timecode(clip.end()),
-            timecode(clip.duration)
+            sequence.timecode(clip.duration)
         );
         let name = paint::clip_name(sequence, clip);
         response.clone().on_hover_ui_at_pointer(|ui| {

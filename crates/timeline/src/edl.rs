@@ -114,6 +114,7 @@ pub fn to_edl(sequence: &Sequence, title: &str, video_track: usize) -> String {
         let position = rate.frame_start(frame, sequence.timebase);
         Timecode::new(position, sequence.timebase, rate).to_string()
     };
+    let first_frame = rate.frame_at(sequence.start_time, sequence.timebase);
     let mut text = format!("TITLE: {title}\nFCM: NON-DROP FRAME\n");
     for (number, (event, channels)) in events.iter().enumerate() {
         let number = number + 1;
@@ -131,8 +132,8 @@ pub fn to_edl(sequence: &Sequence, title: &str, video_track: usize) -> String {
                 line.reel,
                 timecode(line.source.0, line.source_rate),
                 timecode(line.source.1, line.source_rate),
-                timecode(line.record.0, rate),
-                timecode(line.record.1, rate),
+                timecode(first_frame + line.record.0, rate),
+                timecode(first_frame + line.record.1, rate),
             );
         }
         if let (Some(fps), Some(line)) = (event.speed, event.lines.last()) {
@@ -377,6 +378,16 @@ mod tests {
         assert_eq!(
             events(&edl),
             ["001  AX       B     C        00:00:04:00 00:00:06:00 00:00:01:00 00:00:03:00"]
+        );
+    }
+
+    #[test]
+    fn record_times_count_from_the_start_time() {
+        let mut sequence = sequence(vec![clip(1, 25, 50, 100)], Vec::new());
+        sequence.start_time = Ticks(25 * 3_600);
+        assert_eq!(
+            events(&to_edl(&sequence, "Hour", 0)),
+            ["001  AX       V     C        00:00:04:00 00:00:06:00 01:00:01:00 01:00:03:00"]
         );
     }
 

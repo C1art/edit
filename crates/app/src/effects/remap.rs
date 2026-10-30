@@ -21,7 +21,7 @@ enum Action {
 /// keyframes in between, and keyframes the speed at the playhead.
 pub(super) fn controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
     let sequence = editor.timeline.sequence();
-    let timecode = |position| sequence.timecode(position).to_string();
+    let timecode = |position| sequence.timecode_at(position).to_string();
     let playhead = editor.playhead();
     let dragging = editor.effects.remapping;
     let mut action = None;

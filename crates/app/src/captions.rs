@@ -26,6 +26,7 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
         sequence.format.frame_rate,
         sequence.time_display,
     );
+    let start = sequence.start_time;
     let mut captions = match &editor.captions.draft {
         // An undo or another edit since the draft began wins over it.
         Some((taken, draft)) if *taken == revision => draft.clone(),
@@ -80,7 +81,7 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
                 egui::Frame::group(ui.style()).fill(fill).show(ui, |ui| {
                     ui.push_id(index, |ui| {
                         let row = caption_row(ui, caption, playhead, |time| {
-                            Timecode::shown(time, timebase, rate, display).to_string()
+                            Timecode::shown(time + start, timebase, rate, display).to_string()
                         });
                         match row {
                             Some(RowAction::Seek(time)) => seek = Some(time),
