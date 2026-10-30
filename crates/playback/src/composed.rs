@@ -45,22 +45,7 @@ impl Layer {
                 rgba: &frame.pixels,
                 source: Some(Arc::clone(frame) as Arc<dyn Any + Send + Sync>),
             },
-            LayerPicture::Planes(frame, output) => {
-                let planes = frame.planes();
-                Picture::Planes {
-                    width: frame.width,
-                    height: frame.height,
-                    output: *output,
-                    luma: rows(planes.luma),
-                    chroma: match planes.chroma {
-                        Chroma::Separate(cb, cr) => ChromaRows::Separate(rows(cb), rows(cr)),
-                        Chroma::Interleaved(both) => ChromaRows::Interleaved(rows(both)),
-                    },
-                    color: frame.color,
-                    format: frame.format,
-                    source: Some(Arc::clone(frame) as Arc<dyn Any + Send + Sync>),
-                }
-            }
+            LayerPicture::Planes(frame, output) => planar_picture(frame, *output),
             LayerPicture::Nest(layers) => Picture::Group(images(layers)),
             LayerPicture::Matted {
                 fill,
@@ -88,6 +73,39 @@ impl Layer {
             look: self.look,
             grade: self.grade.clone(),
         }
+    }
+}
+
+fn planar_picture(frame: &Arc<PlanarFrame>, output: (u32, u32)) -> Picture<'_> {
+    let source = Some(Arc::clone(frame) as Arc<dyn Any + Send + Sync>);
+    #[cfg(windows)]
+    if let Some(surface) = frame.surface() {
+        return Picture::Surface {
+            width: frame.width,
+            height: frame.height,
+            output,
+            texture: surface.texture(),
+            color: frame.color,
+            format: frame.format,
+            source,
+        };
+    }
+    let Some(planes) = frame.planes() else {
+        // Only a picture on the GPU has no planes, and those all have a surface.
+        return Picture::Group(Vec::new());
+    };
+    Picture::Planes {
+        width: frame.width,
+        height: frame.height,
+        output,
+        luma: rows(planes.luma),
+        chroma: match planes.chroma {
+            Chroma::Separate(cb, cr) => ChromaRows::Separate(rows(cb), rows(cr)),
+            Chroma::Interleaved(both) => ChromaRows::Interleaved(rows(both)),
+        },
+        color: frame.color,
+        format: frame.format,
+        source,
     }
 }
 
