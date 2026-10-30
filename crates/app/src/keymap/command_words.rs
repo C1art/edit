@@ -42,6 +42,14 @@ impl Command {
             Self::KeyboardShortcuts => ("keyboard_shortcuts", "Keyboard Shortcuts"),
             Self::SpeedDuration => ("speed_duration", "Speed/Duration"),
             Self::AudioGain => ("audio_gain", "Audio Gain"),
+            Self::IncreaseClipVolume => ("increase_clip_volume", "Increase Clip Volume"),
+            Self::DecreaseClipVolume => ("decrease_clip_volume", "Decrease Clip Volume"),
+            Self::IncreaseClipVolumeMany => {
+                ("increase_clip_volume_many", "Increase Clip Volume Many")
+            }
+            Self::DecreaseClipVolumeMany => {
+                ("decrease_clip_volume_many", "Decrease Clip Volume Many")
+            }
             Self::ToggleEnabled => ("toggle_enabled", "Enable"),
             Self::ToggleLink => ("toggle_link", "Link"),
             Self::Group => ("group", "Group"),

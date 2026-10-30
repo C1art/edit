@@ -104,6 +104,10 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         }
         Command::SpeedDuration => editor.speed_duration(),
         Command::AudioGain => editor.prompt_clip_gain(),
+        Command::IncreaseClipVolume => editor.nudge_clip_gain(1.0),
+        Command::DecreaseClipVolume => editor.nudge_clip_gain(-1.0),
+        Command::IncreaseClipVolumeMany => editor.nudge_clip_gain(6.0),
+        Command::DecreaseClipVolumeMany => editor.nudge_clip_gain(-6.0),
         Command::ToggleEnabled => editor.toggle_enabled(),
         Command::ToggleLink => editor.toggle_link(),
         Command::Group => editor.set_grouped(true),

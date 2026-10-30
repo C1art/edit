@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 
 use timeline::{
-    AddFrameHold, AddTrack, ClipId, Clipboard, CloseGap, CloseGaps, FrameFit, InsertFrameHold,
-    JoinThroughEdits, Lift, LinkedSelection, MakeSubsequence, PasteClips, PlaceMode, Razor,
-    RazorTarget, RippleDelete, Sequence, SetClipsEnabled, SetGrouped, SetLinked,
-    SetLinkedSelection, SetToFrameSize, Ticks, Timebase, Timecode, TrackKind, TrackRef,
+    AddFrameHold, AddTrack, ClipId, Clipboard, CloseGap, CloseGaps, FrameFit, Gain,
+    InsertFrameHold, JoinThroughEdits, Lift, LinkedSelection, MakeSubsequence, NudgeClipGain,
+    PasteClips, PlaceMode, Razor, RazorTarget, RippleDelete, Sequence, SetClipsEnabled, SetGrouped,
+    SetLinked, SetLinkedSelection, SetToFrameSize, Ticks, Timebase, Timecode, TrackKind, TrackRef,
 };
 
 use crate::editor::Editor;
@@ -192,6 +192,26 @@ impl Editor {
         match audio_gain {
             Some(gain) => self.gain_dialog = Some(GainDialog::new(gain.db())),
             None => self.notice("Select a clip with audio first"),
+        }
+    }
+
+    /// Raises or lowers the selected clips' audio by `db` from where each one is.
+    pub(crate) fn nudge_clip_gain(&mut self, db: f32) {
+        let clips = self.view.selection.clone();
+        if self.apply(NudgeClipGain {
+            clips,
+            by: Gain::from_db(db),
+        }) {
+            return;
+        }
+        let sequence = self.timeline.sequence();
+        let selected_audio = sequence
+            .with_links(&self.view.selection)
+            .into_iter()
+            .filter_map(|id| sequence.clip(id))
+            .any(|(track, _)| track.kind == TrackKind::Audio);
+        if !selected_audio {
+            self.notice("Select a clip with audio first");
         }
     }
 

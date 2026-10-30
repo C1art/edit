@@ -26,6 +26,10 @@ pub enum Command {
     KeyboardShortcuts,
     SpeedDuration,
     AudioGain,
+    IncreaseClipVolume,
+    DecreaseClipVolume,
+    IncreaseClipVolumeMany,
+    DecreaseClipVolumeMany,
     ToggleEnabled,
     ToggleLink,
     Group,
@@ -131,7 +135,7 @@ pub enum Command {
 pub const WORKSPACE_SLOTS: u8 = 9;
 
 impl Command {
-    pub const ALL: [Self; 131] = [
+    pub const ALL: [Self; 135] = [
         Self::NewProject,
         Self::OpenProject,
         Self::Save,
@@ -157,6 +161,10 @@ impl Command {
         Self::KeyboardShortcuts,
         Self::SpeedDuration,
         Self::AudioGain,
+        Self::IncreaseClipVolume,
+        Self::DecreaseClipVolume,
+        Self::IncreaseClipVolumeMany,
+        Self::DecreaseClipVolumeMany,
         Self::ToggleEnabled,
         Self::ToggleLink,
         Self::Group,
@@ -286,9 +294,26 @@ impl Command {
             | RippleDelete | CancelDrag | SelectAll | DeselectAll | Find | KeyboardShortcuts => {
                 "Edit"
             }
-            SpeedDuration | AudioGain | ToggleEnabled | ToggleLink | Group | Ungroup
-            | JoinThroughEdits | MakeSubclip | Insert | Overwrite | NudgeLeft | NudgeRight
-            | NudgeLeftFive | NudgeRightFive | NudgeUp | NudgeDown => "Clip",
+            SpeedDuration
+            | AudioGain
+            | IncreaseClipVolume
+            | DecreaseClipVolume
+            | IncreaseClipVolumeMany
+            | DecreaseClipVolumeMany
+            | ToggleEnabled
+            | ToggleLink
+            | Group
+            | Ungroup
+            | JoinThroughEdits
+            | MakeSubclip
+            | Insert
+            | Overwrite
+            | NudgeLeft
+            | NudgeRight
+            | NudgeLeftFive
+            | NudgeRightFive
+            | NudgeUp
+            | NudgeDown => "Clip",
             AddEdit
             | AddEditToAllTracks
             | ExtendEdit
