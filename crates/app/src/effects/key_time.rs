@@ -25,6 +25,43 @@ pub(super) fn seek_to_key(editor: &mut Editor, clip: &Clip, key: Option<Ticks>) 
     }
 }
 
+impl Editor {
+    /// Moves the playhead to the frame showing the selected clips' next or previous
+    /// keyframe, of any property.
+    pub(crate) fn jump_to_keyframe(&mut self, forward: bool) {
+        let sequence = self.timeline.sequence();
+        let playhead = self.playhead();
+        let frames = (sequence.format.frame_rate, sequence.timebase);
+        let target = self
+            .view
+            .selection
+            .iter()
+            .filter_map(|&id| sequence.clip(id))
+            .flat_map(|(_, clip)| keyed_frames(clip, frames))
+            .filter(|&at| {
+                if forward {
+                    at > playhead
+                } else {
+                    at < playhead
+                }
+            })
+            .min_by_key(|&at| (at - playhead).0.abs());
+        if let Some(at) = target {
+            self.seek_program(at);
+        }
+    }
+}
+
+/// Where each of `clip`'s keyframes shows, leaving out those trimmed away.
+fn keyed_frames(clip: &Clip, frames: (FrameRate, Timebase)) -> impl Iterator<Item = Ticks> + '_ {
+    clip.look
+        .params()
+        .chain([&clip.volume, &clip.pan])
+        .flat_map(|param| param.keys.iter().map(|key| key.time))
+        .filter(|&key| (clip.start..clip.end()).contains(&clip.position_of(key)))
+        .map(move |key| frame_showing(clip, key, frames))
+}
+
 fn key_time_at(clip: &Clip, playhead: Ticks, frames: (FrameRate, Timebase)) -> Ticks {
     let playhead = playhead.clamp(clip.start, clip.end() - Ticks(1));
     let time = clip.source_time(playhead);

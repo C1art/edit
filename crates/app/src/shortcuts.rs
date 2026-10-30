@@ -183,6 +183,8 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         Command::GoToOut => editor.go_to_mark(Edge::Tail),
         Command::AddMarker => editor.add_marker(),
         Command::NextMarker => editor.jump_to_marker(true),
+        Command::PreviousKeyframe => editor.jump_to_keyframe(false),
+        Command::NextKeyframe => editor.jump_to_keyframe(true),
         Command::PreviousMarker => editor.jump_to_marker(false),
         Command::ClearMarker => {
             if let Some(id) = editor.marker_at_playhead() {

@@ -114,6 +114,8 @@ pub enum Command {
     GoToEnd,
     PreviousEdit,
     NextEdit,
+    PreviousKeyframe,
+    NextKeyframe,
     PlayInToOut,
     PlayAround,
     ToggleLoop,
@@ -128,7 +130,7 @@ pub enum Command {
 pub const WORKSPACE_SLOTS: u8 = 9;
 
 impl Command {
-    pub const ALL: [Self; 128] = [
+    pub const ALL: [Self; 130] = [
         Self::NewProject,
         Self::OpenProject,
         Self::Save,
@@ -242,6 +244,8 @@ impl Command {
         Self::GoToEnd,
         Self::PreviousEdit,
         Self::NextEdit,
+        Self::PreviousKeyframe,
+        Self::NextKeyframe,
         Self::PlayInToOut,
         Self::PlayAround,
         Self::ToggleLoop,
@@ -336,7 +340,8 @@ impl Command {
             | EllipseTool => "Tools",
             PlayStop | ShuttleLeft | ShuttleStop | ShuttleRight | StepBack | StepForward
             | StepBackFive | StepForwardFive | GoToStart | GoToEnd | PreviousEdit | NextEdit
-            | PlayInToOut | PlayAround | ToggleLoop | ToggleAudioScrubbing => "Playback",
+            | PreviousKeyframe | NextKeyframe | PlayInToOut | PlayAround | ToggleLoop
+            | ToggleAudioScrubbing => "Playback",
             Workspace(_) | ResetWorkspace | MaximizePanel => "Window",
         }
     }
