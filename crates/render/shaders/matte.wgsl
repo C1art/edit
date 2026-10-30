@@ -49,3 +49,11 @@ fn fs_matte_lightness(in: VertexOutput) -> @location(0) vec4<f32> {
     let lightness = (max(rgb.r, max(rgb.g, rgb.b)) + min(rgb.r, min(rgb.g, rgb.b))) / 2.0;
     return vec4<f32>(0.0, 0.0, 0.0, lightness * matte.a);
 }
+
+// Drawn with a blend state that weighs it by what lies under it and leaves that as
+// covered as it was, so it shows only where the picture beneath does.
+@fragment
+fn fs_atop(in: VertexOutput) -> @location(0) vec4<f32> {
+    let layer = layer_color(in);
+    return vec4<f32>(layer.rgb * layer.a, layer.a);
+}

@@ -14,6 +14,9 @@ use crate::WORKING_FORMAT;
 pub(crate) enum LayerPass {
     /// Blends a layer over the working texture.
     Over,
+    /// Draws a layer over only what of the working texture is covered, keeping that
+    /// coverage.
+    Atop,
     /// Draws a layer over the working texture by its blend mode.
     Blended,
     /// Draws a group combined with another, bound as the backdrop.
@@ -189,6 +192,21 @@ impl Builder {
         let over = Some(wgpu::BlendState::ALPHA_BLENDING);
         let (layout, target, entry) = match pass {
             LayerPass::Over => (&self.blit_layout, (WORKING_FORMAT, over), "fs_main"),
+            LayerPass::Atop => {
+                let blend = wgpu::BlendState {
+                    color: wgpu::BlendComponent {
+                        src_factor: wgpu::BlendFactor::DstAlpha,
+                        dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                        operation: wgpu::BlendOperation::Add,
+                    },
+                    alpha: wgpu::BlendComponent {
+                        src_factor: wgpu::BlendFactor::Zero,
+                        dst_factor: wgpu::BlendFactor::One,
+                        operation: wgpu::BlendOperation::Add,
+                    },
+                };
+                (&self.blit_layout, (WORKING_FORMAT, Some(blend)), "fs_atop")
+            }
             LayerPass::Blended => (&self.blended_layout, (WORKING_FORMAT, over), "fs_blend"),
             LayerPass::Combined => (&self.blended_layout, (WORKING_FORMAT, over), "fs_combine"),
             LayerPass::Matte(channel, reverse) => {

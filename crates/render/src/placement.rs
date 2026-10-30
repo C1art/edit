@@ -41,9 +41,21 @@ pub struct LayerLook {
     pub wash: f32,
     pub effects: PixelEffects,
     pub blend: BlendMode,
+    pub reach: Reach,
     /// The width over height of one of the picture's pixels; wider pixels show it wider.
     pub pixel_aspect: f32,
     pub reframe: Option<Reframe>,
+}
+
+/// Where a layer shows over what lies under it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Reach {
+    #[default]
+    Everywhere,
+    /// Only where what lies under it shows, leaving that as covered as it was, so a
+    /// picture with an effect can lie over the same picture without it and keep its
+    /// edges. Drawn normally, whatever the blend mode.
+    OverBelow,
 }
 
 /// Color correction in linear light, every field neutral at zero except saturation.
@@ -112,6 +124,7 @@ impl LayerLook {
         wash: 0.0,
         effects: PixelEffects::NONE,
         blend: BlendMode::Normal,
+        reach: Reach::Everywhere,
         pixel_aspect: 1.0,
         reframe: None,
     };

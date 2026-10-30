@@ -8,7 +8,7 @@ use crate::blit::Blit;
 use crate::blur::BlurTargets;
 use crate::grade::Grade;
 use crate::layer_shader::Features;
-use crate::placement::{fit_scale, Placement};
+use crate::placement::{fit_scale, Placement, Reach};
 use crate::yuv::{ChromaLayout, ChromaRows, PlaneRows, PlaneTextures};
 use crate::WORKING_FORMAT;
 
@@ -44,6 +44,7 @@ pub(super) struct Slot {
     pub(super) blur: Option<BlurTargets>,
     pub(super) blurred: bool,
     pub(super) blend: BlendMode,
+    pub(super) reach: Reach,
     /// The effects its placement uses, which pick its pipelines.
     pub(super) features: Features,
     /// The lookups last drawn with and their textures' binding.
@@ -203,6 +204,7 @@ impl Compositor {
             (None, _) => None,
         };
         slot.blend = look.blend;
+        slot.reach = look.reach;
         let size = (slot.width, slot.height);
         let shown = look.shown_size(size);
         let look = &look.reframed(shown, canvas);
@@ -274,6 +276,7 @@ impl Compositor {
             blur: None,
             blurred: false,
             blend: BlendMode::Normal,
+            reach: Reach::Everywhere,
             features: Features::NONE,
             grade: None,
             uploaded: None,

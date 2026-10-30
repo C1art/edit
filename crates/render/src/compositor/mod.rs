@@ -391,6 +391,7 @@ impl Compositor {
                 Drawn {
                     groups: [slot.placed(), grade],
                     blend: slot.blend,
+                    reach: slot.reach,
                     features: slot.features,
                 }
             })

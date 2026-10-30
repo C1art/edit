@@ -1,6 +1,6 @@
 use render::{
     ColorAdjust, Creative, CreativeVignette, LayerLook, LayerMask, LayerWipe, Outline, PageFold,
-    PixelEffects, Reframe, SecondaryAdjust, Warp, MAX_MASKS, MAX_OUTLINE_POINTS,
+    PixelEffects, Reach, Reframe, SecondaryAdjust, Warp, MAX_MASKS, MAX_OUTLINE_POINTS,
 };
 use timeline::{
     AutoReframe, ColorCorrection, HslSecondary, Look, Mask, MaskShape, MediaItem, Param, Reveal,
@@ -76,6 +76,7 @@ pub(crate) fn layer_look(
         wash: reveal.wash,
         effects: smeared(turned(effects, reveal, canvas), reveal, canvas),
         blend: reveal.blend.unwrap_or(look.blend),
+        reach: Reach::Everywhere,
         pixel_aspect: 1.0,
         reframe: reframe.map(|reframe| reframed(reframe, time)),
     }

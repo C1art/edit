@@ -1,8 +1,9 @@
 //! Clips whose effects reach only inside their own masks: the picture with the other
 //! effects, and over it, for each masked effect, the picture with that effect too,
-//! shown inside its masks. Together they take the clip's opacity and blend mode.
+//! shown inside its masks and only where the picture under it shows, so the clip's own
+//! masks and mattes keep it too. Together they take the clip's opacity and blend mode.
 
-use render::{LayerLook, LayerMask, MAX_MASKS};
+use render::{LayerLook, LayerMask, Reach, MAX_MASKS};
 use timeline::{BlendMode, ColorCorrection, Look, Mask, MaskOwner, Ticks};
 
 use crate::layer_look::layer_mask;
@@ -27,7 +28,8 @@ pub(crate) fn effect_masked(look: &Look, time: Ticks, layer_of: impl Fn(&Look) -
     };
     let overs = reaching.into_iter().filter_map(|(look, masks)| {
         let mut over = drawn_plainly(layer_of(&look));
-        over.look.opacity_masks = kept_inside(masks, &over.look.opacity_masks, time)?;
+        over.look.opacity_masks = kept_inside(masks, &[None; MAX_MASKS], time)?;
+        over.look.reach = Reach::OverBelow;
         Some(over)
     });
     let layers = std::iter::once(drawn_plainly(under)).chain(overs).collect();
@@ -39,9 +41,9 @@ pub(crate) fn effect_masked(look: &Look, time: Ticks, layer_of: impl Fn(&Look) -
     }
 }
 
-/// The effect's masks, cut down to what the clip's own masks and mattes keep, so the
-/// effect never shows where the picture under it doesn't. Several clip masks, which
-/// add together, cut down to where they overlap. `None` while no mask has a shape.
+/// The effect's masks, cut down to what the layer's own masks and mattes keep, so the
+/// effect never reaches where the layer doesn't. Several layer masks, which add
+/// together, cut down to where they overlap. `None` while no effect mask has a shape.
 fn kept_inside(
     masks: &[Mask],
     clip_masks: &[Option<LayerMask>; MAX_MASKS],
@@ -102,7 +104,7 @@ mod tests {
     use crate::layer_look::layer_look;
 
     #[test]
-    fn a_masked_effect_draws_over_the_plain_picture_inside_the_clip_masks() {
+    fn a_masked_effect_draws_inside_its_masks_over_only_the_plain_picture() {
         let mut look = Look {
             opacity: Param::from_value(50.0),
             blend: BlendMode::Multiply,
@@ -145,9 +147,7 @@ mod tests {
         let masks: Vec<(MaskShape, bool)> = (over.look.opacity_masks.iter().flatten())
             .map(|mask| (mask.shape, mask.intersect))
             .collect();
-        assert_eq!(
-            masks,
-            [(MaskShape::Ellipse, false), (MaskShape::Rectangle, true)]
-        );
+        assert_eq!(masks, [(MaskShape::Ellipse, false)]);
+        assert_eq!(over.look.reach, Reach::OverBelow);
     }
 }
