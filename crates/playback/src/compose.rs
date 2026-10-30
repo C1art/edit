@@ -9,7 +9,7 @@ use timeline::{
 use crate::clip_decoders::ClipDecoders;
 use crate::clip_frame::ClipFrame;
 use crate::echo::{echo_of, echoed_frame_at};
-use crate::effect_masks::{adjustment_looks, effect_masked};
+use crate::effect_masks::{adjustment_looks, effect_masked, Adjustment};
 use crate::generated::{animated, caption_frame, scrolled};
 use crate::grades::grade_for;
 use crate::image_matte::image_matted;
@@ -105,8 +105,8 @@ fn video_layers(
                 };
                 let looks = adjustment_looks(&plan.clip.look, time, |look| look_of(look, whole));
                 let grades = std::iter::once(grade).chain(std::iter::repeat(None));
-                for (look, grade) in looks.into_iter().zip(grades) {
-                    adjust(&mut layers, TrackRef::video(index), look, grade);
+                for (adjustment, grade) in looks.into_iter().zip(grades) {
+                    adjust(&mut layers, TrackRef::video(index), adjustment, grade);
                 }
                 continue;
             }
@@ -312,20 +312,40 @@ fn matte_layers(
 /// Applies an adjustment layer's look to the picture of `layers` as one. Below full
 /// opacity, or outside its masks, the adjusted picture blends over the untouched one,
 /// as its opacity is meant to.
-fn adjust(layers: &mut Vec<Layer>, track: TrackRef, look: LayerLook, grade: Option<Arc<Grade>>) {
+fn adjust(
+    layers: &mut Vec<Layer>,
+    track: TrackRef,
+    Adjustment { look, within }: Adjustment,
+    grade: Option<Arc<Grade>>,
+) {
     if layers.is_empty() {
         return;
     }
-    let below = if look.opacity < 1.0 || look.opacity_masks.iter().any(Option::is_some) {
+    let partial = look.opacity < 1.0 || look.opacity_masks.iter().any(Option::is_some);
+    let below = if partial || within.is_some() {
         layers.clone()
     } else {
         std::mem::take(layers)
     };
-    layers.push(Layer {
+    let adjusted = Layer {
         track,
         picture: LayerPicture::Nest(below),
         look,
         grade,
+    };
+    // Nested so the effect's masks cut what the layer's own masks, which add together,
+    // keep, rather than joining them.
+    layers.push(match within {
+        Some(opacity_masks) => Layer {
+            track,
+            picture: LayerPicture::Nest(vec![adjusted]),
+            look: LayerLook {
+                opacity_masks,
+                ..LayerLook::IDENTITY
+            },
+            grade: None,
+        },
+        None => adjusted,
     });
 }
 
@@ -368,7 +388,8 @@ mod tests {
             [1.0, 1.0],
             Timebase::HZ_90K,
         );
-        adjust(&mut layers, TrackRef::video(2), full, None);
+        let everywhere = |look| Adjustment { look, within: None };
+        adjust(&mut layers, TrackRef::video(2), everywhere(full), None);
         assert!(
             matches!(&layers[..], [Layer { picture: LayerPicture::Nest(below), .. }] if below.len() == 2)
         );
@@ -382,7 +403,7 @@ mod tests {
             Timebase::HZ_90K,
         );
         let mut layers = vec![layer(0)];
-        adjust(&mut layers, TrackRef::video(1), faded, None);
+        adjust(&mut layers, TrackRef::video(1), everywhere(faded), None);
         assert!(matches!(
             &layers[..],
             [

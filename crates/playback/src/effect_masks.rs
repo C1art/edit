@@ -28,7 +28,7 @@ pub(crate) fn effect_masked(look: &Look, time: Ticks, layer_of: impl Fn(&Look) -
     };
     let overs = reaching.into_iter().filter_map(|(look, masks)| {
         let mut over = drawn_plainly(layer_of(&look));
-        over.look.opacity_masks = kept_inside(masks, &[None; MAX_MASKS], time)?;
+        over.look.opacity_masks = shaped(masks, time)?;
         over.look.reach = Reach::OverBelow;
         Some(over)
     });
@@ -41,28 +41,27 @@ pub(crate) fn effect_masked(look: &Look, time: Ticks, layer_of: impl Fn(&Look) -
     }
 }
 
-/// The effect's masks, cut down to what the layer's own masks and mattes keep, so the
-/// effect never reaches where the layer doesn't. Several layer masks, which add
-/// together, cut down to where they overlap. `None` while no effect mask has a shape.
-fn kept_inside(
-    masks: &[Mask],
-    clip_masks: &[Option<LayerMask>; MAX_MASKS],
-    time: Ticks,
-) -> Option<[Option<LayerMask>; MAX_MASKS]> {
+/// The effect's masks as the layer masks to draw with; `None` while none has a shape.
+fn shaped(masks: &[Mask], time: Ticks) -> Option<[Option<LayerMask>; MAX_MASKS]> {
     let mut effect_masks = masks
         .iter()
         .filter_map(|mask| layer_mask(mask, time))
         .peekable();
     effect_masks.peek()?;
-    let cutting = clip_masks.iter().flatten().map(|&mask| LayerMask {
-        intersect: true,
-        ..mask
-    });
     let mut kept = [None; MAX_MASKS];
-    for (slot, mask) in kept.iter_mut().zip(effect_masks.chain(cutting)) {
+    for (slot, mask) in kept.iter_mut().zip(effect_masks) {
         *slot = Some(mask);
     }
     Some(kept)
+}
+
+/// One pass of an adjustment layer over what is below it.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Adjustment {
+    pub(crate) look: LayerLook,
+    /// For a masked effect: its masks, which cut the adjusted picture after the layer's
+    /// own masks have, so it shows inside both.
+    pub(crate) within: Option<[Option<LayerMask>; MAX_MASKS]>,
 }
 
 /// The adjustment layer's effects that reach everywhere, then each masked one over the
@@ -71,9 +70,10 @@ pub(crate) fn adjustment_looks(
     look: &Look,
     time: Ticks,
     look_of: impl Fn(&Look) -> LayerLook,
-) -> Vec<LayerLook> {
+) -> Vec<Adjustment> {
+    let everywhere = |look| Adjustment { look, within: None };
     if !look.has_effect_masks() {
-        return vec![look_of(look)];
+        return vec![everywhere(look_of(look))];
     }
     let (plain, reaching) = look.split_by_effect_masks();
     let masked = (look.effects.iter().enumerate())
@@ -86,11 +86,14 @@ pub(crate) fn adjustment_looks(
                 color: ColorCorrection::default(),
                 ..plain.clone()
             };
-            let mut over = look_of(&alone);
-            over.opacity_masks = kept_inside(masks, &over.opacity_masks, time)?;
-            Some(over)
+            Some(Adjustment {
+                look: look_of(&alone),
+                within: Some(shaped(masks, time)?),
+            })
         });
-    std::iter::once(look_of(&plain)).chain(overs).collect()
+    std::iter::once(everywhere(look_of(&plain)))
+        .chain(overs)
+        .collect()
 }
 
 #[cfg(test)]
