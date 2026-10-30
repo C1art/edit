@@ -41,7 +41,7 @@ impl MediaTab {
 }
 
 impl SideTab {
-    pub(crate) const ALL: [Self; 7] = [
+    pub(crate) const ALL: [Self; 8] = [
         Self::EffectControls,
         Self::LumetriColor,
         Self::AudioMixer,
@@ -49,6 +49,7 @@ impl SideTab {
         Self::EssentialSound,
         Self::Scopes,
         Self::Captions,
+        Self::Text,
     ];
 
     /// How the tab is written in the workspaces file, and its title.
@@ -61,6 +62,7 @@ impl SideTab {
             Self::EssentialSound => ("essential_sound", "Essential Sound"),
             Self::Scopes => ("scopes", "Scopes"),
             Self::Captions => ("captions", "Captions"),
+            Self::Text => ("text", "Text"),
         }
     }
 }
@@ -120,6 +122,7 @@ impl Editor {
             SideTab::EssentialSound => crate::essential_sound::ui(self, ui),
             SideTab::Scopes => crate::scopes::ui(self, ui),
             SideTab::Captions => crate::captions::ui(self, ui),
+            SideTab::Text => crate::transcribe::ui(self, ui),
         }
     }
 

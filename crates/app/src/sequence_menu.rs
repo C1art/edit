@@ -95,6 +95,12 @@ pub(crate) fn sequence_menu(editor: &mut Editor, ui: &mut egui::Ui) {
         crate::loudness_window::measure(editor);
     }
     ui.separator();
+    if ui
+        .add_enabled(has_clips, Button::new("Transcribe Sequence…"))
+        .clicked()
+    {
+        editor.open_transcribe();
+    }
     if ui.button("Import Captions…").clicked() {
         editor.prompt_path(PathPurpose::ImportCaptions);
     }

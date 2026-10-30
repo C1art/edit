@@ -45,10 +45,11 @@ impl UiMode {
 }
 
 pub(crate) const SIMPLE_MEDIA_TABS: [MediaTab; 2] = [MediaTab::Project, MediaTab::Effects];
-pub(crate) const SIMPLE_SIDE_TABS: [SideTab; 3] = [
+pub(crate) const SIMPLE_SIDE_TABS: [SideTab; 4] = [
     SideTab::EffectControls,
     SideTab::LumetriColor,
     SideTab::EssentialSound,
+    SideTab::Text,
 ];
 
 const SIMPLE_VIDEO_EFFECTS: [&str; 12] = [

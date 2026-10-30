@@ -126,6 +126,7 @@ mod timecode_dialog;
 mod timecode_field;
 mod timeline_view;
 mod title_templates;
+mod transcribe;
 mod transition_defaults;
 mod transition_duration_dialog;
 mod transparency_grid;

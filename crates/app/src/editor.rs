@@ -110,6 +110,11 @@ pub struct Editor {
     pub(crate) gain_dialog: Option<crate::gain_dialog::GainDialog>,
     pub(crate) duck_dialog: Option<crate::duck_dialog::DuckDialog>,
     pub(crate) pauses_dialog: Option<crate::pauses_dialog::PausesDialog>,
+    pub(crate) transcribe_dialog: Option<crate::transcribe::TranscribeDialog>,
+    pub(crate) transcribing: Option<crate::transcribe::Transcribing>,
+    pub(crate) text_panel: crate::transcribe::TextPanel,
+    /// The Whisper model and language last transcribed with.
+    pub(crate) speech_choice: (speech::Model, Option<String>),
     pub(crate) beats_dialog: Option<crate::beats_dialog::BeatsDialog>,
     pub(crate) remix_dialog: Option<crate::remix_dialog::RemixDialog>,
     pub(crate) transition_duration_dialog:
@@ -298,6 +303,10 @@ impl Editor {
             gain_dialog: None,
             duck_dialog: None,
             pauses_dialog: None,
+            transcribe_dialog: None,
+            transcribing: None,
+            text_panel: crate::transcribe::TextPanel::default(),
+            speech_choice: (speech::Model::FastEnglish, None),
             beats_dialog: None,
             remix_dialog: None,
             transition_duration_dialog: None,

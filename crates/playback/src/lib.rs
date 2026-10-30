@@ -36,6 +36,7 @@ mod lighting_effects;
 mod lightning;
 mod loudness;
 mod mixdown;
+mod mono_mix;
 mod morph_cut;
 mod noise_effects;
 mod optical_flow;
@@ -69,6 +70,7 @@ pub use export::{ExportEvent, ExportJob, ExportSettings, VideoEncoding, VideoExp
 pub use frame_probe::FrameProbe;
 pub use generated::generated_frame;
 pub use loudness::{clip_alone, Loudness, LoudnessEvent, LoudnessJob, LoudnessTarget, Piece};
+pub use mono_mix::{media_alone, MonoMix};
 pub use player::Player;
 pub use previews::Preview;
 pub use remix::{RemixEvent, RemixJob};

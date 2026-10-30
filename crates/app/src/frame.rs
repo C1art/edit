@@ -69,12 +69,14 @@ impl eframe::App for Editor {
         self.poll_mask_tracking(&ctx);
         self.poll_export_frame(&ctx);
         self.poll_export_queue(&ctx);
+        self.poll_transcribing(&ctx);
         if self.importer.as_ref().is_some_and(Importer::is_busy) {
             ctx.request_repaint_after(Duration::from_millis(100));
         }
         // Panels edit after the sync below, and a key pressed in the next frame, such as
         // End, must already see that edit.
         self.sync_program();
+        crate::transcribe::take_keys(self, &ctx);
         crate::shortcuts::handle(self, &ctx);
         self.update_window();
         self.sync_program();

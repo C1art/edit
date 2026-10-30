@@ -11,6 +11,7 @@ pub(crate) fn show(editor: &mut Editor, ctx: &egui::Context) {
     crate::gain_dialog::dialog(editor, ctx);
     crate::duck_dialog::dialog(editor, ctx);
     crate::pauses_dialog::dialog(editor, ctx);
+    crate::transcribe::dialog(editor, ctx);
     crate::beats_dialog::dialog(editor, ctx);
     crate::remix_dialog::dialog(editor, ctx);
     crate::transition_duration_dialog::dialog(editor, ctx);

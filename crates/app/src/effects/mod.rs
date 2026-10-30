@@ -91,6 +91,7 @@ pub enum SideTab {
     EssentialSound,
     Scopes,
     Captions,
+    Text,
 }
 
 /// The look, volume or audio effect being dragged, or the title being typed, shown live
