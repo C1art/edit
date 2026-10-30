@@ -2,6 +2,7 @@ mod error;
 mod json;
 mod presets;
 mod replace;
+mod templates;
 
 use std::path::Path;
 
@@ -12,6 +13,7 @@ pub use error::ProjectError;
 use json::Value;
 pub use presets::PresetsFile;
 pub use replace::{rename_into_place, replace_file, retry_while_in_use};
+pub use templates::TemplatesFile;
 
 /// Bump on every breaking change to the file layout and add a migration from the previous version.
 pub const FORMAT_VERSION: u32 = 1;
