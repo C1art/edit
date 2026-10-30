@@ -14,6 +14,7 @@ use render::{Background, Compositor, LayerImage, Readback};
 use timeline::{Sequence, Ticks};
 
 use crate::export_sink::{Sink, Stills, Work};
+use crate::previews::{self, Preview, PreviewPictures};
 use crate::sequence_mix::{SequenceMix, CHUNK_FRAMES};
 use crate::{compose, Layer, PlaybackError, Resolution};
 
@@ -26,6 +27,9 @@ pub struct ExportSettings {
     pub audio: Option<AudioSettings>,
     /// The part of the sequence to export; the whole of it when `None`.
     pub range: Option<Range<Ticks>>,
+    /// Rendered previews whose pictures are taken where they cover, instead of composing
+    /// the sequence again; ignored for an export that keeps alpha, which they lack.
+    pub previews: Vec<Preview>,
 }
 
 /// Pictures at the sequence's frame rate, scaled from its frame size to `size`.
@@ -73,7 +77,7 @@ impl ExportJob {
         sequence: Arc<Sequence>,
         device: wgpu::Device,
         queue: wgpu::Queue,
-        settings: ExportSettings,
+        mut settings: ExportSettings,
     ) -> Result<Self, PlaybackError> {
         let (sender, events) = crossbeam::channel::unbounded();
         let cancel = Arc::new(AtomicBool::new(false));
@@ -87,6 +91,7 @@ impl ExportJob {
             });
         if keeps_alpha {
             compositor.set_background(Background::Transparent);
+            settings.previews.clear();
         }
         let partial = match settings.video.map(|video| video.encoding) {
             Some(VideoEncoding::Stills(_)) => None,
@@ -249,6 +254,7 @@ impl Worker {
         let mut warnings = Vec::new();
 
         let pictures = video.is_some() || stills.is_some();
+        let mut previews = PreviewPictures::new(&self.settings.previews, &sequence);
         let mut pending: Option<Readback> = None;
         // One step past the last frame hands over the last picture.
         for frame in frames.start..=frames.end {
@@ -257,14 +263,17 @@ impl Worker {
             }
             // Decoding this frame overlaps the GPU finishing the one before.
             let layers = (pictures && frame < frames.end).then(|| {
-                compose::layers_at(
-                    &sequence,
-                    rate.frame_start(frame, timebase),
-                    &mut tracks,
-                    &mut warned,
-                    &mut warnings,
-                    Resolution::Full,
-                )
+                let pts = rate.frame_start(frame, timebase);
+                previews::previewed(&mut previews, pts, Resolution::Full).unwrap_or_else(|| {
+                    compose::layers_at(
+                        &sequence,
+                        pts,
+                        &mut tracks,
+                        &mut warned,
+                        &mut warnings,
+                        Resolution::Full,
+                    )
+                })
             });
             if frame > frames.start {
                 let done = frame - 1;

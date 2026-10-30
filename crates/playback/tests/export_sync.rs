@@ -99,6 +99,7 @@ fn cut_media_keeps_its_picture_and_sound_together() {
                 bits_per_second: 192_000,
             }),
             range: None,
+            previews: Vec::new(),
         };
         export(&sequence, &gpu, settings).unwrap();
         let decoded = decode(&path).unwrap();

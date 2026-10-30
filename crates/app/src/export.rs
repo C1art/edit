@@ -36,6 +36,8 @@ pub struct ExportDialog {
     path: String,
     format: ExportFormat,
     span: Span,
+    /// Whether rendered previews stand in for what they cover, as Premiere's Use Previews.
+    use_previews: bool,
     running: Option<Running>,
     /// The file suggested on opening, swapped for a free name while it's left as it is.
     suggested: Option<PathBuf>,
@@ -70,6 +72,7 @@ pub fn open(editor: &mut Editor) {
         path: path.display().to_string(),
         format,
         span,
+        use_previews: false,
         running: None,
         suggested: Some(path),
         target: TargetCheck::new(editor.ctx.clone()).ok(),
@@ -120,6 +123,10 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
         sequence.time_display,
     );
     let sequence_size = (sequence.format.width, sequence.format.height);
+    let rendered = editor
+        .render_previews
+        .as_ref()
+        .is_some_and(|previews| previews.bar().any(|(_, ready)| ready));
     // Escape in the file browser closes only that.
     let browsing = editor.path_prompt.is_some();
     let export_queue = &editor.export_queue;
@@ -173,6 +180,19 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                 ui.label("Duration:");
                 ui.label(length_text(format, length, timing));
                 ui.end_row();
+                if format.format.has_video() {
+                    ui.label("");
+                    ui.add_enabled_ui(rendered, |ui| {
+                        ui.checkbox(&mut dialog.use_previews, "Use Previews")
+                            .on_hover_text(
+                                "Take rendered previews where they cover instead of \
+                                 rendering those parts again; faster, though those parts \
+                                 are encoded once more",
+                            )
+                            .on_disabled_hover_text("Render previews of the sequence first");
+                    });
+                    ui.end_row();
+                }
             });
             if dialog.format.format != kind {
                 let suggested = dialog.suggested.as_ref() == Some(&dialog.output());
@@ -236,6 +256,10 @@ fn prepare(editor: &mut Editor) -> Option<(Arc<Sequence>, ExportSettings)> {
     let (width, height) = dialog.format.size(sequence_size);
     let range = (dialog.span == Span::InToOut && sequence.marks.is_set())
         .then(|| sequence.marks.range(sequence.duration()));
+    let previews = match &editor.render_previews {
+        Some(previews) if dialog.use_previews => previews.previews(),
+        _ => Vec::new(),
+    };
     let problem = if path.as_os_str().is_empty() {
         Some("Choose an output file first".to_owned())
     } else if editor.is_project_file(&path) {
@@ -260,6 +284,7 @@ fn prepare(editor: &mut Editor) -> Option<(Arc<Sequence>, ExportSettings)> {
         video: dialog.format.video(sequence_size),
         audio: dialog.format.audio(),
         range,
+        previews,
     };
     Some((Arc::new(sequence.clone()), settings))
 }

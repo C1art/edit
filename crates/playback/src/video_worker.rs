@@ -8,7 +8,7 @@ use crate::clock::SharedPosition;
 use crate::command::{coalesce, Coalesced, Command, Event};
 use crate::frame_picker::TaggedFrame;
 use crate::preroll::preroll;
-use crate::previews::PreviewPictures;
+use crate::previews::{self, PreviewPictures};
 use crate::{compose, ComposedFrame, Layer, Resolution};
 
 pub(crate) struct VideoChannels {
@@ -215,17 +215,7 @@ impl VideoWorker {
         self.prerolling = true;
     }
 
-    /// The preview's picture where one covers `pts`. A preview that can't be read is
-    /// dropped, and the sequence composed from then on.
     fn previewed(&mut self, pts: Ticks) -> Option<Vec<Layer>> {
-        let previews = self
-            .previews
-            .as_mut()
-            .filter(|previews| previews.covers(pts))?;
-        let layers = previews.layers_at(pts, self.resolution);
-        if layers.is_none() {
-            self.previews = None;
-        }
-        layers
+        previews::previewed(&mut self.previews, pts, self.resolution)
     }
 }

@@ -249,6 +249,7 @@ impl Editor {
                 bits_per_second: 0,
             }),
             range: Some(Ticks::ZERO..pending.end),
+            previews: Vec::new(),
         };
         ExportJob::start(
             Arc::new(view),

@@ -96,5 +96,20 @@ impl PreviewPictures {
     }
 }
 
+/// The preview's picture where one covers `pts`. A preview that can't be read is
+/// dropped, and the sequence composed from then on.
+pub(crate) fn previewed(
+    previews: &mut Option<PreviewPictures>,
+    pts: Ticks,
+    resolution: Resolution,
+) -> Option<Vec<Layer>> {
+    let pictures = previews.as_mut().filter(|previews| previews.covers(pts))?;
+    let layers = pictures.layers_at(pts, resolution);
+    if layers.is_none() {
+        *previews = None;
+    }
+    layers
+}
+
 /// The previews to play, shared between the player and its video worker.
 pub(crate) type PreviewList = Arc<Vec<Preview>>;

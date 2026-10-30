@@ -69,7 +69,7 @@ impl RenderPreviews {
             .map(|(range, fingerprint)| (range.clone(), self.rendered.contains(fingerprint)))
     }
 
-    fn previews(&self) -> Vec<Preview> {
+    pub(crate) fn previews(&self) -> Vec<Preview> {
         self.segments
             .iter()
             .filter(|(_, fingerprint)| self.rendered.contains(fingerprint))
@@ -250,6 +250,7 @@ impl Editor {
                 }),
                 audio: None,
                 range: Some(range),
+                previews: Vec::new(),
             };
             let started = ExportJob::start(
                 Arc::new(sequence.clone()),
