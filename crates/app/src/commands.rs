@@ -1,11 +1,11 @@
 use std::collections::HashSet;
 
 use timeline::{
-    AddFrameHold, AddTrack, ClipId, Clipboard, CloseGap, CloseGaps, DeleteEmptyTracks, FrameFit,
-    Gain, HoldFrame, InsertFrameHold, JoinThroughEdits, Lift, LinkedSelection, MakeSubsequence,
-    NudgeClipGain, PasteClips, PlaceMode, Razor, RazorTarget, RippleDelete, Sequence,
-    SetClipsEnabled, SetFrameHold, SetGrouped, SetLinked, SetLinkedSelection, SetToFrameSize,
-    Ticks, Timebase, TrackKind, TrackRef,
+    AddBlurredBackground, AddFrameHold, AddTrack, ClipId, Clipboard, CloseGap, CloseGaps,
+    DeleteEmptyTracks, FrameFit, Gain, HoldFrame, InsertFrameHold, JoinThroughEdits, Lift,
+    LinkedSelection, MakeSubsequence, NudgeClipGain, PasteClips, PlaceMode, Razor, RazorTarget,
+    RippleDelete, Sequence, SetClipsEnabled, SetFrameHold, SetGrouped, SetLinked,
+    SetLinkedSelection, SetToFrameSize, Ticks, Timebase, TrackKind, TrackRef,
 };
 
 use crate::editor::Editor;
@@ -346,6 +346,15 @@ impl Editor {
         };
         if !self.apply(edit) {
             self.notice("No through edits at the selected clips");
+        }
+    }
+
+    pub(crate) fn add_blurred_background(&mut self) {
+        let edit = AddBlurredBackground {
+            clips: self.view.selection.clone(),
+        };
+        if !self.apply(edit) {
+            self.notice("Select video clips to put a blurred background under");
         }
     }
 

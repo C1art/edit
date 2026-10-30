@@ -265,6 +265,13 @@ fn video_options(editor: &mut Editor, ui: &mut Ui, selected: bool) {
             if ui.button("Set to Fill Frame").clicked() {
                 editor.set_to_frame_size(FrameFit::Fill);
             }
+            if ui
+                .button("Add Blurred Background")
+                .on_hover_text("Fills the frame beneath the clip with a blurred copy of it")
+                .clicked()
+            {
+                editor.add_blurred_background();
+            }
         });
         ui.menu_button("Time Interpolation", |ui| time_interpolation(editor, ui));
     });

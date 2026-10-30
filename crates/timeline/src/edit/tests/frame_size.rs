@@ -58,3 +58,32 @@ fn media_imported_with_a_default_scaling_is_placed_at_it() {
     let (_, sound) = timeline.sequence().clip(clip_on(&timeline, A1, 0)).unwrap();
     assert_eq!(sound.look.motion.scale, Param::new(10_000));
 }
+
+#[test]
+fn blurred_background_fills_a_new_track_beneath_and_undoes_with_it() {
+    let (mut timeline, _) = timeline();
+    let wide = import_wide(&mut timeline, None);
+    timeline
+        .apply(place(wide, 0, 0, 100, PlaceMode::Overwrite))
+        .unwrap();
+    let tracks = timeline.sequence().video.len();
+    let original = clip_on(&timeline, V1, 0);
+    timeline
+        .apply(AddBlurredBackground {
+            clips: vec![original],
+        })
+        .unwrap();
+
+    let sequence = timeline.sequence();
+    assert_eq!(sequence.video.len(), tracks + 1);
+    let (moved_to, clip) = sequence.clip(original).unwrap();
+    assert_eq!(moved_to, TrackRef::video(1));
+    let background = &sequence.video[0].clips[0];
+    assert_eq!(background.look.motion.scale, Param::new(3_333));
+    assert!(clip.group.is_some() && background.group == clip.group);
+
+    timeline.undo();
+    assert_eq!(timeline.sequence().video.len(), tracks);
+    let (track, _) = timeline.sequence().clip(original).unwrap();
+    assert_eq!(track, TrackRef::video(0));
+}
