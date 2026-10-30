@@ -9,7 +9,7 @@ use timeline::{
 use crate::clip_decoders::ClipDecoders;
 use crate::clip_frame::ClipFrame;
 use crate::echo::{echo_of, echoed_frame_at};
-use crate::generated::{caption_frame, scrolled};
+use crate::generated::{animated, caption_frame, scrolled};
 use crate::grades::grade_for;
 use crate::image_matte::image_matted;
 use crate::layer_look::{interpreted, layer_look};
@@ -218,6 +218,7 @@ fn clip_picture(
             match rgba {
                 Ok(frame) => frame
                     .map(|frame| scrolled(frame, sequence, plan.clip, media, time))
+                    .map(|frame| animated(frame, sequence, plan.clip, media, time))
                     .map(|frame| bucket_filled(frame, effects, time))
                     .map(|frame| written_on(frame, plan.clip, sequence.timebase, time))
                     .map(|frame| image_matted(frame, effects, sequence.timebase, decoding.warnings))

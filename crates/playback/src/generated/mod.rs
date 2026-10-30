@@ -1,3 +1,4 @@
+mod animate;
 mod bars;
 mod coverage;
 mod image_layer;
@@ -16,6 +17,7 @@ use timeline::{
     Title, TitleFont, TitleMotion,
 };
 
+pub(crate) use animate::animated;
 use bars::draw_bars;
 use coverage::Coverage;
 use layers::draw_graphic;
