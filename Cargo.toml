@@ -44,6 +44,8 @@ expect_used = "warn"
 
 [profile.dev.package."*"]
 opt-level = 2
+# Dependencies' debug info was most of target/: it's copied into every test binary's PDB.
+debug = false
 
 [profile.release]
 lto = "thin"
