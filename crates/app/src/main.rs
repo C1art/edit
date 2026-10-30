@@ -31,6 +31,7 @@ mod file_drop;
 mod find_dialog;
 mod fit_clip;
 mod gain_dialog;
+mod gpu_setup;
 mod graphics_tools;
 mod history_panel;
 mod icons;
@@ -114,6 +115,7 @@ fn main() -> eframe::Result {
                 .with_drag_and_drop(true),
         ),
         centered: window.centered(),
+        wgpu_options: gpu_setup::wgpu_configuration(),
         ..Default::default()
     };
     eframe::run_native(

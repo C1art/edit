@@ -160,6 +160,8 @@ impl Editor {
         if render_state.is_none() {
             notices.push("Video disabled: the window has no wgpu renderer".to_owned());
         }
+        // Before anything decodes, so decoders open on the adapter that draws.
+        crate::gpu_setup::decode_where_drawn(render_state.as_ref());
         let timeline = Timeline::new(Sequence::with_default_tracks(
             Timebase::HZ_90K,
             VideoFormat::default(),

@@ -51,7 +51,7 @@ pub(super) fn gpu() -> egui_wgpu::RenderState {
     // two threads set up or use devices of their own at once.
     static GPU: OnceLock<egui_wgpu::RenderState> = OnceLock::new();
     GPU.get_or_init(|| {
-        let config = egui_wgpu::WgpuConfiguration::default();
+        let config = crate::gpu_setup::wgpu_configuration();
         let instance = block_on(config.wgpu_setup.new_instance());
         block_on(egui_wgpu::RenderState::create(
             &config,
