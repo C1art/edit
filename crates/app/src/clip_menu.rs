@@ -290,6 +290,28 @@ fn labels(editor: &mut Editor, ui: &mut Ui) {
     if ui.button("Track Color").clicked() {
         set_label(editor, None);
     }
+    ui.separator();
+    if ui.button("Select Label Group").clicked() {
+        select_label_group(editor);
+    }
+}
+
+/// Selects every clip in the sequence labeled as one of the selected clips is.
+fn select_label_group(editor: &mut Editor) {
+    let sequence = editor.timeline.sequence();
+    let labels: Vec<Option<Label>> = editor
+        .view
+        .selection
+        .iter()
+        .filter_map(|&id| sequence.clip(id))
+        .map(|(_, clip)| clip.label)
+        .collect();
+    editor.view.selection = sequence
+        .tracks()
+        .flat_map(|(_, track)| track.clips.iter())
+        .filter(|clip| labels.contains(&clip.label))
+        .map(|clip| clip.id)
+        .collect();
 }
 
 fn set_label(editor: &mut Editor, label: Option<Label>) {
