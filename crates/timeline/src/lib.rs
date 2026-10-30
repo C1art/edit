@@ -8,6 +8,7 @@ mod collect;
 mod color;
 mod curves;
 mod ducking;
+mod duplicates;
 mod edit;
 mod edl;
 mod effect;
