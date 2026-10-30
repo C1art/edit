@@ -108,6 +108,8 @@ pub struct Editor {
     pub(crate) duck_dialog: Option<crate::duck_dialog::DuckDialog>,
     pub(crate) pauses_dialog: Option<crate::pauses_dialog::PausesDialog>,
     pub(crate) remix_dialog: Option<crate::remix_dialog::RemixDialog>,
+    pub(crate) transition_duration_dialog:
+        Option<crate::transition_duration_dialog::TransitionDurationDialog>,
     pub(crate) interpret_dialog: Option<crate::interpret_dialog::InterpretDialog>,
     pub(crate) channels_dialog: Option<crate::channels_dialog::ChannelsDialog>,
     pub(crate) find: crate::find_dialog::FindDialog,
@@ -286,6 +288,7 @@ impl Editor {
             duck_dialog: None,
             pauses_dialog: None,
             remix_dialog: None,
+            transition_duration_dialog: None,
             interpret_dialog: None,
             channels_dialog: None,
             find: Default::default(),

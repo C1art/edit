@@ -168,5 +168,8 @@ impl Editor {
         if let Some(clip) = output.open_clip {
             self.open_clip(clip);
         }
+        if let Some((clip, edge, longest)) = output.transition_duration {
+            self.open_transition_duration(clip, edge, longest);
+        }
     }
 }

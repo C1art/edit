@@ -30,8 +30,9 @@ use std::collections::BTreeSet;
 
 use egui::{Rect, Sense};
 use timeline::{
-    AddTrack, ClipId, ClipLine, DeltaBounds, LinkedSelection, MarkerId, MarkerOwner, RemoveTrack,
-    RenameTrack, Sequence, SetTrackSwitch, Ticks, TimeDisplay, Timeline, TrackKind, TrackRef,
+    AddTrack, ClipId, ClipLine, DeltaBounds, Edge, LinkedSelection, MarkerId, MarkerOwner,
+    RemoveTrack, RenameTrack, Sequence, SetTrackSwitch, Ticks, TimeDisplay, Timeline, TrackKind,
+    TrackRef,
 };
 
 use crate::clip_art::ClipArt;
@@ -106,6 +107,8 @@ pub struct TimelineOutput {
     pub effect_drop: Option<EffectDrop>,
     /// A double-clicked clip, whose media to open.
     pub open_clip: Option<ClipId>,
+    /// A double-clicked transition, whose duration to ask for, and the longest it can be.
+    pub transition_duration: Option<(ClipId, Edge, Ticks)>,
     /// The clip area while a right-click on a clip has its menu open.
     pub clip_menu: Option<egui::Response>,
     /// The clip area while a right-click on a gap has its menu open.

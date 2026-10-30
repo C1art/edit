@@ -34,6 +34,10 @@ impl TimelineView {
 
         if response.double_clicked() && self.tool.on_timeline() == Tool::Selection {
             if let Some(pos) = response.interact_pointer_pos() {
+                if let Some(shown) = transition_grip::transition_at(sequence, &rows, &scale, pos) {
+                    output.transition_duration = Some((shown.clip, shown.edge, shown.longest));
+                    return;
+                }
                 if let Hit::Body { clip, .. } = layout::hit(sequence, &rows, &scale, pos) {
                     let marker = sequence
                         .clip(clip)

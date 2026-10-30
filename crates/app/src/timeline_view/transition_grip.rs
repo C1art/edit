@@ -126,3 +126,20 @@ pub(super) fn grip_at(
             })
         })
 }
+
+/// The transition shown under `pos`, if any.
+pub(super) fn transition_at(
+    sequence: &Sequence,
+    rows: &[Row],
+    scale: &TimeScale,
+    pos: Pos2,
+) -> Option<Shown> {
+    let row = row_at(rows, pos.y)?;
+    let track = sequence.track(row.track)?;
+    let time = scale.time(pos.x);
+    track
+        .clips
+        .iter()
+        .flat_map(|clip| shown(track, clip))
+        .find(|shown| shown.span.contains(&time))
+}
