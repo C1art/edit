@@ -4,9 +4,10 @@ use std::sync::Arc;
 use timeline::{
     AlphaInterpretation, AudioEffect, Bin, BinId, BinSearch, BoxStyle, Caption, Clip, ClipId,
     ColorSpace, CurvePoint, FillGradient, Gain, Generator, GradientKind, Interpolation, Keyframe,
-    Marks, Mask, MaskShape, MediaItem, MediaLog, Nest, Pan, Param, PixelAspect, Rgb, Scroll,
-    SearchField, ShadowStyle, SourceId, TextAlign, TextStroke, Ticks, Timebase, Title, TitleFont,
-    TitleMotion, Track, Transition, TransitionKind, VideoEffect, VideoFormat,
+    Marks, Mask, MaskShape, MediaItem, MediaLog, Nest, Pan, Param, PixelAspect, PluginEffect,
+    PluginParam, Rgb, Scroll, SearchField, ShadowStyle, SourceId, TextAlign, TextStroke, Ticks,
+    Timebase, Title, TitleFont, TitleMotion, Track, Transcript, Transition, TransitionKind,
+    VideoEffect, VideoFormat, Word,
 };
 
 use super::*;
@@ -143,11 +144,30 @@ fn sample() -> ProjectFile {
         .clips
         .push(Clip::new(ClipId(8), SourceId(1), Ticks(30), Ticks(60), Ticks(0)).into());
     Arc::make_mut(&mut nest.audio[1].clips[0]).audio_effects = AudioEffect::catalog().to_vec();
+    let mut drive = Param::from_value(0.25);
+    drive.keys.push(Keyframe::new(Ticks(45), 1_000));
+    nest.master_effects = vec![AudioEffect::Plugin(Box::new(PluginEffect {
+        name: "Tape \"Saturator\"".to_owned(),
+        vendor: "Acme".to_owned(),
+        path: PathBuf::from(r"C:\Program Files\Common Files\VST3\Tape.vst3"),
+        class_id: [0xab; 16],
+        params: vec![PluginParam {
+            id: 7,
+            value: drive,
+        }],
+    }))];
     nest.master = Gain(-150);
     nest.marks = Marks::default().with_in(Ticks(10));
     Arc::make_mut(&mut sequence.media).push(MediaItem {
         poster: None,
-        transcript: None,
+        transcript: Some(Arc::new(Transcript {
+            language: "en".to_owned(),
+            words: vec![Word {
+                start: Ticks(3),
+                end: Ticks(9),
+                text: "Hello,".to_owned(),
+            }],
+        })),
         id: SourceId(3),
         name: "Nested Sequence 01".to_owned(),
         path: PathBuf::new(),

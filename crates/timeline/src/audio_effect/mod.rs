@@ -6,12 +6,14 @@ mod catalog;
 mod convolution;
 mod dynamics;
 mod guitar;
+mod plugin;
 mod scientific;
 mod vocal;
 
 pub use convolution::ReverbSpace;
 pub use dynamics::{CompressorSection, Dynamics, ExpanderSection, GateSection, LimiterSection};
 pub use guitar::{AmpModel, GuitarFilter};
+pub use plugin::{PluginEffect, PluginParam};
 pub use scientific::{FilterMode, FilterType};
 pub use vocal::VocalMode;
 
@@ -302,6 +304,8 @@ pub enum AudioEffect {
     SwapChannels,
     /// Flips the polarity of both sides.
     Invert,
+    /// A VST3 plugin's effect.
+    Plugin(Box<PluginEffect>),
 }
 
 impl AudioEffect {
@@ -393,6 +397,11 @@ impl AudioEffect {
                 mix,
             } => vec![time, feedback, saturation, tone, mix],
             Self::Dynamics(dynamics) => dynamics.params_mut(),
+            Self::Plugin(plugin) => plugin
+                .params
+                .iter_mut()
+                .map(|param| &mut param.value)
+                .collect(),
             Self::AutomaticClickRemover { threshold } => vec![threshold],
             Self::TubeCompressor {
                 threshold,

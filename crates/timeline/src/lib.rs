@@ -85,7 +85,7 @@ mod yuv;
 
 pub use audio_effect::{
     AmpModel, AudioEffect, CompressorSection, Dynamics, ExpanderSection, FilterMode, FilterType,
-    GateSection, GuitarFilter, LimiterSection, ReverbSpace, VocalMode,
+    GateSection, GuitarFilter, LimiterSection, PluginEffect, PluginParam, ReverbSpace, VocalMode,
 };
 pub use audio_plan::{audio_fade, audio_span, clip_balance, clip_level, track_automation};
 pub use audio_type::AudioType;

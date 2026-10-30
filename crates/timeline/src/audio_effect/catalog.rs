@@ -217,6 +217,14 @@ impl AudioEffect {
         ]
     }
 
+    /// What to call this effect: its name, or for a plugin the plugin's own name.
+    pub fn title(&self) -> &str {
+        match self {
+            Self::Plugin(plugin) => &plugin.name,
+            _ => self.name(),
+        }
+    }
+
     pub fn name(&self) -> &'static str {
         match self {
             Self::Amplify { .. } => "Amplify",
@@ -264,6 +272,7 @@ impl AudioEffect {
             Self::ScientificFilter { .. } => "Scientific Filter",
             Self::GuitarSuite { .. } => "Guitar Suite",
             Self::ConvolutionReverb { .. } => "Convolution Reverb",
+            Self::Plugin(_) => "VST3 Plugin",
         }
     }
 }
