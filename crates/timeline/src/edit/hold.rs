@@ -100,3 +100,74 @@ impl Edit for InsertFrameHold {
         Ok(())
     }
 }
+
+/// Which of its own frames a whole clip holds on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HoldFrame {
+    In,
+    Out,
+    /// The frame showing at this sequence position, for clips over it.
+    At(Ticks),
+}
+
+/// Makes the video clips among `clips` show one frame for their whole length, as
+/// Premiere's Frame Hold Options do, or with `None` play on again from the frame held.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetFrameHold {
+    pub clips: Vec<ClipId>,
+    pub frame: Option<HoldFrame>,
+}
+
+impl Edit for SetFrameHold {
+    fn name(&self) -> &'static str {
+        match self.frame {
+            Some(_) => "Frame Hold Options",
+            None => "Remove Frame Hold",
+        }
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let changes: Vec<_> = self
+            .clips
+            .iter()
+            .filter_map(|&id| sequence.clip(id))
+            .filter(|(track, _)| track.kind == TrackKind::Video)
+            .filter_map(|(_, clip)| {
+                let held = match self.frame {
+                    None => {
+                        return clip
+                            .hold
+                            .then(|| (clip.id, false, released_in(sequence, clip)))
+                    }
+                    Some(HoldFrame::In) => clip.source_time(clip.start),
+                    Some(HoldFrame::Out) => clip.source_time(clip.end() - Ticks(1)),
+                    Some(HoldFrame::At(at)) => clip.covers(at).then(|| clip.source_time(at))?,
+                };
+                let unchanged = clip.hold && clip.source_in == held;
+                (!unchanged).then_some((clip.id, true, held))
+            })
+            .collect();
+        if changes.is_empty() {
+            return Err(TimelineError::NothingToEdit);
+        }
+        for (id, hold, source_in) in changes {
+            let clip = ops::clip_mut(sequence, id)?;
+            clip.hold = hold;
+            clip.source_in = source_in;
+        }
+        Ok(())
+    }
+}
+
+/// Where a released clip starts playing from: the frame it held, unless that leaves too
+/// little media after it to fill the clip, when it starts as late as the media allows.
+fn released_in(sequence: &Sequence, clip: &Clip) -> Ticks {
+    let Some(item) = sequence
+        .media_item(clip.source)
+        .filter(|_| clip.remap.is_none())
+    else {
+        return clip.source_in;
+    };
+    let span = clip.rate().source_span(clip.duration);
+    clip.source_in.min(item.duration - span).max(Ticks::ZERO)
+}

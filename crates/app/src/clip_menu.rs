@@ -1,6 +1,6 @@
 use egui::{Atom, Button, Checkbox, RichText, Ui};
 use timeline::{
-    ClipId, Edit, FrameFit, IntoSync, JoinThroughEdits, Label, SetClipLabel, SetGrouped,
+    ClipId, Edit, FrameFit, HoldFrame, IntoSync, JoinThroughEdits, Label, SetClipLabel, SetGrouped,
     SetTimeInterpolation, SyncMethod, TimeInterpolation, TitleTemplate, TrackKind,
 };
 
@@ -223,6 +223,7 @@ fn video_options(editor: &mut Editor, ui: &mut Ui, selected: bool) {
         if ui.button("Insert Frame Hold Segment").clicked() {
             editor.insert_frame_hold();
         }
+        ui.menu_button("Frame Hold Options", |ui| frame_hold_options(editor, ui));
         ui.add_enabled_ui(selected, |ui| {
             if ui.button("Set to Frame Size").clicked() {
                 editor.set_to_frame_size(FrameFit::Fit);
@@ -233,6 +234,22 @@ fn video_options(editor: &mut Editor, ui: &mut Ui, selected: bool) {
         });
         ui.menu_button("Time Interpolation", |ui| time_interpolation(editor, ui));
     });
+}
+
+fn frame_hold_options(editor: &mut Editor, ui: &mut Ui) {
+    let at = editor.playhead();
+    let choices = [
+        ("Hold In Point", Some(HoldFrame::In)),
+        ("Hold Out Point", Some(HoldFrame::Out)),
+        ("Hold Playhead Frame", Some(HoldFrame::At(at))),
+        ("Release Frame Hold", None),
+    ];
+    for (name, frame) in choices {
+        if ui.button(name).clicked() {
+            editor.set_frame_hold(frame);
+            ui.close();
+        }
+    }
 }
 
 fn time_interpolation(editor: &mut Editor, ui: &mut Ui) {

@@ -55,3 +55,37 @@ fn a_frame_hold_segment_goes_between_the_cut_pieces_and_pushes_the_rest_along() 
     assert_eq!(after.link, sequence.audio[0].clips[1].link);
     assert_ne!(before.link, after.link);
 }
+
+#[test]
+fn frame_hold_options_hold_a_whole_clip_on_one_frame_and_release_it() {
+    let (mut timeline, source) = timeline();
+    timeline
+        .apply(place(source, 100, 200, 400, PlaceMode::Overwrite))
+        .unwrap();
+    let video = clip_on(&timeline, V1, 0);
+    let hold = |frame| SetFrameHold {
+        clips: vec![video],
+        frame,
+    };
+    timeline
+        .apply(hold(Some(HoldFrame::At(Ticks(150)))))
+        .unwrap();
+    assert_eq!(spans(&timeline, V1), [(100, 500, 250)]);
+    assert_eq!(
+        timeline.apply(hold(Some(HoldFrame::At(Ticks(600))))),
+        Err(TimelineError::NothingToEdit)
+    );
+
+    // Released, it plays on from the frame it held.
+    timeline.apply(hold(None)).unwrap();
+    let released = &timeline.sequence().video[0].clips[0];
+    assert!(!released.hold);
+    assert_eq!(released.source_time(Ticks(499)), Ticks(649));
+    assert_eq!(spans(&timeline, A1), [(100, 500, 200)]);
+
+    // Released near the media's end, it starts early enough to stay within it.
+    timeline.apply(hold(Some(HoldFrame::Out))).unwrap();
+    assert_eq!(spans(&timeline, V1), [(100, 500, 649)]);
+    timeline.apply(hold(None)).unwrap();
+    assert_eq!(spans(&timeline, V1), [(100, 500, 600)]);
+}

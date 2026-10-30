@@ -1,10 +1,11 @@
 use std::collections::HashSet;
 
 use timeline::{
-    AddFrameHold, AddTrack, ClipId, Clipboard, CloseGap, CloseGaps, FrameFit, Gain,
+    AddFrameHold, AddTrack, ClipId, Clipboard, CloseGap, CloseGaps, FrameFit, Gain, HoldFrame,
     InsertFrameHold, JoinThroughEdits, Lift, LinkedSelection, MakeSubsequence, NudgeClipGain,
-    PasteClips, PlaceMode, Razor, RazorTarget, RippleDelete, Sequence, SetClipsEnabled, SetGrouped,
-    SetLinked, SetLinkedSelection, SetToFrameSize, Ticks, Timebase, TrackKind, TrackRef,
+    PasteClips, PlaceMode, Razor, RazorTarget, RippleDelete, Sequence, SetClipsEnabled,
+    SetFrameHold, SetGrouped, SetLinked, SetLinkedSelection, SetToFrameSize, Ticks, Timebase,
+    TrackKind, TrackRef,
 };
 
 use crate::editor::Editor;
@@ -232,6 +233,18 @@ impl Editor {
         };
         if !self.apply(InsertFrameHold { clips, at, length }) {
             self.notice("Put the playhead over a video clip to hold its frame");
+        }
+    }
+
+    /// Holds the selected video clips, or else those under the playhead, on one of their
+    /// frames for their whole length, or with `None` lets them play again.
+    pub(crate) fn set_frame_hold(&mut self, frame: Option<HoldFrame>) {
+        let clips = self.held_clips(self.playhead());
+        if !self.apply(SetFrameHold { clips, frame }) {
+            self.notice(match frame {
+                Some(_) => "Select video clips, or put the playhead over one, to hold",
+                None => "None of those clips holds a frame",
+            });
         }
     }
 
