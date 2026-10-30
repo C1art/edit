@@ -2,13 +2,14 @@ use std::sync::Arc;
 
 use render::{Grade, LayerLook};
 use timeline::{
-    track_layers_at, Clip, ClipId, Generator, MediaItem, PlannedLayer, Reveal, Sequence, SourceId,
-    Ticks, TimeInterpolation, Track, TrackRef, VideoEffect,
+    track_layers_at, Clip, ClipId, Generator, Look, MediaItem, PlannedLayer, Reveal, Sequence,
+    SourceId, Ticks, TimeInterpolation, Track, TrackRef, VideoEffect,
 };
 
 use crate::clip_decoders::ClipDecoders;
 use crate::clip_frame::ClipFrame;
 use crate::echo::{echo_of, echoed_frame_at};
+use crate::effect_masks::{adjustment_looks, effect_masked};
 use crate::generated::{animated, caption_frame, scrolled};
 use crate::grades::grade_for;
 use crate::image_matte::image_matted;
@@ -92,8 +93,8 @@ fn video_layers(
                 continue;
             };
             let time = plan.clip.source_time(pts);
-            let look_of = |reveal| {
-                let look = layer_look(&plan.clip.look, time, reveal, canvas, sequence.timebase);
+            let look_of = |look: &Look, reveal| {
+                let look = layer_look(look, time, reveal, canvas, sequence.timebase);
                 interpreted(look, media)
             };
             let grade = grade_for(&plan.clip.look.color, decoding.warnings);
@@ -102,7 +103,11 @@ fn video_layers(
                     split: None,
                     ..plan.reveal
                 };
-                adjust(&mut layers, TrackRef::video(index), look_of(whole), grade);
+                let looks = adjustment_looks(&plan.clip.look, time, |look| look_of(look, whole));
+                let grades = std::iter::once(grade).chain(std::iter::repeat(None));
+                for (look, grade) in looks.into_iter().zip(grades) {
+                    adjust(&mut layers, TrackRef::video(index), look, grade);
+                }
                 continue;
             }
             // Decoded first, as the clip's own track decoders are borrowed below.
@@ -140,11 +145,17 @@ fn video_layers(
             let start = layers.len();
             // A split picture is drawn once for each piece, every piece in its place.
             for piece in reveal.pieces() {
-                let layer = Layer {
+                let layer_of = |look: &Look| Layer {
                     track: TrackRef::video(index),
                     picture: picture.clone(),
-                    look: look_of(piece),
+                    look: look_of(look, piece),
                     grade: grade.clone(),
+                };
+                let look = &plan.clip.look;
+                let layer = if look.has_effect_masks() {
+                    effect_masked(look, time, layer_of)
+                } else {
+                    layer_of(look)
                 };
                 let layer = match &combination {
                     Some((combine, pictures)) => combined(layer, *combine, pictures.clone()),

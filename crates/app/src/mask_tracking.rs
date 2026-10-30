@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use crossbeam::channel::{self, Receiver, TryRecvError};
 use media::{MediaError, RegionTrack, TrackDirection, TrackedFrame};
-use timeline::{ClipId, Look, SetClipLook, Similarity, Ticks, TrackKind};
+use timeline::{ClipId, Look, MaskRef, SetClipLook, Similarity, Ticks, TrackKind};
 
 use crate::editor::Editor;
 use crate::effects::{commit_look, keyframe_time, preview_look};
@@ -27,7 +27,7 @@ enum Event {
 /// A clip's mask being tracked through its footage on a worker, keyed once it stops.
 pub struct MaskTrackJob {
     clip: ClipId,
-    mask: usize,
+    mask: MaskRef,
     from: Ticks,
     poses: Vec<(Ticks, Similarity)>,
     size: [u32; 2],
@@ -41,7 +41,7 @@ impl Editor {
     pub(crate) fn track_mask(
         &mut self,
         clip: ClipId,
-        mask: usize,
+        mask: MaskRef,
         direction: TrackDirection,
         span: TrackSpan,
     ) {
@@ -62,7 +62,7 @@ impl Editor {
             self.notice("Mask tracking needs a clip of video footage");
             return;
         };
-        let Some(shape) = found.look.masks.get(mask) else {
+        let Some(shape) = found.look.mask(mask) else {
             return;
         };
         let from = keyframe_time(self, found);
@@ -117,7 +117,7 @@ impl Editor {
     }
 
     /// Which of `clip`'s masks is being tracked and how far along, while one is.
-    pub(crate) fn mask_tracking(&self, clip: ClipId) -> Option<(usize, f32)> {
+    pub(crate) fn mask_tracking(&self, clip: ClipId) -> Option<(MaskRef, f32)> {
         self.mask_track_job
             .as_ref()
             .filter(|job| job.clip == clip)
@@ -186,8 +186,7 @@ impl Editor {
         let (last, _) = job.poses.last()?;
         let (_, clip) = self.timeline.sequence().clip(job.clip)?;
         let mut look: Look = clip.look.clone();
-        look.masks
-            .get_mut(job.mask)?
+        look.mask_mut(job.mask)?
             .follow(job.from, &job.poses, job.size);
         let position = clip
             .position_of(*last)

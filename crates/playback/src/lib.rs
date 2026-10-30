@@ -17,6 +17,7 @@ mod composed;
 mod detail_effects;
 mod echo;
 mod edge_effects;
+mod effect_masks;
 mod envelope;
 mod error;
 mod export;

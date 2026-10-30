@@ -14,6 +14,7 @@ mod duplicates;
 mod edit;
 mod edl;
 mod effect;
+mod effect_mask;
 mod error;
 mod export_overlay;
 mod file_url;
@@ -136,6 +137,7 @@ pub use effect::{
     ShadowRender, SimpleText, Texturize, TimecodeSource, UnsharpMask, VideoEffect, VideoLimiter,
     WriteOn, WriteOnStyle, MAX_LIGHTS, ULTRA_KEY_REACH,
 };
+pub use effect_mask::{MaskOwner, MaskRef};
 pub use error::TimelineError;
 pub use export_overlay::{ExportOverlays, OverlayPlace, Watermark};
 pub use fill_gradient::{FillGradient, GradientKind};

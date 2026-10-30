@@ -1,7 +1,7 @@
 use std::ops::RangeInclusive;
 
 use egui::{DragValue, RichText};
-use timeline::{BlendMode, Interpolation, Look, Param, Ticks};
+use timeline::{BlendMode, Interpolation, Look, MaskOwner, MaskRef, Param, Ticks};
 
 use media::TrackDirection;
 
@@ -28,7 +28,7 @@ pub(super) struct Output {
     /// Whether to find the clip's subject for Auto Reframe.
     pub(super) analyze_reframe: bool,
     /// A mask to track through the footage from the playhead.
-    pub(super) track_mask: Option<(usize, TrackDirection, TrackSpan)>,
+    pub(super) track_mask: Option<(MaskRef, TrackDirection, TrackSpan)>,
     pub(super) stop_tracking: bool,
     /// What to set the Basic Correction for from the picture.
     pub(super) analyze_tone: Option<ToneGoal>,
@@ -121,7 +121,7 @@ pub(super) fn controls(
                 });
             }
             if !rows.simple || !look.masks.is_empty() {
-                super::masks::controls(ui, &mut rows, &mut look.masks);
+                super::masks::controls(ui, &mut rows, MaskOwner::Opacity, &mut look.masks);
             }
         });
     egui::CollapsingHeader::new("Crop").show(ui, |ui| {
@@ -138,26 +138,7 @@ pub(super) fn controls(
     egui::CollapsingHeader::new("Effects")
         .default_open(true)
         .show(ui, |ui| {
-            let mut removed = None;
-            for (index, effect) in look.effects.iter_mut().enumerate() {
-                ui.push_id(index, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new(effect.name()).strong());
-                        if ui.small_button("Remove").clicked() {
-                            removed = Some(index);
-                        }
-                    });
-                    rows.effect(ui, effect, video_tracks);
-                    if std::mem::take(&mut rows.browse_matte) {
-                        rows.output.choose_matte = Some(index);
-                    }
-                });
-            }
-            if let Some(index) = removed {
-                look.effects.remove(index);
-                rows.commit();
-            }
-            super::video_effects::add_menu(ui, &mut rows, &mut look.effects);
+            super::effect_stack::controls(ui, &mut rows, look, video_tracks);
         });
     // Simple mode keeps color to the Lumetri Color tab.
     if !rows.simple {
@@ -166,7 +147,11 @@ pub(super) fn controls(
         });
     }
     ui.add_space(4.0);
-    if ui.button("Reset Effects").clicked() && *look != Look::default() {
+    let changed = *look != Look::default();
+    if ui
+        .add_enabled(changed, egui::Button::new("Reset Effects"))
+        .clicked()
+    {
         *look = Look::default();
         rows.commit();
     }
@@ -183,7 +168,7 @@ pub(super) struct Rows {
     /// How much of the clip has been analyzed for Auto Reframe, while it is being.
     pub(super) reframing: Option<f32>,
     /// Which mask is being tracked and how far along, while one is.
-    pub(super) tracking: Option<(usize, f32)>,
+    pub(super) tracking: Option<(MaskRef, f32)>,
     pub(super) tone: ToneState,
     /// Whether the effect being shown asked for its matte picture.
     pub(super) browse_matte: bool,

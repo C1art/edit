@@ -5,6 +5,7 @@ mod controls;
 mod curves;
 mod detail;
 mod edges;
+mod effect_stack;
 mod generate;
 mod generated;
 mod graphic_layers;

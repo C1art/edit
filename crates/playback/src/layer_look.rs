@@ -202,7 +202,6 @@ fn opacity_masks(
     effects: &[VideoEffect],
     time: Ticks,
 ) -> [Option<LayerMask>; MAX_MASKS] {
-    let fraction = |param: &Param| param.value_at(time) / 100.0;
     let mattes = effects.iter().filter_map(|effect| match effect {
         VideoEffect::GarbageMatte(matte) => Some(LayerMask {
             shape: MaskShape::Path,
@@ -218,12 +217,19 @@ fn opacity_masks(
         }),
         _ => None,
     });
-    let shaped = masks.iter().filter_map(|mask| {
-        let outline = Outline::new(&mask.outline_at(time, MAX_OUTLINE_POINTS));
-        (mask.shape != MaskShape::Path || !outline.is_empty()).then_some((mask, outline))
-    });
+    let masks = masks.iter().filter_map(|mask| layer_mask(mask, time));
     let mut layer_masks = [None; MAX_MASKS];
-    let masks = shaped.map(|(mask, outline)| LayerMask {
+    for (slot, mask) in layer_masks.iter_mut().zip(mattes.chain(masks)) {
+        *slot = Some(mask);
+    }
+    layer_masks
+}
+
+/// `mask` at `time`; `None` for a path still being drawn.
+pub(crate) fn layer_mask(mask: &Mask, time: Ticks) -> Option<LayerMask> {
+    let fraction = |param: &Param| param.value_at(time) / 100.0;
+    let outline = Outline::new(&mask.outline_at(time, MAX_OUTLINE_POINTS));
+    (mask.shape != MaskShape::Path || !outline.is_empty()).then(|| LayerMask {
         shape: mask.shape,
         center: mask.center.each_ref().map(fraction),
         size: mask.size.each_ref().map(fraction),
@@ -234,9 +240,5 @@ fn opacity_masks(
         inverted: mask.inverted,
         intersect: false,
         outline,
-    });
-    for (slot, mask) in layer_masks.iter_mut().zip(mattes.chain(masks)) {
-        *slot = Some(mask);
-    }
-    layer_masks
+    })
 }

@@ -213,7 +213,8 @@ fn moved_clip(editor: &Editor) -> Option<Clip> {
         .filter_map(|&id| sequence.clip(id))
         .find(|(track, _)| track.kind == TrackKind::Video)?;
     let shown = (clip.start..clip.end()).contains(&playhead);
-    (shown && shown_look(editor, clip).masks.is_empty()).then(|| clip.clone())
+    let masked = shown_look(editor, clip).mask_refs().next().is_some();
+    (shown && !masked).then(|| clip.clone())
 }
 
 impl Start {

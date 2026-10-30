@@ -124,6 +124,10 @@ pub struct Look {
     /// Applied in order, before motion.
     #[serde(default)]
     pub effects: Vec<VideoEffect>,
+    /// Each effect's masks, beside it in `effects`; an effect without any, or past the
+    /// end, reaches the whole picture.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub effect_masks: Vec<Vec<Mask>>,
     #[serde(default, skip_serializing_if = "is_default")]
     pub color: ColorCorrection,
 }
@@ -147,6 +151,7 @@ impl Default for Look {
             masks: Vec::new(),
             crop: Crop::default(),
             effects: Vec::new(),
+            effect_masks: Vec::new(),
             color: ColorCorrection::default(),
         }
     }
@@ -161,6 +166,12 @@ impl Look {
             .chain(self.crop.params_mut())
             .chain(self.effects.iter_mut().flat_map(VideoEffect::params_mut))
             .chain(self.color.params_mut())
+            .chain(
+                self.effect_masks
+                    .iter_mut()
+                    .flatten()
+                    .flat_map(Mask::params_mut),
+            )
     }
 
     /// The blurriness of all the blurs together for each of the red, green, blue and
@@ -199,6 +210,7 @@ impl Look {
             .chain(self.masks.iter().flat_map(Mask::params))
             .chain(effects)
             .chain(self.color.params())
+            .chain(self.effect_masks.iter().flatten().flat_map(Mask::params))
     }
 
     /// Source times of every keyframe, sorted and deduplicated.

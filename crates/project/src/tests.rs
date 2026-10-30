@@ -191,6 +191,7 @@ fn sample() -> ProjectFile {
         blurriness: clip.look.opacity.clone(),
     });
     clip.look.effects.extend(VideoEffect::catalog());
+    clip.look.effect_masks = vec![vec![Mask::new(MaskShape::Ellipse)]];
     sequence.video.push(Track {
         clips: vec![clip.into()],
         locked: true,
