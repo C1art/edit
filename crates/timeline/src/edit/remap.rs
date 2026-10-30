@@ -1,5 +1,7 @@
 use crate::edit::ops;
-use crate::{Clip, ClipId, Edit, Sequence, Speed, Ticks, TimeRemap, TimelineError, TrackKind};
+use crate::{
+    Clip, ClipId, Edit, Sequence, Speed, SpeedRamp, Ticks, TimeRemap, TimelineError, TrackKind,
+};
 
 /// Keyframes the speed of a video clip at sequence position `at`, starting time
 /// remapping on it if needed. Linked sound playing in step with it follows its speed.
@@ -44,6 +46,48 @@ impl Edit for AddSpeedKeyframe {
             {
                 return Err(TimelineError::NothingToEdit);
             }
+        }
+        Ok(())
+    }
+}
+
+/// Gives video clips, and the sound in step with each, a ready-made speed ramp in place
+/// of the speed they had, keeping their lengths and the source they play. Held,
+/// reversed and too short clips keep theirs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApplySpeedRamp {
+    pub clips: Vec<ClipId>,
+    pub ramp: SpeedRamp,
+}
+
+impl Edit for ApplySpeedRamp {
+    fn name(&self) -> &'static str {
+        "Speed Ramp"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let frames = (sequence.format.frame_rate, sequence.timebase);
+        let mut ramped = Vec::new();
+        for &id in &self.clips {
+            let Some((track, clip)) = sequence.clip(id) else {
+                continue;
+            };
+            if track.kind != TrackKind::Video || clip.hold || clip.reverse || ramped.contains(&id) {
+                continue;
+            }
+            let source = clip.source_in..clip.source_out();
+            let Some(remap) = self.ramp.remap(source, clip.duration, frames) else {
+                continue;
+            };
+            for id in in_step(sequence, id) {
+                let clip = ops::clip_mut(sequence, id)?;
+                clip.remap = Some(remap.clone());
+                clip.speed = Speed::NORMAL;
+                ramped.push(id);
+            }
+        }
+        if ramped.is_empty() {
+            return Err(TimelineError::NothingToEdit);
         }
         Ok(())
     }

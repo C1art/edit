@@ -1,7 +1,7 @@
 use egui::{Atom, Button, Checkbox, RichText, Ui};
 use timeline::{
     ClipId, Edit, FrameFit, HoldFrame, IntoSync, JoinThroughEdits, Label, SetClipLabel, SetGrouped,
-    SetTimeInterpolation, SyncMethod, TimeInterpolation, TitleTemplate, TrackKind,
+    SetTimeInterpolation, SpeedRamp, SyncMethod, TimeInterpolation, TitleTemplate, TrackKind,
 };
 
 use crate::editor::Editor;
@@ -121,6 +121,15 @@ fn on_selection(editor: &mut Editor, ui: &mut Ui) {
     if ui.add(speed).clicked() {
         editor.speed_duration();
     }
+    ui.menu_button("Speed Ramp", |ui| {
+        for ramp in SpeedRamp::ALL {
+            let button = ui.button(ramp.name()).on_hover_text(ramp.description());
+            if button.clicked() {
+                editor.speed_ramp(ramp);
+                ui.close();
+            }
+        }
+    });
     let transitions = Button::new("Apply Default Transitions")
         .shortcut_text(editor.keymap.label(Command::TransitionsToSelection));
     if ui.add(transitions).clicked() {

@@ -84,7 +84,8 @@ pub use place::{AddEdits, PlaceClip, PlaceClips, PlaceMode, Razor, RazorTarget};
 pub use range::{ExtractMarked, LiftMarked, RippleTrimToPlayhead, SetMarks, TrimToPlayhead};
 pub use reframe::ReframeSequence;
 pub use remap::{
-    AddSpeedKeyframe, RemoveSpeedKeyframe, RemoveTimeRemap, SetMaintainPitch, SetSegmentSpeed,
+    AddSpeedKeyframe, ApplySpeedRamp, RemoveSpeedKeyframe, RemoveTimeRemap, SetMaintainPitch,
+    SetSegmentSpeed,
 };
 pub use remix::RemixClip;
 pub use render_replace::{RenderAndReplace, RestoreUnrendered};

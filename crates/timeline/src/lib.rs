@@ -51,6 +51,7 @@ mod rolling_shutter;
 mod secondary;
 mod shadow;
 mod speed;
+mod speed_ramp;
 mod split;
 mod srt;
 mod stabilize;
@@ -89,23 +90,23 @@ pub use ducking::{active_spans, ducked_volume};
 pub use edit::{
     clamp_delta, is_through_edit, pauses, synchronized_clips, unused_time, AddBin, AddEdits,
     AddFrameHold, AddGenerated, AddMarker, AddNest, AddSpeedKeyframe, AddSubmix, AddTrack,
-    AddTracks, ApplyEffect, ApplyTransitions, Attribute, AutoDuck, AutomateToSequence,
-    AutomatedPiece, BreakoutToMono, CaptionsToTitles, ClearMarkers, ClipEffect, ClipSound,
-    Clipboard, CloseGap, CloseGaps, ConsolidateDuplicates, CreateMulticam, DeleteEmptyTracks,
-    DeltaBounds, DuplicateMedia, Edge, ExtractMarked, FlattenMulticam, FrameFit, HoldFrame,
-    ImportMedia, InNest, InsertFrameHold, InterpretFootage, IntoSync, JoinThroughEdits, Lift,
-    LiftMarked, MakeOffline, MakeSubclip, MakeSubsequence, MarkerOwner, MergeClips, MoveClips,
-    MoveMode, MoveToBin, NestClips, NestFromMedia, NewTracks, NormalizeClipGains, NudgeClipGain,
-    PasteAttributes, PasteClips, PauseRules, PlaceClip, PlaceClips, PlaceMode, RateStretch, Razor,
-    RazorTarget, ReframeSequence, RelinkMedia, RemixClip, RemoveAttributes, RemoveBin,
-    RemoveMarker, RemoveMedia, RemovePauses, RemoveSpeedKeyframe, RemoveSubmix, RemoveTimeRemap,
-    RemoveTrack, RemoveTransitions, RemoveUnused, RenameBin, RenameClips, RenameMedia, RenameTrack,
-    RenderAndReplace, ReplaceClip, RestoreUnrendered, RippleDelete, RippleTrimToPlayhead, Roll,
-    SetBinSearch, SetCaptions, SetChannelMap, SetClipAudioEffects, SetClipGain, SetClipLabel,
-    SetClipLine, SetClipLook, SetClipPan, SetClipSpeed, SetClipVolume, SetClipsEnabled,
-    SetClipsSound, SetFrameHold, SetGenerator, SetGrouped, SetLinked, SetLinkedSelection,
-    SetMaintainPitch, SetMarks, SetMasterEffects, SetMasterGain, SetMediaLog, SetProxy,
-    SetRippleMarkers, SetSegmentSpeed, SetSequenceFormat, SetSubmix, SetTimeDisplay,
+    AddTracks, ApplyEffect, ApplySpeedRamp, ApplyTransitions, Attribute, AutoDuck,
+    AutomateToSequence, AutomatedPiece, BreakoutToMono, CaptionsToTitles, ClearMarkers, ClipEffect,
+    ClipSound, Clipboard, CloseGap, CloseGaps, ConsolidateDuplicates, CreateMulticam,
+    DeleteEmptyTracks, DeltaBounds, DuplicateMedia, Edge, ExtractMarked, FlattenMulticam, FrameFit,
+    HoldFrame, ImportMedia, InNest, InsertFrameHold, InterpretFootage, IntoSync, JoinThroughEdits,
+    Lift, LiftMarked, MakeOffline, MakeSubclip, MakeSubsequence, MarkerOwner, MergeClips,
+    MoveClips, MoveMode, MoveToBin, NestClips, NestFromMedia, NewTracks, NormalizeClipGains,
+    NudgeClipGain, PasteAttributes, PasteClips, PauseRules, PlaceClip, PlaceClips, PlaceMode,
+    RateStretch, Razor, RazorTarget, ReframeSequence, RelinkMedia, RemixClip, RemoveAttributes,
+    RemoveBin, RemoveMarker, RemoveMedia, RemovePauses, RemoveSpeedKeyframe, RemoveSubmix,
+    RemoveTimeRemap, RemoveTrack, RemoveTransitions, RemoveUnused, RenameBin, RenameClips,
+    RenameMedia, RenameTrack, RenderAndReplace, ReplaceClip, RestoreUnrendered, RippleDelete,
+    RippleTrimToPlayhead, Roll, SetBinSearch, SetCaptions, SetChannelMap, SetClipAudioEffects,
+    SetClipGain, SetClipLabel, SetClipLine, SetClipLook, SetClipPan, SetClipSpeed, SetClipVolume,
+    SetClipsEnabled, SetClipsSound, SetFrameHold, SetGenerator, SetGrouped, SetLinked,
+    SetLinkedSelection, SetMaintainPitch, SetMarks, SetMasterEffects, SetMasterGain, SetMediaLog,
+    SetProxy, SetRippleMarkers, SetSegmentSpeed, SetSequenceFormat, SetSubmix, SetTimeDisplay,
     SetTimeInterpolation, SetToFrameSize, SetTrackAutomation, SetTrackEffects, SetTrackMix,
     SetTrackOutput, SetTrackSends, SetTrackSwitch, SetTransition, SimplifySequence, Slide, Slip,
     SwitchAngle, SyncMethod, SynchronizeClips, TrackSwitch, Trim, TrimMode, TrimToPlayhead,
@@ -173,6 +174,7 @@ pub use rolling_shutter::{RollingShutterRepair, ScanDirection};
 pub use secondary::HslSecondary;
 pub use shadow::ShadowStyle;
 pub use speed::{Speed, TimeInterpolation};
+pub use speed_ramp::SpeedRamp;
 pub use split::Split;
 pub use srt::{parse_srt, to_srt};
 pub use stabilize::{CameraPath, Framing, Pose, Similarity, StabilizeMethod, Stabilizer};

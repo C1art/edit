@@ -1,5 +1,5 @@
 use egui::Key;
-use timeline::{ClipId, SetClipSpeed, Speed, Ticks};
+use timeline::{ApplySpeedRamp, ClipId, SetClipSpeed, Speed, SpeedRamp, Ticks};
 
 use crate::editor::Editor;
 
@@ -27,6 +27,14 @@ pub fn percent_text(speed: Speed) -> String {
 }
 
 impl Editor {
+    /// Ramps the speed of the selected video clips, keeping where they start and end.
+    pub(crate) fn speed_ramp(&mut self, ramp: SpeedRamp) {
+        let clips = self.view.selection.clone();
+        if !self.apply(ApplySpeedRamp { clips, ramp }) {
+            self.notice("Select video clips at least two frames long, not held or reversed");
+        }
+    }
+
     /// Opens Speed/Duration for the selected clips.
     pub(crate) fn speed_duration(&mut self) {
         let sequence = self.timeline.sequence();

@@ -37,6 +37,16 @@ impl TimeRemap {
         }
     }
 
+    /// `None` unless the anchors make a valid remapping.
+    pub(crate) fn from_anchors(anchors: Vec<Anchor>) -> Option<Self> {
+        let remap = Self { anchors };
+        let ordered = remap
+            .anchors
+            .windows(2)
+            .all(|pair| pair[0].offset < pair[1].offset && pair[0].source <= pair[1].source);
+        (ordered && remap.is_valid()).then_some(remap)
+    }
+
     pub fn anchors(&self) -> &[Anchor] {
         &self.anchors
     }
