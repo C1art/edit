@@ -25,6 +25,7 @@ mod effects_panel;
 mod error;
 mod essential_sound;
 mod export;
+mod export_captions;
 mod export_format;
 mod export_frame;
 mod export_loudness;

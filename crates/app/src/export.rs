@@ -4,9 +4,10 @@ use std::sync::Arc;
 use egui::{ComboBox, Key};
 use media::VideoCodec;
 use playback::{ExportEvent, ExportJob, ExportSettings};
-use timeline::Sequence;
+use timeline::{Sequence, Ticks};
 
 use crate::editor::Editor;
+use crate::export_captions::{self, CaptionExport};
 use crate::export_format::{ExportFormat, Format, PRESETS};
 use crate::export_progress::{self, ExportProgress};
 use crate::export_summary::{length_text, span_length, summary};
@@ -38,6 +39,7 @@ pub struct ExportDialog {
     span: Span,
     /// Whether rendered previews stand in for what they cover, as Premiere's Use Previews.
     use_previews: bool,
+    captions: CaptionExport,
     running: Option<Running>,
     /// The file suggested on opening, swapped for a free name while it's left as it is.
     suggested: Option<PathBuf>,
@@ -73,6 +75,7 @@ pub fn open(editor: &mut Editor) {
         format,
         span,
         use_previews: false,
+        captions: CaptionExport::of(sequence),
         running: None,
         suggested: Some(path),
         target: TargetCheck::new(editor.ctx.clone()).ok(),
@@ -123,6 +126,7 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
         sequence.time_display,
     );
     let sequence_size = (sequence.format.width, sequence.format.height);
+    let has_captions = !sequence.captions.items.is_empty();
     let rendered = editor
         .render_previews
         .as_ref()
@@ -193,6 +197,9 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                     });
                     ui.end_row();
                 }
+                if has_captions {
+                    export_captions::row(ui, &mut dialog.captions, format.format.has_video());
+                }
             });
             if dialog.format.format != kind {
                 let suggested = dialog.suggested.as_ref() == Some(&dialog.output());
@@ -260,10 +267,19 @@ fn prepare(editor: &mut Editor) -> Option<(Arc<Sequence>, ExportSettings)> {
         Some(previews) if dialog.use_previews => previews.previews(),
         _ => Vec::new(),
     };
+    let captions = match dialog.captions.for_format(dialog.format.format.has_video()) {
+        _ if sequence.captions.items.is_empty() => CaptionExport::Omit,
+        choice => choice,
+    };
+    let sidecar =
+        (captions == CaptionExport::Sidecar).then(|| export_captions::sidecar_path(&path));
     let problem = if path.as_os_str().is_empty() {
         Some("Choose an output file first".to_owned())
-    } else if editor.is_project_file(&path) {
-        Some(format!("{} is part of the project", quoted_name(&path)))
+    } else if let Some(taken) = std::iter::once(&path)
+        .chain(&sidecar)
+        .find(|path| editor.is_project_file(path))
+    {
+        Some(format!("{} is part of the project", quoted_name(taken)))
     } else if sequence.duration() == timeline::Ticks::ZERO {
         Some(EMPTY_SEQUENCE.to_owned())
     } else if dialog.format.format.has_video()
@@ -287,7 +303,13 @@ fn prepare(editor: &mut Editor) -> Option<(Arc<Sequence>, ExportSettings)> {
         previews,
         loudness: dialog.format.loudness.filter(|_| dialog.format.has_audio()),
     };
-    Some((Arc::new(sequence.clone()), settings))
+    let mut sequence = sequence.clone();
+    sequence.captions.hidden = captions != CaptionExport::BurnIn;
+    if sidecar.is_some() {
+        let span = (settings.range.clone()).unwrap_or(Ticks::ZERO..sequence.duration());
+        editor.write_caption_sidecar(&settings.path, span);
+    }
+    Some((Arc::new(sequence), settings))
 }
 
 fn start_job(editor: &mut Editor) {

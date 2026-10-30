@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{Rgb, Ticks, TimelineError};
@@ -58,6 +60,20 @@ impl Captions {
         self.items.partition_point(|caption| caption.end <= time)
     }
 
+    /// The captions over `range`, cut to it and timed from its start, as a file of just
+    /// that part has them.
+    pub fn within(&self, range: Range<Ticks>) -> Vec<Caption> {
+        self.items
+            .iter()
+            .filter(|caption| caption.start < range.end && range.start < caption.end)
+            .map(|caption| Caption {
+                start: caption.start.max(range.start) - range.start,
+                end: caption.end.min(range.end) - range.start,
+                text: caption.text.clone(),
+            })
+            .collect()
+    }
+
     /// Checks the order and lengths edits must keep.
     pub(crate) fn validate(&self) -> Result<(), TimelineError> {
         if let Some(caption) = self
@@ -88,4 +104,39 @@ pub fn captions_from_cues(mut cues: Vec<Caption>) -> Vec<Caption> {
     }
     cues.retain(|cue| cue.start < cue.end && !cue.text.trim().is_empty());
     cues
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn caption(start: i64, end: i64, text: &str) -> Caption {
+        Caption {
+            start: Ticks(start),
+            end: Ticks(end),
+            text: text.to_owned(),
+        }
+    }
+
+    #[test]
+    fn within_cuts_to_the_range_and_times_from_its_start() {
+        let captions = Captions {
+            items: vec![
+                caption(0, 100, "before"),
+                caption(150, 300, "straddles in"),
+                caption(400, 500, "inside"),
+                caption(550, 700, "straddles out"),
+                caption(800, 900, "after"),
+            ],
+            ..Captions::default()
+        };
+        assert_eq!(
+            captions.within(Ticks(200)..Ticks(600)),
+            vec![
+                caption(0, 100, "straddles in"),
+                caption(200, 300, "inside"),
+                caption(350, 400, "straddles out"),
+            ]
+        );
+    }
 }
