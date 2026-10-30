@@ -30,6 +30,7 @@ mod paint;
 mod picture_frame;
 mod reframe;
 mod remap;
+mod responsive;
 mod secondary;
 mod shift;
 mod simple_text;
@@ -146,6 +147,7 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
         if let Some((_, clip)) = &picture {
             picture_controls(editor, ui, clip, Sections::All);
             remap::controls(editor, ui, clip);
+            responsive::controls(editor, ui, clip);
         }
         if let Some((_, clip)) = &sound {
             volume_controls(editor, ui, clip);

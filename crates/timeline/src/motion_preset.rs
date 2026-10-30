@@ -84,6 +84,7 @@ impl MotionPreset {
         let Some(span) = Span::of(clip, frames) else {
             return;
         };
+        self.pin(clip, &span);
         let motion = &mut clip.look.motion;
         match self {
             Self::ZoomIn | Self::ZoomOut => {
@@ -134,6 +135,26 @@ impl MotionPreset {
                     .push(VideoEffect::GaussianBlur { blurriness });
             }
         }
+    }
+}
+
+impl MotionPreset {
+    /// Pins the animation to the end it's at, so trimming the clip keeps it there.
+    fn pin(self, clip: &mut Clip, span: &Span) {
+        let out = clip.source_out();
+        let (intro, outro) = match self {
+            Self::FadeIn | Self::BlurIn => (span.opened - clip.source_in, Ticks::ZERO),
+            Self::FadeOut | Self::BlurOut => (Ticks::ZERO, out - span.closing),
+            // A move over the whole clip keeps spanning it: its first and last frames
+            // are pinned.
+            _ => {
+                let frame = out - span.last;
+                (span.first - clip.source_in + frame, frame)
+            }
+        };
+        let pinned = &mut clip.pinned;
+        pinned.intro = pinned.intro.max(intro);
+        pinned.outro = pinned.outro.max(outro);
     }
 }
 

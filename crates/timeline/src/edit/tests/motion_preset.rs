@@ -51,3 +51,26 @@ fn a_fade_out_shorter_than_half_a_second_takes_half_the_clip() {
     let keyed: Vec<_> = keys.iter().map(|key| (key.time, key.hundredths)).collect();
     assert_eq!(keyed, [(Ticks(25_200), 10_000), (Ticks(39_600), 0)]);
 }
+
+#[test]
+fn a_fade_out_stays_at_the_end_when_the_clip_is_trimmed_shorter() {
+    let (mut timeline, clip) = ten_frames();
+    let effect = ClipEffect::Motion(MotionPreset::FadeOut);
+    timeline
+        .apply(ApplyEffect {
+            clips: vec![clip],
+            effect,
+        })
+        .unwrap();
+    timeline
+        .apply(Trim {
+            clips: vec![clip],
+            edge: Edge::Tail,
+            delta: Ticks(-10_800),
+            mode: TrimMode::Normal,
+        })
+        .unwrap();
+    let keys = &timeline.sequence().clip(clip).unwrap().1.look.opacity.keys;
+    let keyed: Vec<_> = keys.iter().map(|key| (key.time, key.hundredths)).collect();
+    assert_eq!(keyed, [(Ticks(14_400), 10_000), (Ticks(28_800), 0)]);
+}

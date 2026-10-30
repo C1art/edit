@@ -50,6 +50,7 @@ mod preset;
 mod reframe;
 mod remap;
 mod render_segments;
+mod responsive;
 mod reveal;
 mod rolling_shutter;
 mod secondary;
@@ -113,11 +114,11 @@ pub use edit::{
     SetClipLine, SetClipLook, SetClipPan, SetClipSpeed, SetClipVolume, SetClipsEnabled,
     SetClipsSound, SetFrameHold, SetGenerator, SetGrouped, SetLinked, SetLinkedSelection,
     SetMaintainPitch, SetMarks, SetMasterEffects, SetMasterGain, SetMediaLog, SetMediaTimecode,
-    SetPosterFrame, SetProxy, SetRippleMarkers, SetSegmentSpeed, SetSequenceFormat, SetStartTime,
-    SetSubmix, SetTimeDisplay, SetTimeInterpolation, SetToFrameSize, SetTrackAutomation,
-    SetTrackEffects, SetTrackMix, SetTrackOutput, SetTrackSends, SetTrackSwitch, SetTransition,
-    SimplifySequence, Slide, Slip, SwitchAngle, SyncMethod, SynchronizeClips, TrackSwitch, Trim,
-    TrimMode, TrimToPlayhead, Unlinked, Unnest, UpdateMarker,
+    SetPinnedEnds, SetPosterFrame, SetProxy, SetRippleMarkers, SetSegmentSpeed, SetSequenceFormat,
+    SetStartTime, SetSubmix, SetTimeDisplay, SetTimeInterpolation, SetToFrameSize,
+    SetTrackAutomation, SetTrackEffects, SetTrackMix, SetTrackOutput, SetTrackSends,
+    SetTrackSwitch, SetTransition, SimplifySequence, Slide, Slip, SwitchAngle, SyncMethod,
+    SynchronizeClips, TrackSwitch, Trim, TrimMode, TrimToPlayhead, Unlinked, Unnest, UpdateMarker,
 };
 pub use edl::to_edl;
 pub use effect::{
@@ -179,6 +180,7 @@ pub use preset::EffectPreset;
 pub use reframe::{AutoReframe, ReframeMotion, SubjectPath};
 pub use remap::{Anchor, TimeRemap};
 pub use render_segments::{render_segments, segment_content};
+pub use responsive::PinnedEnds;
 pub use reveal::{Fold, Reveal, Turn};
 pub use rolling_shutter::{RollingShutterRepair, ScanDirection};
 pub use secondary::HslSecondary;

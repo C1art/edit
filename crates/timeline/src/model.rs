@@ -4,8 +4,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     AudioEffect, AudioType, Bin, Captions, ColorSpace, FieldOrder, FrameRate, Gain, GroupId, Guide,
-    Label, LinkedSelection, Look, Marker, Marks, MediaItem, Param, PixelAspect, SourceId, Speed,
-    Submix, Ticks, TimeDisplay, TimeInterpolation, TimeRemap, Timebase, Transition,
+    Label, LinkedSelection, Look, Marker, Marks, MediaItem, Param, PinnedEnds, PixelAspect,
+    SourceId, Speed, Submix, Ticks, TimeDisplay, TimeInterpolation, TimeRemap, Timebase,
+    Transition,
 };
 
 pub use crate::track::Track;
@@ -133,6 +134,8 @@ pub struct Clip {
     /// pictures in its place, at the same source times.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unrendered: Option<SourceId>,
+    #[serde(default, skip_serializing_if = "PinnedEnds::is_unpinned")]
+    pub pinned: PinnedEnds,
 }
 
 fn is_normal_speed(speed: &Speed) -> bool {
@@ -181,6 +184,7 @@ impl Clip {
             interpolation: TimeInterpolation::FrameSampling,
             conform: Speed::NORMAL,
             unrendered: None,
+            pinned: PinnedEnds::default(),
         }
     }
 
@@ -257,6 +261,7 @@ impl Clip {
     /// Moves the head `delta` later in the sequence (earlier when negative), keeping the
     /// tail and the source showing there. The caller moves `start`.
     pub(crate) fn trim_head(&mut self, delta: Ticks) {
+        let old_in = self.source_in;
         if let (Some(remap), false) = (&mut self.remap, self.hold) {
             remap.shift(Ticks::ZERO - delta, Ticks::ZERO);
             self.source_in = remap.source_at(Ticks::ZERO);
@@ -264,11 +269,13 @@ impl Clip {
             self.source_in = self.source_in + self.rate().source_span(delta);
         }
         self.duration = self.duration - delta;
+        self.carry_intro(old_in);
     }
 
     /// Moves the tail `delta` later in the sequence, keeping the head and the source
     /// showing there.
     pub(crate) fn trim_tail(&mut self, delta: Ticks) {
+        let old_out = self.source_out();
         if self.reverse && !self.hold && self.remap.is_none() {
             let source_out = self.source_out();
             self.duration = self.duration + delta;
@@ -276,6 +283,7 @@ impl Clip {
         } else {
             self.duration = self.duration + delta;
         }
+        self.carry_outro(old_out);
     }
 }
 

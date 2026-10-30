@@ -7,8 +7,8 @@ use std::ops::Range;
 use super::add_tracks::renumber_layers;
 use super::ops;
 use crate::{
-    Clip, ClipId, Edit, Gain, LinkId, Nest, Sequence, Ticks, TimelineError, Track, TrackKind,
-    TrackRef,
+    Clip, ClipId, Edit, Gain, LinkId, Nest, PinnedEnds, Sequence, Ticks, TimelineError, Track,
+    TrackKind, TrackRef,
 };
 
 /// Replaces each nest clip among `clips` and those linked to them with the nest's clips
@@ -178,6 +178,8 @@ fn pieces(inner: &Track, clip: &Clip) -> Vec<Clip> {
         .filter(|piece| piece.start < to && from < piece.end())
         .map(|piece| {
             let mut piece = Clip::clone(piece);
+            // Cut from the nest rather than trimmed, so no keyframes move.
+            piece.pinned = PinnedEnds::default();
             if piece.start < from {
                 piece.trim_head(from - piece.start);
                 piece.start = from;

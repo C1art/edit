@@ -96,12 +96,15 @@ pub(crate) fn split(
             transition_in: None,
             ..left
         };
+        // A cut moves no keyframes; each piece keeps the pinned end it still has.
+        right.pinned.intro = Ticks::ZERO;
         right.start = at;
         right.trim_head(at - left_start);
         let Some(track) = sequence.track_mut(track_ref) else {
             continue;
         };
         let cut = Arc::make_mut(&mut track.clips[index]);
+        cut.pinned.outro = Ticks::ZERO;
         cut.trim_tail(at - left_end);
         cut.transition_out = None;
         track.clips.insert(index + 1, right.into());

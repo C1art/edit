@@ -34,6 +34,7 @@ mod remap;
 mod remix;
 mod render_replace;
 mod replace;
+mod responsive;
 mod simplify;
 mod sound;
 mod speed;
@@ -95,6 +96,7 @@ pub use remap::{
 pub use remix::RemixClip;
 pub use render_replace::{RenderAndReplace, RestoreUnrendered};
 pub use replace::ReplaceClip;
+pub use responsive::SetPinnedEnds;
 pub use simplify::SimplifySequence;
 pub use sound::{ClipSound, SetClipsSound};
 pub use speed::{RateStretch, SetClipSpeed, SetTimeInterpolation};
