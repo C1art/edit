@@ -54,10 +54,14 @@ impl Chord {
         match event {
             Event::Key {
                 key,
+                physical_key,
                 pressed: true,
                 modifiers,
                 ..
-            } if !is_modifier(*key) => Some(Self::held(*modifiers, *key)),
+            } if !is_modifier(*key) => {
+                let key = unshifted(*key, *physical_key, modifiers.shift);
+                Some(Self::held(*modifiers, key))
+            }
             Event::Copy => Some(Self::new(true, false, false, Key::C)),
             // Shift+Delete is also a cut to the windowing layer.
             Event::Cut if modifiers.shift && !ctrl => {
@@ -125,6 +129,20 @@ impl fmt::Display for Chord {
 }
 
 /// Modifier keys arrive as presses of their own, but only ever hold others down.
+/// The key a shifted symbol was typed on, so Shift+; reads as Shift+Semicolon rather
+/// than as a colon no shortcut names, whatever the keyboard layout.
+fn unshifted(key: Key, physical_key: Option<Key>, shift: bool) -> Key {
+    use Key::*;
+    let shifted_symbol = matches!(
+        key,
+        Colon | Pipe | Questionmark | Exclamationmark | OpenCurlyBracket | CloseCurlyBracket | Plus
+    );
+    match physical_key {
+        Some(physical) if shift && shifted_symbol => physical,
+        _ => key,
+    }
+}
+
 fn is_modifier(key: Key) -> bool {
     use Key::*;
     matches!(
