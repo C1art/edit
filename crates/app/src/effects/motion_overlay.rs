@@ -1,6 +1,7 @@
 use egui::{Color32, CursorIcon, Pos2, Sense, Shape, Stroke, Vec2};
 use timeline::{Clip, Motion, Param, SetClipLook, Ticks, TrackKind};
 
+use super::motion_snap::{snap, Guides};
 use super::picture_frame::PictureFrame;
 use super::{adjust_look, keyframe_time, shown_look, SideTab};
 use crate::editor::Editor;
@@ -44,8 +45,9 @@ struct Start {
 
 /// Outlines the selected clip's picture over the program picture in `area` while the
 /// effect controls show, as Premiere does with Motion selected: dragging inside moves
-/// it, a corner scales it, just past a corner turns it and the cross moves its anchor point. Masked clips leave the
-/// picture to their mask handles.
+/// it, snapping its edges and center to the frame's unless Ctrl is held, a corner scales
+/// it, just past a corner turns it and the cross moves its anchor point. Masked clips
+/// leave the picture to their mask handles.
 pub fn motion_overlay(editor: &mut Editor, ui: &egui::Ui, area: egui::Rect) {
     if editor.side_tab != SideTab::EffectControls {
         return;
@@ -64,8 +66,16 @@ pub fn motion_overlay(editor: &mut Editor, ui: &egui::Ui, area: egui::Rect) {
     let id = ui.make_persistent_id(("motion_overlay", clip.id));
     let response = ui.interact(frame.shown.expand(ROTATE_REACH), id, Sense::drag());
     let mut held = ui.data(|data| data.get_temp::<Held>(id));
-    let (down, shift) = ui.input(|input| (input.pointer.primary_down(), input.modifiers.shift));
+    let (down, shift, free) = ui.input(|input| {
+        let modifiers = input.modifiers;
+        (
+            input.pointer.primary_down(),
+            modifiers.shift,
+            modifiers.command,
+        )
+    });
     let mut change = None;
+    let mut guides = Guides::default();
     if held.is_none() && response.drag_started() {
         let origin = ui.input(|input| input.pointer.press_origin());
         held = origin
@@ -88,7 +98,19 @@ pub fn motion_overlay(editor: &mut Editor, ui: &egui::Ui, area: egui::Rect) {
             let motion = &mut look.motion;
             let dragged = (pointer - drag.from) / per_pixel.max(f32::EPSILON);
             match drag.grip {
-                Grip::Move => set_position(motion, time, start.position + dragged),
+                Grip::Move => {
+                    let wanted = start.position + dragged;
+                    let moved_by = (wanted - Start::at(motion, time).position) * per_pixel;
+                    let nudge = if free {
+                        Vec2::ZERO
+                    } else {
+                        let (nudge, lines) =
+                            snap(corners.map(|corner| corner + moved_by), frame.shown);
+                        guides = lines;
+                        nudge
+                    };
+                    set_position(motion, time, wanted + nudge / per_pixel.max(f32::EPSILON));
+                }
                 Grip::Anchor => {
                     // The picture holds still, so its frame is the same as at the start.
                     let moved = frame.to_picture(pointer) - frame.to_picture(drag.from);
@@ -141,6 +163,7 @@ pub fn motion_overlay(editor: &mut Editor, ui: &egui::Ui, area: egui::Rect) {
         None => data.remove::<Held>(id),
     });
     paint(ui, &corners, &frame);
+    guides.paint(ui, frame.shown);
     if change.is_some() {
         let edit = SetClipLook {
             clip: clip.id,

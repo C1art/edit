@@ -23,6 +23,7 @@ mod mask_overlay;
 mod masks;
 mod matte_overlay;
 mod motion_overlay;
+mod motion_snap;
 mod optics;
 mod paint;
 mod picture_frame;
