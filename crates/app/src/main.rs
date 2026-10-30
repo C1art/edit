@@ -34,6 +34,7 @@ mod file_browser;
 mod file_drop;
 mod find_dialog;
 mod fit_clip;
+mod frame;
 mod full_screen;
 mod gain_dialog;
 mod gang;
