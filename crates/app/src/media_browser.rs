@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use egui::{vec2, Align2, Rect, ScrollArea, Sense, TextEdit, Ui};
+use egui::{vec2, Align2, CursorIcon, DragAndDrop, Rect, ScrollArea, Sense, TextEdit, Ui};
 use timeline::SourceId;
 
 use crate::editor::Editor;
@@ -37,12 +37,15 @@ pub(crate) struct MediaBrowser {
     search: String,
     selected: HashSet<PathBuf>,
     error: Option<String>,
+    /// Files dragged out of the panel, carried as project items once all are imported.
+    carrying: Vec<PathBuf>,
 }
 
 enum Action {
     Import(Vec<PathBuf>),
     Open(SourceId),
     Reveal(PathBuf),
+    Carry(Vec<PathBuf>),
 }
 
 impl MediaBrowser {
@@ -207,7 +210,7 @@ impl MediaBrowser {
                     let entry = &self.entries[self.shown[row]];
                     let (rect, response) = ui.allocate_exact_size(
                         vec2(ui.available_width(), ROW_HEIGHT),
-                        Sense::click(),
+                        Sense::click_and_drag(),
                     );
                     let selected = self.selected.contains(&entry.path);
                     let source = in_project.get(entry.path.as_path()).copied();
@@ -223,7 +226,12 @@ impl MediaBrowser {
                         Some(_) => response.on_hover_text("In the project"),
                         None => response,
                     };
-                    if response.double_clicked() {
+                    if response.drag_started() && !entry.folder {
+                        if !selected {
+                            self.selected = HashSet::from([entry.path.clone()]);
+                        }
+                        action = Some(Action::Carry(self.selected_files()));
+                    } else if response.double_clicked() {
                         if entry.folder {
                             entered = Some(entry.path.clone());
                         } else {
@@ -358,6 +366,27 @@ pub(crate) fn ui(editor: &mut Editor, ui: &mut Ui) {
     let footer = ROW_HEIGHT + 10.0;
     let height = (ui.available_height() - footer).max(ROW_HEIGHT);
     let browser = &mut editor.media_browser;
+    if !browser.carrying.is_empty() {
+        let sources: Option<Vec<SourceId>> = browser
+            .carrying
+            .iter()
+            .map(|path| in_project.get(path.as_path()).copied())
+            .collect();
+        if !ui.input(|input| input.pointer.primary_down()) {
+            browser.carrying.clear();
+        } else if let Some(sources) = sources {
+            // Carried as the project panel carries its selection, so every drop target
+            // takes them alike.
+            if let Some(&first) = sources.first() {
+                DragAndDrop::set_payload(ui.ctx(), first);
+            }
+            editor.pool.selected = sources;
+            browser.carrying.clear();
+        } else {
+            ui.ctx().set_cursor_icon(CursorIcon::Progress);
+            ui.ctx().request_repaint_after(Duration::from_millis(30));
+        }
+    }
     let mut action = browser.entries_list(ui, height, &in_project);
     let files = browser.selected_files();
     let new: Vec<PathBuf> = files
@@ -404,5 +433,16 @@ pub(crate) fn ui(editor: &mut Editor, ui: &mut Ui) {
         }
         Action::Open(source) => editor.open_source(source),
         Action::Reveal(path) => editor.reveal_file(&path),
+        Action::Carry(paths) => {
+            let missing: Vec<PathBuf> = paths
+                .iter()
+                .filter(|path| !in_project.contains_key(path.as_path()))
+                .cloned()
+                .collect();
+            for path in missing {
+                editor.import(path, None);
+            }
+            editor.media_browser.carrying = paths;
+        }
     }
 }
