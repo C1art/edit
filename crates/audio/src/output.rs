@@ -34,16 +34,49 @@ struct Shared {
 pub struct AudioOutput {
     _stream: cpal::Stream,
     shared: Arc<Shared>,
-    device_name: String,
+    device: OutputDevice,
 }
 
-/// The names of the output devices connected now, each told apart from any others of
-/// the same name. Asking the system can take a while, so call this off the UI thread.
-pub fn output_devices() -> Result<Vec<String>, AudioError> {
-    let devices = cpal::default_host()
+/// An output device as listed and remembered: by the id the system keeps for it, and
+/// by a name told apart from others of the same model for showing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OutputDevice {
+    /// `None` for a device remembered by name alone, from before ids were kept.
+    pub id: Option<String>,
+    pub name: String,
+}
+
+impl OutputDevice {
+    /// Whether both name one device: by id where both have one, as numbered names
+    /// follow the order the system lists devices in, which can change.
+    pub fn is(&self, other: &OutputDevice) -> bool {
+        match (&self.id, &other.id) {
+            (Some(id), Some(other_id)) => id == other_id,
+            _ => self.name == other.name,
+        }
+    }
+}
+
+/// The output devices connected now. Asking the system can take a while, so call this
+/// off the UI thread.
+pub fn output_devices() -> Result<Vec<OutputDevice>, AudioError> {
+    let devices: Vec<_> = cpal::default_host()
         .output_devices()
-        .map_err(AudioError::Device)?;
-    Ok(distinct_names(devices.map(|device| device.to_string())))
+        .map_err(AudioError::Device)?
+        .collect();
+    Ok(described(&devices))
+}
+
+fn described(devices: &[cpal::Device]) -> Vec<OutputDevice> {
+    let names = distinct_names(devices.iter().map(ToString::to_string));
+    devices
+        .iter()
+        .zip(names)
+        .map(|(device, name)| OutputDevice {
+            id: device.id().ok().map(|id| id.to_string()),
+            name,
+        })
+        .collect()
 }
 
 /// The names in order, a later one already taken numbered " (2)", " (3)" and on, as
@@ -62,27 +95,31 @@ fn distinct_names(names: impl Iterator<Item = String>) -> Vec<String> {
 }
 
 impl AudioOutput {
-    /// Opens the named device, or the system default, which playback then follows where the
-    /// system allows. Opening can take a while, so call this off the UI thread.
-    pub fn open(device_name: Option<&str>) -> Result<Self, AudioError> {
+    /// Opens the given device, or the system default, which playback then follows where
+    /// the system allows. Opening can take a while, so call this off the UI thread.
+    pub fn open(wanted: Option<&OutputDevice>) -> Result<Self, AudioError> {
         let host = cpal::default_host();
-        let device = match device_name {
-            None => host.default_output_device(),
-            Some(name) => {
+        let (device, opened) = match wanted {
+            None => {
+                let device = host
+                    .default_output_device()
+                    .ok_or(AudioError::NoOutputDevice)?;
+                let opened = OutputDevice {
+                    id: device.id().ok().map(|id| id.to_string()),
+                    name: device.to_string(),
+                };
+                (device, opened)
+            }
+            Some(wanted) => {
                 let devices: Vec<_> = host.output_devices().map_err(AudioError::Device)?.collect();
-                let names = distinct_names(devices.iter().map(ToString::to_string));
+                let listed = described(&devices);
                 devices
                     .into_iter()
-                    .zip(names)
-                    .find_map(|(device, distinct)| (distinct == name).then_some(device))
+                    .zip(listed)
+                    .find(|(_, listed)| listed.is(wanted))
+                    .ok_or_else(|| AudioError::MissingDevice(wanted.name.clone()))?
             }
         };
-        let device = device.ok_or_else(|| match device_name {
-            Some(name) => AudioError::MissingDevice(name.to_owned()),
-            None => AudioError::NoOutputDevice,
-        })?;
-        // Chosen by its numbered name, which the device itself doesn't know.
-        let name = device_name.map_or_else(|| device.to_string(), str::to_owned);
         let config = device.default_output_config().map_err(AudioError::Device)?;
         if config.sample_format() != cpal::SampleFormat::F32 {
             return Err(AudioError::UnsupportedSampleFormat);
@@ -130,12 +167,12 @@ impl AudioOutput {
         Ok(Self {
             _stream: stream,
             shared,
-            device_name: name,
+            device: opened,
         })
     }
 
-    pub fn device_name(&self) -> &str {
-        &self.device_name
+    pub fn device(&self) -> &OutputDevice {
+        &self.device
     }
 
     /// Whether the device went away or stopped playing, so the output must be opened anew.
@@ -273,6 +310,18 @@ impl AudioWriter {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_device_is_known_by_its_id_whatever_number_its_name_got() {
+        let device = |id: Option<&str>, name: &str| OutputDevice {
+            id: id.map(str::to_owned),
+            name: name.to_owned(),
+        };
+        let remembered = device(Some("b"), "Speakers (2)");
+        assert!(remembered.is(&device(Some("b"), "Speakers")));
+        assert!(!remembered.is(&device(Some("a"), "Speakers (2)")));
+        assert!(device(None, "Speakers (2)").is(&device(Some("a"), "Speakers (2)")));
+    }
 
     #[test]
     fn devices_of_one_name_are_numbered_after_the_first() {

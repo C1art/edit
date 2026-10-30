@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use audio::{AudioError, AudioOutput};
+use audio::{AudioError, AudioOutput, OutputDevice};
 use crossbeam::channel::{self, Receiver, TryRecvError};
 
 use crate::editor::Editor;
@@ -16,21 +16,21 @@ const RELIST: Duration = Duration::from_secs(2);
 #[derive(Default)]
 pub(crate) struct AudioSwitch {
     /// The device chosen in Preferences; `None` follows the system default.
-    pub(crate) chosen: Option<String>,
+    pub(crate) chosen: Option<OutputDevice>,
     opening: Option<Opening>,
     /// The choice the output in use was opened for.
-    opened_for: Option<Option<String>>,
+    opened_for: Option<Option<OutputDevice>>,
     retry_at: Option<Instant>,
     /// Whether the user was told no device could be opened, so it's said once, not on
     /// every retry.
     told_failure: bool,
-    listing: Option<Receiver<Vec<String>>>,
+    listing: Option<Receiver<Vec<OutputDevice>>>,
     listed_at: Option<Instant>,
-    devices: Vec<String>,
+    devices: Vec<OutputDevice>,
 }
 
 struct Opening {
-    choice: Option<String>,
+    choice: Option<OutputDevice>,
     output: Receiver<Result<AudioOutput, AudioError>>,
 }
 
@@ -44,7 +44,7 @@ impl AudioSwitch {
         std::thread::Builder::new()
             .name("audio open".to_owned())
             .spawn(move || {
-                let opened = AudioOutput::open(wanted.as_deref()).or_else(|error| match error {
+                let opened = AudioOutput::open(wanted.as_ref()).or_else(|error| match error {
                     AudioError::MissingDevice(_) => AudioOutput::open(None),
                     error => Err(error),
                 });
@@ -57,7 +57,7 @@ impl AudioSwitch {
 
     /// The output devices last found, asking the system again on a worker when the list
     /// has gone stale.
-    pub(crate) fn devices(&mut self) -> &[String] {
+    pub(crate) fn devices(&mut self) -> &[OutputDevice] {
         if let Some(listing) = &self.listing {
             match listing.try_recv() {
                 Ok(devices) => self.devices = devices,
@@ -126,10 +126,11 @@ impl Editor {
         let in_use = self.audio.as_ref().filter(|output| !output.is_lost());
         match opened {
             Ok(output) => {
-                let device = output.device_name();
-                if let Some(name) = choice.as_deref().filter(|&name| name != device) {
+                let device = &output.device().name;
+                if let Some(wanted) = choice.as_ref().filter(|wanted| !output.device().is(wanted)) {
                     self.notices.push(format!(
-                        "The audio device “{name}” is not connected; playing through “{device}”"
+                        "The audio device “{}” is not connected; playing through “{device}”",
+                        wanted.name
                     ));
                 } else if switch.told_failure || (self.audio.is_some() && in_use.is_none()) {
                     self.notices
@@ -137,7 +138,15 @@ impl Editor {
                 }
                 switch.told_failure = false;
                 switch.retry_at = None;
-                switch.opened_for = Some(choice);
+                // Remembered as opened, so a choice kept by name alone gains its id and a
+                // renumbered name is brought up to date.
+                if choice
+                    .as_ref()
+                    .is_some_and(|wanted| output.device().is(wanted))
+                {
+                    switch.chosen = Some(output.device().clone());
+                }
+                switch.opened_for = Some(switch.chosen.clone());
                 self.use_output(Some(output));
             }
             // Another device was chosen and couldn't be opened: keep playing through this one.
@@ -177,33 +186,40 @@ impl Editor {
 pub(crate) fn menu(editor: &mut Editor, ui: &mut egui::Ui) {
     ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
     let switch = &mut editor.audio_switch;
-    let in_use = editor.audio.as_ref().map(AudioOutput::device_name);
-    let mut chosen = switch.chosen.clone();
+    let in_use = editor.audio.as_ref().map(|output| &output.device().name);
+    let mut picked = None;
     let default = match (&switch.chosen, in_use) {
         (None, Some(device)) => format!("System Default ({device})"),
         _ => "System Default".to_owned(),
     };
-    ui.radio_value(&mut chosen, None, default);
+    if ui.radio(switch.chosen.is_none(), default).clicked() {
+        picked = Some(None);
+    }
+    let chosen = switch.chosen.clone();
+    let is_chosen = |device: &OutputDevice| chosen.as_ref().is_some_and(|chosen| chosen.is(device));
     let devices = switch.devices();
     if devices.is_empty() {
         ui.weak("Looking for devices…");
     }
     for device in devices {
-        ui.radio_value(&mut chosen, Some(device.clone()), device);
+        if ui.radio(is_chosen(device), &device.name).clicked() {
+            picked = Some(Some(device.clone()));
+        }
     }
-    if let Some(missing) = switch
-        .chosen
+    if let Some(missing) = chosen
         .as_ref()
-        .filter(|&name| !switch.devices.contains(name))
+        .filter(|chosen| !switch.devices.iter().any(|device| device.is(chosen)))
     {
-        ui.radio_value(
-            &mut chosen,
-            Some(missing.clone()),
-            format!("{missing} (not connected)"),
-        );
+        let _ = ui.radio(true, format!("{} (not connected)", missing.name));
     }
-    if chosen != switch.chosen {
-        switch.chosen = chosen;
+    // Compared as devices, so picking the one in use again, or a device remembered by
+    // name alone, doesn't reopen it.
+    let changed = |picked: &Option<OutputDevice>| match (picked, &chosen) {
+        (Some(picked), Some(chosen)) => !picked.is(chosen),
+        (picked, chosen) => picked.is_some() != chosen.is_some(),
+    };
+    if let Some(picked) = picked.filter(changed) {
+        switch.chosen = picked;
         ui.close();
     }
 }

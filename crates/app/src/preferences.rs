@@ -1,3 +1,5 @@
+use audio::OutputDevice;
+
 use crate::editor::Editor;
 use crate::project_store::Setting;
 
@@ -11,7 +13,7 @@ pub(crate) struct Preferences {
     selection_follows_playhead: bool,
     dropped_frame_indicator: bool,
     /// `None` follows the system default.
-    audio_device: Option<String>,
+    audio_device: Option<OutputDevice>,
 }
 
 impl Preferences {
@@ -30,14 +32,21 @@ impl Preferences {
     pub(crate) fn to_text(&self) -> String {
         format!(
             "hardware_decoding\t{}\nautosave\t{}\nautosave_minutes\t{}\nscrub_audio\t{}\n\
-             selection_follows_playhead\t{}\ndropped_frame_indicator\t{}\naudio_device\t{}\n",
+             selection_follows_playhead\t{}\ndropped_frame_indicator\t{}\naudio_device\t{}\n\
+             audio_device_id\t{}\n",
             self.hardware_decoding,
             self.autosave,
             self.autosave_minutes,
             self.scrub_audio,
             self.selection_follows_playhead,
             self.dropped_frame_indicator,
-            self.audio_device.as_deref().unwrap_or_default(),
+            self.audio_device
+                .as_ref()
+                .map_or("", |device| device.name.as_str()),
+            self.audio_device
+                .as_ref()
+                .and_then(|device| device.id.as_deref())
+                .unwrap_or_default(),
         )
     }
 
@@ -54,7 +63,16 @@ impl Preferences {
                 "selection_follows_playhead" => set(&mut self.selection_follows_playhead, flag),
                 "dropped_frame_indicator" => set(&mut self.dropped_frame_indicator, flag),
                 "audio_device" => {
-                    self.audio_device = Some(value.to_owned()).filter(|name| !name.is_empty());
+                    self.audio_device = (!value.is_empty()).then(|| OutputDevice {
+                        id: None,
+                        name: value.to_owned(),
+                    });
+                }
+                // Written after the name, so it lands on the device just read.
+                "audio_device_id" => {
+                    if let Some(device) = &mut self.audio_device {
+                        device.id = (!value.is_empty()).then(|| value.to_owned());
+                    }
                 }
                 _ => {}
             }
@@ -119,7 +137,12 @@ mod tests {
             scrub_audio: false,
             selection_follows_playhead: true,
             dropped_frame_indicator: true,
-            audio_device: Some("Speakers (USB Audio)".to_owned()),
+            audio_device: Some(OutputDevice {
+                id: Some(
+                    "wasapi:{0.0.0.00000000}.{6c1f2a52-3b8e-4f0a-9d3c-0a1b2c3d4e5f}".to_owned(),
+                ),
+                name: "Speakers (USB Audio)".to_owned(),
+            }),
         };
         assert_eq!(DEFAULTS.read(&chosen.to_text()), chosen);
     }
