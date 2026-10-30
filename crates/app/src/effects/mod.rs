@@ -11,6 +11,7 @@ mod graphic_layers;
 mod hue_curves;
 mod image;
 mod key_selection;
+mod key_time;
 mod keying;
 mod lane;
 mod layer_animation;
@@ -42,8 +43,8 @@ use std::path::PathBuf;
 use egui::RichText;
 use timeline::{
     preview, AudioEffect, Clip, ClipId, Edit, Generator, Look, Param, Sequence,
-    SetClipAudioEffects, SetClipLook, SetClipPan, SetClipVolume, SetGenerator, SourceId, Ticks,
-    TrackKind, TrackRef, VideoEffect,
+    SetClipAudioEffects, SetClipLook, SetClipPan, SetClipVolume, SetGenerator, SourceId, TrackKind,
+    TrackRef, VideoEffect,
 };
 
 use crate::editor::Editor;
@@ -56,6 +57,8 @@ use look::Rows;
 
 pub use color::LutSlot;
 pub(crate) use key_selection::KeyAction;
+pub(crate) use key_time::keyframe_time;
+use key_time::seek_to_key;
 pub use lumetri::ui as lumetri_ui;
 pub use mask_overlay::mask_overlay;
 pub use matte_overlay::matte_overlay;
@@ -341,20 +344,8 @@ fn audio_effect_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
     }
 }
 
-/// The source time keyframes go to: under the playhead, kept within the clip.
 fn lane(editor: &Editor, ui: &egui::Ui, clip: &Clip) -> Option<Lane> {
     Lane::new(ui, editor.timeline.sequence(), clip)
-}
-
-pub(crate) fn keyframe_time(editor: &Editor, clip: &Clip) -> Ticks {
-    clip.source_time(editor.playhead().clamp(clip.start, clip.end() - Ticks(1)))
-}
-
-fn seek_to_key(editor: &mut Editor, clip: &Clip, key: Option<Ticks>) {
-    if let Some(key) = key {
-        let position = clip.position_of(key);
-        editor.seek_program(position.clamp(clip.start, clip.end() - Ticks(1)));
-    }
 }
 
 /// Sets one of a clip's LUTs to the file at `path`, which playback reads when drawing.
