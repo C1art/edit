@@ -31,7 +31,7 @@ impl PreviewPictures {
         let mut track = Track::default();
         for (index, preview) in (1..).zip(previews) {
             let duration = preview.range.end - preview.range.start;
-            sequence.media.push(MediaItem {
+            Arc::make_mut(&mut sequence.media).push(MediaItem {
                 id: SourceId(index),
                 name: String::new(),
                 path: preview.path.clone(),
@@ -60,7 +60,7 @@ impl PreviewPictures {
                 duration,
                 Ticks::ZERO,
             );
-            track.clips.push(clip);
+            track.clips.push(clip.into());
         }
         track.clips.sort_by_key(|clip| clip.start);
         sequence.video.push(track);

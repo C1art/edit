@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::*;
 use crate::{ImportMedia, Marker, MarkerId, PlaceClip, PlaceMode, Timebase, Timeline};
 
@@ -52,8 +54,8 @@ fn an_exported_sequence_reads_back_as_a_nest_of_the_same_cut() {
     }
     let mut sequence = timeline.sequence().clone();
     let dissolve = Transition::new(TransitionKind::DipToBlack, Ticks(10));
-    sequence.video[0].clips[1].transition_in = Some(dissolve);
-    sequence.audio[0].clips[0].gain = Gain::from_db(-6.0);
+    Arc::make_mut(&mut sequence.video[0].clips[1]).transition_in = Some(dissolve);
+    Arc::make_mut(&mut sequence.audio[0].clips[0]).gain = Gain::from_db(-6.0);
     let marker = |at, duration, name: &str| Marker {
         id: MarkerId(900),
         at: Ticks(at),
@@ -64,7 +66,7 @@ fn an_exported_sequence_reads_back_as_a_nest_of_the_same_cut() {
         kind: Default::default(),
     };
     sequence.markers = vec![marker(20, 0, "Point"), marker(60, 15, "Span")];
-    sequence.video[0].clips[1].markers = vec![marker(210, 0, "Take")];
+    Arc::make_mut(&mut sequence.video[0].clips[1]).markers = vec![marker(210, 0, "Take")];
     let mut timeline = Timeline::new(sequence.clone());
 
     let import = read_xmeml(&crate::to_xmeml(&sequence, "Cut")).unwrap();

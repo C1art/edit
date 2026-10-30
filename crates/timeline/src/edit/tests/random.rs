@@ -3,6 +3,7 @@
 //! landing on exactly the states before and after.
 
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use super::*;
 use crate::{LinkedSelection, Marks, Speed, TrackKind, Transition, TransitionKind};
@@ -69,7 +70,7 @@ fn fixture() -> (Timeline, Vec<SourceId>) {
 fn clip_ids(sequence: &Sequence) -> Vec<ClipId> {
     sequence
         .tracks()
-        .flat_map(|(_, track)| &track.clips)
+        .flat_map(|(_, track)| track.clips.iter().map(Arc::as_ref))
         .map(|clip| clip.id)
         .collect()
 }
@@ -89,7 +90,7 @@ fn some_track(rng: &mut Rng, sequence: &Sequence) -> Option<TrackRef> {
 fn some_time(rng: &mut Rng, sequence: &Sequence) -> Ticks {
     let clips: Vec<(Ticks, Ticks)> = sequence
         .tracks()
-        .flat_map(|(_, track)| &track.clips)
+        .flat_map(|(_, track)| track.clips.iter().map(Arc::as_ref))
         .map(|clip| (clip.start, clip.end()))
         .collect();
     match (rng.pick(&clips), rng.below(5)) {

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::*;
 use crate::{
     ClipId, FrameRate, Sequence, SourceId, Ticks, Timebase, Timeline, TimelineError, TrackRef,
@@ -312,6 +314,30 @@ fn undo_and_redo_restore_each_state_exactly() {
     assert!(timeline.redo().unwrap());
     assert_eq!(timeline.sequence(), &after);
     assert_eq!(timeline.undo_name(), Some("Insert"));
+}
+
+#[test]
+fn undo_steps_share_what_an_edit_left_alone() {
+    let (mut timeline, source) = timeline();
+    for at in [0, 200] {
+        timeline
+            .apply(place(source, at, 0, 100, PlaceMode::Overwrite))
+            .unwrap();
+    }
+    let before = timeline.sequence().clone();
+    timeline
+        .apply(place(source, 500, 0, 50, PlaceMode::Overwrite))
+        .unwrap();
+    let after = timeline.sequence();
+    let kept = |track: TrackRef| {
+        let (old, new) = (
+            &before.track(track).unwrap().clips,
+            &after.track(track).unwrap().clips,
+        );
+        old.iter().zip(new).all(|(old, new)| Arc::ptr_eq(old, new))
+    };
+    assert!(kept(V1) && kept(A1));
+    assert!(Arc::ptr_eq(&before.media, &after.media));
 }
 
 #[test]

@@ -174,7 +174,7 @@ mod tests {
         let mut incoming = clip(2, 100, 100, 500);
         incoming.transition_in = dissolve(TransitionKind::CrossDissolve, 40);
         let track = Track {
-            clips: vec![clip(1, 0, 100, 0), incoming],
+            clips: vec![clip(1, 0, 100, 0).into(), incoming.into()],
             ..Track::default()
         };
         let sequence = sequence();
@@ -191,7 +191,7 @@ mod tests {
         let mut incoming = clip(2, 100, 100, 500);
         incoming.transition_in = dissolve(TransitionKind::MorphCut, 40);
         let track = Track {
-            clips: vec![clip(1, 0, 100, 0), incoming],
+            clips: vec![clip(1, 0, 100, 0).into(), incoming.into()],
             ..Track::default()
         };
         let sequence = sequence();
@@ -211,7 +211,7 @@ mod tests {
             ..Transition::new(TransitionKind::CrossDissolve, Ticks(40))
         });
         let track = Track {
-            clips: vec![clip(1, 0, 100, 0), incoming],
+            clips: vec![clip(1, 0, 100, 0).into(), incoming.into()],
             ..Track::default()
         };
         let sequence = sequence();
@@ -226,7 +226,7 @@ mod tests {
         let mut incoming = clip(2, 100, 100, 0);
         incoming.transition_in = dissolve(TransitionKind::DipToBlack, 40);
         let track = Track {
-            clips: vec![clip(1, 0, 100, 0), incoming],
+            clips: vec![clip(1, 0, 100, 0).into(), incoming.into()],
             ..Track::default()
         };
         let sequence = sequence();
@@ -242,7 +242,7 @@ mod tests {
         lone.transition_in = dissolve(TransitionKind::CrossDissolve, 20);
         lone.transition_out = dissolve(TransitionKind::DipToBlack, 50);
         let track = Track {
-            clips: vec![clip(2, 0, 50, 0), lone],
+            clips: vec![clip(2, 0, 50, 0).into(), lone.into()],
             ..Track::default()
         };
         let sequence = sequence();
@@ -258,7 +258,7 @@ mod tests {
             let mut incoming = clip(2, 100, 100, 0);
             incoming.transition_in = dissolve(kind, 40);
             Track {
-                clips: vec![clip(1, 0, 100, 0), incoming],
+                clips: vec![clip(1, 0, 100, 0).into(), incoming.into()],
                 ..Track::default()
             }
         };
@@ -287,7 +287,7 @@ mod tests {
         let mut lone = clip(3, 300, 100, 0);
         lone.transition_in = dissolve(TransitionKind::PageTurn, 40);
         let track = Track {
-            clips: vec![clip(1, 0, 100, 0), incoming, lone],
+            clips: vec![clip(1, 0, 100, 0).into(), incoming.into(), lone.into()],
             ..Track::default()
         };
         let sequence = sequence();

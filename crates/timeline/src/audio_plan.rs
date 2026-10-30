@@ -1,4 +1,5 @@
 use std::f32::consts::FRAC_PI_2;
+use std::sync::Arc;
 
 use crate::plan::{cut_window, fraction};
 use crate::{Clip, Gain, Ticks, Track, TransitionKind};
@@ -104,9 +105,12 @@ fn neighbors(track: &Track, index: usize) -> (Option<&Clip>, Option<&Clip>) {
     let clip = &clips[index];
     let previous = index
         .checked_sub(1)
-        .map(|i| &clips[i])
+        .map(|i| &*clips[i])
         .filter(|previous| previous.end() == clip.start);
-    let next = clips.get(index + 1).filter(|next| next.start == clip.end());
+    let next = clips
+        .get(index + 1)
+        .map(Arc::as_ref)
+        .filter(|next| next.start == clip.end());
     (previous, next)
 }
 
@@ -123,7 +127,7 @@ mod tests {
         ));
         let outgoing = Clip::new(ClipId(1), SourceId(1), Ticks(0), Ticks(100), Ticks(0));
         Track {
-            clips: vec![outgoing, incoming],
+            clips: vec![outgoing.into(), incoming.into()],
             ..Track::default()
         }
     }
@@ -149,7 +153,8 @@ mod tests {
     fn constant_gain_sums_amplitude_and_exponential_fades_evenly_in_decibels() {
         let curve = |kind| {
             let mut track = track_with_crossfade(40);
-            track.clips[1].transition_in = Some(Transition::new(kind, Ticks(40)));
+            Arc::make_mut(&mut track.clips[1]).transition_in =
+                Some(Transition::new(kind, Ticks(40)));
             let at = |index| audio_fade(&track, index, Ticks(100));
             (at(0), at(1))
         };

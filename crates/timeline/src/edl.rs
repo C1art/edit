@@ -3,6 +3,7 @@
 //! wipes and fades through black, with speed changes as M2 lines.
 
 use std::fmt::Write;
+use std::sync::Arc;
 
 use crate::{cut_window, Clip, FrameRate, Sequence, Ticks, Timecode, Track, TransitionKind};
 
@@ -243,7 +244,12 @@ fn change(kind: TransitionKind, video: bool, frames: i64) -> Change {
 
 fn track_events(sequence: &Sequence, track: &Track, video: bool) -> Vec<Event> {
     let frames = Frames { sequence };
-    let clips: Vec<&Clip> = track.clips.iter().filter(|clip| !clip.disabled).collect();
+    let clips: Vec<&Clip> = track
+        .clips
+        .iter()
+        .map(Arc::as_ref)
+        .filter(|clip| !clip.disabled)
+        .collect();
     let name = |clip: &Clip| {
         sequence
             .media_item(clip.source)
@@ -333,11 +339,11 @@ mod tests {
         let timebase = Timebase::new(1, 25).expect("valid timebase");
         let mut sequence = Sequence::new(timebase, VideoFormat::default());
         sequence.video = vec![Track {
-            clips: video,
+            clips: video.into_iter().map(Arc::new).collect(),
             ..Track::default()
         }];
         sequence.audio = vec![Track {
-            clips: audio,
+            clips: audio.into_iter().map(Arc::new).collect(),
             ..Track::default()
         }];
         sequence

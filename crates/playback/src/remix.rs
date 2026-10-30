@@ -73,7 +73,8 @@ fn whole_source(sequence: &Sequence, clip: ClipId) -> Option<Piece> {
         .audio
         .iter_mut()
         .flat_map(|track| &mut track.clips)
-        .find(|kept| kept.id == clip)?;
+        .find(|kept| kept.id == clip)
+        .map(Arc::make_mut)?;
     kept.start = span.start;
     kept.source_in = span.start;
     kept.duration = span.end - span.start;

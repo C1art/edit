@@ -314,7 +314,7 @@ mod tests {
         let mut sequence = Sequence::new(Timebase::HZ_90K, format);
         let clip = Clip::new(ClipId(1), SourceId(1), Ticks(0), Ticks(36_100), Ticks(0));
         sequence.video.push(Track {
-            clips: vec![clip],
+            clips: vec![clip.into()],
             ..Track::default()
         });
         // A frame lasts 3,600 ticks; the clip ends 100 ticks into frame 10.

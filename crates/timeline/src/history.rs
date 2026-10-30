@@ -29,8 +29,8 @@ pub fn preview(sequence: &Sequence, edit: &impl Edit) -> Result<Sequence, Timeli
     Ok(working)
 }
 
-/// Edits kept for undo. Each holds the whole sequence as it was before it, so a long
-/// session on a big project would otherwise hold gigabytes.
+/// Edits kept for undo. Each holds the sequence as it was before it, sharing the clips
+/// and media the edit left alone, so what a step costs is what it changed.
 pub(crate) const UNDO_LEVELS: usize = 100;
 
 #[derive(Debug)]

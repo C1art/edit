@@ -134,7 +134,8 @@ fn source_sequence(item: &MediaItem, pool: &Sequence) -> Sequence {
         clips: vec![Clip {
             conform,
             ..Clip::new(ClipId(id), item.id, Ticks::ZERO, duration, range.start)
-        }],
+        }
+        .into()],
         ..Track::default()
     };
     if item.video.is_some() {

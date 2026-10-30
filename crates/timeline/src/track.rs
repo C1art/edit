@@ -1,4 +1,5 @@
 use std::ops::Range;
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
@@ -7,7 +8,9 @@ use crate::{AudioEffect, Clip, Gain, Pan, Param, SubmixId, Ticks, TrackSend};
 /// Clips are kept sorted by `start` and never overlap.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Track {
-    pub clips: Vec<Clip>,
+    /// Shared, so that undo snapshots hold only the clips an edit changed;
+    /// `Arc::make_mut` copies a clip on its first change.
+    pub clips: Vec<Arc<Clip>>,
     /// Shown beside the track's number, as "A1 Dialogue"; none until the user names it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
@@ -50,11 +53,12 @@ impl Track {
         let index = self.clips.partition_point(|clip| clip.start <= position);
         self.clips[..index]
             .last()
+            .map(|clip| &**clip)
             .filter(|clip| clip.covers(position))
     }
 
     pub fn end(&self) -> Ticks {
-        self.clips.last().map_or(Ticks::ZERO, Clip::end)
+        self.clips.last().map_or(Ticks::ZERO, |clip| clip.end())
     }
 
     /// The empty stretch around `position` with a clip after it, which closing pulls
@@ -67,7 +71,7 @@ impl Track {
         let end = self.clips.get(index)?.start;
         let start = self.clips[..index]
             .iter()
-            .map(Clip::end)
+            .map(|clip| clip.end())
             .max()
             .unwrap_or(Ticks::ZERO);
         Some(start..end)

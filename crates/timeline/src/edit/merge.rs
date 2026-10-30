@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{
     Clip, ClipId, Edit, LinkId, MediaItem, Nest, Sequence, SourceId, Ticks, TimelineError, Track,
 };
@@ -51,8 +53,8 @@ impl Edit for MergeClips {
                 Ticks::ZERO,
             );
             clip.link = Some(link);
-            let track = |clip| Track {
-                clips: vec![clip],
+            let track = |clip: Clip| Track {
+                clips: vec![clip.into()],
                 ..Track::default()
             };
             let is_camera = index == camera;
@@ -70,7 +72,7 @@ impl Edit for MergeClips {
         }
         let id = SourceId(sequence.ids.next());
         let bin = items[camera].0.bin;
-        sequence.media.push(MediaItem {
+        Arc::make_mut(&mut sequence.media).push(MediaItem {
             id,
             name: self.name.clone(),
             path: Default::default(),

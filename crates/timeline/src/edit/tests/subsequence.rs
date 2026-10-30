@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::*;
 use crate::Marks;
 
@@ -24,12 +26,15 @@ fn a_subsequence_copies_the_marked_span_from_zero_and_leaves_the_sequence_alone(
     let nest = item.nest.as_ref().unwrap();
     let spans: Vec<_> = nest
         .tracks()
-        .flat_map(|(_, track)| &track.clips)
+        .flat_map(|(_, track)| track.clips.iter().map(Arc::as_ref))
         .map(|clip| (clip.start.0, clip.duration.0, clip.source_in.0))
         .collect();
     assert_eq!(spans, [(0, 200, 100), (0, 200, 100)]);
     // The copies are clips of their own, still linked to each other.
-    let copies: Vec<_> = nest.tracks().flat_map(|(_, track)| &track.clips).collect();
+    let copies: Vec<_> = nest
+        .tracks()
+        .flat_map(|(_, track)| track.clips.iter().map(Arc::as_ref))
+        .collect();
     assert!(copies
         .iter()
         .all(|copy| copy.id != clip_on(&timeline, V1, 0)));

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::generator::seconds;
 use crate::{
     Edit, Generator, MediaItem, Sequence, SourceId, TimelineError, GENERATED_SECONDS,
@@ -32,7 +34,7 @@ impl Edit for AddGenerated {
             Generator::CountingLeader(_) => LEADER_SECONDS,
             _ => GENERATED_SECONDS,
         };
-        sequence.media.push(MediaItem {
+        Arc::make_mut(&mut sequence.media).push(MediaItem {
             id,
             name: self.name.clone(),
             path: Default::default(),
@@ -84,8 +86,7 @@ impl Edit for SetGenerator {
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
-        let item = sequence
-            .media
+        let item = Arc::make_mut(&mut sequence.media)
             .iter_mut()
             .find(|item| item.id == self.source)
             .ok_or(TimelineError::MediaNotFound(self.source))?;

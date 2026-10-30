@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{ClipId, Sequence};
@@ -19,7 +21,7 @@ impl Sequence {
         }
         let members: Vec<ClipId> = self
             .tracks()
-            .flat_map(|(_, track)| &track.clips)
+            .flat_map(|(_, track)| track.clips.iter().map(Arc::as_ref))
             .filter(|clip| clip.group.is_some_and(|group| groups.contains(&group)))
             .map(|clip| clip.id)
             .chain(linked)

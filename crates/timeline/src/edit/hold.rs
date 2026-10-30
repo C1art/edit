@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::edit::ops::{self, Relinks};
 use crate::{ClipId, Edit, Sequence, Ticks, TimelineError, TrackKind};
 
@@ -35,6 +37,7 @@ impl Edit for AddFrameHold {
                 .clips
                 .iter_mut()
                 .find(|clip| clip.start == self.at)
+                .map(Arc::make_mut)
                 .ok_or(TimelineError::NothingToEdit)?;
             tail.source_in = held;
             tail.hold = true;

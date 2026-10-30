@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{Bin, BinId, BinSearch, Edit, Sequence, SourceId, TimelineError};
 
 fn check_exists(sequence: &Sequence, bin: Option<BinId>) -> Result<(), TimelineError> {
@@ -95,7 +97,10 @@ impl Edit for RemoveBin {
             .ok_or(TimelineError::BinNotFound(self.bin))?
             .parent;
         let removed = Some(self.bin);
-        for item in sequence.media.iter_mut().filter(|item| item.bin == removed) {
+        for item in Arc::make_mut(&mut sequence.media)
+            .iter_mut()
+            .filter(|item| item.bin == removed)
+        {
             item.bin = parent;
         }
         for bin in sequence.bins.iter_mut().filter(|bin| bin.parent == removed) {
@@ -163,7 +168,7 @@ impl Edit for MoveToBin {
             return Err(TimelineError::MediaNotFound(missing));
         }
         let mut moved = false;
-        for item in &mut sequence.media {
+        for item in Arc::make_mut(&mut sequence.media) {
             if self.media.contains(&item.id) && item.bin != self.to {
                 item.bin = self.to;
                 moved = true;

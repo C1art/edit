@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::*;
 
 #[test]
@@ -66,7 +68,10 @@ fn a_duplicated_sequence_gives_its_clips_and_links_new_ids() {
     let contents = |index: usize| {
         let item = &timeline.project().media[index];
         let nest = item.nest.as_ref().unwrap();
-        let clips: Vec<_> = nest.tracks().flat_map(|(_, track)| &track.clips).collect();
+        let clips: Vec<_> = nest
+            .tracks()
+            .flat_map(|(_, track)| track.clips.iter().map(Arc::as_ref))
+            .collect();
         clips
             .iter()
             .map(|clip| (clip.id, clip.link))

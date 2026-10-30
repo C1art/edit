@@ -23,7 +23,7 @@ ffmpeg-sys-next = "9"
 cpal = "0.18"
 rubato = "5"
 crossbeam = "0.8"
-serde = { version = "1", features = ["derive"] }
+serde = { version = "1", features = ["derive", "rc"] }
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

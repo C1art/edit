@@ -25,7 +25,7 @@ pub(crate) fn check(before: &Sequence, after: &Sequence) -> Result<(), TimelineE
     check_markers(&after.markers)?;
     check_marks(after.marks)?;
     check_captions(&after.captions)?;
-    for item in &after.media {
+    for item in after.media.iter() {
         let Some(nest) = &item.nest else {
             continue;
         };

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{AutoReframe, Edit, ReframeMotion, Sequence, TimelineError, VideoEffect};
 
 /// Reshapes the sequence's frame and gives each clip of video footage an Auto Reframe
@@ -29,7 +31,10 @@ impl Edit for ReframeSequence {
             .collect();
         let timebase = sequence.timebase;
         let clips = sequence.video.iter_mut().flat_map(|track| &mut track.clips);
-        for clip in clips.filter(|clip| footage.contains(&clip.source)) {
+        for clip in clips
+            .filter(|clip| footage.contains(&clip.source))
+            .map(Arc::make_mut)
+        {
             let effects = &mut clip.look.effects;
             let existing = effects.iter_mut().rev().find_map(|effect| match effect {
                 VideoEffect::AutoReframe(reframe) => Some(reframe),

@@ -3,6 +3,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
+use std::sync::Arc;
 
 use crate::{Clip, ClipId, LinkId, Sequence, Ticks, TimelineError, TrackRef};
 
@@ -50,12 +51,14 @@ pub(crate) fn clips_mut<'a>(
         .tracks_mut()
         .flat_map(|(track_ref, track)| track.clips.iter_mut().map(move |clip| (track_ref, clip)))
         .filter(move |(_, clip)| ids.contains(&clip.id))
+        .map(|(track_ref, clip)| (track_ref, Arc::make_mut(clip)))
 }
 
 pub(crate) fn clip_mut(sequence: &mut Sequence, id: ClipId) -> Result<&mut Clip, TimelineError> {
     sequence
         .tracks_mut()
         .find_map(|(_, track)| track.clips.iter_mut().find(|clip| clip.id == id))
+        .map(Arc::make_mut)
         .ok_or(TimelineError::ClipNotFound(id))
 }
 
@@ -78,7 +81,7 @@ pub(crate) fn split(
         else {
             continue;
         };
-        let left = track.clips[index].clone();
+        let left = Clip::clone(&track.clips[index]);
         let (left_start, left_end) = (left.start, left.end());
         let link = left.link.map(|link| {
             *relinks
@@ -98,9 +101,10 @@ pub(crate) fn split(
         let Some(track) = sequence.track_mut(track_ref) else {
             continue;
         };
-        track.clips[index].trim_tail(at - left_end);
-        track.clips[index].transition_out = None;
-        track.clips.insert(index + 1, right);
+        let cut = Arc::make_mut(&mut track.clips[index]);
+        cut.trim_tail(at - left_end);
+        cut.transition_out = None;
+        track.clips.insert(index + 1, right.into());
         cuts += 1;
     }
     cuts
@@ -138,7 +142,10 @@ pub(crate) fn shift(
             .clips
             .iter_mut()
             .filter(|clip| clip.start >= from && !skip.contains(&clip.id))
-            .for_each(|clip| clip.start = clip.start + delta);
+            .for_each(|clip| {
+                let clip = Arc::make_mut(clip);
+                clip.start = clip.start + delta;
+            });
     }
 }
 
@@ -150,7 +157,7 @@ pub(crate) fn insert(
 ) -> Result<(), TimelineError> {
     let clips = &mut track_mut(sequence, track)?.clips;
     let index = clips.partition_point(|existing| existing.start <= clip.start);
-    clips.insert(index, clip);
+    clips.insert(index, clip.into());
     Ok(())
 }
 
@@ -163,7 +170,11 @@ pub(crate) fn remove(sequence: &mut Sequence, ids: &[ClipId]) -> Vec<(TrackRef, 
             .into_iter()
             .partition(|clip| ids.contains(&clip.id));
         track.clips = kept;
-        removed.extend(taken.into_iter().map(|clip: Clip| (track_ref, clip)));
+        removed.extend(
+            taken
+                .into_iter()
+                .map(|clip: Arc<Clip>| (track_ref, Arc::unwrap_or_clone(clip))),
+        );
     }
     removed
 }

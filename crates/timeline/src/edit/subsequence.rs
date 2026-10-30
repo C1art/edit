@@ -1,4 +1,5 @@
 use std::ops::Range;
+use std::sync::Arc;
 
 use super::arrange::close_gaps;
 use super::media::renumber;
@@ -67,7 +68,7 @@ impl Edit for MakeSubsequence {
         };
         renumber(&mut nest, &mut sequence.ids);
         let id = SourceId(sequence.ids.next());
-        sequence.media.push(MediaItem {
+        Arc::make_mut(&mut sequence.media).push(MediaItem {
             id,
             name: self.name.clone(),
             path: Default::default(),
@@ -108,7 +109,7 @@ impl Edit for CloseGaps {
         let filled = ops::merge_ranges(
             sequence
                 .tracks()
-                .flat_map(|(_, track)| &track.clips)
+                .flat_map(|(_, track)| track.clips.iter().map(Arc::as_ref))
                 .map(|clip| clip.start..clip.end())
                 .collect(),
         );
@@ -132,7 +133,11 @@ impl Edit for CloseGaps {
 
 /// From the earliest clip's start to the latest's end.
 fn span(sequence: &Sequence) -> Option<Range<Ticks>> {
-    let clips = || sequence.tracks().flat_map(|(_, track)| &track.clips);
+    let clips = || {
+        sequence
+            .tracks()
+            .flat_map(|(_, track)| track.clips.iter().map(Arc::as_ref))
+    };
     let start = clips().map(|clip| clip.start).min()?;
     let end = clips().map(|clip| clip.end()).max()?;
     Some(start..end)

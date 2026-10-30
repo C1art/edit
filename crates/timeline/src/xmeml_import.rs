@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use crate::file_url::path_from_url;
 use crate::xmeml_markers::XmlMarker;
@@ -336,7 +337,7 @@ impl Edit for ImportXmeml {
                     let (width, height) = file
                         .size
                         .unwrap_or((sequence.format.width, sequence.format.height));
-                    sequence.media.push(MediaItem {
+                    Arc::make_mut(&mut sequence.media).push(MediaItem {
                         id,
                         name: file.name.clone(),
                         path: file.path.clone(),
@@ -402,7 +403,7 @@ impl Edit for ImportXmeml {
                             .iter()
                             .map(|marker| marker.marker(&mut sequence.ids, xml.rate, timebase))
                             .collect();
-                        track.clips.push(clip);
+                        track.clips.push(clip.into());
                     }
                     track
                 })
@@ -421,7 +422,7 @@ impl Edit for ImportXmeml {
             ..Nest::default()
         };
         let id = SourceId(sequence.ids.next());
-        sequence.media.push(MediaItem {
+        Arc::make_mut(&mut sequence.media).push(MediaItem {
             id,
             name: self.name.clone(),
             path: PathBuf::new(),

@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use crate::{Clip, ClipId, Edit, Sequence, TimelineError};
 
@@ -60,8 +61,8 @@ impl Edit for JoinThroughEdits {
                     index += 1;
                     continue;
                 }
-                let right = track.clips.remove(index);
-                let left = &mut track.clips[index - 1];
+                let right = Arc::unwrap_or_clone(track.clips.remove(index));
+                let left = Arc::make_mut(&mut track.clips[index - 1]);
                 left.duration = left.duration + right.duration;
                 left.transition_out = right.transition_out;
                 left.markers.extend(right.markers);

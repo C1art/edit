@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use crate::edit::ops;
 use crate::{
@@ -144,7 +145,7 @@ impl Edit for ImportMedia {
             return Err(TimelineError::NonPositiveDuration);
         }
         let id = SourceId(sequence.ids.next());
-        sequence.media.push(MediaItem {
+        Arc::make_mut(&mut sequence.media).push(MediaItem {
             id,
             name: self.name.clone(),
             path: self.path.clone(),
@@ -197,7 +198,7 @@ impl Edit for RemoveMedia {
             track.clips.retain(|clip| clip.source != source);
         }
         let mut emptied = Vec::new();
-        for item in &mut sequence.media {
+        for item in Arc::make_mut(&mut sequence.media) {
             let Some(nest) = &mut item.nest else {
                 continue;
             };
@@ -209,7 +210,7 @@ impl Edit for RemoveMedia {
                 }
             }
         }
-        sequence.media.retain(|item| item.id != source);
+        Arc::make_mut(&mut sequence.media).retain(|item| item.id != source);
         for nest in emptied {
             sequence.fit_nest(nest);
         }
@@ -230,8 +231,7 @@ impl Edit for SetProxy {
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
-        let item = sequence
-            .media
+        let item = Arc::make_mut(&mut sequence.media)
             .iter_mut()
             .find(|item| item.id == self.source)
             .ok_or(TimelineError::MediaNotFound(self.source))?;

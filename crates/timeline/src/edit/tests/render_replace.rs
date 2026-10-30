@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::*;
 use crate::{AddGenerated, Generator, Title};
 
@@ -71,7 +73,10 @@ fn render_and_replace_swaps_the_source_at_the_same_times_and_restores() {
 fn graphics_render_alone_but_adjustment_layers_do_not() {
     let (mut timeline, title, rendered) = rendered_title();
     let view = timeline.sequence().render_view(title).unwrap();
-    let clips: Vec<_> = view.tracks().flat_map(|(_, track)| &track.clips).collect();
+    let clips: Vec<_> = view
+        .tracks()
+        .flat_map(|(_, track)| track.clips.iter().map(Arc::as_ref))
+        .collect();
     assert_eq!(clips.len(), 1);
     assert_eq!((clips[0].source, clips[0].start), (title, Ticks::ZERO));
     assert_eq!(

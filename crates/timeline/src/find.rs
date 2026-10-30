@@ -1,5 +1,7 @@
 //! Edit > Find: clips by name and sequence markers by name or comment.
 
+use std::sync::Arc;
+
 use crate::{ClipId, MarkerId, Sequence, Ticks};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -56,7 +58,9 @@ impl Sequence {
         if query.text.is_empty() {
             return Vec::new();
         }
-        let clips = self.tracks().flat_map(|(_, track)| &track.clips);
+        let clips = self
+            .tracks()
+            .flat_map(|(_, track)| track.clips.iter().map(Arc::as_ref));
         let clips = clips.filter_map(|clip| {
             let name = clip.name.as_deref().or_else(|| {
                 let item = project.media_item(clip.source)?;

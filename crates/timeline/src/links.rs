@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
@@ -35,7 +36,7 @@ impl Sequence {
         let ids: HashSet<ClipId> = ids.iter().copied().collect();
         let clips = || {
             self.tracks().flat_map(|(track_ref, track)| {
-                track.clips.iter().map(move |clip| (track_ref, clip))
+                track.clips.iter().map(move |clip| (track_ref, &**clip))
             })
         };
         let links: HashSet<LinkId> = if follow_links {
@@ -63,7 +64,10 @@ impl Sequence {
     /// by searching the whole sequence for each clip's partners.
     pub fn sync_offsets(&self) -> HashMap<ClipId, Ticks> {
         let mut partners: HashMap<(LinkId, SourceId), Vec<&Clip>> = HashMap::new();
-        for clip in self.tracks().flat_map(|(_, track)| &track.clips) {
+        for clip in self
+            .tracks()
+            .flat_map(|(_, track)| track.clips.iter().map(Arc::as_ref))
+        {
             if let Some(link) = clip.link {
                 partners.entry((link, clip.source)).or_default().push(clip);
             }
@@ -87,7 +91,7 @@ impl Sequence {
     pub(crate) fn out_of_sync_with(&self, clip: &Clip) -> Option<(&Clip, Ticks)> {
         let link = clip.link?;
         self.tracks()
-            .flat_map(|(_, track)| &track.clips)
+            .flat_map(|(_, track)| track.clips.iter().map(Arc::as_ref))
             .filter(|other| other.id != clip.id && other.link == Some(link))
             .filter(|other| other.source == clip.source)
             .map(|other| (other, clip.start - other.position_of(clip.source_in)))

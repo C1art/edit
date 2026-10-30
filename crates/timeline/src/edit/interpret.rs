@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{
     AlphaInterpretation, Clip, ColorSpace, Edit, FieldOrder, FrameRate, PixelAspect, Sequence,
     SourceId, Speed, Ticks, TimelineError, Track,
@@ -25,8 +27,7 @@ impl Edit for InterpretFootage {
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
-        let item = sequence
-            .media
+        let item = Arc::make_mut(&mut sequence.media)
             .iter_mut()
             .find(|item| item.id == self.source)
             .ok_or(TimelineError::MediaNotFound(self.source))?;
@@ -56,8 +57,7 @@ impl Edit for InterpretFootage {
         }
         item.interpreted_rate = rate;
         let conform = item.conform();
-        let nests = sequence
-            .media
+        let nests = Arc::make_mut(&mut sequence.media)
             .iter_mut()
             .filter_map(|item| item.nest.as_mut())
             .flat_map(|nest| nest.video.iter_mut().chain(&mut nest.audio));
@@ -85,7 +85,7 @@ fn conform_track(track: &mut Track, source: SourceId, conform: Speed) {
             continue;
         }
         let next = starts.get(index + 1).copied();
-        conform_clip(clip, conform, next);
+        conform_clip(Arc::make_mut(clip), conform, next);
     }
 }
 

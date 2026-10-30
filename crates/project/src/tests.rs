@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use timeline::{
     AlphaInterpretation, AudioEffect, Bin, BinId, BinSearch, Caption, Clip, ClipId, ColorSpace,
@@ -12,7 +13,7 @@ use super::*;
 
 fn sample() -> ProjectFile {
     let mut sequence = Sequence::new(Timebase::HZ_90K, VideoFormat::default());
-    sequence.media.push(MediaItem {
+    Arc::make_mut(&mut sequence.media).push(MediaItem {
         id: SourceId(1),
         name: "Interview \"A\" — café\n".to_owned(),
         path: PathBuf::from(r"C:\Footage\interview 😀.mp4"),
@@ -44,7 +45,7 @@ fn sample() -> ProjectFile {
         still: false,
         channel_map: None,
     });
-    sequence.media.push(MediaItem {
+    Arc::make_mut(&mut sequence.media).push(MediaItem {
         id: SourceId(2),
         name: "Title 01".to_owned(),
         path: PathBuf::new(),
@@ -118,17 +119,13 @@ fn sample() -> ProjectFile {
         },
     ];
     let mut nest = Nest::with_default_tracks();
-    nest.audio[1].clips.push(Clip::new(
-        ClipId(8),
-        SourceId(1),
-        Ticks(30),
-        Ticks(60),
-        Ticks(0),
-    ));
-    nest.audio[1].clips[0].audio_effects = AudioEffect::catalog().to_vec();
+    nest.audio[1]
+        .clips
+        .push(Clip::new(ClipId(8), SourceId(1), Ticks(30), Ticks(60), Ticks(0)).into());
+    Arc::make_mut(&mut nest.audio[1].clips[0]).audio_effects = AudioEffect::catalog().to_vec();
     nest.master = Gain(-150);
     nest.marks = Marks::default().with_in(Ticks(10));
-    sequence.media.push(MediaItem {
+    Arc::make_mut(&mut sequence.media).push(MediaItem {
         id: SourceId(3),
         name: "Nested Sequence 01".to_owned(),
         path: PathBuf::new(),
@@ -173,7 +170,7 @@ fn sample() -> ProjectFile {
     });
     clip.look.effects.extend(VideoEffect::catalog());
     sequence.video.push(Track {
-        clips: vec![clip],
+        clips: vec![clip.into()],
         locked: true,
         ..Track::default()
     });
@@ -229,10 +226,10 @@ fn newer_or_unversioned_files_are_refused() {
 #[test]
 fn overlapping_clips_are_refused() {
     let mut project = sample();
-    let mut clip = project.sequence.video[0].clips[0].clone();
+    let mut clip = Clip::clone(&project.sequence.video[0].clips[0]);
     clip.id = ClipId(8);
     clip.start = Ticks(45_000);
-    project.sequence.video[0].clips.push(clip);
+    project.sequence.video[0].clips.push(clip.into());
     let text = project.to_text().unwrap();
     assert!(matches!(
         ProjectFile::from_text(&text),

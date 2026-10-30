@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{ClipId, Edit, Sequence, SourceId, Ticks, TimelineError};
 
 /// Puts other media under a clip and the clips linked to it, keeping their place, length
@@ -33,7 +35,8 @@ impl Edit for ReplaceClip {
         let audio = sequence.audio.iter_mut().filter(|_| sound);
         let mut replaced = false;
         for track in video.chain(audio) {
-            for clip in track.clips.iter_mut().filter(|clip| ids.contains(&clip.id)) {
+            let chosen = track.clips.iter_mut().filter(|clip| ids.contains(&clip.id));
+            for clip in chosen.map(Arc::make_mut) {
                 clip.source = self.source;
                 clip.source_in = clip.source_in + shift;
                 clip.conform = conform;

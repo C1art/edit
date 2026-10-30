@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::ops::{insert, remove};
 use crate::{
     Clip, ClipId, Edit, LinkId, MediaItem, Nest, PlaceClip, PlaceMode, Sequence, SourceId, Ticks,
@@ -70,14 +72,14 @@ impl Edit for NestClips {
                 tracks.resize_with(track.index + 1, Default::default);
             }
             clip.start = clip.start - start;
-            tracks[track.index].clips.push(clip);
+            tracks[track.index].clips.push(clip.into());
         }
         for track in nest.video.iter_mut().chain(&mut nest.audio) {
             track.clips.sort_by_key(|clip| clip.start);
         }
 
         let id = SourceId(sequence.ids.next());
-        sequence.media.push(MediaItem {
+        Arc::make_mut(&mut sequence.media).push(MediaItem {
             id,
             name: self.name.clone(),
             path: Default::default(),
@@ -129,7 +131,7 @@ impl Edit for AddNest {
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
         let id = SourceId(sequence.ids.next());
-        sequence.media.push(MediaItem {
+        Arc::make_mut(&mut sequence.media).push(MediaItem {
             id,
             name: self.name.clone(),
             path: Default::default(),

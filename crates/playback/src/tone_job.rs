@@ -71,7 +71,7 @@ pub fn clip_ungraded(sequence: &Sequence, clip: ClipId) -> Option<Arc<Sequence>>
     alone.audio.iter_mut().for_each(|track| track.clips.clear());
     for track in &mut alone.video {
         track.clips.retain(|kept| kept.id == clip);
-        for kept in &mut track.clips {
+        for kept in track.clips.iter_mut().map(Arc::make_mut) {
             kept.look.color = ColorCorrection::default();
             kept.disabled = false;
             kept.transition_in = None;

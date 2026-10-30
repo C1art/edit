@@ -6,6 +6,7 @@
 use std::collections::HashMap;
 use std::fmt::{Display, Write};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use crate::file_url::path_url;
 use crate::{
@@ -54,6 +55,7 @@ fn exported<'a>(sequence: &'a Sequence, track: &'a Track) -> impl Iterator<Item 
     track
         .clips
         .iter()
+        .map(Arc::as_ref)
         .filter(|clip| file_of(sequence, clip).is_some())
 }
 
@@ -417,7 +419,7 @@ mod tests {
             timeline.apply(place).unwrap();
         }
         let mut sequence = timeline.sequence().clone();
-        sequence.video[0].clips[1].transition_in =
+        Arc::make_mut(&mut sequence.video[0].clips[1]).transition_in =
             Some(Transition::new(TransitionKind::CrossDissolve, Ticks(10)));
         let [first, second] = [0, 1].map(|index| sequence.video[0].clips[index].id.0);
         let partner = sequence.audio[0].clips[1].id.0;

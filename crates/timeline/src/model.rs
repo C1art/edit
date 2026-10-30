@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -322,8 +324,9 @@ pub struct Sequence {
     pub timebase: Timebase,
     #[serde(default)]
     pub format: VideoFormat,
+    /// Shared like track clips, as most edits leave the pool be.
     #[serde(default)]
-    pub media: Vec<MediaItem>,
+    pub media: Arc<Vec<MediaItem>>,
     #[serde(default)]
     pub bins: Vec<Bin>,
     #[serde(default)]
@@ -355,7 +358,7 @@ impl Sequence {
         Self {
             timebase,
             format,
-            media: Vec::new(),
+            media: Arc::default(),
             bins: Vec::new(),
             video: Vec::new(),
             audio: Vec::new(),
@@ -428,7 +431,7 @@ impl Sequence {
     pub fn clip(&self, id: ClipId) -> Option<(TrackRef, &Clip)> {
         self.tracks().find_map(|(track_ref, track)| {
             let clip = track.clips.iter().find(|clip| clip.id == id)?;
-            Some((track_ref, clip))
+            Some((track_ref, &**clip))
         })
     }
 
@@ -440,7 +443,7 @@ impl Sequence {
     /// pictures only, since proxies carry no sound.
     pub fn with_proxies(&self) -> Self {
         let mut sequence = self.clone();
-        for item in &mut sequence.media {
+        for item in Arc::make_mut(&mut sequence.media) {
             if let Some(proxy) = item.proxy.take() {
                 item.path = proxy;
                 // Proxies are made from deinterlaced pictures.
@@ -476,7 +479,7 @@ impl Sequence {
     pub fn edit_points(&self) -> Vec<Ticks> {
         let mut points: Vec<Ticks> = self
             .tracks()
-            .flat_map(|(_, track)| &track.clips)
+            .flat_map(|(_, track)| track.clips.iter().map(Arc::as_ref))
             .flat_map(|clip| [clip.start, clip.end()])
             .collect();
         points.sort_unstable();

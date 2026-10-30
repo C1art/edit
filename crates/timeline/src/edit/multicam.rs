@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::iter;
+use std::sync::Arc;
 
 use super::ops::{self, Relinks};
 use crate::{
@@ -54,7 +55,7 @@ impl Edit for CreateMulticam {
                 );
                 clip.link = link;
                 Track {
-                    clips: vec![clip],
+                    clips: vec![clip.into()],
                     ..Track::default()
                 }
             };
@@ -69,7 +70,7 @@ impl Edit for CreateMulticam {
             return Err(TimelineError::NothingToEdit);
         }
         let id = SourceId(sequence.ids.next());
-        sequence.media.push(MediaItem {
+        Arc::make_mut(&mut sequence.media).push(MediaItem {
             id,
             name: self.name.clone(),
             path: Default::default(),

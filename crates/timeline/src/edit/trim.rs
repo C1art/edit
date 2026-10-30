@@ -1,7 +1,8 @@
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use crate::edit::ops;
-use crate::{Clip, ClipId, Edit, Sequence, Ticks, TimelineError, TrackRef};
+use crate::{ClipId, Edit, Sequence, Ticks, TimelineError, TrackRef};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Edge {
@@ -114,9 +115,11 @@ impl Edit for Roll {
         for &track_ref in &self.tracks {
             for clip in &mut ops::track_mut(sequence, track_ref)?.clips {
                 if clip.end() == self.at {
+                    let clip = Arc::make_mut(clip);
                     clip.trim_tail(self.delta);
                     rolled = true;
                 } else if clip.start == self.at {
+                    let clip = Arc::make_mut(clip);
                     clip.start = clip.start + self.delta;
                     clip.trim_head(self.delta);
                     rolled = true;
@@ -180,18 +183,20 @@ impl Edit for Slide {
         for (_, track) in sequence.tracks_mut() {
             let slid = track.clips.iter().filter(|clip| ids.contains(&clip.id));
             let starts: HashSet<Ticks> = slid.clone().map(|clip| clip.start).collect();
-            let ends: HashSet<Ticks> = slid.map(Clip::end).collect();
+            let ends: HashSet<Ticks> = slid.map(|clip| clip.end()).collect();
             for clip in &mut track.clips {
                 if ids.contains(&clip.id) {
+                    let clip = Arc::make_mut(clip);
                     clip.start = clip.start + d;
                     continue;
                 }
                 // A clip between two slid ones gives at both ends.
                 let (start, end) = (clip.start, clip.end());
                 if starts.contains(&end) {
-                    clip.trim_tail(d);
+                    Arc::make_mut(clip).trim_tail(d);
                 }
                 if ends.contains(&start) {
+                    let clip = Arc::make_mut(clip);
                     clip.start = clip.start + d;
                     clip.trim_head(d);
                 }

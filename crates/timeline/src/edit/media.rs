@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::ops::Range;
 use std::path::Path;
+use std::sync::Arc;
 
 use crate::model::IdGenerator;
 use crate::{
@@ -9,8 +10,7 @@ use crate::{
 };
 
 fn media_item(sequence: &mut Sequence, source: SourceId) -> Result<&mut MediaItem, TimelineError> {
-    sequence
-        .media
+    Arc::make_mut(&mut sequence.media)
         .iter_mut()
         .find(|item| item.id == source)
         .ok_or(TimelineError::MediaNotFound(source))
@@ -183,7 +183,7 @@ impl Edit for MakeSubclip {
             subclip: Some(range),
             ..item
         };
-        sequence.media.push(subclip);
+        Arc::make_mut(&mut sequence.media).push(subclip);
         Ok(())
     }
 }
@@ -212,7 +212,7 @@ impl Edit for DuplicateMedia {
         if let Some(nest) = &mut copy.nest {
             renumber(nest, &mut sequence.ids);
         }
-        sequence.media.insert(index + 1, copy);
+        Arc::make_mut(&mut sequence.media).insert(index + 1, copy);
         Ok(())
     }
 }
@@ -223,7 +223,7 @@ pub(super) fn renumber(nest: &mut Nest, ids: &mut IdGenerator) {
     let mut links: HashMap<LinkId, LinkId> = HashMap::new();
     let mut groups: HashMap<GroupId, GroupId> = HashMap::new();
     let tracks = nest.video.iter_mut().chain(&mut nest.audio);
-    for clip in tracks.flat_map(|track| &mut track.clips) {
+    for clip in tracks.flat_map(|track| track.clips.iter_mut().map(Arc::make_mut)) {
         clip.id = ClipId(ids.next());
         if let Some(link) = &mut clip.link {
             *link = *links.entry(*link).or_insert_with(|| LinkId(ids.next()));

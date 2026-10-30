@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use crate::{Clip, Sequence, SourceId};
 
@@ -30,7 +31,7 @@ pub fn collect_files(
     let mut collected = sequence.clone();
     if keep == Collect::UsedOnly {
         let used: HashSet<SourceId> = sequence.all_clips().map(|clip| clip.source).collect();
-        collected.media.retain(|item| {
+        Arc::make_mut(&mut collected.media).retain(|item| {
             item.nest.is_some() || item.generator.is_some() || used.contains(&item.id)
         });
     }
@@ -40,7 +41,7 @@ pub fn collect_files(
         targets: HashMap::new(),
         names: HashSet::new(),
     };
-    for item in &mut collected.media {
+    for item in Arc::make_mut(&mut collected.media) {
         if item.nest.is_none() && item.generator.is_none() {
             item.path = copier.copy(&item.path);
         }
@@ -57,15 +58,22 @@ pub fn collect_files(
             .for_each(|lut| *lut = copier.copy(lut));
     };
     for track in collected.video.iter_mut().chain(&mut collected.audio) {
-        track.clips.iter_mut().for_each(&mut luts);
+        track
+            .clips
+            .iter_mut()
+            .map(Arc::make_mut)
+            .for_each(&mut luts);
     }
-    for nest in collected
-        .media
+    for nest in Arc::make_mut(&mut collected.media)
         .iter_mut()
         .filter_map(|item| item.nest.as_mut())
     {
         for track in nest.video.iter_mut().chain(&mut nest.audio) {
-            track.clips.iter_mut().for_each(&mut luts);
+            track
+                .clips
+                .iter_mut()
+                .map(Arc::make_mut)
+                .for_each(&mut luts);
         }
     }
     (collected, copier.copies)

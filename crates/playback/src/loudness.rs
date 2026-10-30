@@ -119,7 +119,7 @@ pub fn clip_alone(sequence: &Sequence, clip: ClipId) -> Option<Piece> {
             clips: std::mem::take(&mut track.clips),
             ..Track::default()
         };
-        for kept in &mut track.clips {
+        for kept in track.clips.iter_mut().map(Arc::make_mut) {
             kept.gain = Gain::UNITY;
             kept.volume = Param::default();
             kept.pan = Param::default();
