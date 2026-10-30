@@ -390,7 +390,7 @@ impl FileBrowser {
     }
 }
 
-fn icon(folder: bool, path: &Path) -> (Icon, Color32) {
+pub(crate) fn icon(folder: bool, path: &Path) -> (Icon, Color32) {
     if folder {
         (Icon::Folder, Color32::from_rgb(214, 172, 86))
     } else if VIDEO_FILES.shows(path) {

@@ -11,8 +11,12 @@ use crate::editor::Editor;
 impl Editor {
     pub(crate) fn reveal_in_explorer(&mut self, source: SourceId) {
         if let Some(path) = self.file_of(source) {
-            self.start(file_manager(&path), "Cannot open the file's folder");
+            self.reveal_file(&path);
         }
+    }
+
+    pub(crate) fn reveal_file(&mut self, path: &Path) {
+        self.start(file_manager(path), "Cannot open the file's folder");
     }
 
     /// Opens `source`'s file in the application the system opens it with, as Premiere's

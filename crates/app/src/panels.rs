@@ -10,6 +10,7 @@ use crate::theme;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum MediaTab {
     Project,
+    MediaBrowser,
     Markers,
     History,
     Effects,
@@ -17,10 +18,11 @@ pub(crate) enum MediaTab {
 }
 
 impl MediaTab {
-    pub(crate) const ALL: [Self; 5] = [
+    pub(crate) const ALL: [Self; 6] = [
         Self::Project,
         Self::Markers,
         Self::Effects,
+        Self::MediaBrowser,
         Self::Metadata,
         Self::History,
     ];
@@ -29,6 +31,7 @@ impl MediaTab {
     pub(crate) fn words(self) -> (&'static str, &'static str) {
         match self {
             Self::Project => ("project", "Project"),
+            Self::MediaBrowser => ("media_browser", "Media Browser"),
             Self::Markers => ("markers", "Markers"),
             Self::History => ("history", "History"),
             Self::Effects => ("effects", "Effects"),
@@ -78,6 +81,7 @@ impl Editor {
                     self.pool_action(action);
                 }
             }
+            MediaTab::MediaBrowser => crate::media_browser::ui(self, ui),
             MediaTab::Markers => crate::markers_panel::ui(self, ui),
             MediaTab::History => crate::history_panel::ui(self, ui),
             MediaTab::Effects => crate::effects_panel::ui(self, ui),

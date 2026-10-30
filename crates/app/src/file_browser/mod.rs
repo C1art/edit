@@ -7,7 +7,9 @@ mod view;
 use std::path::{Path, PathBuf};
 
 pub use filter::*;
-use listing::{natural_order, Entry, Found, Lister, Place};
+use listing::natural_order;
+pub(crate) use listing::{Entry, Found, Lister, Place};
+pub(crate) use view::icon as file_icon;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
@@ -387,6 +389,6 @@ impl FileBrowser {
     }
 }
 
-fn home() -> Option<PathBuf> {
+pub(crate) fn home() -> Option<PathBuf> {
     std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from)
 }

@@ -57,6 +57,7 @@ mod loudness_window;
 mod marker_dialog;
 mod markers_panel;
 mod mask_tracking;
+mod media_browser;
 mod media_pool;
 mod media_scaling;
 mod menus;
