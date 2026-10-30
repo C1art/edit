@@ -81,6 +81,7 @@ mod rename_clip;
 mod render_previews;
 mod render_replace;
 mod replace_clip;
+mod reveal;
 mod safe_margins;
 mod same_path;
 mod scene_edits;

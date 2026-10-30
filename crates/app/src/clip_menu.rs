@@ -125,6 +125,20 @@ fn on_selection(editor: &mut Editor, ui: &mut Ui) {
     if ui.button("Rename…").clicked() {
         editor.rename_clips();
     }
+    if let Some(source) = editor.selected_source() {
+        if ui.button("Reveal in Project").clicked() {
+            editor.reveal_in_project(source);
+        }
+        let on_disk = editor
+            .timeline
+            .sequence()
+            .media
+            .iter()
+            .any(|item| item.id == source && item.is_file() && !item.offline);
+        if on_disk && ui.button("Reveal in Explorer").clicked() {
+            editor.reveal_in_explorer(source);
+        }
+    }
     if let Some(clip) = kept_title(editor) {
         if ui.button("Save as Title Template…").clicked() {
             editor.name_title_template(clip);

@@ -17,6 +17,7 @@ impl Editor {
     pub(crate) fn pool_action(&mut self, action: PoolAction) {
         match action {
             PoolAction::Open(id) => self.open_source(id),
+            PoolAction::RevealInExplorer(id) => self.reveal_in_explorer(id),
             PoolAction::OpenNest(id) => self.enter_nest(id, Ticks::ZERO),
             PoolAction::Remove(id) => self.remove_media(id),
             PoolAction::Duplicate(source) => {

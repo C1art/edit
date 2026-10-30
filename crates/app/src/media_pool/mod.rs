@@ -5,6 +5,8 @@ mod rows;
 mod search_bins;
 mod tiles;
 
+use std::iter;
+
 use egui::{CollapsingHeader, DragAndDrop, Response, RichText, Sense, StrokeKind};
 use timeline::{Bin, BinId, BinSearch, MediaItem, Sequence, SourceId};
 
@@ -52,6 +54,7 @@ pub enum PoolAction {
     Merge(Vec<SourceId>, MulticamSync, bool),
     /// Makes a sequence holding all of the item and opens it.
     NewSequenceFrom(SourceId),
+    RevealInExplorer(SourceId),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -74,6 +77,17 @@ pub struct PoolView {
     row_height: Option<f32>,
     /// An item in use, waiting on the user to confirm removing it with its clips.
     removing: Option<SourceId>,
+    /// An item to open the bins around and scroll to.
+    revealing: Option<SourceId>,
+}
+
+impl PoolView {
+    /// Selects `source` alone and brings it into view.
+    pub(crate) fn reveal(&mut self, source: SourceId) {
+        self.selected = vec![source];
+        self.revealing = Some(source);
+        self.search.clear();
+    }
 }
 
 /// Lists imported media in its bins. Click opens an item in the source monitor;
@@ -171,6 +185,25 @@ impl Pool<'_> {
         }
     }
 
+    /// Whether the item being revealed sits in `bin` or in a bin inside it.
+    fn reveals_inside(&self, bin: BinId) -> bool {
+        let sequence = self.sequence;
+        let Some(item) = self
+            .view
+            .revealing
+            .and_then(|id| sequence.media.iter().find(|item| item.id == id))
+        else {
+            return false;
+        };
+        let parent = |at: &BinId| {
+            let held = sequence.bins.iter().find(|held| held.id == *at)?;
+            held.parent
+        };
+        iter::successors(item.bin, parent)
+            .take(sequence.bins.len())
+            .any(|at| at == bin)
+    }
+
     fn view_options(&mut self, ui: &mut egui::Ui) {
         let view = &mut *self.view;
         let layouts = [
@@ -215,6 +248,7 @@ impl Pool<'_> {
         let title = RichText::new(format!("{} ({count})", bin.name)).strong();
         let shown = CollapsingHeader::new(title)
             .id_salt(("bin", bin.id.0))
+            .open(self.reveals_inside(bin.id).then_some(true))
             .show(ui, |ui| self.contents(ui, inside));
         let header = shown.header_response.interact(Sense::click_and_drag());
         if bin.search.is_some() {
@@ -263,7 +297,8 @@ impl Pool<'_> {
         let offline = self.art.offline.contains(&item.id);
         let plain_row =
             matches!(self.view.layout, PoolLayout::List) && building.is_none() && !offline;
-        if let Some(height) = self.view.row_height.filter(|_| plain_row) {
+        let revealing = self.view.revealing == Some(item.id);
+        if let Some(height) = self.view.row_height.filter(|_| plain_row && !revealing) {
             let top = ui.cursor().top();
             let shown = ui.clip_rect().y_range();
             if top > shown.max || top + height < shown.min {
@@ -278,6 +313,10 @@ impl Pool<'_> {
         };
         if plain_row {
             self.view.row_height = Some(response.rect.height());
+        }
+        if revealing {
+            response.scroll_to_me(Some(egui::Align::Center));
+            self.view.revealing = None;
         }
         let selected = &mut self.view.selected;
         if response.drag_started() {
