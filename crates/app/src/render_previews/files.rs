@@ -1,21 +1,12 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::thread;
-use std::time::Duration;
 
 use crossbeam::channel::{self, Receiver, Sender};
 
 const EXTENSION: &str = "mov";
 /// Marks a file still being written, so one cut short is never taken for a preview.
 const PARTIAL: &str = ".rendering";
-/// How long to wait for the player to close a preview before removing it fails.
-const IN_USE_WAITS: [Duration; 5] = [
-    Duration::from_millis(20),
-    Duration::from_millis(50),
-    Duration::from_millis(100),
-    Duration::from_millis(250),
-    Duration::from_millis(500),
-];
 
 enum Request {
     Scan,
@@ -130,21 +121,7 @@ fn serve(folder: &Path, request: Request) -> std::io::Result<Reply> {
 /// Removes `path`, giving the player a moment to let go of it, as Windows refuses to
 /// remove a file that is open.
 fn remove(path: &Path) -> std::io::Result<()> {
-    let mut waits = IN_USE_WAITS.iter();
-    loop {
-        match std::fs::remove_file(path) {
-            Err(error) if is_in_use(&error) => match waits.next() {
-                Some(&wait) => thread::sleep(wait),
-                None => return Err(error),
-            },
-            removed => return removed,
-        }
-    }
-}
-
-fn is_in_use(error: &std::io::Error) -> bool {
-    const ERROR_SHARING_VIOLATION: i32 = 32;
-    cfg!(windows) && error.raw_os_error() == Some(ERROR_SHARING_VIOLATION)
+    project::retry_while_in_use(|| std::fs::remove_file(path))
 }
 
 /// The fingerprints of the previews in `folder`.
@@ -170,6 +147,7 @@ fn scan(folder: &Path) -> HashSet<u64> {
 #[cfg(all(test, windows))]
 mod tests {
     use std::os::windows::fs::OpenOptionsExt;
+    use std::time::Duration;
 
     use super::*;
 

@@ -26,10 +26,16 @@ pub fn replace_file(path: &Path, contents: &[u8]) -> io::Result<()> {
         file.sync_all()
     });
     written
-        .and_then(|()| swap_in(partial, path))
+        .and_then(|()| retry_while_in_use(|| std::fs::rename(partial, path)))
         .inspect_err(|_| {
             let _ = std::fs::remove_file(partial);
         })
+}
+
+/// Renames a finished file over `path`, as `replace_file` does once it has written it.
+pub fn rename_into_place(finished: &Path, path: &Path) -> io::Result<()> {
+    refuse_read_only(path)?;
+    retry_while_in_use(|| std::fs::rename(finished, path))
 }
 
 /// Windows won't rename over a read-only file, and only says access is denied.
@@ -47,17 +53,18 @@ fn refuse_read_only(path: &Path) -> io::Result<()> {
     Ok(())
 }
 
-/// Tries again for a moment while the file is in use, as on Windows a virus scanner,
-/// sync client or file preview opening it briefly is enough to make the rename fail.
-fn swap_in(partial: &Path, path: &Path) -> io::Result<()> {
+/// Tries again for a moment while a file is in use, as on Windows a virus scanner,
+/// sync client, file preview or our own player opening it briefly is enough to make
+/// a rename or removal fail.
+pub fn retry_while_in_use<T>(mut attempt: impl FnMut() -> io::Result<T>) -> io::Result<T> {
     let mut waits = IN_USE_WAITS.iter();
     loop {
-        match std::fs::rename(partial, path) {
+        match attempt() {
             Err(error) if is_in_use(&error) => match waits.next() {
                 Some(&wait) => std::thread::sleep(wait),
                 None => return Err(error),
             },
-            renamed => return renamed,
+            done => return done,
         }
     }
 }

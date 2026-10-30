@@ -155,7 +155,7 @@ impl Worker {
 
     fn keep(&self, outcome: Outcome) -> Result<Outcome, PlaybackError> {
         if let (Outcome::Finished, Some(partial)) = (&outcome, &self.partial) {
-            std::fs::rename(partial, &self.settings.path).map_err(|error| {
+            project::rename_into_place(partial, &self.settings.path).map_err(|error| {
                 PlaybackError::Replace {
                     path: self.settings.path.clone(),
                     error,
