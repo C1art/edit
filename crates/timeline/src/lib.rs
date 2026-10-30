@@ -34,6 +34,7 @@ mod mask_track;
 mod media;
 mod mix;
 mod model;
+mod motion_preset;
 mod multicam;
 mod nest;
 mod param;
@@ -146,6 +147,7 @@ pub use mix::{balance, Gain, Pan};
 pub use model::{
     Clip, ClipId, IdGenerator, LinkId, Sequence, Track, TrackKind, TrackRef, VideoFormat,
 };
+pub use motion_preset::MotionPreset;
 pub use multicam::MulticamLayout;
 pub use nest::Nest;
 pub use param::Param;

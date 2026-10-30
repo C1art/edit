@@ -452,6 +452,7 @@ mod link;
 mod marker;
 mod media;
 mod merge;
+mod motion_preset;
 mod multicam;
 mod nest;
 mod paste;

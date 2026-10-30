@@ -1,6 +1,8 @@
 use crate::edit::attributes::each_clip;
+use crate::motion_preset::Frames;
 use crate::{
-    AudioEffect, ClipId, Edit, EffectPreset, Sequence, TimelineError, TrackKind, VideoEffect,
+    AudioEffect, ClipId, Edit, EffectPreset, MotionPreset, Sequence, TimelineError, TrackKind,
+    VideoEffect,
 };
 
 /// An effect or preset from the Effects panel, for the clips of its kind.
@@ -9,6 +11,8 @@ pub enum ClipEffect {
     Video(Box<VideoEffect>),
     Audio(Box<AudioEffect>),
     Preset(EffectPreset),
+    /// Keyframes a picture's motion, opacity or blur.
+    Motion(MotionPreset),
 }
 
 /// Adds an effect after the own effects of `clips` and of the clips linked to them,
@@ -23,12 +27,17 @@ pub struct ApplyEffect {
 impl Edit for ApplyEffect {
     fn name(&self) -> &'static str {
         match self.effect {
-            ClipEffect::Preset(_) => "Apply Preset",
+            ClipEffect::Preset(_) | ClipEffect::Motion(_) => "Apply Preset",
             ClipEffect::Video(_) | ClipEffect::Audio(_) => "Apply Effect",
         }
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let frames = Frames {
+            rate: sequence.format.frame_rate,
+            timebase: sequence.timebase,
+            width: sequence.format.width,
+        };
         each_clip(sequence, &self.clips, |kind, clip| {
             match (&self.effect, kind) {
                 (ClipEffect::Video(effect), TrackKind::Video) => {
@@ -38,6 +47,7 @@ impl Edit for ApplyEffect {
                     clip.audio_effects.push(AudioEffect::clone(effect));
                 }
                 (ClipEffect::Preset(preset), kind) => preset.apply(kind, clip),
+                (ClipEffect::Motion(preset), TrackKind::Video) => preset.apply(clip, frames),
                 _ => {}
             }
         })
