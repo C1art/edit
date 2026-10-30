@@ -8,7 +8,7 @@ use timeline::{
 use crate::editor::Editor;
 use crate::effects::LutSlot;
 use crate::export::ExportDialog;
-use crate::file_browser::FileBrowser;
+use crate::path_dialog::Chooser;
 use crate::project_store::{Setting, StoreEvent};
 use crate::recent_projects::RecentProjects;
 
@@ -37,7 +37,10 @@ pub enum PathPurpose {
 
 pub struct PathPrompt {
     pub purpose: PathPurpose,
-    pub browser: FileBrowser,
+    pub chooser: Chooser,
+    /// Where the dialog started, kept to start the editor's browser there if the
+    /// system's dialog can't be shown.
+    pub start: Option<PathBuf>,
     /// Whether an import takes the numbered pictures that follow the file as one clip.
     pub image_sequence: bool,
 }
@@ -101,6 +104,14 @@ impl Editor {
     }
 
     pub(crate) fn prompt_path(&mut self, purpose: PathPurpose) {
+        if let Some(PathPrompt {
+            chooser: Chooser::Native(_),
+            ..
+        }) = &self.path_prompt
+        {
+            // The system's dialog is still open; it can't be swapped for another.
+            return;
+        }
         let project_with = |extension: &str| {
             self.project_path
                 .as_ref()
@@ -119,10 +130,11 @@ impl Editor {
             PathPurpose::ExportMedia => self.export.as_ref().map(ExportDialog::output),
             _ => None,
         };
-        let browser = crate::path_dialog::browser_for(self, purpose, start.as_deref());
+        let chooser = crate::path_dialog::chooser_for(self, purpose, start.as_deref());
         self.path_prompt = Some(PathPrompt {
             purpose,
-            browser,
+            chooser,
+            start,
             image_sequence: false,
         });
     }

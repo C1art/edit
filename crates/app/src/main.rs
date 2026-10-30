@@ -56,6 +56,7 @@ mod monitors;
 mod motion_analysis;
 mod multicam;
 mod multicam_sync;
+mod native_dialog;
 mod nesting;
 mod notifications;
 mod offline;
