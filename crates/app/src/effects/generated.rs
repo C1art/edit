@@ -7,13 +7,14 @@ use super::graphic_layers;
 use crate::installed_fonts;
 use crate::mixer::{response_state, Change};
 
-/// What a title, shape or color matte draws on a frame `height` pixels tall. Typing
+/// What a title, shape or color matte draws on a `frame` of width and height. Typing
 /// previews live and commits when the text field loses focus.
 pub(super) fn controls(
     ui: &mut egui::Ui,
     generator: &mut Generator,
-    height: u32,
+    frame: [u32; 2],
 ) -> Option<Change> {
+    let height = frame[1];
     if matches!(
         generator,
         Generator::AdjustmentLayer
@@ -42,7 +43,7 @@ pub(super) fn controls(
                 change = shape_controls(ui, shape, height);
                 change = graphic_layers::upgrade_row(ui, generator).or(change);
             }
-            Generator::Graphic(graphic) => change = graphic_layers::controls(ui, graphic, height),
+            Generator::Graphic(graphic) => change = graphic_layers::controls(ui, graphic, frame),
             Generator::CountingLeader(leader) => change = leader_controls(ui, leader),
         });
     change

@@ -144,7 +144,7 @@ pub use generator::{
     held_length, Generator, Shape, ShapeKind, TextAlign, TextStroke, Title, TitleFont,
     GENERATED_SECONDS,
 };
-pub use graphic::{Graphic, GraphicContent, GraphicLayer, Pin};
+pub use graphic::{Graphic, GraphicContent, GraphicLayer, Pin, VerticalPin};
 pub use group::GroupId;
 pub use guide::{Guide, GuideAxis};
 pub use history::{preview, Edit, EditCommand, Timeline};

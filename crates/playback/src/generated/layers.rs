@@ -1,4 +1,4 @@
-use timeline::{FrameSide, Graphic, GraphicContent, GraphicLayer, LayerPose, Pin};
+use timeline::{FrameSide, Graphic, GraphicContent, GraphicLayer, LayerPose, Pin, VerticalPin};
 
 use super::coverage::Coverage;
 use super::image_layer::draw_image;
@@ -53,21 +53,26 @@ impl Placement {
         let scale = layer.scale.max(1) as f32 / 100.0;
         let extent = match &layer.content {
             GraphicContent::Text(title) => {
-                Coverage::title_extent(title, width).map_or(0.0, |e| e.x)
+                Coverage::title_extent(title, width).map_or([0.0; 2], |e| [e.x, e.y])
             }
-            GraphicContent::Shape(shape) => shape.width as f32,
-            GraphicContent::Image(_) => 0.0,
+            GraphicContent::Shape(shape) => [shape.width as f32, shape.height as f32],
+            GraphicContent::Image(_) => [0.0; 2],
         };
         // Whole pixels, so unscaled text stays crisp.
-        let half = (extent * scale / 2.0).round();
-        let pinned = match layer.pin {
-            Pin::Left => half,
+        let [half_x, half_y] = extent.map(|extent| (extent * scale / 2.0).round());
+        let pinned_x = match layer.pin {
+            Pin::Left => half_x,
             Pin::Center => 0.0,
-            Pin::Right => -half,
+            Pin::Right => -half_x,
+        };
+        let pinned_y = match layer.pin_vertical {
+            VerticalPin::Top => half_y,
+            VerticalPin::Middle => 0.0,
+            VerticalPin::Bottom => -half_y,
         };
         let [x, y] = layer.offset.map(|offset| offset as f32);
         Self {
-            offset: [x + pinned, y],
+            offset: [x + pinned_x, y + pinned_y],
             scale,
             rotation: layer.rotation as f32,
             opacity: layer.opacity.min(100) as f32 / 100.0,
@@ -347,5 +352,23 @@ mod tests {
         assert_eq!(at(8), 1.0);
         assert_eq!(at(10), 1.0);
         assert_eq!(at(14), 0.0);
+    }
+
+    #[test]
+    fn a_bottom_pinned_shape_grows_upward_from_its_position() {
+        let mut bar = square(Rgb::new(255, 0, 0), [0, 0]);
+        if let GraphicContent::Shape(shape) = &mut bar.content {
+            shape.height = 6;
+        }
+        bar.pin_vertical = VerticalPin::Bottom;
+        let drawn = draw_layer(&bar.content, 16, 16).unwrap();
+        let mut canvas = Canvas::new(16, 16);
+        canvas.cover(&drawn, &Placement::of(&bar, 16));
+        let at = |y: usize| canvas.pixels[y * 16 + 7][3];
+        // The 6 tall bar ends at the center row and reaches 6 rows above it.
+        assert_eq!(at(1), 0.0);
+        assert_eq!(at(2), 1.0);
+        assert_eq!(at(7), 1.0);
+        assert_eq!(at(8), 0.0);
     }
 }

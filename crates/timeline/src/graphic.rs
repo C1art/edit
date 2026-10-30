@@ -34,6 +34,8 @@ pub struct GraphicLayer {
     #[serde(default)]
     pub pin: Pin,
     #[serde(default)]
+    pub pin_vertical: VerticalPin,
+    #[serde(default)]
     pub animation: LayerAnimation,
 }
 
@@ -55,6 +57,28 @@ impl Pin {
             Self::Left => "Left",
             Self::Center => "Center",
             Self::Right => "Right",
+        }
+    }
+}
+
+/// Which edge stays put as a layer grows taller, so a lower third pinned to its bottom
+/// grows upward as lines are added.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub enum VerticalPin {
+    Top,
+    #[default]
+    Middle,
+    Bottom,
+}
+
+impl VerticalPin {
+    pub const ALL: [Self; 3] = [Self::Top, Self::Middle, Self::Bottom];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Top => "Top",
+            Self::Middle => "Middle",
+            Self::Bottom => "Bottom",
         }
     }
 }
@@ -92,6 +116,7 @@ impl GraphicLayer {
             rotation: 0,
             opacity: full(),
             pin: Pin::Center,
+            pin_vertical: VerticalPin::Middle,
             animation: LayerAnimation::default(),
         }
     }

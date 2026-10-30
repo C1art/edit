@@ -15,6 +15,7 @@ mod key_selection;
 mod key_time;
 mod keying;
 mod lane;
+mod layer_align;
 mod layer_animation;
 mod layered;
 mod lighting;
@@ -179,11 +180,12 @@ fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip, section
             Some((id, drawing)) if *id == clip.source => drawing.clone(),
             _ => generator,
         });
-    let height = editor.timeline.sequence().format.height;
+    let format = editor.timeline.sequence().format;
+    let frame = [format.width, format.height];
     text_style_row::lend(ui.ctx(), &editor.text_styles);
     let drawing_change = drawing
         .as_mut()
-        .and_then(|generator| generated::controls(ui, generator, height));
+        .and_then(|generator| generated::controls(ui, generator, frame));
     if graphic_layers::take_picture_request(ui) {
         editor.prompt_path(PathPurpose::GraphicPicture(clip.source));
     }

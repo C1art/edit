@@ -91,7 +91,11 @@ fn new_layer_menu(ui: &mut egui::Ui) -> Option<NewLayer> {
 }
 
 /// Essential Graphics' Edit tab: the layers, topmost first, then the chosen one's look.
-pub(super) fn controls(ui: &mut egui::Ui, graphic: &mut Graphic, height: u32) -> Option<Change> {
+pub(super) fn controls(
+    ui: &mut egui::Ui,
+    graphic: &mut Graphic,
+    frame: [u32; 2],
+) -> Option<Change> {
     let chosen_id = ui.make_persistent_id("graphic_layer");
     let last = graphic.layers.len().saturating_sub(1);
     let mut chosen = ui
@@ -154,11 +158,12 @@ pub(super) fn controls(ui: &mut egui::Ui, graphic: &mut Graphic, height: u32) ->
     let Some(layer) = graphic.layers.get_mut(chosen) else {
         return change;
     };
-    change = layer_controls(ui, layer, height).or(change);
+    change = layer_controls(ui, layer, frame).or(change);
     change
 }
 
-fn layer_controls(ui: &mut egui::Ui, layer: &mut GraphicLayer, height: u32) -> Option<Change> {
+fn layer_controls(ui: &mut egui::Ui, layer: &mut GraphicLayer, frame: [u32; 2]) -> Option<Change> {
+    let height = frame[1];
     let mut change = None;
     ui.horizontal(|ui| {
         ui.label("Name");
@@ -179,15 +184,10 @@ fn layer_controls(ui: &mut egui::Ui, layer: &mut GraphicLayer, height: u32) -> O
                 .suffix(" px");
             change = response_state(&ui.add(drag), change);
         }
-        if ui
-            .button("Center")
-            .on_hover_text("Centers the layer in the frame")
-            .clicked()
-        {
-            layer.offset = [0, 0];
-            change = Some(Change::Commit);
-        }
     });
+    if super::layer_align::align_row(ui, layer, frame) {
+        change = Some(Change::Commit);
+    }
     pairs(ui, 300.0, |ui| {
         ui.horizontal(|ui| {
             ui.label("Scale");

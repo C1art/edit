@@ -1,5 +1,5 @@
 use egui::ComboBox;
-use timeline::{Appear, GraphicContent, GraphicLayer, Pin};
+use timeline::{Appear, GraphicContent, GraphicLayer, Pin, VerticalPin};
 
 use super::generated::pairs;
 use crate::mixer::{response_state, Change};
@@ -19,6 +19,18 @@ pub(super) fn animation_controls(ui: &mut egui::Ui, layer: &mut GraphicLayer) ->
                     && layer.pin != pin
                 {
                     layer.pin = pin;
+                    change = Some(Change::Commit);
+                }
+            }
+            ui.separator();
+            for pin in VerticalPin::ALL {
+                if ui
+                    .selectable_label(layer.pin_vertical == pin, pin.name())
+                    .on_hover_text("The edge that stays put as the text or shape grows taller")
+                    .clicked()
+                    && layer.pin_vertical != pin
+                {
+                    layer.pin_vertical = pin;
                     change = Some(Change::Commit);
                 }
             }
