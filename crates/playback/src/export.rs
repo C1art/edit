@@ -51,9 +51,9 @@ pub enum ExportEvent {
     /// A piece of media could not be read; the export carries on without it.
     Warning(PlaybackError),
     Finished,
-    /// The partial file has been removed.
+    /// The partial file has been removed and anything already at the path left alone.
     Cancelled,
-    /// The partial file has been removed.
+    /// The partial file has been removed and anything already at the path left alone.
     Failed(PlaybackError),
 }
 
@@ -83,8 +83,13 @@ impl ExportJob {
         if keeps_alpha {
             compositor.set_background(Background::Transparent);
         }
+        let partial = match settings.video.map(|video| video.encoding) {
+            Some(VideoEncoding::Stills(_)) => None,
+            _ => Some(partial_path(&settings.path)),
+        };
         let worker = Worker {
             compositor,
+            partial,
             sequence,
             settings,
             events: sender,
@@ -120,6 +125,9 @@ struct Worker {
     compositor: Compositor,
     events: Sender<ExportEvent>,
     cancel: Arc<AtomicBool>,
+    /// Where a movie is written until it is finished, so that a failed or cancelled
+    /// export never touches a file already at the path. None for still sequences.
+    partial: Option<PathBuf>,
     /// Every image a still sequence export has written, removed if it fails.
     stills_written: Vec<PathBuf>,
 }
@@ -131,7 +139,7 @@ enum Outcome {
 
 impl Worker {
     fn run(mut self) {
-        let event = match self.render() {
+        let event = match self.render().and_then(|outcome| self.keep(outcome)) {
             Ok(Outcome::Finished) => ExportEvent::Finished,
             Ok(Outcome::Cancelled) => {
                 self.remove_partial();
@@ -145,8 +153,22 @@ impl Worker {
         let _ = self.events.send(event);
     }
 
+    fn keep(&self, outcome: Outcome) -> Result<Outcome, PlaybackError> {
+        if let (Outcome::Finished, Some(partial)) = (&outcome, &self.partial) {
+            std::fs::rename(partial, &self.settings.path).map_err(|error| {
+                PlaybackError::Replace {
+                    path: self.settings.path.clone(),
+                    error,
+                }
+            })?;
+        }
+        Ok(outcome)
+    }
+
     fn remove_partial(&self) {
-        let _ = std::fs::remove_file(&self.settings.path);
+        if let Some(partial) = &self.partial {
+            let _ = std::fs::remove_file(partial);
+        }
         for still in &self.stills_written {
             let _ = std::fs::remove_file(still);
         }
@@ -188,7 +210,11 @@ impl Worker {
         let writer = match stills {
             Some(_) => None,
             None => Some(MediaWriter::with_chapters(
-                &path, video, audio, &chapters, timebase,
+                self.partial.as_deref().unwrap_or(&path),
+                video,
+                audio,
+                &chapters,
+                timebase,
             )?),
         };
         let writes_audio = writer.is_some() && audio.is_some();
@@ -283,6 +309,17 @@ fn still_path(path: &Path, index: i64, count: i64, format: StillFormat) -> PathB
         .file_stem()
         .map_or_else(String::new, |stem| stem.to_string_lossy().into_owned());
     path.with_file_name(format!("{stem}{index:0digits$}.{}", format.extension()))
+}
+
+/// Beside `path` with the same extension, which picks the container.
+fn partial_path(path: &Path) -> PathBuf {
+    let mut name = path.file_stem().unwrap_or_default().to_owned();
+    name.push(".partial");
+    if let Some(extension) = path.extension() {
+        name.push(".");
+        name.push(extension);
+    }
+    path.with_file_name(name)
 }
 
 /// Every frame that overlaps `range`, or the sequence up to the end of its last clip.

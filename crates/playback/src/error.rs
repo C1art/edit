@@ -6,6 +6,11 @@ pub enum PlaybackError {
     Render(render::RenderError),
     Audio(audio::AudioError),
     WorkerSpawn(std::io::Error),
+    /// A finished export could not be moved over the file at its path.
+    Replace {
+        path: std::path::PathBuf,
+        error: std::io::Error,
+    },
     Lut {
         path: std::path::PathBuf,
         reason: String,
@@ -24,6 +29,9 @@ impl fmt::Display for PlaybackError {
             Self::Render(error) => write!(f, "render: {error}"),
             Self::Audio(error) => write!(f, "audio: {error}"),
             Self::WorkerSpawn(error) => write!(f, "cannot start decode thread: {error}"),
+            Self::Replace { path, error } => {
+                write!(f, "cannot replace {}: {error}", path.display())
+            }
             Self::Lut { path, reason } => {
                 write!(f, "cannot use the LUT {}: {reason}", path.display())
             }
@@ -41,6 +49,7 @@ impl std::error::Error for PlaybackError {
             Self::Render(error) => Some(error),
             Self::Audio(error) => Some(error),
             Self::WorkerSpawn(error) => Some(error),
+            Self::Replace { error, .. } => Some(error),
             Self::ImageMatte { error, .. } => Some(error),
             Self::Lut { .. } => None,
         }
