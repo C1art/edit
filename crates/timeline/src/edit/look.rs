@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::edit::ops;
 use crate::{ClipId, Edge, Edit, Look, Sequence, TimelineError, TrackKind, Transition};
 
@@ -55,6 +57,66 @@ impl Edit for SetTransition {
             return Err(TimelineError::NothingToEdit);
         }
         *slot = self.transition;
+        Ok(())
+    }
+}
+
+/// Puts `transition` at each edit point of `clips`: the cuts between two of them and
+/// the ends that meet no other clip. Transitions already there stay; none runs longer
+/// than the clips it joins.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApplyTransitions {
+    pub clips: Vec<ClipId>,
+    pub transition: Transition,
+}
+
+impl Edit for ApplyTransitions {
+    fn name(&self) -> &'static str {
+        "Apply Default Transitions"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let chosen: HashSet<ClipId> = self.clips.iter().copied().collect();
+        let mut edges = Vec::new();
+        for (_, track) in sequence.tracks().filter(|(_, track)| !track.locked) {
+            let clips = &track.clips;
+            for (index, clip) in clips.iter().enumerate() {
+                if !chosen.contains(&clip.id) {
+                    continue;
+                }
+                let previous = index
+                    .checked_sub(1)
+                    .and_then(|previous| clips.get(previous))
+                    .filter(|previous| previous.end() == clip.start);
+                let next = clips.get(index + 1).filter(|next| next.start == clip.end());
+                match previous {
+                    _ if clip.transition_in.is_some() => {}
+                    None => edges.push((clip.id, Edge::Head, clip.duration)),
+                    Some(previous) if chosen.contains(&previous.id) => {
+                        let shorter = clip.duration.min(previous.duration);
+                        edges.push((clip.id, Edge::Head, shorter));
+                    }
+                    Some(_) => {}
+                }
+                if next.is_none() && clip.transition_out.is_none() {
+                    edges.push((clip.id, Edge::Tail, clip.duration));
+                }
+            }
+        }
+        if edges.is_empty() {
+            return Err(TimelineError::NothingToEdit);
+        }
+        for (id, edge, longest) in edges {
+            let transition = Some(Transition {
+                duration: self.transition.duration.min(longest),
+                ..self.transition
+            });
+            let clip = ops::clip_mut(sequence, id)?;
+            match edge {
+                Edge::Head => clip.transition_in = transition,
+                Edge::Tail => clip.transition_out = transition,
+            }
+        }
         Ok(())
     }
 }

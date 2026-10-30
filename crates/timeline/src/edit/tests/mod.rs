@@ -470,4 +470,5 @@ mod submix;
 mod subsequence;
 mod through;
 mod track;
+mod transitions;
 mod trim;
