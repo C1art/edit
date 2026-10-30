@@ -130,6 +130,7 @@ const CASES: &[(&str, Expect)] = &[
             audio: false,
         },
     ),
+    ("sine_44k.mp3", Expect::Sound { seconds: 1.0 }),
     ("surround51.ac3", Expect::Sound { seconds: 1.0 }),
     ("tiny_audio.wav", Expect::Sound { seconds: 0.01 }),
     ("truncated.mp4", Expect::Damaged),
@@ -269,7 +270,7 @@ fn check(path: &Path, expect: Expect) -> Vec<String> {
         }
     }
     if !matches!(expect, Expect::Damaged) {
-        for fraction in [0.75, 0.25, 0.5] {
+        for fraction in [0.75, 0.25, 0.5, 0.0] {
             let target = Ticks((duration.0 as f64 * fraction) as i64);
             if let Err(error) = reader.seek(target) {
                 problems.push(format!("seek to {:.3} s: {error}", seconds(target)));
@@ -287,8 +288,10 @@ fn check(path: &Path, expect: Expect) -> Vec<String> {
                 }
             };
             let still = matches!(expect, Expect::Picture { .. });
+            // Before the first picture, the first picture is the one to show.
+            let shown = target.max(decoded.pictures.first().copied().unwrap_or(Ticks::ZERO));
             match picture {
-                Some(pts) if !still && (pts > target || target - pts > Ticks(SECOND / 5)) => {
+                Some(pts) if !still && (pts > shown || target - pts > Ticks(SECOND / 5)) => {
                     problems.push(format!(
                         "seek to {:.3} s showed {:.3} s",
                         seconds(target),

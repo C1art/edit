@@ -267,7 +267,9 @@ impl MediaReader {
             // without, it lands on the very audio packet.
             target -= AUDIO_PREROLL;
         }
-        self.input.seek(target)?;
+        // Demuxers such as MP3's and AC-3's refuse a target before their first packet.
+        let start = self.start.rescale(self.timebase, MICROSECONDS).0;
+        self.input.seek(target.max(start))?;
         if let Some(video) = &mut self.video {
             video.decoder.flush();
         }
