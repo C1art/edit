@@ -93,7 +93,7 @@ impl Dice {
 }
 
 #[derive(Debug, Clone)]
-enum Gesture {
+pub(super) enum Gesture {
     Click {
         at: Pos2,
         button: PointerButton,
@@ -119,13 +119,20 @@ enum Gesture {
     Type(&'static str),
 }
 
-struct Monkey {
+pub(super) struct Monkey {
     dice: Dice,
     /// Menus and popups open near the last click, so later clicks often land nearby.
     last: Pos2,
 }
 
 impl Monkey {
+    pub(super) fn new(seed: u64) -> Self {
+        Self {
+            dice: Dice(seed),
+            last: Pos2::ZERO,
+        }
+    }
+
     fn place(&mut self) -> Pos2 {
         let roll = self.dice.below(100);
         let pos = if roll < 15 {
@@ -160,7 +167,7 @@ impl Monkey {
         }
     }
 
-    fn gesture(&mut self) -> Gesture {
+    pub(super) fn gesture(&mut self) -> Gesture {
         match self.dice.below(100) {
             0..=44 => Gesture::Click {
                 at: self.place(),
@@ -204,7 +211,7 @@ fn button(pos: Pos2, button: PointerButton, pressed: bool, modifiers: Modifiers)
 }
 
 /// The events of each frame the gesture spans.
-fn frames(gesture: &Gesture) -> Vec<Vec<Event>> {
+pub(super) fn frames(gesture: &Gesture) -> Vec<Vec<Event>> {
     match *gesture {
         Gesture::Click {
             at,
@@ -264,7 +271,7 @@ fn frames(gesture: &Gesture) -> Vec<Vec<Event>> {
     }
 }
 
-fn crowded(editor: &mut Editor) {
+pub(super) fn crowded(editor: &mut Editor) {
     import(editor, 25);
     place(editor, 0, 10);
     place(editor, 14, 11);
@@ -277,10 +284,7 @@ fn run_monkey(gpu: Option<&egui_wgpu::RenderState>, seeds: Range<u64>) {
         let mut editor = editor(gpu);
         let mut screen = Screen::default();
         crowded(&mut editor);
-        let mut monkey = Monkey {
-            dice: Dice(seed),
-            last: Pos2::ZERO,
-        };
+        let mut monkey = Monkey::new(seed);
         let mut done: Vec<Gesture> = Vec::new();
         for step in 0..GESTURES {
             let gesture = monkey.gesture();
@@ -305,7 +309,7 @@ fn run_monkey(gpu: Option<&egui_wgpu::RenderState>, seeds: Range<u64>) {
 }
 
 /// `EDIT_MONKEY_SEEDS=0..200` runs longer than the default.
-fn seeds(default: Range<u64>) -> Range<u64> {
+pub(super) fn seeds(default: Range<u64>) -> Range<u64> {
     std::env::var("EDIT_MONKEY_SEEDS")
         .ok()
         .and_then(|seeds| {

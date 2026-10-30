@@ -3,6 +3,7 @@
 
 mod commands;
 mod monkey;
+mod soak;
 
 use std::future::Future;
 use std::path::PathBuf;
