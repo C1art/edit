@@ -1,7 +1,7 @@
 use egui::{Pos2, Rangef};
 use timeline::{
-    ClipId, DeltaBounds, LinkedSelection, MarkerOwner, MoveMode, Razor, RazorTarget, Sequence,
-    SetClipLine, SetClipVolume, SetTrackAutomation, Ticks, Timeline, TrackKind, TrackRef,
+    ClipId, DeltaBounds, LinkedSelection, MarkerOwner, MoveMode, Sequence, SetClipLine,
+    SetClipVolume, SetTrackAutomation, Ticks, Timeline, TrackKind, TrackRef,
 };
 
 use super::gesture::{self, Gesture};
@@ -70,17 +70,7 @@ impl TimelineView {
         if response.clicked() {
             if let Some(pos) = response.interact_pointer_pos() {
                 let hit = layout::hit(sequence, &rows, &scale, pos);
-                if self.tool.on_timeline() == Tool::Razor {
-                    if let Hit::Body { clip, .. } | Hit::Edge { clip, .. } = hit {
-                        let razor = Razor {
-                            at: frame_time(pos.x),
-                            target: RazorTarget::Clips(vec![clip]),
-                        };
-                        if let Err(error) = timeline.apply(razor) {
-                            output.errors.push(error.to_string());
-                        }
-                    }
-                } else if let Tool::TrackSelect(direction) = self.tool.on_timeline() {
+                if let Tool::TrackSelect(direction) = self.tool.on_timeline() {
                     let only = shift.then(|| hit_track(hit)).flatten();
                     self.selection =
                         track_select::pick(sequence, frame_time(pos.x), direction, only);
@@ -304,7 +294,7 @@ impl TimelineView {
                     from,
                 })
             }
-            (Tool::Razor, _) | (_, Hit::Empty { .. }) => None,
+            (_, Hit::Empty { .. }) => None,
             (Tool::Selection | Tool::Ripple, Hit::Edge { clip, edge, .. }) => {
                 self.selection = sequence.with_links(&[clip]);
                 let mode = if self.tool.on_timeline() == Tool::Ripple {

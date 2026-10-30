@@ -38,11 +38,12 @@ pub(crate) fn sequence_menu(editor: &mut Editor, ui: &mut egui::Ui) {
         ui.menu_button("Go to Gap", |ui| go_to_gap(editor, ui))
     });
     ui.separator();
-    let add_edit = Button::new("Add Edit").shortcut_text(editor.keymap.label(Command::AddEdit));
+    let add_edit =
+        Button::new("Snip at Playhead").shortcut_text(editor.keymap.label(Command::AddEdit));
     if ui.add_enabled(has_clips, add_edit).clicked() {
         editor.add_edit();
     }
-    let add_edit_all = Button::new("Add Edit to All Tracks")
+    let add_edit_all = Button::new("Snip All Tracks at Playhead")
         .shortcut_text(editor.keymap.label(Command::AddEditToAllTracks));
     if ui.add_enabled(has_clips, add_edit_all).clicked() {
         editor.add_edit_to_all_tracks();

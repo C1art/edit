@@ -21,7 +21,7 @@ const GROUPS: [(&str, &[(Command, &str)]); 4] = [
     (
         "Cut",
         &[
-            (Command::AddEdit, "Cut the clips at the playhead"),
+            (Command::AddEdit, "Snip the clips at the playhead"),
             (
                 Command::RippleTrimPrevious,
                 "Trim the clip's start to the playhead",
@@ -39,7 +39,6 @@ const GROUPS: [(&str, &[(Command, &str)]); 4] = [
         "Tools",
         &[
             (Command::SelectionTool, "Select and move clips"),
-            (Command::RazorTool, "Cut a clip where you click"),
             (Command::TypeTool, "Type a title on the picture"),
         ],
     ),

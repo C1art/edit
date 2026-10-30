@@ -65,7 +65,6 @@ impl TimelineView {
             });
         }
         match (tool, hit) {
-            (Tool::Razor, Hit::Body { .. } | Hit::Edge { .. }) => Some(CursorIcon::Crosshair),
             (Tool::Roll, Hit::Edge { .. }) => Some(CursorIcon::ResizeColumn),
             (Tool::Selection | Tool::Ripple | Tool::RateStretch, Hit::Edge { .. })
             | (Tool::Slip | Tool::Slide, Hit::Body { .. }) => Some(CursorIcon::ResizeHorizontal),

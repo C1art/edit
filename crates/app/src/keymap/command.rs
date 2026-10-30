@@ -113,7 +113,6 @@ pub enum Command {
     RippleTool,
     RollTool,
     RateStretchTool,
-    RazorTool,
     SlipTool,
     SlideTool,
     HandTool,
@@ -155,7 +154,7 @@ pub enum Command {
 pub const WORKSPACE_SLOTS: u8 = 9;
 
 impl Command {
-    pub const ALL: [Self; 155] = [
+    pub const ALL: [Self; 154] = [
         Self::NewProject,
         Self::OpenProject,
         Self::Save,
@@ -268,7 +267,6 @@ impl Command {
         Self::RippleTool,
         Self::RollTool,
         Self::RateStretchTool,
-        Self::RazorTool,
         Self::SlipTool,
         Self::SlideTool,
         Self::HandTool,
@@ -413,7 +411,6 @@ impl Command {
             | RippleTool
             | RollTool
             | RateStretchTool
-            | RazorTool
             | SlipTool
             | SlideTool
             | HandTool

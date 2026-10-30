@@ -357,7 +357,7 @@ mod tests {
         let previous = keymap.bind(Command::MatchFrame, chord("Ctrl+K"));
         assert_eq!(previous, Some(Command::AddEdit));
         assert_eq!(keymap.command(chord("Ctrl+K")), Some(Command::MatchFrame));
-        assert!(keymap.chords(Command::AddEdit).is_empty());
+        assert_eq!(keymap.chords(Command::AddEdit), [chord("Ctrl+B")]);
     }
 
     #[test]

@@ -65,13 +65,6 @@ pub(super) fn paint(painter: &Painter, rect: Rect, tool: Tool, color: Color32) {
                 .collect();
             line(&spring);
         }
-        Tool::Razor => {
-            filled(&[(0.05, 0.78), (0.62, 0.05), (0.95, 0.3), (0.38, 1.0)]);
-            painter.line_segment(
-                [at(0.36, 0.56), at(0.62, 0.34)],
-                Stroke::new(1.4, Color32::BLACK),
-            );
-        }
         Tool::Slip => {
             line(&[(0.04, 0.1), (0.04, 0.9)]);
             line(&[(0.96, 0.1), (0.96, 0.9)]);
@@ -111,4 +104,19 @@ pub(super) fn paint(painter: &Painter, rect: Rect, tool: Tool, color: Color32) {
         Tool::Shape(ShapeKind::Rectangle) => super::paint(painter, rect, Icon::Rectangle, color),
         Tool::Shape(ShapeKind::Ellipse) => super::paint(painter, rect, Icon::Ellipse, color),
     }
+}
+
+/// Two blades crossing at a pivot over two finger loops, for Snip.
+pub(super) fn scissors(painter: &Painter, rect: Rect, color: Color32) {
+    let at = |x: f32, y: f32| rect.lerp_inside(vec2(x, y));
+    let loop_radius = rect.width() * 0.15;
+    let blade = Stroke::new(1.6, color);
+    for (loop_x, tip_x) in [(0.24, 0.8), (0.76, 0.2)] {
+        let center = at(loop_x, 0.8);
+        painter.circle_stroke(center, loop_radius, Stroke::new(1.3, color));
+        // From the loop's rim, through the pivot, to the opposite tip.
+        let toward_tip = (at(tip_x, 0.02) - center).normalized();
+        painter.line_segment([center + toward_tip * loop_radius, at(tip_x, 0.02)], blade);
+    }
+    painter.circle_filled(at(0.5, 0.45), rect.width() * 0.06, color);
 }

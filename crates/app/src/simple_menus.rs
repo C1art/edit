@@ -235,7 +235,7 @@ fn sequence(editor: &mut Editor, ui: &mut Ui) {
     }
     ui.separator();
     let has_clips = editor.timeline.sequence().has_clips();
-    item(editor, ui, Command::AddEdit, "Cut at Playhead", has_clips);
+    item(editor, ui, Command::AddEdit, "Snip at Playhead", has_clips);
     item(
         editor,
         ui,

@@ -15,7 +15,6 @@ pub enum Tool {
     Ripple,
     Roll,
     RateStretch,
-    Razor,
     Slip,
     Slide,
     /// Drag to pan the view.
@@ -30,14 +29,13 @@ pub enum Tool {
 
 impl Tool {
     /// Every tool, grouped as the toolbar shows them: one button per group.
-    pub const GROUPS: [&'static [Self]; 7] = [
+    pub const GROUPS: [&'static [Self]; 6] = [
         &[Self::Selection],
         &[
             Self::TrackSelect(Direction::Forward),
             Self::TrackSelect(Direction::Backward),
         ],
         &[Self::Ripple, Self::Roll, Self::RateStretch],
-        &[Self::Razor],
         &[Self::Slip, Self::Slide],
         &[Self::Hand, Self::Zoom],
         &[
@@ -55,7 +53,6 @@ impl Tool {
             Self::Ripple => "Ripple",
             Self::Roll => "Roll",
             Self::RateStretch => "Stretch",
-            Self::Razor => "Razor",
             Self::Slip => "Slip",
             Self::Slide => "Slide",
             Self::Hand => "Hand",
@@ -77,7 +74,6 @@ impl Tool {
             Self::Ripple => "Drag an edge to trim and shift what follows",
             Self::Roll => "Drag a cut to move it between two clips",
             Self::RateStretch => "Drag an edge to change a clip's speed to fit",
-            Self::Razor => "Click a clip to cut it",
             Self::Slip => "Drag a clip to change its source range",
             Self::Slide => "Drag a clip between its neighbours",
             Self::Hand => "Drag to scroll the timeline",

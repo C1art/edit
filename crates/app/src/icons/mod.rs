@@ -48,6 +48,7 @@ pub(crate) enum Icon {
     Sort,
     NewBin,
     Magnet,
+    Scissors,
     Tool(crate::timeline_view::Tool),
 }
 
@@ -429,6 +430,7 @@ pub(crate) fn paint(painter: &Painter, rect: Rect, icon: Icon, color: Color32) {
             painter.line_segment([at(0.68, 0.26), at(1.0, 0.26)], gap);
         }
         Icon::Tool(tool) => tools::paint(painter, rect, tool, color),
+        Icon::Scissors => tools::scissors(painter, rect, color),
         Icon::Settings => {
             let center = rect.center();
             for tooth in 0..8 {

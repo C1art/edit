@@ -13,7 +13,6 @@ impl Command {
             Self::RippleTool => Tool::Ripple,
             Self::RollTool => Tool::Roll,
             Self::RateStretchTool => Tool::RateStretch,
-            Self::RazorTool => Tool::Razor,
             Self::SlipTool => Tool::Slip,
             Self::SlideTool => Tool::Slide,
             Self::HandTool => Tool::Hand,

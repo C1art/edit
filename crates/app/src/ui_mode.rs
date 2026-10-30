@@ -120,7 +120,7 @@ pub(crate) fn tool_groups(mode: UiMode, current: Tool) -> Vec<&'static [Tool]> {
 fn simple_tool(tool: Tool) -> bool {
     matches!(
         tool,
-        Tool::Selection | Tool::Razor | Tool::Hand | Tool::Zoom | Tool::Type | Tool::Shape(_)
+        Tool::Selection | Tool::Hand | Tool::Zoom | Tool::Type | Tool::Shape(_)
     )
 }
 

@@ -348,6 +348,15 @@ pub fn timeline_toolbar(editor: &mut Editor, ui: &mut egui::Ui) {
                 tool_group(ui, &mut editor.view.tool, group, &editor.keymap);
             }
         });
+        let snip = icons::sized_toggle(ui, false, Icon::Scissors, Look::Filled, TOOL)
+            .on_hover_text(
+                editor
+                    .keymap
+                    .tip("Snip: cut the clips at the playhead", Command::AddEdit),
+            );
+        if snip.clicked() {
+            editor.add_edit();
+        }
         theme::segmented(ui, |ui| {
             let snapping = editor.view.snapping;
             let snap = icons::sized_toggle(ui, snapping, Icon::Magnet, Look::Filled, TOOL)
