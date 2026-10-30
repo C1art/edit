@@ -14,14 +14,16 @@ pub(crate) enum MediaTab {
     Markers,
     History,
     Effects,
+    Graphics,
     Metadata,
 }
 
 impl MediaTab {
-    pub(crate) const ALL: [Self; 6] = [
+    pub(crate) const ALL: [Self; 7] = [
         Self::Project,
         Self::Markers,
         Self::Effects,
+        Self::Graphics,
         Self::MediaBrowser,
         Self::Metadata,
         Self::History,
@@ -35,6 +37,7 @@ impl MediaTab {
             Self::Markers => ("markers", "Markers"),
             Self::History => ("history", "History"),
             Self::Effects => ("effects", "Effects"),
+            Self::Graphics => ("graphics", "Graphics"),
             Self::Metadata => ("metadata", "Metadata"),
         }
     }
@@ -95,6 +98,7 @@ impl Editor {
             MediaTab::Markers => crate::markers_panel::ui(self, ui),
             MediaTab::History => crate::history_panel::ui(self, ui),
             MediaTab::Effects => crate::effects_panel::ui(self, ui),
+            MediaTab::Graphics => crate::title_templates::browser_ui(self, ui),
             MediaTab::Metadata => crate::metadata_panel::ui(self, ui),
         }
     }

@@ -44,7 +44,8 @@ impl UiMode {
     }
 }
 
-pub(crate) const SIMPLE_MEDIA_TABS: [MediaTab; 2] = [MediaTab::Project, MediaTab::Effects];
+pub(crate) const SIMPLE_MEDIA_TABS: [MediaTab; 3] =
+    [MediaTab::Project, MediaTab::Effects, MediaTab::Graphics];
 pub(crate) const SIMPLE_SIDE_TABS: [SideTab; 4] = [
     SideTab::EffectControls,
     SideTab::LumetriColor,

@@ -70,6 +70,9 @@ impl eframe::App for Editor {
         self.poll_export_frame(&ctx);
         self.poll_export_queue(&ctx);
         self.poll_transcribing(&ctx);
+        if self.graphics.poll(&ctx) {
+            ctx.request_repaint();
+        }
         if self.vst.poll() {
             ctx.request_repaint();
         }

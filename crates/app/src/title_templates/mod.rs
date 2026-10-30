@@ -1,8 +1,12 @@
 //! Ready-made titles to start from, and titles the user keeps to start from again.
 
+mod browser;
 mod catalog;
 mod headings;
 mod overlays;
+mod previews;
+
+pub(crate) use browser::{ui as browser_ui, GraphicsBrowser};
 
 use egui::Key;
 use project::TemplatesFile;

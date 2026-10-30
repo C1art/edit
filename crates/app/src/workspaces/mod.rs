@@ -48,7 +48,7 @@ impl Layout {
     }
 }
 
-const BUILT_IN: [(&str, Layout); 6] = [
+const BUILT_IN: [(&str, Layout); 7] = [
     (
         "Assembly",
         Layout::new(
@@ -78,6 +78,14 @@ const BUILT_IN: [(&str, Layout); 6] = [
         Layout::new(
             [300.0, 330.0, 340.0],
             MediaTab::Effects,
+            SideTab::EffectControls,
+        ),
+    ),
+    (
+        "Graphics",
+        Layout::new(
+            [300.0, 330.0, 300.0],
+            MediaTab::Graphics,
             SideTab::EffectControls,
         ),
     ),
