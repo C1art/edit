@@ -265,6 +265,12 @@ pub fn menu_bar(editor: &mut Editor, ui: &mut egui::Ui) {
                     }
                     ui.weak("For media brought in from now on");
                 });
+                ui.menu_button("Timeline Playback Auto-Scrolling", |ui| {
+                    let choice = &mut editor.view.auto_scroll;
+                    for option in crate::timeline_view::AutoScroll::ALL {
+                        ui.radio_value(choice, option, option.label());
+                    }
+                });
                 ui.menu_button("Proxies for 4K and High Frame Rate Media", |ui| {
                     let choice = &mut editor.proxy_offer.choice;
                     for option in crate::proxy_offer::HeavyMedia::ALL {

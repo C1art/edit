@@ -3,6 +3,40 @@ use timeline::{Sequence, Ticks};
 
 use super::TimelineView;
 
+/// Premiere's Timeline Playback Auto-Scrolling: how the view keeps up with the playhead
+/// while it plays.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum AutoScroll {
+    None,
+    #[default]
+    Page,
+    Smooth,
+}
+
+impl AutoScroll {
+    pub(crate) const ALL: [Self; 3] = [Self::None, Self::Page, Self::Smooth];
+
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            Self::None => "No Scroll",
+            Self::Page => "Page Scroll",
+            Self::Smooth => "Smooth Scroll",
+        }
+    }
+
+    pub(crate) fn key(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Page => "page",
+            Self::Smooth => "smooth",
+        }
+    }
+
+    pub(crate) fn from_key(key: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|scroll| scroll.key() == key)
+    }
+}
+
 impl TimelineView {
     /// Zooms by `factor` (above one zooms in) keeping time at screen x `anchor` fixed.
     pub fn zoom(&mut self, factor: f32, anchor: Option<f32>) {
@@ -46,7 +80,11 @@ impl TimelineView {
         let jumped = playhead != self.last_playhead && !ui.input(|input| input.pointer.any_down());
         self.last_playhead = playhead;
         if playing {
-            self.follow(playhead, 0.1);
+            match self.auto_scroll {
+                AutoScroll::None => {}
+                AutoScroll::Page => self.follow(playhead, 0.1),
+                AutoScroll::Smooth => self.center_past_middle(playhead),
+            }
         } else if jumped {
             self.follow(playhead, 0.5);
         }
@@ -84,6 +122,16 @@ impl TimelineView {
         }
         if scroll.y != 0.0 {
             self.scroll_tracks(-scroll.y, sequence, tracks);
+        }
+    }
+
+    /// Holds the playhead in the middle once it gets there, the sequence moving under it.
+    fn center_past_middle(&mut self, playhead: Ticks) {
+        let half = self.width * 0.5;
+        let scale = self.scale(0.0);
+        let x = scale.x(playhead);
+        if x > half || x < 0.0 {
+            self.scroll = (playhead - scale.span(half)).max(Ticks::ZERO);
         }
     }
 

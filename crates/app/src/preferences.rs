@@ -5,6 +5,7 @@ use crate::media_scaling::MediaScaling;
 use crate::project_store::Setting;
 use crate::proxy_offer::HeavyMedia;
 use crate::still_length::StillLength;
+use crate::timeline_view::AutoScroll;
 use crate::transition_defaults::TransitionDefaults;
 
 /// The choices kept from one session to the next, written as `name<TAB>value` lines.
@@ -26,6 +27,7 @@ pub(crate) struct Preferences {
     transitions: TransitionDefaults,
     still_length: StillLength,
     media_scaling: MediaScaling,
+    auto_scroll: AutoScroll,
 }
 
 impl Preferences {
@@ -45,6 +47,7 @@ impl Preferences {
             transitions: editor.transition_defaults,
             still_length: editor.still_length,
             media_scaling: editor.media_scaling,
+            auto_scroll: editor.view.auto_scroll,
         }
     }
 
@@ -55,7 +58,7 @@ impl Preferences {
              audio_device\t{}\naudio_device_id\t{}\nvoiceover_input\t{}\n\
              voiceover_input_id\t{}\nvoiceover_countdown\t{}\nvoiceover_hear_sequence\t{}\n\
              default_transition\t{}\ndefault_transition_length\t{}\nstill_length\t{}\n\
-             media_scaling\t{}\n",
+             media_scaling\t{}\nauto_scroll\t{}\n",
             self.hardware_decoding,
             self.autosave,
             self.autosave_minutes,
@@ -83,6 +86,7 @@ impl Preferences {
             self.transitions.length,
             self.still_length.0,
             self.media_scaling.key(),
+            self.auto_scroll.key(),
         )
     }
 
@@ -133,6 +137,7 @@ impl Preferences {
                 }
                 "still_length" => set(&mut self.still_length.0, value.parse().ok()),
                 "media_scaling" => set(&mut self.media_scaling, MediaScaling::from_key(value)),
+                "auto_scroll" => set(&mut self.auto_scroll, AutoScroll::from_key(value)),
                 _ => {}
             }
         }
@@ -175,6 +180,7 @@ impl Editor {
                 .clamp(*StillLength::LENGTHS.start(), *StillLength::LENGTHS.end()),
         );
         self.media_scaling = preferences.media_scaling;
+        self.view.auto_scroll = preferences.auto_scroll;
         self.saved_preferences = Some(Preferences::of(self));
     }
 
@@ -210,6 +216,7 @@ mod tests {
         transitions: TransitionDefaults::STANDARD,
         still_length: StillLength::STANDARD,
         media_scaling: MediaScaling::None,
+        auto_scroll: AutoScroll::Page,
     };
 
     #[test]
@@ -240,6 +247,7 @@ mod tests {
             },
             still_length: StillLength(250),
             media_scaling: MediaScaling::SetToFillFrame,
+            auto_scroll: AutoScroll::Smooth,
         };
         assert_eq!(DEFAULTS.read(&chosen.to_text()), chosen);
     }

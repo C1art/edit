@@ -49,6 +49,7 @@ use scale::TimeScale;
 pub use tool::{Direction, Tool};
 pub use track_heights::TrackHeights;
 pub use trim_view::TrimView;
+pub(crate) use zoom::AutoScroll;
 
 const HEADER_WIDTH: f32 = 200.0;
 const RULER_HEIGHT: f32 = 26.0;
@@ -161,6 +162,7 @@ pub struct TimelineView {
     pub heights: TrackHeights,
     /// The costly segments, each with whether a render preview of it is ready.
     pub render_bar: Vec<(std::ops::Range<Ticks>, bool)>,
+    pub auto_scroll: AutoScroll,
     /// The playhead at the last layout, to notice it jumping.
     last_playhead: Ticks,
     /// Whether the sequence had anything in it at the last layout.
@@ -193,6 +195,7 @@ impl Default for TimelineView {
             renaming: None,
             heights: TrackHeights::default(),
             render_bar: Vec::new(),
+            auto_scroll: AutoScroll::default(),
             last_playhead: Ticks::ZERO,
             filled: false,
             fitted: None,
