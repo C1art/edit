@@ -48,9 +48,10 @@ impl TimelineView {
         let rows = layout::rows(sequence, &self.heights, top);
         let hit = layout::hit(sequence, &rows, scale, pos);
         let tool = self.tool.on_timeline();
+        let grip = matches!(hit, Hit::Body { .. })
+            && transition_grip::grip_at(sequence, &rows, scale, pos).is_some();
         if tool == Tool::Selection
-            && matches!(hit, Hit::Body { .. })
-            && transition_grip::grip_at(sequence, &rows, scale, pos).is_some()
+            && (grip || transition_grip::fade_at(sequence, &rows, scale, pos).is_some())
         {
             return Some(CursorIcon::ResizeHorizontal);
         }

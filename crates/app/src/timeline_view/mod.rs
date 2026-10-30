@@ -340,6 +340,15 @@ impl TimelineView {
         if let Some(at) = self.drag.as_ref().and_then(|drag| drag.snapped_to) {
             paint::guide(&painter, scale.x(at), tracks.top(), tracks.bottom());
         }
+        let hover = ui
+            .ctx()
+            .pointer_hover_pos()
+            .filter(|pos| tracks.contains(*pos));
+        if let Some(pointer) =
+            hover.filter(|_| self.drag.is_none() && self.tool.on_timeline() == Tool::Selection)
+        {
+            transition_grip::paint_fade_handles(&painter, sequence, &rows, &scale, pointer);
+        }
         paint::ruler(&ui.painter_at(ruler), ruler, &scale, sequence);
         paint::render_bar(&ui.painter_at(ruler), ruler, &scale, &self.render_bar);
         markers::paint_in_out(

@@ -243,10 +243,12 @@ impl Gesture {
             }
             Self::TransitionLength(grip) => {
                 let frame = sequence.format.frame_rate.frame_start(1, sequence.timebase);
+                // A fade handle dragged nowhere or outward lays no fade.
+                let unlaid = grip.transition.duration == Ticks::ZERO && grip.stretch * delta.0 <= 0;
                 PendingEdit::Transition(SetTransition {
                     clip: grip.clip,
                     edge: grip.edge,
-                    transition: Some(grip.dragged(delta, frame)),
+                    transition: (!unlaid).then(|| grip.dragged(delta, frame)),
                 })
             }
         }

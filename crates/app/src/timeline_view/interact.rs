@@ -133,7 +133,9 @@ impl TimelineView {
             }
             let selecting = self.tool.on_timeline() == Tool::Selection;
             let grip = transition_grip::grip_at(sequence, &rows, &scale, origin)
-                .filter(|_| selecting && matches!(hit, Hit::Body { .. }));
+                .filter(|_| matches!(hit, Hit::Body { .. }))
+                .or_else(|| transition_grip::fade_at(sequence, &rows, &scale, origin))
+                .filter(|_| selecting);
             let band = self
                 .band_hit(sequence, &rows, &scale, hit, origin)
                 .filter(|_| selecting);
