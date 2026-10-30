@@ -109,6 +109,14 @@ fn select_all(ui: &egui::Ui, id: Id, text: &str) {
     state.store(ui.ctx(), id);
 }
 
+pub fn frames_text(
+    frames: i64,
+    (timebase, rate, display): (Timebase, FrameRate, TimeDisplay),
+) -> String {
+    let ticks = rate.frame_start(frames, timebase);
+    Timecode::shown(ticks, timebase, rate, display).to_string()
+}
+
 /// A count of frames shown as timecode, which takes timecode when typed into too.
 pub fn frames(
     frames: &mut i64,
@@ -116,10 +124,7 @@ pub fn frames(
 ) -> egui::DragValue<'_> {
     egui::DragValue::new(frames)
         .speed(0.5)
-        .custom_formatter(move |frames, _| {
-            let ticks = rate.frame_start(frames as i64, timebase);
-            Timecode::shown(ticks, timebase, rate, display).to_string()
-        })
+        .custom_formatter(move |frames, _| frames_text(frames as i64, (timebase, rate, display)))
         .custom_parser(
             move |text| match TypedTimecode::parse(text, rate, display)? {
                 TypedTimecode::At(frames) => Some(frames as f64),

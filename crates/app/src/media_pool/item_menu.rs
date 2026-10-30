@@ -88,6 +88,9 @@ impl Pool<'_> {
         if item.nest.is_some() && ui.button("Open in Timeline").clicked() {
             self.action = Some(PoolAction::OpenNest(item.id));
         }
+        if item.subclip.is_some() && ui.button("Edit Subclip…").clicked() {
+            self.action = Some(PoolAction::EditSubclip(item.id));
+        }
         if ui.button("Rename").clicked() {
             self.view.renaming = Some((entry, item.name.clone()));
         }

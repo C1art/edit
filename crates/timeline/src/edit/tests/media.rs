@@ -73,6 +73,33 @@ fn a_subclip_places_its_part_of_the_file_and_cannot_reach_past_it() {
 }
 
 #[test]
+fn editing_a_subclip_moves_its_range_or_makes_it_a_master_clip() {
+    let (mut timeline, source) = timeline();
+    timeline
+        .apply(MakeSubclip {
+            source,
+            range: Ticks(200)..Ticks(400),
+            name: "take 2".into(),
+        })
+        .unwrap();
+    let subclip = timeline.sequence().media.last().unwrap().id;
+    let edit = |range: Option<(i64, i64)>| EditSubclip {
+        source: subclip,
+        range: range.map(|(start, end)| Ticks(start)..Ticks(end)),
+    };
+    timeline.apply(edit(Some((100, 5_000)))).unwrap();
+    let item = timeline.sequence().media_item(subclip).unwrap();
+    assert_eq!(item.subclip, Some(Ticks(100)..Ticks(1000)));
+    timeline.apply(edit(None)).unwrap();
+    let item = timeline.sequence().media_item(subclip).unwrap();
+    assert_eq!(item.default_range(Timebase::HZ_90K), Ticks(0)..Ticks(1000));
+    assert_eq!(
+        timeline.apply(edit(None)),
+        Err(TimelineError::NothingToEdit)
+    );
+}
+
+#[test]
 fn a_duplicate_follows_its_original_under_a_new_id_and_undoes() {
     let (mut timeline, source) = timeline();
     timeline.apply(DuplicateMedia { source }).unwrap();

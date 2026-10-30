@@ -110,6 +110,7 @@ mod source_drag;
 mod source_waveform;
 mod speed_dialog;
 mod still_length;
+mod subclip_dialog;
 mod text_styles;
 mod theme;
 mod timecode_dialog;

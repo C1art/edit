@@ -212,6 +212,37 @@ impl Edit for MakeSubclip {
     }
 }
 
+/// Changes the part of the file a subclip stands for, or with no range makes it stand
+/// for the whole file again, as a master clip. Its clips keep their source times.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EditSubclip {
+    pub source: SourceId,
+    /// In the file's time.
+    pub range: Option<Range<Ticks>>,
+}
+
+impl Edit for EditSubclip {
+    fn name(&self) -> &'static str {
+        "Edit Subclip"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let item = media_item(sequence, self.source)?;
+        let range = self
+            .range
+            .as_ref()
+            .map(|range| range.start.max(Ticks::ZERO)..range.end.min(item.duration));
+        if range.as_ref().is_some_and(Range::is_empty) {
+            return Err(TimelineError::NonPositiveDuration);
+        }
+        if item.subclip.is_none() || item.subclip == range {
+            return Err(TimelineError::NothingToEdit);
+        }
+        item.subclip = range;
+        Ok(())
+    }
+}
+
 /// Copies a media item, as the Project panel's Duplicate does: a sequence's copy is
 /// edited apart from the original, and clips placed from the original keep using it.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -39,6 +39,7 @@ pub enum PoolAction {
     /// Asks which of the file's channels play on each side.
     AudioChannels(SourceId),
     Timecode(SourceId),
+    EditSubclip(SourceId),
     /// Adds a mono item for each of the file's channels.
     BreakoutToMono(SourceId),
     /// Asks for files to import.
