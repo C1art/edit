@@ -70,12 +70,13 @@ pub(crate) struct Hold(Arc<AtomicUsize>);
 impl Holds {
     /// Another hold, unless as many as allowed are out.
     pub(super) fn take(&self) -> Option<Hold> {
-        let counted = self
-            .0
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |held| {
-                (held < MOST_HELD).then_some(held + 1)
-            });
-        counted.ok().map(|_| Hold(Arc::clone(&self.0)))
+        // `fetch_update` is deprecated on newer toolchains and its replacement missing on
+        // older ones, so count first and give the hold back when over.
+        if self.0.fetch_add(1, Ordering::AcqRel) >= MOST_HELD {
+            self.0.fetch_sub(1, Ordering::AcqRel);
+            return None;
+        }
+        Some(Hold(Arc::clone(&self.0)))
     }
 }
 
