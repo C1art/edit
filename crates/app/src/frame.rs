@@ -61,6 +61,7 @@ impl eframe::App for Editor {
         crate::essential_sound::poll(self, &ctx);
         self.poll_proxies(&ctx);
         self.poll_multicam_sync(&ctx);
+        self.poll_clip_sync(&ctx);
         self.poll_scene_edits(&ctx);
         self.poll_motion_analysis(&ctx);
         self.poll_reframe_analysis(&ctx);

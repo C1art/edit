@@ -9,6 +9,7 @@ mod channels_dialog;
 mod clip_art;
 mod clip_menu;
 mod clip_moves;
+mod clip_sync;
 mod color_match;
 mod commands;
 mod comparison;

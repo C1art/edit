@@ -61,6 +61,7 @@ pub struct Editor {
     pub(crate) gang: Option<crate::gang::Gang>,
     /// Items waiting on their files to say how many channels to break out.
     pub(crate) breakouts: Vec<timeline::SourceId>,
+    pub(crate) clip_sync: Option<crate::clip_sync::ClipSyncJob>,
     pub(crate) dropped_frame_indicator: bool,
     pub(crate) full_screen: bool,
     pub(crate) transition_defaults: crate::transition_defaults::TransitionDefaults,
@@ -240,6 +241,7 @@ impl Editor {
             ganged: false,
             gang: None,
             breakouts: Vec::new(),
+            clip_sync: None,
             dropped_frame_indicator: false,
             full_screen: false,
             transition_defaults: crate::transition_defaults::TransitionDefaults::STANDARD,

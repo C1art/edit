@@ -473,6 +473,7 @@ mod replace;
 mod speed;
 mod submix;
 mod subsequence;
+mod synchronize;
 mod through;
 mod track;
 mod transitions;

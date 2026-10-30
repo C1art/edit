@@ -189,6 +189,14 @@ fn on_selection(editor: &mut Editor, ui: &mut Ui) {
     if ui.add_enabled(joins, join).clicked() {
         editor.join_through_edits();
     }
+    ui.menu_button("Synchronize", |ui| {
+        ui.weak("Line up with the earliest selected clip by");
+        for point in crate::clip_sync::SyncPoint::ALL {
+            if ui.button(point.name()).clicked() {
+                editor.synchronize(point);
+            }
+        }
+    });
     let gain = Button::new("Audio Gain…").shortcut_text(editor.keymap.label(Command::AudioGain));
     if ui.add(gain).clicked() {
         editor.prompt_clip_gain();
