@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Generator, Shape, Title, TitleMotion};
+use crate::{Generator, LayerAnimation, Shape, Title, TitleMotion};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Graphic {
@@ -31,6 +31,32 @@ pub struct GraphicLayer {
     /// Percent.
     #[serde(default = "full")]
     pub opacity: u32,
+    #[serde(default)]
+    pub pin: Pin,
+    #[serde(default)]
+    pub animation: LayerAnimation,
+}
+
+/// Which edge of a layer stays at its position as what's in it grows, so text typed
+/// into a left-aligned lower third grows to the right.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub enum Pin {
+    Left,
+    #[default]
+    Center,
+    Right,
+}
+
+impl Pin {
+    pub const ALL: [Self; 3] = [Self::Left, Self::Center, Self::Right];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Left => "Left",
+            Self::Center => "Center",
+            Self::Right => "Right",
+        }
+    }
 }
 
 fn full() -> u32 {
@@ -65,6 +91,8 @@ impl GraphicLayer {
             scale: full(),
             rotation: 0,
             opacity: full(),
+            pin: Pin::Center,
+            animation: LayerAnimation::default(),
         }
     }
 }

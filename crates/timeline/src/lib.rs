@@ -22,6 +22,7 @@ mod hue_curves;
 mod interpretation;
 mod keyframe;
 mod label;
+mod layer_motion;
 mod leader;
 mod links;
 mod look;
@@ -54,6 +55,7 @@ mod three_point;
 mod time;
 mod timecode;
 mod title_motion;
+mod title_template;
 mod track;
 mod transition;
 mod validate;
@@ -118,7 +120,7 @@ pub use generator::{
     held_length, Generator, Shape, ShapeKind, TextAlign, TextStroke, Title, TitleFont,
     GENERATED_SECONDS,
 };
-pub use graphic::{Graphic, GraphicContent, GraphicLayer};
+pub use graphic::{Graphic, GraphicContent, GraphicLayer, Pin};
 pub use group::GroupId;
 pub use history::{preview, Edit, EditCommand, Timeline};
 pub use hue_curves::{HueCurve, HueCurves, HUE_CURVE_NEUTRAL};
@@ -127,6 +129,7 @@ pub use interpretation::{
 };
 pub use keyframe::{HandleSide, Handles, Interpolation, Keyframe};
 pub use label::Label;
+pub use layer_motion::{Appear, FrameSide, LayerAnimation, LayerPose};
 pub use leader::{CountingLeader, LeaderPicture, LEADER_SECONDS};
 pub use links::LinkedSelection;
 pub use look::{Crop, Look, Motion};
@@ -164,6 +167,7 @@ pub use three_point::{edit_points, EditPoints, FourPoint};
 pub use time::{Ticks, Timebase};
 pub use timecode::{FrameRate, Timecode, TypedTimecode};
 pub use title_motion::{Scroll, TitleMotion};
+pub use title_template::{TemplateLength, TitleTemplate};
 pub use transition::{nearest_transition_edge, Alignment, Side, Transition, TransitionKind};
 pub use wipe::{Border, Sweep, Wipe, WipePattern};
 pub use xmeml::to_xmeml;
