@@ -55,7 +55,7 @@ fn title_controls(ui: &mut egui::Ui, title: &mut Title) -> Option<Change> {
 
 /// A title's look, without its motion.
 pub(super) fn text_controls(ui: &mut egui::Ui, title: &mut Title) -> Option<Change> {
-    let mut change = None;
+    let mut change = super::text_style_row::row(ui, title);
     // Effect Controls is often narrow, so rows here wrap rather than run off its edge.
     let text = ui.add(
         egui::TextEdit::multiline(&mut title.text)

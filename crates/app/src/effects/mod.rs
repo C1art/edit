@@ -35,6 +35,7 @@ mod simple_text;
 mod sound;
 mod sound_more;
 mod stabilizer;
+mod text_style_row;
 mod tone;
 mod transitions;
 mod video_effects;
@@ -66,6 +67,7 @@ pub use matte_overlay::matte_overlay;
 pub use motion_overlay::motion_overlay;
 pub(crate) use sound::track_effect_controls;
 pub(crate) use sound::{category as audio_category, CATEGORIES as AUDIO_CATEGORIES};
+pub(crate) use text_style_row::StyleRequest;
 pub use transitions::{
     add_transition, apply_default_transition, apply_default_transitions_to_selection,
     apply_transition, remove_transitions_from_selection,
@@ -171,11 +173,15 @@ fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip, section
             _ => generator,
         });
     let height = editor.timeline.sequence().format.height;
+    text_style_row::lend(ui.ctx(), &editor.text_styles);
     let drawing_change = drawing
         .as_mut()
         .and_then(|generator| generated::controls(ui, generator, height));
     if graphic_layers::take_picture_request(ui) {
         editor.prompt_path(PathPurpose::GraphicPicture(clip.source));
+    }
+    if let Some(request) = text_style_row::take_request(ui.ctx()) {
+        editor.text_style_request(request);
     }
     let video_tracks = editor.timeline.sequence().video.len();
     let keys = std::mem::take(&mut editor.effects.keys);

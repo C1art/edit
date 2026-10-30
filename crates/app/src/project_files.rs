@@ -346,6 +346,9 @@ impl Editor {
                 StoreEvent::SettingRead(Setting::TitleTemplates, Ok(Some(text))) => {
                     self.load_title_templates(&text);
                 }
+                StoreEvent::SettingRead(Setting::TextStyles, Ok(Some(text))) => {
+                    self.load_text_styles(&text);
+                }
                 StoreEvent::SettingRead(Setting::Workspaces, Ok(Some(text))) => {
                     self.load_workspaces(&text);
                 }

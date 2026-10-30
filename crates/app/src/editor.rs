@@ -158,6 +158,8 @@ pub struct Editor {
     pub(crate) preset_dialog: Option<crate::effect_presets::PresetDialog>,
     pub(crate) title_templates: Vec<timeline::TitleTemplate>,
     pub(crate) template_dialog: Option<crate::title_templates::TemplateDialog>,
+    pub(crate) text_styles: std::sync::Arc<Vec<timeline::TextStyle>>,
+    pub(crate) text_style_dialog: Option<crate::text_styles::StyleDialog>,
     pub(crate) workspaces: crate::workspaces::Workspaces,
     pub(crate) naming_workspace: Option<crate::workspaces::NamingWorkspace>,
     pub(crate) typing: Option<crate::graphics_tools::Typing>,
@@ -324,6 +326,8 @@ impl Editor {
             preset_dialog: None,
             title_templates: Vec::new(),
             template_dialog: None,
+            text_styles: std::sync::Arc::default(),
+            text_style_dialog: None,
         };
         for path in initial {
             editor.open_path(path);

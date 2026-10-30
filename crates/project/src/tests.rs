@@ -275,6 +275,23 @@ fn presets_round_trip_through_text() {
 }
 
 #[test]
+fn text_styles_round_trip_through_text() {
+    let title = timeline::Title {
+        font: timeline::TitleFont::File(PathBuf::from(r"C:\Fonts\Bold Face.ttf")),
+        stroke: Some(timeline::TextStroke::default()),
+        background: Some(timeline::Rgb::BLACK),
+        tracking: -40,
+        ..timeline::Title::default()
+    };
+    let file = TextStylesFile::new(vec![timeline::TextStyle::from_title(
+        "Lower".into(),
+        &title,
+    )]);
+    let text = file.to_text().unwrap();
+    assert_eq!(TextStylesFile::from_text(&text).unwrap(), file);
+}
+
+#[test]
 fn ultra_keys_saved_before_spill_suppression_keep_their_edge_desaturation() {
     let text = r#"{"format_version": 1, "presets": [{"name": "Key", "video": [
         {"UltraKey": {"color": {"r": 0, "g": 255, "b": 0},

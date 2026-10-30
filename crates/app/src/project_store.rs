@@ -59,6 +59,7 @@ pub enum Setting {
     Keymap,
     Presets,
     TitleTemplates,
+    TextStyles,
     Workspaces,
     Folders,
     RecentProjects,
@@ -68,10 +69,11 @@ pub enum Setting {
 
 impl Setting {
     /// Those the editor reads once it starts; the window's is needed before then.
-    pub const READ_AT_START: [Self; 7] = [
+    pub const READ_AT_START: [Self; 8] = [
         Self::Keymap,
         Self::Presets,
         Self::TitleTemplates,
+        Self::TextStyles,
         Self::Workspaces,
         Self::Folders,
         Self::RecentProjects,
@@ -83,6 +85,7 @@ impl Setting {
             Self::Keymap => "Keyboard Shortcuts.txt",
             Self::Presets => "Effect Presets.json",
             Self::TitleTemplates => "Title Templates.json",
+            Self::TextStyles => "Text Styles.json",
             Self::Workspaces => "Workspaces.txt",
             Self::Folders => "Recent Folders.txt",
             Self::RecentProjects => "Recent Projects.txt",
@@ -97,6 +100,7 @@ impl Setting {
             Self::Keymap => "shortcuts",
             Self::Presets => "effect presets",
             Self::TitleTemplates => "title templates",
+            Self::TextStyles => "text styles",
             Self::Workspaces => "workspaces",
             Self::Folders => "recent folders",
             Self::RecentProjects => "recent projects",

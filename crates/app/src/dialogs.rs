@@ -27,6 +27,7 @@ pub(crate) fn show(editor: &mut Editor, ctx: &egui::Context) {
     crate::keymap::window(editor, ctx);
     crate::effect_presets::dialog(editor, ctx);
     crate::title_templates::dialog(editor, ctx);
+    crate::text_styles::dialog(editor, ctx);
     crate::workspaces::dialog(editor, ctx);
     crate::link_media::dialog(editor, ctx);
     crate::proxy_offer::dialog(editor, ctx);
