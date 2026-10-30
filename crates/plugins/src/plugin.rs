@@ -11,7 +11,7 @@ use crate::{state, ClassId, ParamId, ParameterInfo, PluginError, PluginInfo, Tai
 /// thread and `process` on the audio thread; most plugins tolerate everything on one
 /// thread while no editor is open, but see the crate docs before opening one.
 pub struct Plugin {
-    instance: Instance,
+    pub(crate) instance: Instance,
 }
 
 impl Plugin {

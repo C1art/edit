@@ -86,10 +86,13 @@ impl Instance {
     }
 
     pub(crate) fn has_editor(&self) -> bool {
+        self.create_view().is_some()
+    }
+
+    pub(crate) fn create_view(&self) -> Option<ComPtr<IPlugView>> {
         // SAFETY: `kEditor` is a NUL-terminated view type name.
         let view = unsafe { self.controller.createView(kEditor) };
-        // SAFETY: a non-null view carries one reference for us; dropping the pointer
-        // releases it immediately.
-        unsafe { ComPtr::<IPlugView>::from_raw(view) }.is_some()
+        // SAFETY: a non-null view carries one reference, which the pointer takes over.
+        unsafe { ComPtr::<IPlugView>::from_raw(view) }
     }
 }

@@ -1,6 +1,8 @@
 mod classes;
 mod consts;
 mod controller;
+#[cfg(windows)]
+pub(crate) mod editor;
 mod host;
 mod instance;
 mod message;

@@ -24,6 +24,8 @@ pub(super) struct Output {
     pub(super) choose_lut: Option<LutSlot>,
     /// The effect, by index, whose Image Matte Key to ask for the picture of.
     pub(super) choose_matte: Option<usize>,
+    /// The plugin effect, by index, whose own editor window to open.
+    pub(super) open_editor: Option<usize>,
     /// Whether to analyze the clip's motion for Warp Stabilizer.
     pub(super) analyze_motion: bool,
     /// Whether to find the clip's subject for Auto Reframe.
@@ -199,6 +201,7 @@ impl Rows {
                 seek: None,
                 choose_lut: None,
                 choose_matte: None,
+                open_editor: None,
                 analyze_motion: false,
                 analyze_reframe: false,
                 track_mask: None,

@@ -32,6 +32,11 @@ pub enum PluginError {
     UnknownParameter(ParamId),
     InvalidParameterValue,
     InvalidState,
+    /// Plugin editors can only be shown on Windows.
+    EditorUnsupported,
+    NoEditor,
+    /// A step of opening an editor window failed.
+    Editor(&'static str),
 }
 
 impl fmt::Display for PluginError {
@@ -61,6 +66,9 @@ impl fmt::Display for PluginError {
             Self::UnknownParameter(id) => write!(f, "unknown parameter {}", id.0),
             Self::InvalidParameterValue => f.write_str("parameter value is not finite"),
             Self::InvalidState => f.write_str("plugin state blob is malformed"),
+            Self::EditorUnsupported => f.write_str("plugin editors open only on Windows"),
+            Self::NoEditor => f.write_str("plugin has no editor window"),
+            Self::Editor(step) => write!(f, "{step} for the plugin editor failed"),
         }
     }
 }

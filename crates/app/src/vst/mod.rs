@@ -3,6 +3,7 @@
 //! stall the interface.
 
 mod cache;
+mod editors;
 mod worker;
 
 use std::collections::{HashMap, HashSet};
@@ -10,6 +11,8 @@ use std::path::PathBuf;
 
 use crossbeam::channel::{Receiver, Sender};
 use plugins::{ParameterInfo, PluginInfo};
+
+pub(crate) use editors::{open_editor, tend_editors, Holder};
 
 /// A plugin class, as an effect names it.
 pub(crate) type PluginKey = (PathBuf, [u8; 16]);
@@ -40,6 +43,7 @@ pub(crate) struct PluginHost {
     /// The plugin's text for each parameter's value, and the value it was asked about.
     shown: HashMap<(PluginKey, u32), (f32, String)>,
     asked: HashSet<(PluginKey, u32)>,
+    editors: Vec<editors::OpenEditor>,
 }
 
 impl PluginHost {
@@ -54,6 +58,7 @@ impl PluginHost {
             described: HashMap::new(),
             shown: HashMap::new(),
             asked: HashSet::new(),
+            editors: Vec::new(),
         }
     }
 

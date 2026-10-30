@@ -15,6 +15,7 @@ use timeline::{
 
 use crate::editor::Editor;
 use automation::{AutomationMode, Pass};
+pub(crate) use inserts::{effects as channel_effects, set_effects as set_channel_effects};
 use recording::{automate, mode_picker};
 
 /// Fader travel shown, in dB; the bottom stop means silence.
@@ -27,7 +28,7 @@ const STRIP_HEIGHT: f32 = 180.0;
 const RECORDING: Color32 = Color32::from_rgb(235, 80, 70);
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum Channel {
+pub(crate) enum Channel {
     Track(TrackRef),
     Submix(SubmixId),
     Master,

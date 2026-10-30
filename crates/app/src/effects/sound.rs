@@ -111,6 +111,9 @@ pub(super) fn effect_controls(
                         if ui.small_button("Remove").clicked() {
                             removed = Some(index);
                         }
+                        if matches!(effect, AudioEffect::Plugin(_)) && editor_button(ui) {
+                            rows.output.open_editor = Some(index);
+                        }
                     });
                     match effect {
                         AudioEffect::Plugin(plugin) => {
@@ -151,16 +154,24 @@ pub(super) fn effect_controls(
 }
 
 /// Edits a track's inserts, keyframed over sequence time at `time`. Returns the change
-/// made and a keyframe to move the playhead to.
+/// made, a keyframe to move the playhead to and a plugin whose editor to open.
 pub(crate) fn track_effect_controls(
     ui: &mut egui::Ui,
     effects: &mut Vec<AudioEffect>,
     time: Ticks,
     host: &mut PluginHost,
-) -> (Option<Change>, Option<Ticks>) {
+) -> (Option<Change>, Option<Ticks>, Option<usize>) {
     let rows = Rows::new(time, None, Default::default());
     let output = effect_controls(ui, effects, rows, host);
-    (output.change, output.seek)
+    (output.change, output.seek, output.open_editor)
+}
+
+fn editor_button(ui: &mut egui::Ui) -> bool {
+    let button = egui::Button::new("Open Editor").small();
+    ui.add_enabled(cfg!(windows), button)
+        .on_hover_text("Open the plugin's own window")
+        .on_disabled_hover_text("Plugin windows open on Windows only")
+        .clicked()
 }
 
 fn band_rows(ui: &mut egui::Ui, rows: &mut Rows, bands: &mut [Param], centers: &[f32]) {

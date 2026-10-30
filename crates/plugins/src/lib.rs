@@ -10,9 +10,10 @@
 //!   [`Plugin::reset`] and dropping the plugin.
 //!
 //! A [`Plugin`] is `Send` and not `Sync`, so all its calls are serialized on whichever
-//! thread owns it. Plugins generally tolerate that while no editor is open. Once an
-//! editor exists, controller calls must move to the thread that owns the editor window.
+//! thread. Plugins generally tolerate that while no editor is open, so an
+//! [`EditorWindow`] runs a separate instance on the thread that owns its window.
 
+pub mod editor;
 mod error;
 mod ffi;
 mod plugin;
@@ -20,6 +21,7 @@ mod scan;
 mod state;
 mod types;
 
+pub use editor::{EditorEvent, EditorSetup, EditorWindow};
 pub use error::PluginError;
 pub use plugin::Plugin;
 pub use scan::{default_folders, scan};

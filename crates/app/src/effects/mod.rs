@@ -62,6 +62,7 @@ use timeline::{
 use crate::editor::Editor;
 use crate::mixer::Change;
 use crate::project_files::PathPurpose;
+use crate::vst::Holder;
 use color::ToneState;
 use key_selection::KeySelection;
 use lane::Lane;
@@ -366,29 +367,44 @@ pub(crate) fn adjust_levels(editor: &mut Editor, edit: impl Edit, change: Change
 
 fn audio_effect_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
     let time = keyframe_time(editor, clip);
-    let mut effects = match &editor.effects.processing {
-        Some((id, effects)) if *id == clip.id => effects.clone(),
-        _ => clip.audio_effects.clone(),
-    };
+    let mut effects = clip_audio_effects(editor, clip);
     let keys = std::mem::take(&mut editor.effects.keys);
     let rows = Rows::new(time, lane(editor, ui, clip), keys);
     let mut output = sound::effect_controls(ui, &mut effects, rows, &mut editor.vst);
     editor.effects.keys = std::mem::take(&mut output.keys);
     seek_to_key(editor, clip, output.seek);
-    let edit = SetClipAudioEffects {
-        clip: clip.id,
-        effects,
-    };
-    match output.change {
-        Some(Change::Live) => {
+    if let Some(change) = output.change {
+        set_clip_audio_effects(editor, clip.id, effects, change);
+    }
+    if let Some(index) = output.open_editor {
+        crate::vst::open_editor(editor, ui.ctx(), Holder::Clip(clip.id), index);
+    }
+}
+
+/// A clip's audio effects, as they are while being adjusted.
+pub(crate) fn clip_audio_effects(editor: &Editor, clip: &Clip) -> Vec<AudioEffect> {
+    match &editor.effects.processing {
+        Some((id, effects)) if *id == clip.id => effects.clone(),
+        _ => clip.audio_effects.clone(),
+    }
+}
+
+pub(crate) fn set_clip_audio_effects(
+    editor: &mut Editor,
+    clip: ClipId,
+    effects: Vec<AudioEffect>,
+    change: Change,
+) {
+    let edit = SetClipAudioEffects { clip, effects };
+    match change {
+        Change::Live => {
             hear_live(editor, &edit);
             editor.effects.processing = Some((edit.clip, edit.effects));
         }
-        Some(Change::Commit) => {
+        Change::Commit => {
             editor.effects.processing = None;
             editor.apply_levels(edit);
         }
-        None => {}
     }
 }
 
