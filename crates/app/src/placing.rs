@@ -1,6 +1,8 @@
+use std::ops::Range;
+
 use timeline::{
     edit_points, AddGenerated, AddTrack, ClipId, FourPoint, Generator, PlaceClip, PlaceClips,
-    PlaceMode, SourceId, Ticks, TrackKind,
+    PlaceMode, Sequence, SourceId, Ticks, Track, TrackKind,
 };
 
 use egui::DragAndDrop;
@@ -136,14 +138,7 @@ pub fn place_carried(editor: &mut Editor, media: &[SourceDrag], at: Ticks, mode:
         return;
     }
     editor.match_format(first.source);
-    let sequence = editor.timeline.sequence();
-    let length = media
-        .iter()
-        .filter_map(|drag| {
-            let item = sequence.media_item(drag.source)?;
-            Some(item.conform().sequence_span(drag.range.1))
-        })
-        .fold(Ticks::ZERO, |sum, span| sum + span);
+    let length = carried_length(editor.timeline.sequence(), media);
     let placed = editor.apply(PlaceClips {
         pieces: pieces(media),
         at,
@@ -154,6 +149,90 @@ pub fn place_carried(editor: &mut Editor, media: &[SourceDrag], at: Ticks, mode:
     if placed {
         editor.seek_program(at + length);
     }
+}
+
+/// Lays dragged media at the playhead on the first video track above the targeted one,
+/// and the first audio track from the targeted one, that are free for its length,
+/// adding tracks when none is, as Premiere's Overlay drop.
+pub fn overlay_carried(editor: &mut Editor, media: &[SourceDrag]) {
+    let Some(first) = media.first() else {
+        return;
+    };
+    editor.match_format(first.source);
+    let sequence = editor.timeline.sequence();
+    let at = editor.playhead();
+    let span = at..at + carried_length(sequence, media);
+    let has = |wanted: fn(&timeline::MediaItem, Take) -> bool| {
+        media.iter().any(|drag| {
+            sequence
+                .media_item(drag.source)
+                .is_some_and(|item| wanted(item, drag.take))
+        })
+    };
+    let pictures = has(|item, take| item.video.is_some() && take != Take::AudioOnly);
+    let sound = has(|item, take| item.has_audio && take != Take::VideoOnly);
+    let targets = editor.view.targets;
+    let above = targets.video.map_or(0, |index| index + 1);
+    let video_track = pictures.then(|| free_or_new_track(editor, TrackKind::Video, above, &span));
+    let from = targets.audio.unwrap_or(0);
+    let audio_track = sound.then(|| free_or_new_track(editor, TrackKind::Audio, from, &span));
+    let placed = editor.apply(PlaceClips {
+        pieces: pieces(media),
+        at,
+        video_track,
+        audio_track,
+        mode: PlaceMode::Overwrite,
+    });
+    if placed {
+        editor.seek_program(span.end);
+    }
+}
+
+/// How long dragged media lasts in the sequence, end to end.
+fn carried_length(sequence: &Sequence, media: &[SourceDrag]) -> Ticks {
+    media
+        .iter()
+        .filter_map(|drag| {
+            let item = sequence.media_item(drag.source)?;
+            Some(item.conform().sequence_span(drag.range.1))
+        })
+        .fold(Ticks::ZERO, |sum, span| sum + span)
+}
+
+/// The first unlocked track from `from` up with nothing over `span`.
+fn free_track(tracks: &[Track], from: usize, span: &Range<Ticks>) -> Option<usize> {
+    let free = |track: &Track| {
+        !track.locked
+            && track
+                .clips
+                .iter()
+                .all(|clip| clip.end() <= span.start || clip.start >= span.end)
+    };
+    tracks
+        .iter()
+        .enumerate()
+        .skip(from)
+        .find(|(_, track)| free(track))
+        .map(|(index, _)| index)
+}
+
+fn free_or_new_track(
+    editor: &mut Editor,
+    kind: TrackKind,
+    from: usize,
+    span: &Range<Ticks>,
+) -> usize {
+    let sequence = editor.timeline.sequence();
+    let tracks = match kind {
+        TrackKind::Video => &sequence.video,
+        TrackKind::Audio => &sequence.audio,
+    };
+    if let Some(index) = free_track(tracks, from, span) {
+        return index;
+    }
+    let index = tracks.len();
+    editor.apply(AddTrack { kind });
+    index
 }
 
 fn pieces(media: &[SourceDrag]) -> Vec<(SourceId, Ticks, Ticks)> {
@@ -209,29 +288,7 @@ pub fn place_generated(
         .filter(|&track| track < sequence.audio.len());
     let at = editor.playhead();
     let first = editor.view.targets.video.unwrap_or(0);
-    let free = sequence
-        .video
-        .iter()
-        .enumerate()
-        .skip(first)
-        .find(|(_, track)| {
-            !track.locked
-                && track
-                    .clips
-                    .iter()
-                    .all(|clip| clip.end() <= at || clip.start >= at + duration)
-        })
-        .map(|(index, _)| index);
-    let track = match free {
-        Some(index) => index,
-        None => {
-            let index = sequence.video.len();
-            editor.apply(AddTrack {
-                kind: TrackKind::Video,
-            });
-            index
-        }
-    };
+    let track = free_or_new_track(editor, TrackKind::Video, first, &(at..at + duration));
     let placed = editor.apply(PlaceClip {
         source,
         source_in: range.start,
