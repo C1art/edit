@@ -30,6 +30,18 @@ thread_local! {
     static SPARE: RefCell<Vec<(Key, Loaded)>> = const { RefCell::new(Vec::new()) };
 }
 
+/// Unloads the thread's spare plugins when dropped. Left to the thread's end, they would
+/// unload while Windows holds the loader lock, which deadlocks against a plugin being
+/// loaded elsewhere and hangs plugins that wait for their own threads.
+pub(crate) struct SparePlugins;
+
+impl Drop for SparePlugins {
+    fn drop(&mut self) {
+        let spares = SPARE.try_with(|spare| std::mem::take(&mut *spare.borrow_mut()));
+        drop(spares);
+    }
+}
+
 pub(crate) struct PluginUnit {
     key: Key,
     /// None when the plugin couldn't be loaded; its sound then passes unchanged.

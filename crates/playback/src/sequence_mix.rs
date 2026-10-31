@@ -1,6 +1,7 @@
 use audio::SampleRate;
 use timeline::{Sequence, Ticks, Timebase};
 
+use crate::audio_plugin::SparePlugins;
 use crate::tracks_mix::{Bus, TracksMix};
 use crate::{Levels, PlaybackError};
 
@@ -15,6 +16,8 @@ pub(crate) struct SequenceMix {
     sample_rate: SampleRate,
     /// The last chunk mixed.
     pub(crate) mix: Vec<f32>,
+    /// Last, so it drops after the chains above have handed it their plugins.
+    _spares: SparePlugins,
 }
 
 impl SequenceMix {
@@ -23,6 +26,7 @@ impl SequenceMix {
             tracks: TracksMix::new(sample_rate),
             sample_rate,
             mix: vec![0.0; CHUNK_FRAMES * 2],
+            _spares: SparePlugins,
         }
     }
 
