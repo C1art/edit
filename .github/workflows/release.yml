@@ -1,14 +1,20 @@
 name: release
 
-# A pushed `v*` tag builds, packs and publishes that version. A pull request into main, or
-# running it by hand, builds and packs without publishing and keeps the installer as a
-# workflow artifact, so a broken Windows build shows up before anything is tagged.
+# A pushed `v*` tag, or a run by hand with "publish" ticked, builds, packs and publishes the
+# Cargo version as a GitHub release (tagging it when the tag doesn't exist yet). A pull
+# request into main, or a run by hand without "publish", builds and packs only and keeps the
+# installer as a workflow artifact, so a broken Windows build shows up before a release.
 on:
   push:
     tags: ["v*"]
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish this commit's version as a release
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -24,6 +30,7 @@ env:
   FFMPEG_BUILD: ffmpeg-n8.1-latest-win64-gpl-shared-8.1
   REPO_URL: https://github.com/C1art/edit
   CARGO_TERM_COLOR: always
+  PUBLISH: ${{ github.ref_type == 'tag' || inputs.publish == true }}
 
 jobs:
   release:
@@ -107,16 +114,16 @@ jobs:
           ls -l Releases
 
       - name: Keep the installer (dry run)
-        if: github.ref_type != 'tag'
+        if: env.PUBLISH != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: Cledit-${{ env.VERSION }}
           path: Releases
 
       - name: Publish
-        if: github.ref_type == 'tag'
+        if: env.PUBLISH == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           vpk upload github --repoUrl "$REPO_URL" --token "$GITHUB_TOKEN" --publish \
-            --releaseName "Cledit $VERSION" --tag "v$VERSION"
+            --releaseName "Cledit $VERSION" --tag "v$VERSION" --targetCommitish "$GITHUB_SHA"
