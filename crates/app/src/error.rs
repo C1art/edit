@@ -20,6 +20,8 @@ pub enum AppError {
     NoRenderer,
     UnnamedWorkspace,
     WorkspaceTaken(String),
+    /// The settings file there couldn't be read, so it's left as it was.
+    SettingHeld,
 }
 
 impl fmt::Display for AppError {
@@ -39,6 +41,9 @@ impl fmt::Display for AppError {
             Self::NoRenderer => f.write_str("there is no GPU renderer"),
             Self::UnnamedWorkspace => f.write_str("Name the workspace"),
             Self::WorkspaceTaken(name) => write!(f, "There is already a workspace called {name}"),
+            Self::SettingHeld => f.write_str(
+                "the file there couldn't be read when the editor started, so it is left unchanged",
+            ),
         }
     }
 }
@@ -56,7 +61,8 @@ impl std::error::Error for AppError {
             | Self::NotRenderable(_)
             | Self::NoRenderer
             | Self::UnnamedWorkspace
-            | Self::WorkspaceTaken(_) => None,
+            | Self::WorkspaceTaken(_)
+            | Self::SettingHeld => None,
         }
     }
 }

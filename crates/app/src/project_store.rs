@@ -35,6 +35,9 @@ enum Request {
     WriteSetting(Setting, String),
     /// Renames a settings file that couldn't be read, so saving over it loses nothing.
     SetAsideSetting(Setting),
+    /// Keeps saves off a settings file this build can't read but that isn't damaged,
+    /// such as one a newer version wrote.
+    HoldSetting(Setting),
     /// A Final Cut Pro XML file to read a sequence from.
     ReadInterchange(PathBuf),
     /// A sequence written for another editor, such as an EDL.
@@ -64,6 +67,7 @@ pub enum StoreEvent {
     SettingWritten(Setting, Result<(), AppError>),
     /// Where an unreadable settings file now is.
     SettingSetAside(Setting, Result<PathBuf, AppError>),
+    SettingHeld,
     InterchangeRead(PathBuf, Result<Box<ImportXmeml>, AppError>),
     InterchangeWritten(PathBuf, Result<(), AppError>),
     Recoverable(Option<Recoverable>),
@@ -111,7 +115,6 @@ impl Setting {
         })
     }
 
-    /// Where a file that couldn't be read is moved to, beside it.
     /// The first free name to move an unreadable file to, so one set aside earlier is
     /// kept too.
     pub fn unreadable_path(self) -> PathBuf {
@@ -166,8 +169,12 @@ impl ProjectStore {
             .name("project".to_owned())
             .spawn(move || {
                 let mut marker = recovery::SessionMarker::default();
+                let mut held = Vec::new();
                 for request in request_rx {
-                    if event_tx.send(handle(request, &mut marker)).is_err() {
+                    if event_tx
+                        .send(handle(request, &mut marker, &mut held))
+                        .is_err()
+                    {
                         break;
                     }
                 }
@@ -251,6 +258,10 @@ impl ProjectStore {
         self.send(Request::SetAsideSetting(setting));
     }
 
+    pub fn hold_setting(&mut self, setting: Setting) {
+        self.send(Request::HoldSetting(setting));
+    }
+
     /// Looks for work lost when the last session crashed; ask before marking this one.
     pub fn find_recoverable(&mut self) {
         self.send(Request::FindRecoverable);
@@ -293,7 +304,13 @@ impl Drop for ProjectStore {
     }
 }
 
-fn handle(request: Request, marker: &mut recovery::SessionMarker) -> StoreEvent {
+/// `held` lists the settings whose files couldn't be read and are still where they
+/// were: saving over one would replace what it holds with only what was made since.
+fn handle(
+    request: Request,
+    marker: &mut recovery::SessionMarker,
+    held: &mut Vec<Setting>,
+) -> StoreEvent {
     match request {
         Request::Save {
             path,
@@ -349,11 +366,17 @@ fn handle(request: Request, marker: &mut recovery::SessionMarker) -> StoreEvent 
             let result = match std::fs::read_to_string(setting.path()) {
                 Ok(text) => Ok(Some(text)),
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-                Err(error) => Err(error.into()),
+                Err(error) => {
+                    held.push(setting);
+                    Err(error.into())
+                }
             };
             StoreEvent::SettingRead(setting, result)
         }
         Request::WriteSetting(setting, text) => {
+            if held.contains(&setting) {
+                return StoreEvent::SettingWritten(setting, Err(AppError::SettingHeld));
+            }
             let path = setting.path();
             let result = path
                 .parent()
@@ -365,10 +388,18 @@ fn handle(request: Request, marker: &mut recovery::SessionMarker) -> StoreEvent 
         Request::SetAsideSetting(setting) => {
             let path = setting.path();
             let aside = setting.unreadable_path();
-            let result = std::fs::rename(&path, &aside)
+            let result = project::retry_while_in_use(|| std::fs::rename(&path, &aside))
                 .map(|()| aside)
                 .map_err(AppError::from);
+            match result {
+                Ok(_) => held.retain(|kept| *kept != setting),
+                Err(_) => held.push(setting),
+            }
             StoreEvent::SettingSetAside(setting, result)
+        }
+        Request::HoldSetting(setting) => {
+            held.push(setting);
+            StoreEvent::SettingHeld
         }
         Request::ReadInterchange(path) => {
             let result = std::fs::read_to_string(&path)

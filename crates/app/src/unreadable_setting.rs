@@ -3,14 +3,26 @@ use std::path::PathBuf;
 use crate::editor::Editor;
 use crate::error::AppError;
 use crate::project_store::Setting;
+use project::ProjectError;
 
 impl Editor {
-    /// Moves a settings file that couldn't be read out of the way: the next save would
-    /// otherwise replace everything in it with only what was made since.
-    pub(crate) fn unreadable_setting(&mut self, setting: Setting, error: impl std::fmt::Display) {
+    /// Keeps the next save from replacing everything in a settings file that couldn't
+    /// be read with only what was made since: a damaged file is moved out of the way,
+    /// one that may be fine for another build stays put and isn't saved over.
+    pub(crate) fn unreadable_setting(&mut self, setting: Setting, error: ProjectError) {
         self.notice(format!("Cannot read {}: {error}", setting.noun()));
-        if let Some(store) = &mut self.store {
-            store.set_aside_setting(setting);
+        let Some(store) = &mut self.store else {
+            return;
+        };
+        match error {
+            ProjectError::Syntax { .. }
+            | ProjectError::Invalid(_)
+            | ProjectError::MissingVersion => {
+                store.set_aside_setting(setting);
+            }
+            ProjectError::UnsupportedVersion(_) | ProjectError::Io(_) => {
+                store.hold_setting(setting);
+            }
         }
     }
 

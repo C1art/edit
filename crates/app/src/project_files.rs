@@ -402,11 +402,11 @@ impl Editor {
                 }
                 StoreEvent::SettingRead(Setting::Window, Ok(Some(_))) => {}
                 StoreEvent::SettingRead(_, Ok(None)) => {}
-                // Moved aside like a file that won't parse, so a later write of the
-                // setting doesn't replace what the user had.
+                // The store keeps saves off the file until the editor is restarted.
                 StoreEvent::SettingRead(setting, Err(error)) => {
-                    self.unreadable_setting(setting, error);
+                    self.notice(format!("Cannot read {}: {error}", setting.noun()));
                 }
+                StoreEvent::SettingHeld => {}
                 StoreEvent::SettingWritten(_, Ok(())) => {}
                 StoreEvent::SettingSetAside(setting, result) => {
                     self.setting_set_aside(setting, result);
