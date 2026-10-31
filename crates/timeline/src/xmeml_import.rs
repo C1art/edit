@@ -181,7 +181,9 @@ impl Reader {
         let key = element.attribute("id").unwrap_or_default().to_owned();
         let described = element.child("pathurl").is_some() || element.child("name").is_some();
         let index = match self.file_keys.get(&key) {
-            Some(&index) if !described || key.is_empty() => index,
+            // Writers that leave out file ids describe every file in full, so an id-less
+            // description is always a new file.
+            Some(&index) if !described || !key.is_empty() => index,
             _ if !described => {
                 return Err(unreadable(&format!(
                     "file {key} is used before it is described"

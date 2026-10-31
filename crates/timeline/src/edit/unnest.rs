@@ -20,7 +20,15 @@ pub struct Unnest {
 }
 
 /// The new link of each piece, by the link of the clip it came out of and its own.
-type Relinks = HashMap<(Option<LinkId>, LinkId), LinkId>;
+type Relinks = HashMap<(Origin, LinkId), LinkId>;
+
+/// The nest clip a piece came from: the pieces of linked nest clips link together, the
+/// pieces of separate ones never do.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum Origin {
+    Linked(LinkId),
+    Alone(ClipId),
+}
 
 impl Edit for Unnest {
     fn name(&self) -> &'static str {
@@ -148,7 +156,10 @@ fn unnest(sequence: &mut Sequence, id: ClipId, relinks: &mut Relinks) -> Result<
             piece.group = None;
             piece.link = piece.link.map(|inner| {
                 *relinks
-                    .entry((clip.link, inner))
+                    .entry((
+                        clip.link.map_or(Origin::Alone(clip.id), Origin::Linked),
+                        inner,
+                    ))
                     .or_insert_with(|| LinkId(sequence.ids.next()))
             });
             ops::insert(sequence, TrackRef { index, ..track }, piece)?;

@@ -143,6 +143,8 @@ fn paste(attribute: Attribute, from: &Clip, to: &mut Clip) {
             key.time = timing.source_time(timing.start + offset);
         }
         param.keys.sort_by_key(|key| key.time);
+        // A held target maps every key to one source frame.
+        param.keys.dedup_by_key(|key| key.time);
     };
     let look = &mut to.look;
     match attribute {
