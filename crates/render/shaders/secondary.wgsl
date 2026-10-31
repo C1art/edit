@@ -35,8 +35,10 @@ fn secondary_key(rgb: vec3<f32>) -> f32 {
     let soft = max(key.z, 1e-3);
     let color = hsl(rgb);
     let hue_distance = abs(fract(color.x - key.x + 0.5) - 0.5);
-    // Grey has no hue, so the saturation range alone decides whether it is keyed.
-    let hue = 1.0 - smoothstep(key.y, key.y + soft * 0.5, hue_distance);
+    // Grey has no hue, so the saturation range alone decides whether it is keyed; the
+    // hue's say grows with saturation, so near-greys don't flip on a hue they barely have.
+    let hue_match = 1.0 - smoothstep(key.y, key.y + soft * 0.5, hue_distance);
+    let hue = mix(1.0, hue_match, smoothstep(0.0, soft, color.y));
     let matte = hue * within(color.y, ranges.x, ranges.y, soft) * within(color.z, ranges.z, ranges.w, soft);
     return mix(matte, 1.0 - matte, placement.secondary_wheel.w);
 }
