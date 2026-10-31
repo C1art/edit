@@ -141,3 +141,25 @@ fn the_start_time_is_written_as_timecode_the_way_the_sequence_shows_it() {
     assert!(xml.contains("<frame>107892</frame>"));
     assert!(xml.contains("<displayformat>DF</displayformat>"));
 }
+
+#[test]
+fn a_file_first_described_inside_a_nested_sequence_is_found() {
+    let file = r#"<file id="f1"><name>a.mov</name><pathurl>file:///media/a.mov</pathurl>
+        <rate><timebase>25</timebase></rate><media><video/></media></file>"#;
+    let xml = format!(
+        r#"<xmeml version="4"><sequence><name>Main</name><rate><timebase>25</timebase></rate>
+        <media><video><track>
+          <clipitem id="nest"><start>0</start><end>50</end><in>0</in><out>50</out>
+            <sequence><media><video><track>
+              <clipitem id="inner"><start>0</start><end>50</end><in>0</in><out>50</out>{file}</clipitem>
+            </track></video></media></sequence>
+          </clipitem>
+          <clipitem id="outer"><start>50</start><end>100</end><in>10</in><out>60</out>
+            <file id="f1"/></clipitem>
+        </track></video></media></sequence></xmeml>"#
+    );
+    let import = read_xmeml(&xml).unwrap();
+    assert_eq!(import.files.len(), 1);
+    assert_eq!(import.files[0].path, PathBuf::from("/media/a.mov"));
+    assert_eq!(import.video[0].len(), 1);
+}
