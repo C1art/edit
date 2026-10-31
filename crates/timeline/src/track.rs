@@ -3,11 +3,14 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{AudioEffect, Clip, Gain, Pan, Param, SubmixId, Ticks, TrackSend};
+use crate::{AudioEffect, Clip, Gain, Pan, Param, SubmixId, Ticks, TrackId, TrackSend};
 
 /// Clips are kept sorted by `start` and never overlap.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Eq, Serialize, Deserialize)]
 pub struct Track {
+    /// Not part of what the track holds, so two tracks compare by their contents.
+    #[serde(skip)]
+    pub id: TrackId,
     /// Shared, so that undo snapshots hold only the clips an edit changed;
     /// `Arc::make_mut` copies a clip on its first change.
     pub clips: Vec<Arc<Clip>>,
@@ -46,6 +49,39 @@ pub struct Track {
     /// Copies of an audio track's sound for submixes, besides its output.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sends: Vec<TrackSend>,
+}
+
+impl PartialEq for Track {
+    fn eq(&self, other: &Self) -> bool {
+        // Destructured so a new field can't be left out of the comparison.
+        let Self {
+            id: _,
+            clips,
+            name,
+            muted,
+            locked,
+            sync_unlocked,
+            solo,
+            volume,
+            pan,
+            automation,
+            effects,
+            output,
+            sends,
+        } = self;
+        *clips == other.clips
+            && *name == other.name
+            && *muted == other.muted
+            && *locked == other.locked
+            && *sync_unlocked == other.sync_unlocked
+            && *solo == other.solo
+            && *volume == other.volume
+            && *pan == other.pan
+            && *automation == other.automation
+            && *effects == other.effects
+            && *output == other.output
+            && *sends == other.sends
+    }
 }
 
 impl Track {

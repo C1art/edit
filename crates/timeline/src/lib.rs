@@ -157,7 +157,7 @@ pub use group::GroupId;
 pub use guide::{Guide, GuideAxis};
 pub use history::{preview, Edit, EditCommand, Timeline};
 pub use hue_curves::{HueCurve, HueCurves, HUE_CURVE_NEUTRAL};
-pub use ids::{ClipId, LinkId, TrackKind, TrackRef};
+pub use ids::{ClipId, LinkId, TrackId, TrackKind, TrackRef};
 pub use interpretation::{
     AlphaInterpretation, ColorSpace, FieldOrder, PixelAspect, Primaries, Transfer,
 };

@@ -8,7 +8,7 @@ use super::add_tracks::renumber_layers;
 use super::ops;
 use crate::{
     Clip, ClipId, Edit, Gain, LinkId, Nest, PinnedEnds, Sequence, Ticks, TimelineError, Track,
-    TrackKind, TrackRef,
+    TrackId, TrackKind, TrackRef,
 };
 
 /// Replaces each nest clip among `clips` and those linked to them with the nest's clips
@@ -203,6 +203,7 @@ fn make_room(sequence: &mut Sequence, track: TrackRef, base: usize, span: &Range
         clips: Vec::new(),
         name: None,
         sync_unlocked: false,
+        id: TrackId::default(),
         ..track.clone()
     };
     let Some(base) = tracks.get(base).map(settings) else {

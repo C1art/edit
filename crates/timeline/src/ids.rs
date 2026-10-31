@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -12,6 +14,19 @@ pub struct LinkId(pub u64);
 pub enum TrackKind {
     Video,
     Audio,
+}
+
+/// Which track this is while the program runs, wherever adding and deleting tracks
+/// moves it, so a view can keep its own state for the track. Each new track gets its
+/// own, a copy keeps it, and a loaded one gets a new one; it isn't saved.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct TrackId(u64);
+
+impl Default for TrackId {
+    fn default() -> Self {
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        Self(NEXT.fetch_add(1, Ordering::Relaxed))
+    }
 }
 
 /// Video tracks are numbered from the bottom layer up (V1 is under V2); audio tracks
