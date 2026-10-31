@@ -10,7 +10,6 @@ use crate::effects::LutSlot;
 use crate::export::ExportDialog;
 use crate::path_dialog::Chooser;
 use crate::project_store::{SaveMark, Setting, StoreEvent};
-use crate::recent_projects::RecentProjects;
 
 /// What a picked path is for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -371,7 +370,7 @@ impl Editor {
                     self.load_workspaces(&text);
                 }
                 StoreEvent::SettingRead(Setting::RecentProjects, Ok(Some(text))) => {
-                    self.recent_projects = RecentProjects::from_text(&text);
+                    self.load_recent_projects(&text);
                 }
                 StoreEvent::SettingRead(Setting::Folders, Ok(Some(text))) => {
                     self.browse_folders = crate::path_dialog::folders_from_text(&text);

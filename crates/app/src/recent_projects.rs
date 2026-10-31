@@ -44,6 +44,17 @@ impl RecentProjects {
 }
 
 impl Editor {
+    pub(crate) fn load_recent_projects(&mut self, text: &str) {
+        // A project opened before the list was read stays at its top.
+        let early = std::mem::replace(&mut self.recent_projects, RecentProjects::from_text(text));
+        let changed = early.paths.iter().rev().fold(false, |changed, path| {
+            self.recent_projects.remember(path) | changed
+        });
+        if changed {
+            self.save_recent_projects();
+        }
+    }
+
     pub(crate) fn remember_project(&mut self, path: &Path) {
         if self.recent_projects.remember(path) {
             self.save_recent_projects();
