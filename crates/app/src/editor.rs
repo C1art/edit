@@ -149,9 +149,11 @@ pub struct Editor {
     pub(crate) saved_preferences: Option<crate::preferences::Preferences>,
     /// Where the project was last saved or opened from.
     pub(crate) project_path: Option<PathBuf>,
-    /// The timeline revision on disk; any other means unsaved changes.
     pub(crate) recovery: crate::recovery::Recovery,
+    /// The timeline revision on disk; any other means unsaved changes.
     pub(crate) saved_revision: u64,
+    /// Counts the projects opened, so work started for an earlier one is ignored.
+    pub(crate) project_generation: u64,
     pub(crate) confirm_discard: Option<AfterDiscard>,
     pub(crate) confirm_revert: bool,
     /// Runs once the save in progress succeeds.
@@ -243,6 +245,7 @@ impl Editor {
             shown_revision: timeline.revision(),
             recovery: Default::default(),
             saved_revision: timeline.revision(),
+            project_generation: 0,
             timeline,
             audio: None,
             audio_switch: Default::default(),

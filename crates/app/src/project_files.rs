@@ -9,7 +9,7 @@ use crate::editor::Editor;
 use crate::effects::LutSlot;
 use crate::export::ExportDialog;
 use crate::path_dialog::Chooser;
-use crate::project_store::{Setting, StoreEvent};
+use crate::project_store::{SaveMark, Setting, StoreEvent};
 use crate::recent_projects::RecentProjects;
 
 /// What a picked path is for.
@@ -167,9 +167,12 @@ impl Editor {
     pub(crate) fn save_project_to(&mut self, path: PathBuf) {
         let path = with_project_extension(path);
         let sequence = self.timeline.project().clone();
-        let revision = self.timeline.revision();
+        let mark = SaveMark {
+            project: self.project_generation,
+            revision: self.timeline.revision(),
+        };
         match &mut self.store {
-            Some(store) => store.save(path, sequence, revision),
+            Some(store) => store.save(path, sequence, mark),
             None => self.notice("Cannot save: the project worker is not running"),
         }
     }
@@ -262,6 +265,7 @@ impl Editor {
         self.source = None;
         self.left_sources.clear();
         self.timeline = Timeline::new(sequence);
+        self.project_generation += 1;
         let revision = self.timeline.revision();
         self.saved_revision = revision;
         self.project_path = path;
@@ -273,6 +277,7 @@ impl Editor {
         if let Some(previews) = &mut self.render_previews {
             previews.forget();
         }
+        self.forget_project_work();
         // A new timeline restarts its revisions, so the program viewer is updated directly.
         self.shown_revision = revision;
         self.view.prune_selection(self.timeline.sequence());
@@ -289,9 +294,16 @@ impl Editor {
         let events = store.poll();
         for event in events {
             match event {
-                StoreEvent::Saved(path, revision, Ok(())) => {
+                StoreEvent::Saved(path, mark, result)
+                    if mark.project != self.project_generation =>
+                {
+                    if let Err(error) = result {
+                        self.notice(format!("Cannot save {}: {error}", quoted_name(&path)));
+                    }
+                }
+                StoreEvent::Saved(path, mark, Ok(())) => {
                     self.remember_project(&path);
-                    self.saved_revision = revision;
+                    self.saved_revision = mark.revision;
                     self.project_path = Some(path);
                     if let Some(action) = self.after_save.take() {
                         self.after_discard(action);

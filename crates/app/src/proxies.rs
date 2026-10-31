@@ -24,7 +24,14 @@ struct Request {
 
 pub enum ProxyEvent {
     Progress(SourceId, f32),
-    Finished(SourceId, Result<PathBuf, AppError>),
+    /// The source, its media file and the proxy made of it.
+    Finished(SourceId, PathBuf, Result<PathBuf, AppError>),
+}
+
+pub struct FinishedProxy {
+    source: SourceId,
+    media: PathBuf,
+    result: Result<PathBuf, AppError>,
 }
 
 /// Builds proxies one at a time on a worker thread.
@@ -47,10 +54,8 @@ impl ProxyMaker {
             .spawn(move || {
                 for request in request_rx {
                     let result = make(&request, &stop, &event_tx);
-                    if event_tx
-                        .send(ProxyEvent::Finished(request.source, result))
-                        .is_err()
-                    {
+                    let finished = ProxyEvent::Finished(request.source, request.path, result);
+                    if event_tx.send(finished).is_err() {
                         break;
                     }
                 }
@@ -82,7 +87,7 @@ impl ProxyMaker {
     }
 
     /// Finished jobs since the last poll.
-    pub fn poll(&mut self) -> Vec<(SourceId, Result<PathBuf, AppError>)> {
+    pub fn poll(&mut self) -> Vec<FinishedProxy> {
         let mut finished = Vec::new();
         for event in self.events.try_iter() {
             match event {
@@ -91,9 +96,13 @@ impl ProxyMaker {
                         *progress = done;
                     }
                 }
-                ProxyEvent::Finished(source, result) => {
+                ProxyEvent::Finished(source, media, result) => {
                     self.jobs.remove(&source);
-                    finished.push((source, result));
+                    finished.push(FinishedProxy {
+                        source,
+                        media,
+                        result,
+                    });
                 }
             }
         }
@@ -110,14 +119,26 @@ impl Editor {
         if maker.is_busy() {
             ctx.request_repaint_after(Duration::from_millis(100));
         }
-        for (source, result) in finished {
+        for FinishedProxy {
+            source,
+            media,
+            result,
+        } in finished
+        {
+            // The id may name another item by now, after a project was opened.
+            let same_media = self
+                .timeline
+                .project()
+                .media_item(source)
+                .is_some_and(|item| item.path == media);
             match result {
-                Ok(path) => {
+                Ok(path) if same_media => {
                     self.apply(SetProxy {
                         source,
                         proxy: Some(path),
                     });
                 }
+                Ok(_) => {}
                 Err(error) => self.notice(format!("Cannot create proxy: {error}")),
             }
         }

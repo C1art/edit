@@ -94,6 +94,7 @@ mod project_copy;
 mod project_files;
 mod project_manager;
 mod project_store;
+mod project_switch;
 mod proxies;
 mod proxy_offer;
 mod quick_export;

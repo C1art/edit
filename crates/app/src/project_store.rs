@@ -13,7 +13,7 @@ enum Request {
     Save {
         path: PathBuf,
         sequence: Box<Sequence>,
-        revision: u64,
+        mark: SaveMark,
     },
     /// Writes the project elsewhere without it counting as saved.
     SaveCopy {
@@ -42,9 +42,16 @@ enum Request {
     EndSession,
 }
 
+/// Which project and timeline revision a save wrote, so later edits still count as
+/// unsaved and a save that finishes after another project was opened is ignored.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SaveMark {
+    pub project: u64,
+    pub revision: u64,
+}
+
 pub enum StoreEvent {
-    /// The timeline revision that was written, so later edits still count as unsaved.
-    Saved(PathBuf, u64, Result<(), AppError>),
+    Saved(PathBuf, SaveMark, Result<(), AppError>),
     CopySaved(PathBuf, Result<(), AppError>),
     Opened(PathBuf, Result<Box<Sequence>, AppError>),
     Autosaved(PathBuf, Result<(), AppError>),
@@ -152,11 +159,11 @@ impl ProjectStore {
         })
     }
 
-    pub fn save(&mut self, path: PathBuf, sequence: Sequence, revision: u64) {
+    pub fn save(&mut self, path: PathBuf, sequence: Sequence, mark: SaveMark) {
         let request = Request::Save {
             path,
             sequence: Box::new(sequence),
-            revision,
+            mark,
         };
         if self.requests.send(request).is_ok() {
             self.pending += 1;
@@ -266,12 +273,12 @@ fn handle(request: Request) -> StoreEvent {
         Request::Save {
             path,
             sequence,
-            revision,
+            mark,
         } => {
             let result = ProjectFile::new(*sequence)
                 .save(&path)
                 .map_err(AppError::from);
-            StoreEvent::Saved(path, revision, result)
+            StoreEvent::Saved(path, mark, result)
         }
         Request::SaveCopy { path, sequence } => {
             let result = ProjectFile::new(*sequence)
