@@ -183,8 +183,8 @@ impl Biquad {
             for (sample, [z1, z2]) in frame.iter_mut().zip(&mut self.state) {
                 let input = *sample;
                 let output = b0 * input + *z1;
-                *z1 = b1 * input - a1 * output + *z2;
-                *z2 = b2 * input - a2 * output;
+                *z1 = super::flush(b1 * input - a1 * output + *z2);
+                *z2 = super::flush(b2 * input - a2 * output);
                 *sample = output;
             }
         }

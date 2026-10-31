@@ -62,10 +62,10 @@ impl Phaser {
                 let mut wet = *sample + self.last[side] * feedback;
                 for memory in &mut self.state[side][..stages] {
                     let output = coefficient * wet + *memory;
-                    *memory = wet - coefficient * output;
+                    *memory = super::flush(wet - coefficient * output);
                     wet = output;
                 }
-                self.last[side] = wet;
+                self.last[side] = super::flush(wet);
                 *sample += (wet - *sample) * mix;
             }
             self.phase = (self.phase + step).fract();

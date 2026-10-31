@@ -91,10 +91,10 @@ impl Gate {
         let (attack, release) = (smoothing(attack_ms, rate), smoothing(release_ms, rate));
         for frame in samples.as_chunks_mut::<2>().0 {
             let peak = frame[0].abs().max(frame[1].abs());
-            self.level = peak.max(self.level * hold);
+            self.level = super::flush(peak.max(self.level * hold));
             let open = if self.level >= threshold { 1.0 } else { 0.0 };
             let coefficient = if open > self.gain { attack } else { release };
-            self.gain = open + coefficient * (self.gain - open);
+            self.gain = super::flush(open + coefficient * (self.gain - open));
             frame.iter_mut().for_each(|sample| *sample *= self.gain);
         }
     }

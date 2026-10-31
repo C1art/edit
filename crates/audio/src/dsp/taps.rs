@@ -124,9 +124,10 @@ impl AnalogDelay {
             let delayed = self.line.read(delay);
             let mut written = [0.0; 2];
             for side in 0..2 {
-                self.tone[side] += (delayed[side] - self.tone[side]) * smoothing;
+                self.tone[side] =
+                    super::flush(self.tone[side] + (delayed[side] - self.tone[side]) * smoothing);
                 let echo = (self.tone[side] * drive).tanh() / drive;
-                written[side] = frame[side] + echo * feedback;
+                written[side] = super::flush(frame[side] + echo * feedback);
                 frame[side] += echo * mix;
             }
             self.line.push(written);

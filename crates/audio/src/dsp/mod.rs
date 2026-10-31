@@ -53,6 +53,16 @@ pub use scientific::{FilterBand, FilterDesign, ScientificFilter, ScientificSetti
 pub use shape::{distort, widen};
 pub use taps::{AnalogDelay, AnalogDelaySettings, MultitapDelay, Tap};
 
+/// Zero for values far below hearing. Feedback that decays after the sound stops
+/// otherwise reaches subnormal floats, which are many times slower to compute with.
+fn flush(value: f32) -> f32 {
+    if value.abs() < 1e-20 {
+        0.0
+    } else {
+        value
+    }
+}
+
 fn db_to_amplitude(db: f32) -> f32 {
     10.0_f32.powf(db / 20.0)
 }

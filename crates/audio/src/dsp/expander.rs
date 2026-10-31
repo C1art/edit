@@ -35,7 +35,7 @@ impl Expander {
         for frame in samples.as_chunks_mut::<2>().0 {
             // Held through the dips of the waveform, so a tone under the threshold
             // isn't turned down at every zero crossing.
-            self.level = frame[0].abs().max(frame[1].abs()).max(self.level * hold);
+            self.level = super::flush(frame[0].abs().max(frame[1].abs()).max(self.level * hold));
             let level_db = match self.level > 0.0 {
                 true => (20.0 * self.level.log10()).max(SILENCE_DB),
                 false => SILENCE_DB,
