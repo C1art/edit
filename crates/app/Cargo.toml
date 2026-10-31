@@ -22,6 +22,7 @@ plugins.workspace = true
 eframe.workspace = true
 egui.workspace = true
 crossbeam.workspace = true
+velopack.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows.workspace = true

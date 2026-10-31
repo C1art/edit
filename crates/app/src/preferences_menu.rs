@@ -63,6 +63,7 @@ pub(crate) fn menu(editor: &mut Editor, ui: &mut egui::Ui) {
             ui.radio_value(choice, option, option.label());
         }
     });
+    ui.checkbox(&mut editor.updates.automatic, "Check for Updates at Start");
     ui.menu_button("Audio Output", |ui| {
         crate::audio_switch::menu(editor, ui);
     });

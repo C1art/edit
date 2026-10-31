@@ -58,6 +58,9 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     });
     if let Some(choice) = choice {
         editor.exports_on_quit = choice;
+        if choice == ExportsOnQuit::Ask {
+            editor.updates.cancel_restart();
+        }
         if choice == ExportsOnQuit::Stop {
             ctx.send_viewport_cmd(ViewportCommand::Close);
         }

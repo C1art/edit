@@ -394,11 +394,13 @@ impl Editor {
                 }
                 StoreEvent::SettingRead(Setting::Preferences, Ok(Some(text))) => {
                     self.load_preferences(&text);
+                    self.updates.check_at_start();
                 }
                 // Nothing saved yet means a first run, which starts with the fewer tools
                 // of Simple mode; Advanced is a click away in the menu bar.
                 StoreEvent::SettingRead(Setting::Preferences, Ok(None)) => {
                     self.set_ui_mode(crate::ui_mode::UiMode::Simple);
+                    self.updates.check_at_start();
                 }
                 StoreEvent::SettingRead(Setting::Window, Ok(Some(_))) => {}
                 StoreEvent::SettingRead(_, Ok(None)) => {}

@@ -17,6 +17,9 @@ impl Editor {
             ctx.send_viewport_cmd(ViewportCommand::CancelClose);
             self.confirm_discard = Some(AfterDiscard::Quit);
         }
+        if closes {
+            self.updates.window_closing();
+        }
         self.track_window(&ctx, closes);
         self.tend_session_marker(closes);
         let name = self
@@ -71,7 +74,10 @@ pub fn discard_dialog(editor: &mut Editor, ctx: &egui::Context) {
         Choice::Discard => editor.after_discard(action),
         Choice::Cancel if action == AfterDiscard::UseOpened => editor.drop_parked_open(),
         // A later quit asks about the exports again.
-        Choice::Cancel => editor.exports_on_quit = Default::default(),
+        Choice::Cancel => {
+            editor.exports_on_quit = Default::default();
+            editor.updates.cancel_restart();
+        }
     }
 }
 

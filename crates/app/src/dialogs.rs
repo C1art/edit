@@ -4,6 +4,7 @@ use crate::editor::Editor;
 pub(crate) fn show(editor: &mut Editor, ctx: &egui::Context) {
     crate::path_dialog::path_dialog(editor, ctx);
     crate::quit_exports::dialog(editor, ctx);
+    crate::updates::ui(editor, ctx);
     crate::window_close::discard_dialog(editor, ctx);
     crate::project_copy::revert_dialog(editor, ctx);
     crate::recovery::dialog(editor, ctx);

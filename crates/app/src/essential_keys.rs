@@ -69,6 +69,8 @@ pub(crate) fn help_menu(editor: &mut Editor, ui: &mut Ui) {
         if ui.add(all).clicked() {
             editor.keymap_window = Some(KeymapWindow::default());
         }
+        ui.separator();
+        crate::updates::help_menu_item(editor, ui);
     });
 }
 
