@@ -263,6 +263,10 @@ impl Editor {
     }
 
     fn replace_with_render(&mut self, pending: Pending, import: ImportMedia) {
+        self.as_one_edit(|editor| editor.import_and_replace(pending, import));
+    }
+
+    fn import_and_replace(&mut self, pending: Pending, import: ImportMedia) {
         if !self.apply(import) {
             return;
         }

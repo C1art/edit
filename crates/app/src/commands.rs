@@ -299,7 +299,8 @@ impl Editor {
             self.notice("Select clips to enable or disable");
             return;
         }
-        let enabled = selected.iter().all(|(_, clip)| clip.disabled);
+        // A mix of both turns everything on, as the menus offer "Enable" for it.
+        let enabled = selected.iter().any(|(_, clip)| clip.disabled);
         self.apply(SetClipsEnabled {
             clips: self.view.selection.clone(),
             enabled,

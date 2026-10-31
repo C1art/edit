@@ -108,17 +108,19 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
         return;
     };
     if done {
-        editor.apply(SetSequenceFormat {
-            format: settings.format,
+        let mut format = settings.format;
+        // Clips placed while the dialog was open may have set the rate they sit on.
+        if rate_locked {
+            format.frame_rate = editor.timeline.sequence().format.frame_rate;
+        }
+        let start = format.frame_rate.frame_start(settings.start, timebase);
+        editor.as_one_edit(|editor| {
+            editor.apply(SetSequenceFormat { format });
+            editor.apply_levels(SetTimeDisplay {
+                display: settings.display,
+            });
+            editor.apply_levels(SetStartTime { start });
         });
-        editor.apply_levels(SetTimeDisplay {
-            display: settings.display,
-        });
-        let start = settings
-            .format
-            .frame_rate
-            .frame_start(settings.start, timebase);
-        editor.apply_levels(SetStartTime { start });
     }
 }
 

@@ -164,7 +164,7 @@ pub(crate) fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
             file_section(editor, ui, &media);
             committed = log_section(editor, ui, &media);
         });
-    if let Some(log) = committed {
+    if let Some((source, log)) = committed {
         editor.apply_to_pool(SetMediaLog { source, log });
     }
 }
@@ -304,13 +304,25 @@ fn properties(ui: &mut egui::Ui, id: &str, rows: impl FnOnce(&mut dyn FnMut(&str
     }
 }
 
-/// Returns the log to keep once a field is left changed.
-fn log_section(editor: &mut Editor, ui: &mut egui::Ui, media: &MediaItem) -> Option<MediaLog> {
+/// Returns the log to keep, and whose it is, once a field is left changed or the item
+/// shown changes under a field being typed in.
+fn log_section(
+    editor: &mut Editor,
+    ui: &mut egui::Ui,
+    media: &MediaItem,
+) -> Option<(SourceId, MediaLog)> {
+    let project = editor.timeline.project();
     let editing = &mut editor.metadata.editing;
+    let mut switched = None;
     if editing
         .as_ref()
         .is_none_or(|(source, _)| *source != media.id)
     {
+        switched = editing.take().filter(|(source, log)| {
+            project
+                .media_item(*source)
+                .is_some_and(|item| item.log != *log)
+        });
         *editing = Some((media.id, media.log.clone()));
     }
     let (_, log) = editing.as_mut()?;
@@ -341,8 +353,11 @@ fn log_section(editor: &mut Editor, ui: &mut egui::Ui, media: &MediaItem) -> Opt
                 ui.end_row();
             });
         });
+    if switched.is_some() {
+        return switched;
+    }
     if left && *log != media.log {
-        return Some(log.clone());
+        return Some((media.id, log.clone()));
     }
     // Undo and redo change the log underneath; show theirs unless a field is in use.
     if !typing {
