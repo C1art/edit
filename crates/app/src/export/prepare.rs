@@ -46,9 +46,10 @@ pub(crate) fn prepare(
     let sidecar =
         (captions == CaptionExport::Sidecar).then(|| export_captions::sidecar_path(&path));
     // The project may read an image sequence the export would write over.
-    let frames = matches!(dialog.format.format, Format::Stills(_))
-        .then(|| media::sequence_pattern(&first_frame(&path)))
-        .flatten();
+    let frames = match dialog.format.format {
+        Format::Stills(format) => media::sequence_pattern(&first_frame(&path, format)),
+        _ => None,
+    };
     let problem = if path.as_os_str().is_empty() {
         Some("Choose an output file first".to_owned())
     } else if path.is_relative() {

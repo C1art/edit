@@ -124,7 +124,10 @@ impl ExportDialog {
     ) -> Option<Target> {
         let output = self.output();
         let kind = self.format.format;
-        let frames = matches!(kind, Format::Stills(_));
+        let frames = match kind {
+            Format::Stills(format) => Some(format),
+            _ => None,
+        };
         let sidecar = export_captions::chosen(self.captions, kind.has_video(), sequence)
             == CaptionExport::Sidecar;
         let target = self

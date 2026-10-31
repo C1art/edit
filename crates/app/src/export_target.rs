@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use crossbeam::channel::{self, Receiver, Sender};
+use media::StillFormat;
 
 use crate::editor::Editor;
 use crate::export_captions::sidecar_path;
@@ -33,7 +34,7 @@ pub(crate) enum Target {
 struct Request {
     path: PathBuf,
     queued: Vec<PathBuf>,
-    frames: bool,
+    frames: Option<StillFormat>,
     sidecar: bool,
 }
 
@@ -59,7 +60,11 @@ impl TargetCheck {
                         request = newest;
                     }
                     let on_disk = |path: &Path| {
-                        if path.is_file() || request.frames && first_frame(path).is_file() {
+                        if path.is_file()
+                            || request
+                                .frames
+                                .is_some_and(|format| first_frame(path, format).is_file())
+                        {
                             Some(Holder::File)
                         } else if request.sidecar && sidecar_path(path).is_file() {
                             Some(Holder::Sidecar)
@@ -87,7 +92,7 @@ impl TargetCheck {
     pub(crate) fn target(
         &mut self,
         path: &Path,
-        frames: bool,
+        frames: Option<StillFormat>,
         sidecar: bool,
         queued: impl FnOnce() -> Vec<PathBuf>,
     ) -> Option<&Target> {
@@ -135,10 +140,9 @@ fn check(path: &Path, queued: &[PathBuf], on_disk: impl Fn(&Path) -> Option<Hold
 
 /// The first image an image-sequence export to `path` writes. Exports of 10,000 frames
 /// or more number with more digits, but one that long over an old one is rare.
-pub(crate) fn first_frame(path: &Path) -> PathBuf {
+pub(crate) fn first_frame(path: &Path, format: StillFormat) -> PathBuf {
     let stem = path.file_stem().unwrap_or_default().to_string_lossy();
-    let extension = path.extension().unwrap_or_default().to_string_lossy();
-    path.with_file_name(format!("{stem}0000.{extension}"))
+    path.with_file_name(format!("{stem}0000.{}", format.extension()))
 }
 
 /// "Name 2.mp4", "Name 3.mp4" and on beside `path`, counting on from a number its
