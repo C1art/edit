@@ -208,7 +208,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "app"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "audio",
  "crossbeam",
@@ -423,7 +423,7 @@ dependencies = [
 
 [[package]]
 name = "audio"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "cpal",
  "crossbeam",
@@ -1988,7 +1988,7 @@ checksum = "dae608c151f68243f2b000364e1f7b186d9c29845f7d2d85bd31b9ad77ad552b"
 
 [[package]]
 name = "media"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "ffmpeg-sys-next",
  "timeline",
@@ -2756,7 +2756,7 @@ checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
 
 [[package]]
 name = "playback"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "audio",
  "crossbeam",
@@ -2771,14 +2771,14 @@ dependencies = [
 
 [[package]]
 name = "plugin_fixture"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "vst3",
 ]
 
 [[package]]
 name = "plugins"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "libloading 0.9.0",
  "vst3",
@@ -2901,7 +2901,7 @@ checksum = "3d595e54a326bc53c1c197b32d295e14b169e3cfeaa8dc82b529f947fba6bcf5"
 
 [[package]]
 name = "project"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "timeline",
@@ -3062,7 +3062,7 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "render"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "crossbeam",
  "timeline",
@@ -3449,7 +3449,7 @@ dependencies = [
 
 [[package]]
 name = "speech"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "audio",
  "crossbeam",
@@ -3599,7 +3599,7 @@ dependencies = [
 
 [[package]]
 name = "timeline"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
 ]
