@@ -23,7 +23,8 @@ pub(super) fn mode_picker(ui: &mut egui::Ui, mixer: &mut Mixer, track: TrackRef)
 }
 
 /// Records the fader into the track's volume keyframes while its mode says to, and
-/// commits a pass once it ends. True while the fader is being recorded.
+/// commits a pass once it ends. True while the fader is being recorded, and on the
+/// frame its pass ends.
 pub(super) fn automate(
     editor: &mut Editor,
     track: TrackRef,
@@ -45,7 +46,9 @@ pub(super) fn automate(
         finish_pass(editor, track);
     }
     if !records {
-        return false;
+        // Releasing the fader in Touch ends the pass on the frame the drag stops, and
+        // that release mustn't also set the track's own volume.
+        return last.is_some();
     }
     let level = db - volume.db();
     let pass = editor.mixer.passes.entry(track).or_default();
