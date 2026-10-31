@@ -147,6 +147,7 @@ mod transport;
 mod trim_monitor;
 mod ui_mode;
 mod unreadable_setting;
+mod updates;
 mod viewer;
 mod voiceover;
 mod vst;
@@ -160,6 +161,7 @@ use editor::Editor;
 use window_state::WindowState;
 
 fn main() -> eframe::Result {
+    let updated_to = updates::start_up();
     let initial: Vec<PathBuf> = std::env::args_os().skip(1).map(PathBuf::from).collect();
     project_store::adopt_old_app_folder();
     let window = WindowState::load();
@@ -174,12 +176,21 @@ fn main() -> eframe::Result {
         wgpu_options: gpu_setup::wgpu_configuration(),
         ..Default::default()
     };
+    let (on_exit, apply) = crossbeam::channel::unbounded();
     let ran = eframe::run_native(
         "Cledit",
         options,
-        Box::new(|creation_context| Ok(Box::new(Editor::new(creation_context, initial, window)))),
+        Box::new(move |creation_context| {
+            let mut editor = Editor::new(creation_context, initial, window);
+            editor.updates.hand_over_on_exit(on_exit);
+            if let Some(version) = updated_to {
+                editor.notice(format!("Cledit was updated to {version}."));
+            }
+            Ok(Box::new(editor))
+        }),
     );
     // The window is gone; a quit during an export only gets this long to clean up.
     playback::stop_exports(std::time::Duration::from_secs(5));
+    updates::apply_on_exit(&apply);
     ran
 }

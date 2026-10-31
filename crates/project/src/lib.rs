@@ -19,7 +19,9 @@ pub use text_styles::TextStylesFile;
 
 /// Bump on every breaking change to the file layout and add a migration from the previous version.
 pub const FORMAT_VERSION: u32 = 1;
-pub const EXTENSION: &str = "editproj";
+pub const EXTENSION: &str = "cledit";
+/// What projects were saved as before the rename; they still open, and save where they are.
+pub const OLD_EXTENSION: &str = "editproj";
 
 const VERSION_FIELD: &str = "format_version";
 

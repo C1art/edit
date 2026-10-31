@@ -36,6 +36,8 @@ pub(crate) struct Preferences {
     speech_model: Model,
     /// A language code, or `None` for the model to tell.
     speech_language: Option<String>,
+    check_for_updates: bool,
+    skipped_version: Option<String>,
 }
 
 impl Preferences {
@@ -61,6 +63,8 @@ impl Preferences {
             ui_mode: editor.ui_mode,
             speech_model: editor.speech_choice.0,
             speech_language: editor.speech_choice.1.clone(),
+            check_for_updates: editor.updates.automatic,
+            skipped_version: editor.updates.skipped.clone(),
         }
     }
 
@@ -72,7 +76,8 @@ impl Preferences {
              voiceover_input_id\t{}\nvoiceover_countdown\t{}\nvoiceover_hear_sequence\t{}\n\
              default_transition\t{}\ndefault_transition_length\t{}\nstill_length\t{}\n\
              media_scaling\t{}\nauto_scroll\t{}\nwaveforms\t{}\nrectified_waveforms\t{}\n\
-             ui_mode\t{}\nspeech_model\t{}\nspeech_language\t{}\n",
+             ui_mode\t{}\nspeech_model\t{}\nspeech_language\t{}\ncheck_for_updates\t{}\n\
+             skipped_version\t{}\n",
             self.hardware_decoding,
             self.autosave,
             self.autosave_minutes,
@@ -106,6 +111,8 @@ impl Preferences {
             self.ui_mode.key(),
             self.speech_model.key(),
             self.speech_language.as_deref().unwrap_or_default(),
+            self.check_for_updates,
+            self.skipped_version.as_deref().unwrap_or_default(),
         )
     }
 
@@ -164,6 +171,10 @@ impl Preferences {
                 "speech_language" => {
                     self.speech_language = (!value.is_empty()).then(|| value.to_owned());
                 }
+                "check_for_updates" => set(&mut self.check_for_updates, flag),
+                "skipped_version" => {
+                    self.skipped_version = (!value.is_empty()).then(|| value.to_owned());
+                }
                 _ => {}
             }
         }
@@ -211,6 +222,8 @@ impl Editor {
         self.clip_art.rectified_waveforms = preferences.rectified_waveforms;
         self.set_ui_mode(preferences.ui_mode);
         self.speech_choice = (preferences.speech_model, preferences.speech_language);
+        self.updates.automatic = preferences.check_for_updates;
+        self.updates.skipped = preferences.skipped_version;
         self.saved_preferences = Some(Preferences::of(self));
     }
 
@@ -252,6 +265,8 @@ mod tests {
         ui_mode: UiMode::Advanced,
         speech_model: Model::FastEnglish,
         speech_language: None,
+        check_for_updates: true,
+        skipped_version: None,
     };
 
     #[test]
@@ -288,6 +303,8 @@ mod tests {
             ui_mode: UiMode::Simple,
             speech_model: Model::AccurateAnyLanguage,
             speech_language: Some("de".to_owned()),
+            check_for_updates: false,
+            skipped_version: Some("0.2.0".to_owned()),
         };
         assert_eq!(DEFAULTS.read(&chosen.to_text()), chosen);
     }

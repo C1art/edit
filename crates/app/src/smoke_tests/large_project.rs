@@ -67,7 +67,7 @@ fn large_project() {
         ms(started.elapsed())
     );
 
-    let path = std::env::temp_dir().join("edit-large-project.editproj");
+    let path = std::env::temp_dir().join("cledit-large-project.cledit");
     save(&mut editor, &mut screen, &path);
     let file = ProjectFile::new(editor.timeline.project().clone());
     let started = Instant::now();

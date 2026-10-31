@@ -94,7 +94,7 @@ mod tests {
     #[allow(clippy::unwrap_used)]
     fn scratch(name: &str) -> std::path::PathBuf {
         let path =
-            std::env::temp_dir().join(format!("edit-{name}-{}.editproj", std::process::id()));
+            std::env::temp_dir().join(format!("cledit-{name}-{}.cledit", std::process::id()));
         std::fs::write(&path, b"old").unwrap();
         path
     }

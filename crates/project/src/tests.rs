@@ -372,9 +372,9 @@ fn a_project_moved_together_with_its_media_finds_it_again() {
     std::fs::write(&media, b"").unwrap();
     let mut project = sample();
     Arc::make_mut(&mut project.sequence.media)[0].path = media;
-    project.save(&before.join("cut.editproj")).unwrap();
+    project.save(&before.join("cut.cledit")).unwrap();
     std::fs::rename(&before, &after).unwrap();
-    let moved = ProjectFile::load(&after.join("cut.editproj"));
+    let moved = ProjectFile::load(&after.join("cut.cledit"));
     std::fs::remove_dir_all(&root).unwrap();
     assert_eq!(
         moved.unwrap().sequence.media[0].path,

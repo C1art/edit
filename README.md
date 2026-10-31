@@ -65,8 +65,9 @@ Release builds open without a console window.
 
 Preferences, workspaces, autosaves, cached waveforms, presets, templates and downloaded
 speech models live in `%APPDATA%\Cledit` (a `%APPDATA%\Edit` folder from before the
-rename is moved there on first start). Projects are `.editproj` files wherever you save
-them. VST3 plugins are found in `C:\Program Files\Common Files\VST3`.
+rename is moved there on first start). Projects are `.cledit` files wherever you save
+them (`.editproj` projects from before still open). VST3 plugins are found in
+`C:\Program Files\Common Files\VST3`.
 
 Speech models are downloaded on first use from Hugging Face (whisper.cpp's `ggml` files);
 any model file put in `%APPDATA%\Cledit\models` with the expected name works offline.
@@ -111,3 +112,10 @@ clip a Lumetri grade and a Gaussian blur.
 ## Layout
 
 A Cargo workspace; see `CLAUDE.md` for the crates, rules and conventions.
+
+## License
+
+Cledit is free software under the [GNU General Public License v3.0 or later](LICENSE).
+The installer ships a GPL build of FFmpeg, which is why Cledit is GPL as well; see
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for what it includes and where each
+part's source is.
