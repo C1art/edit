@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use timeline::{
     AddBlurredBackground, AddFrameHold, AddTrack, ClipId, Clipboard, CloseGap, CloseGaps,
     DeleteEmptyTracks, FrameFit, Gain, HoldFrame, InsertFrameHold, JoinThroughEdits, Lift,
-    LinkedSelection, MakeSubsequence, NudgeClipGain, PasteClips, PlaceMode, Razor, RazorTarget,
+    LinkedSelection, MakeSubsequence, NudgeClipGain, PasteClips, PasteMode, Razor, RazorTarget,
     RippleDelete, Sequence, SetClipsEnabled, SetFrameHold, SetGrouped, SetLinked,
     SetLinkedSelection, SetToFrameSize, Ticks, Timebase, TrackKind, TrackRef,
 };
@@ -144,7 +144,28 @@ impl Editor {
 
     /// Pastes at the playhead, onto the targeted tracks where they are set, and parks
     /// the playhead after the pasted clips.
-    pub(crate) fn paste(&mut self, mode: PlaceMode) {
+    /// Pastes at the playhead: a plain paste onto the tracks the clips came from, moved up
+    /// past anything in the way; an insert onto the targeted tracks.
+    pub(crate) fn paste(&mut self, mode: PasteMode) {
+        let targets = match mode {
+            PasteMode::Insert => [self.view.targets.video, self.view.targets.audio],
+            PasteMode::Overwrite | PasteMode::OntoFreeTracks => [None, None],
+        };
+        self.paste_onto(mode, self.playhead(), targets);
+    }
+
+    /// Pastes at `at` with the clicked track taking the clips of its kind.
+    pub(crate) fn paste_here(&mut self, mode: PasteMode, track: TrackRef, at: Ticks) {
+        let targets = match track.kind {
+            TrackKind::Video => [Some(track.index), None],
+            TrackKind::Audio => [None, Some(track.index)],
+        };
+        self.paste_onto(mode, at, targets);
+    }
+
+    /// `targets` are the video and audio tracks the first copied track of each kind
+    /// lands on; `None` keeps the tracks the clips came from.
+    fn paste_onto(&mut self, mode: PasteMode, at: Ticks, targets: [Option<usize>; 2]) {
         let Some(clipboard) = self.clipboard.clone() else {
             return;
         };
@@ -152,11 +173,10 @@ impl Editor {
             (Some(first), Some(target)) => target as isize - first as isize,
             _ => 0,
         };
-        let at = self.playhead();
         let end = at + clipboard.duration();
         let paste = PasteClips {
-            video_offset: offset(TrackKind::Video, self.view.targets.video),
-            audio_offset: offset(TrackKind::Audio, self.view.targets.audio),
+            video_offset: offset(TrackKind::Video, targets[0]),
+            audio_offset: offset(TrackKind::Audio, targets[1]),
             clipboard,
             at,
             mode,

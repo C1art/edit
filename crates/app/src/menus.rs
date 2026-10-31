@@ -1,6 +1,7 @@
 use egui::{Button, MenuBar, ViewportCommand};
 use timeline::{
-    Generator, LinkedSelection, PlaceMode, Rgb, Shape, ShapeKind, Ticks, Title, TrackKind,
+    Generator, LinkedSelection, PasteMode, PlaceMode, Rgb, Shape, ShapeKind, Ticks, Title,
+    TrackKind,
 };
 
 use crate::editor::Editor;
@@ -176,12 +177,12 @@ fn advanced_menus(editor: &mut Editor, ui: &mut egui::Ui) {
         let can_paste = editor.clipboard.is_some();
         let paste = Button::new("Paste").shortcut_text(editor.keymap.label(Command::Paste));
         if ui.add_enabled(can_paste, paste).clicked() {
-            editor.paste(PlaceMode::Overwrite);
+            editor.paste(PasteMode::OntoFreeTracks);
         }
         let paste_insert =
             Button::new("Paste Insert").shortcut_text(editor.keymap.label(Command::PasteInsert));
         if ui.add_enabled(can_paste, paste_insert).clicked() {
-            editor.paste(PlaceMode::Insert);
+            editor.paste(PasteMode::Insert);
         }
         let paste_attributes = Button::new("Paste Attributes…")
             .shortcut_text(editor.keymap.label(Command::PasteAttributes));

@@ -55,7 +55,10 @@ impl TimelineView {
                 let hit = layout::hit(sequence, &rows, &scale, pos);
                 self.context_clip = matches!(hit, Hit::Body { .. } | Hit::Edge { .. });
                 self.select_gap(sequence, hit, scale.time(pos.x));
-                self.context_gap = self.gap.is_some();
+                self.context_empty = match hit {
+                    Hit::Empty { track: Some(track) } => Some((track, frame_time(pos.x))),
+                    _ => None,
+                };
                 if let Hit::Body { clip, .. } | Hit::Edge { clip, .. } = hit {
                     if !self.selection.contains(&clip) {
                         self.selection = sequence.with_groups(&[clip]);

@@ -246,7 +246,11 @@ fn random_edit(
             Some(clipboard) => run!(PasteClips {
                 clipboard,
                 at: some_time(rng, &sequence),
-                mode,
+                mode: match mode {
+                    PlaceMode::Insert => PasteMode::Insert,
+                    PlaceMode::Overwrite if rng.chance(50) => PasteMode::OntoFreeTracks,
+                    PlaceMode::Overwrite => PasteMode::Overwrite,
+                },
                 video_offset: rng.ticks(-1..2).0 as isize,
                 audio_offset: rng.ticks(-1..2).0 as isize,
             }),

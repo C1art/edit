@@ -1,3 +1,5 @@
+use timeline::PasteMode;
+
 use crate::editor::Editor;
 use crate::effects::{self, SideTab};
 use crate::import::Importer;
@@ -164,10 +166,26 @@ impl Editor {
                 });
             });
         }
-        if let Some(response) = output.gap_menu {
+        if let Some((response, track, at)) = output.empty_menu {
             response.context_menu(|ui| {
-                if ui.button("Ripple Delete").clicked() {
-                    self.ripple_delete();
+                let can_paste = self.clipboard.is_some();
+                if ui
+                    .add_enabled(can_paste, egui::Button::new("Paste Here"))
+                    .clicked()
+                {
+                    self.paste_here(PasteMode::OntoFreeTracks, track, at);
+                }
+                if ui
+                    .add_enabled(can_paste, egui::Button::new("Paste Insert Here"))
+                    .clicked()
+                {
+                    self.paste_here(PasteMode::Insert, track, at);
+                }
+                if self.view.gap.is_some() {
+                    ui.separator();
+                    if ui.button("Ripple Delete").clicked() {
+                        self.ripple_delete();
+                    }
                 }
             });
         }

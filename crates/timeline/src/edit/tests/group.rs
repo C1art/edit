@@ -29,7 +29,7 @@ fn a_group_selects_its_clips_with_their_links_until_ungrouped() {
         .apply(PasteClips {
             clipboard,
             at: Ticks(600),
-            mode: PlaceMode::Overwrite,
+            mode: PasteMode::Overwrite,
             video_offset: 0,
             audio_offset: 0,
         })

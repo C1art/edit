@@ -1,5 +1,5 @@
 use egui::{Key, Modifiers};
-use timeline::{Edge, Generator, Marks, PlaceMode, Title, TrackKind};
+use timeline::{Edge, Generator, Marks, PasteMode, PlaceMode, Title, TrackKind};
 
 use crate::editor::Editor;
 use crate::effects::KeyAction;
@@ -93,8 +93,8 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         Command::Copy if editor.act_on_keyframes(KeyAction::Copy) => {}
         Command::Copy => editor.copy(),
         Command::Paste if editor.act_on_keyframes(KeyAction::Paste) => {}
-        Command::Paste => editor.paste(PlaceMode::Overwrite),
-        Command::PasteInsert => editor.paste(PlaceMode::Insert),
+        Command::Paste => editor.paste(PasteMode::OntoFreeTracks),
+        Command::PasteInsert => editor.paste(PasteMode::Insert),
         Command::PasteAttributes => editor.paste_attributes(),
         Command::Clear | Command::RippleDelete if editor.act_on_keyframes(KeyAction::Delete) => {}
         Command::Clear => editor.lift(),

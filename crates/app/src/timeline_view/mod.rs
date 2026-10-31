@@ -116,8 +116,9 @@ pub struct TimelineOutput {
     pub transition_duration: Option<(ClipId, Edge, Ticks)>,
     /// The clip area while a right-click on a clip has its menu open.
     pub clip_menu: Option<egui::Response>,
-    /// The clip area while a right-click on a gap has its menu open.
-    pub gap_menu: Option<egui::Response>,
+    /// The clip area while a right-click on an empty stretch of a track has its menu
+    /// open, with that track and the frame clicked.
+    pub empty_menu: Option<(egui::Response, TrackRef, Ticks)>,
     /// How the sequence's times should show, chosen from the timecode's menu.
     pub time_display: Option<TimeDisplay>,
     pub errors: Vec<String>,
@@ -157,7 +158,7 @@ pub struct TimelineView {
     context_marker: Option<MarkerId>,
     /// Whether the last right-click in the clip area landed on a clip.
     context_clip: bool,
-    context_gap: bool,
+    context_empty: Option<(TrackRef, Ticks)>,
     /// Audio tracks showing their automation in place of their clips' volume lines.
     automation_shown: BTreeSet<TrackRef>,
     /// The property video clips show the keyframes of.
@@ -193,7 +194,7 @@ impl Default for TimelineView {
             drag: None,
             context_marker: None,
             context_clip: false,
-            context_gap: false,
+            context_empty: None,
             automation_shown: BTreeSet::new(),
             clip_line: ClipLine::default(),
             renaming: None,
@@ -289,7 +290,9 @@ impl TimelineView {
             self.show_clip_tip(&response, timeline.sequence(), &scale, top);
         }
         output.clip_menu = self.context_clip.then(|| response.clone());
-        output.gap_menu = self.context_gap.then(|| response.clone());
+        output.empty_menu = self
+            .context_empty
+            .map(|(track, at)| (response.clone(), track, at));
         let drop_hint = egui::DragAndDrop::has_any_payload(ui.ctx())
             .then(|| {
                 let rows = layout::rows(timeline.sequence(), &self.heights, top);
