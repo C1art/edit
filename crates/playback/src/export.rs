@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::ops::{ControlFlow, Range};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -21,6 +22,10 @@ use crate::loudness::{measure_span, LoudnessTarget};
 use crate::previews::Preview;
 use crate::sequence_mix::{SequenceMix, CHUNK_FRAMES};
 use crate::{Layer, PlaybackError};
+
+/// Pictures on their way back from the GPU at once. Waiting on each before compositing
+/// the next left the GPU idle while the CPU waited out its whole turnaround.
+const FRAMES_IN_FLIGHT: usize = 3;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExportSettings {
@@ -305,13 +310,13 @@ impl Worker {
                 DecodeAhead::start(Arc::clone(&sequence), &self.settings.previews, frames)
             })
             .transpose()?;
-        let mut pending: Option<Readback> = None;
+        let mut pending: VecDeque<(i64, Readback)> = VecDeque::new();
         let started = Instant::now();
         let mut timings = ExportTimings {
             frames: frames_total,
             ..ExportTimings::default()
         };
-        // One step past the last frame hands over the last picture.
+        // One step past the last frame hands over the last pictures.
         for frame in frames.start..=frames.end {
             if self.cancel.load(Ordering::Relaxed) {
                 return Ok(Outcome::Cancelled);
@@ -329,8 +334,12 @@ impl Worker {
             });
             ExportTimings::lap(&mut timings.decode, &mut since);
             if frame > frames.start {
-                let done = frame - 1;
-                if let Some(readback) = pending.take() {
+                while pending.len() >= FRAMES_IN_FLIGHT
+                    || (frame == frames.end && !pending.is_empty())
+                {
+                    let Some((done, readback)) = pending.pop_front() else {
+                        break;
+                    };
                     let picture = readback.finish()?;
                     ExportTimings::lap(&mut timings.gpu_wait, &mut since);
                     match stills {
@@ -364,14 +373,14 @@ impl Worker {
                     let _ = self.events.send(ExportEvent::Warning(warning));
                 }
                 let _ = self.events.send(ExportEvent::Progress {
-                    frames_done: frame - frames.start,
+                    frames_done: frame - frames.start - pending.len() as i64,
                     frames_total,
                 });
             }
             if let Some(layers) = layers {
                 let images: Vec<LayerImage<'_>> = layers.iter().map(Layer::image).collect();
                 self.compositor.composite(input_size, &images)?;
-                pending = Some(self.compositor.start_readback()?);
+                pending.push_back((frame, self.compositor.start_readback()?));
                 ExportTimings::lap(&mut timings.composite, &mut since);
             }
         }
