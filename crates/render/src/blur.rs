@@ -2,19 +2,20 @@ use crate::blit::{self, Blit};
 use crate::compositor::extent;
 use crate::WORKING_FORMAT;
 
-/// More taps per side than this and the taps spread apart instead, which the linear
-/// sampler smooths over.
+/// More taps per side than this and the taps spread apart instead.
 const MAX_TAPS: f32 = 24.0;
 
-/// Two intermediate textures at the layer's size: the horizontal pass writes the first
-/// and the vertical pass writes the second, which is then placed like the source.
+/// Two intermediate textures at the layer's size that the passes write in turn: across,
+/// then down, the second written last and placed like the source. A blur too wide for
+/// neighbouring taps first runs a narrow blur each way, so its spread taps don't pick
+/// single texels out of fine detail and leave stripes.
 pub(crate) struct BlurTargets {
-    horizontal_uniform: wgpu::Buffer,
-    vertical_uniform: wgpu::Buffer,
-    horizontal: wgpu::BindGroup,
-    vertical: wgpu::BindGroup,
-    horizontal_view: wgpu::TextureView,
-    vertical_view: wgpu::TextureView,
+    uniforms: [wgpu::Buffer; 4],
+    /// Reading the source, the first, the second and the first texture again.
+    passes: [wgpu::BindGroup; 4],
+    first: wgpu::TextureView,
+    second: wgpu::TextureView,
+    prefiltered: bool,
     /// Places the blurred picture; shares the layer's placement buffer.
     pub(crate) placed: wgpu::BindGroup,
 }
@@ -42,18 +43,18 @@ impl BlurTargets {
                 })
                 .create_view(&wgpu::TextureViewDescriptor::default())
         };
-        let horizontal_view = view("blur_horizontal");
-        let vertical_view = view("blur_vertical");
-        let horizontal_uniform = Blit::placement_buffer(device);
-        let vertical_uniform = Blit::placement_buffer(device);
+        let first = view("blur_first");
+        let second = view("blur_second");
+        let uniforms = [(); 4].map(|()| Blit::placement_buffer(device));
+        let read = [source, &first, &second, &first];
+        let passes = [0, 1, 2, 3].map(|pass| blit.bind(device, read[pass], &uniforms[pass]));
         Self {
-            horizontal: blit.bind(device, source, &horizontal_uniform),
-            vertical: blit.bind(device, &horizontal_view, &vertical_uniform),
-            placed: blit.bind(device, &vertical_view, placement),
-            horizontal_uniform,
-            vertical_uniform,
-            horizontal_view,
-            vertical_view,
+            placed: blit.bind(device, &second, placement),
+            uniforms,
+            passes,
+            first,
+            second,
+            prefiltered: false,
         }
     }
 
@@ -61,39 +62,55 @@ impl BlurTargets {
     /// whether the blurred picture is premultiplied: a straight source is, when all its
     /// channels blur alike, so its colour doesn't bleed in from transparent texels.
     pub(crate) fn write(
-        &self,
+        &mut self,
         queue: &wgpu::Queue,
         (width, height): (u32, u32),
         sigma: [f32; 4],
         source_premultiplied: bool,
     ) -> bool {
         let premultiply = !source_premultiplied && sigma.iter().all(|&each| each == sigma[3]);
-        let horizontal = [1.0 / width as f32, 0.0];
-        let vertical = [0.0, 1.0 / height as f32];
-        queue.write_buffer(
-            &self.horizontal_uniform,
-            0,
-            &uniform(horizontal, sigma, premultiply),
-        );
-        queue.write_buffer(&self.vertical_uniform, 0, &uniform(vertical, sigma, false));
+        let across = [1.0 / width as f32, 0.0];
+        let down = [0.0, 1.0 / height as f32];
+        let (spacing, _) = tap_layout(sigma.into_iter().fold(0.0, f32::max));
+        self.prefiltered = spacing > 1.0;
+        let passes = if self.prefiltered {
+            // Gaussians add in variance, so the two together blur by `sigma`.
+            let narrow = sigma.map(|sigma| sigma.min(spacing));
+            let rest = [0, 1, 2, 3].map(|channel| {
+                (sigma[channel].powi(2) - narrow[channel].powi(2))
+                    .max(0.0)
+                    .sqrt()
+            });
+            vec![
+                uniform(across, narrow, premultiply),
+                uniform(across, rest, false),
+                uniform(down, narrow, false),
+                uniform(down, rest, false),
+            ]
+        } else {
+            vec![
+                uniform(across, sigma, premultiply),
+                uniform(down, sigma, false),
+            ]
+        };
+        for (buffer, bytes) in self.uniforms.iter().zip(&passes) {
+            queue.write_buffer(buffer, 0, bytes);
+        }
         source_premultiplied || premultiply
     }
 
     pub(crate) fn draw(&self, encoder: &mut wgpu::CommandEncoder, blit: &Blit) {
-        blit::draw(
-            encoder,
-            &self.horizontal_view,
-            &blit.blur,
-            &[[&self.horizontal]],
-            wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-        );
-        blit::draw(
-            encoder,
-            &self.vertical_view,
-            &blit.blur,
-            &[[&self.vertical]],
-            wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-        );
+        let count = if self.prefiltered { 4 } else { 2 };
+        let targets = [&self.first, &self.second];
+        for (pass, bindings) in self.passes.iter().take(count).enumerate() {
+            blit::draw(
+                encoder,
+                targets[pass % 2],
+                &blit.blur,
+                &[[bindings]],
+                wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+            );
+        }
     }
 }
 

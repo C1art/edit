@@ -243,7 +243,7 @@ impl Compositor {
         // Compositing leaves a group's colors multiplied by its coverage.
         let mut premultiplied = slot.kind == SlotKind::Group
             || look.effects.alpha == AlphaInterpretation::Premultiplied;
-        if let Some(blur) = slot.blur.as_ref().filter(|_| slot.blurred) {
+        if let Some(blur) = slot.blur.as_mut().filter(|_| slot.blurred) {
             premultiplied = blur.write(&self.queue, size, sigma, premultiplied);
         }
         let placement = Placement {

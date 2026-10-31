@@ -1,5 +1,5 @@
 use crate::common::{compositor, layer, SIZE};
-use render::{Background, RenderError};
+use render::{Background, Picture, RenderError};
 use timeline::BlendMode;
 
 #[test]
@@ -53,6 +53,41 @@ fn a_blurred_cutout_keeps_its_color_at_the_edge() -> Result<(), RenderError> {
             .filter(|pixel| pixel[3] > 8)
             .all(|pixel| pixel[0] > 245),
         "{row:?}"
+    );
+    Ok(())
+}
+
+#[test]
+#[ignore = "needs a GPU"]
+fn a_wide_blur_spreads_a_thin_line_smoothly() -> Result<(), RenderError> {
+    const WIDTH: u32 = 256;
+    // One white column on black.
+    let pixels: Vec<u8> = (0..WIDTH * 2)
+        .flat_map(|index| {
+            let shade = if index % WIDTH == WIDTH / 2 { 255 } else { 0 };
+            [shade, shade, shade, 255]
+        })
+        .collect();
+    let mut picture = layer(&pixels, BlendMode::Normal);
+    picture.picture = Picture::Pixels {
+        width: WIDTH,
+        height: 2,
+        rgba: &pixels,
+        source: None,
+    };
+    picture.look.blur = [32.0; 4];
+    let mut compositor = compositor();
+    compositor.composite((WIDTH, 2), &[picture])?;
+    let output = compositor.read_output()?;
+    let row: Vec<u8> = output.as_chunks::<4>().0[..WIDTH as usize]
+        .iter()
+        .map(|pixel| pixel[0])
+        .collect();
+    let middle = &row[WIDTH as usize / 2 - 8..WIDTH as usize / 2 + 8];
+    assert!(middle.iter().all(|&level| level > 0), "{middle:?}");
+    assert!(
+        middle.windows(2).all(|pair| pair[0].abs_diff(pair[1]) <= 2),
+        "{middle:?}"
     );
     Ok(())
 }
