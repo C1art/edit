@@ -40,14 +40,20 @@ check_version() {
 # Every DLL that Cledit or a DLL it ships loads must be next to it or part of Windows. The
 # Visual C++ runtime counts as missing even when the runner has it, since users may not.
 check_dependencies() {
-  local vs dumpbin shipped
+  local vs dumpbin shipped checked=0
   vs=$(cygpath -u "$("/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe" \
     -latest -products '*' -property installationPath | tr -d '\r')")
   dumpbin=$(ls "$vs"/VC/Tools/MSVC/*/bin/Hostx64/x64/dumpbin.exe | sort -V | tail -1)
   shipped=$(ls "$current" | tr '[:upper:]' '[:lower:]')
   for binary in "$current"/*.exe "$current"/*.dll; do
-    for dll in $("$dumpbin" -nologo -dependents "$(cygpath -w "$binary")" | tr -d '\r' \
-      | sed -n 's/^ \{4,\}\([A-Za-z0-9_.-]*\.[dD][lL][lL]\)$/\1/p' | tr '[:upper:]' '[:lower:]' | sort -u); do
+    local dlls
+    dlls=$("$dumpbin" -nologo -dependents "$(cygpath -w "$binary")" | tr -d '\r' \
+      | sed -n 's/^ \{4,\}\([A-Za-z0-9_.-]*\.[dD][lL][lL]\)$/\1/p' | tr '[:upper:]' '[:lower:]' | sort -u)
+    if [ "$(basename "$binary")" = cledit.exe ] && ! grep -qx vcruntime140.dll <<<"$dlls"; then
+      fail "reading cledit.exe's DLLs found no vcruntime140.dll, so the DLL check is not working"
+    fi
+    for dll in $dlls; do
+      checked=$((checked + 1))
       if grep -qx "$dll" <<<"$shipped"; then
         continue
       elif [[ $dll =~ ^(vcruntime|msvcp|vcomp|concrt|vccorlib) ]]; then
@@ -59,7 +65,7 @@ check_dependencies() {
       fi
     done
   done
-  echo "::notice::checked the DLLs that $(ls "$current"/*.exe "$current"/*.dll | wc -l) installed files load"
+  echo "::notice::checked $checked DLLs loaded by $(ls "$current"/*.exe "$current"/*.dll | wc -l) installed files"
 }
 
 check_file_type() {
