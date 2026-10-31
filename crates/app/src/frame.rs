@@ -88,6 +88,7 @@ impl eframe::App for Editor {
         self.sync_program();
         crate::transcribe::take_keys(self, &ctx);
         crate::shortcuts::handle(self, &ctx);
+        self.end_stopped_dynamic_trim();
         self.update_window();
         self.sync_program();
         self.update_viewers(&ctx);

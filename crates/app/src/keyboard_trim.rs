@@ -90,6 +90,19 @@ impl Editor {
         }
     }
 
+    /// Ends a dynamic trim whose playback stopped some other way, as with the monitor's
+    /// pause button or at the sequence end, so a later Space doesn't trim to wherever
+    /// the playhead has gone by then.
+    pub(crate) fn end_stopped_dynamic_trim(&mut self) {
+        let playing = self
+            .program
+            .as_ref()
+            .is_some_and(|program| program.player.is_playing());
+        if let Some(point) = self.view.edit_point.as_mut().filter(|_| !playing) {
+            point.dynamic = false;
+        }
+    }
+
     pub(crate) fn toggle_trim_type(&mut self) {
         if let Some(point) = &mut self.view.edit_point {
             point.trim = point.trim.next();
