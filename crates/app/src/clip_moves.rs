@@ -33,23 +33,38 @@ impl Editor {
     /// Shows source material `frames` sequence frames later in the selected clips, as far
     /// as their media reaches; a negative count shows earlier material.
     pub(crate) fn slip_selection(&mut self, frames: i64) {
-        self.step_selection(frames, |clips, delta| Slip { clips, delta });
+        self.step_selection(frames, None, |clips, delta| Slip { clips, delta });
     }
 
     /// Moves the selection `frames` frames later while its neighbours give and take the
     /// difference, as far as their media and lengths allow.
     pub(crate) fn slide_selection(&mut self, frames: i64) {
-        self.step_selection(frames, |clips, delta| Slide { clips, delta });
+        let sequence = self.timeline.sequence();
+        let first = self
+            .view
+            .selection
+            .first()
+            .and_then(|&id| sequence.clip(id));
+        let start = first.map(|(_, clip)| clip.start);
+        self.step_selection(frames, start, |clips, delta| Slide { clips, delta });
     }
 
-    fn step_selection<E: Edit>(&mut self, frames: i64, edit: impl Fn(Vec<ClipId>, Ticks) -> E) {
+    /// `frames` from `from` when the selection moves in the sequence, so it stays on the
+    /// frame grid where frames differ in length by a tick, as at 23.976 fps.
+    fn step_selection<E: Edit>(
+        &mut self,
+        frames: i64,
+        from: Option<Ticks>,
+        edit: impl Fn(Vec<ClipId>, Ticks) -> E,
+    ) {
         if self.view.selection.is_empty() {
             self.notice("Select a clip first");
             return;
         }
         let sequence = self.timeline.sequence();
         let (rate, timebase) = (sequence.format.frame_rate, sequence.timebase);
-        let desired = rate.frame_start(frames, timebase) - rate.frame_start(0, timebase);
+        let from = from.unwrap_or(Ticks::ZERO);
+        let desired = rate.frame_start(rate.frame_at(from, timebase) + frames, timebase) - from;
         let clips = self.view.selection.clone();
         let make = |delta| edit(clips.clone(), delta);
         let delta = clamp_delta(sequence, desired, make);

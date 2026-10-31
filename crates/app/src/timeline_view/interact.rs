@@ -160,12 +160,24 @@ impl TimelineView {
         let sequence = drag.unlinked.as_ref().unwrap_or(sequence);
         if response.dragged() {
             if let Some(pos) = response.interact_pointer_pos() {
+                let edges = drag.gesture.moving_edges(sequence);
                 let mut delta = frame_time(pos.x) - drag.origin;
+                // At 23.976 or 59.94 fps frames alternate in length by a tick, so the same
+                // tick delta would leave the grabbed edge between frames: move it by whole
+                // frames instead.
+                let grabbed = edges
+                    .iter()
+                    .min_by_key(|&&edge| (edge - drag.origin).0.unsigned_abs());
+                if let Some(&edge) = grabbed {
+                    let frames = rate.frame_at(frame_time(pos.x), timebase)
+                        - rate.frame_at(drag.origin, timebase);
+                    let target = rate.frame_at(edge, timebase) + frames;
+                    delta = rate.frame_start(target, timebase) - edge;
+                }
                 drag.snapped_to = None;
                 if self.snapping {
                     let moving = drag.gesture.moving_clips(sequence);
                     let targets = scale::snap_targets(sequence, &moving, playhead);
-                    let edges = drag.gesture.moving_edges(sequence);
                     delta = scale::snap(delta, &edges, &targets, scale.span(SNAP_POINTS));
                     drag.snapped_to = targets
                         .into_iter()
