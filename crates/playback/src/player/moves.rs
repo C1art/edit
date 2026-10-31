@@ -70,6 +70,10 @@ impl Player {
         self.looping.is_some()
     }
 
+    pub fn looping(&self) -> Option<Range<Ticks>> {
+        self.looping.clone()
+    }
+
     /// Loops `range` while playing, or plays on through when `None`.
     pub fn set_looping(&mut self, range: Option<Range<Ticks>>) {
         self.looping = range.filter(|range| !range.is_empty());

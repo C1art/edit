@@ -4,6 +4,7 @@
 mod dialog;
 mod recording;
 
+use std::ops::Range;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
@@ -66,6 +67,8 @@ struct Take {
     meter: f32,
     /// Whether the program was silenced for the take and needs its sound back.
     muted: bool,
+    /// The loop turned off for the take, to turn back on after it.
+    looped: Option<Range<Ticks>>,
 }
 
 enum Phase {
@@ -145,6 +148,7 @@ impl Editor {
                     level: None,
                     meter: 0.0,
                     muted: false,
+                    looped: None,
                 });
             }
             Err(error) => self.notice(format!("Cannot record: {error}")),
@@ -208,23 +212,30 @@ impl Editor {
 
     /// Starts the sequence and the microphone together at the playhead.
     fn begin_take(&mut self) {
-        let at = self.playhead();
         let hear = self.voiceover.hear_sequence;
         let Some(take) = &mut self.voiceover.take else {
             return;
         };
         let _ = take.recording.commands.send(Command::Start);
+        let at = match &mut self.program {
+            Some(program) => {
+                // The take is placed as one run from where it starts, so the program
+                // mustn't jump back to a loop's start under it.
+                take.looped = program.player.looping();
+                program.player.set_looping(None);
+                if !hear {
+                    take.muted = program.player.set_output(None).is_ok();
+                }
+                program.player.play();
+                // Playing from the end starts over, so the take starts wherever play did.
+                program.player.position()
+            }
+            None => Ticks::ZERO,
+        };
         take.phase = Phase::Recording {
             at,
             since: Instant::now(),
         };
-        let Some(program) = &mut self.program else {
-            return;
-        };
-        if !hear {
-            take.muted = program.player.set_output(None).is_ok();
-        }
-        program.player.play();
     }
 
     fn stop_take(&mut self) {
@@ -254,12 +265,16 @@ impl Editor {
             return;
         };
         let muted = std::mem::take(&mut take.muted);
+        let looped = take.looped.take();
         let recording = matches!(take.phase, Phase::Recording { .. } | Phase::Saving { .. });
         let Some(program) = &mut self.program else {
             return;
         };
         if recording {
             program.player.pause();
+        }
+        if looped.is_some() {
+            program.player.set_looping(looped);
         }
         if muted {
             let writer = self.audio.as_ref().map(AudioOutput::writer);
