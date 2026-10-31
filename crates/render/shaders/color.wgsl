@@ -92,12 +92,16 @@ fn srgb_decode(c: vec3<f32>) -> vec3<f32> {
     return select(pow((c + 0.055) / 1.055, vec3<f32>(2.4)), c / 12.92, c <= vec3<f32>(0.04045));
 }
 
+// The sRGB curve, unclamped above white, so effects judge shadows by the same code
+// values the source was decoded from and a picked color is compared like for like.
 fn to_gamma(rgb: vec3<f32>) -> vec3<f32> {
-    return pow(max(rgb, vec3<f32>(0.0)), vec3<f32>(1.0 / GAMMA));
+    let c = max(rgb, vec3<f32>(0.0));
+    return select(1.055 * pow(c, vec3<f32>(1.0 / 2.4)) - 0.055, c * 12.92, c <= vec3<f32>(0.0031308));
 }
 
 fn to_linear(rgb: vec3<f32>) -> vec3<f32> {
-    return pow(max(rgb, vec3<f32>(0.0)), vec3<f32>(GAMMA));
+    let c = max(rgb, vec3<f32>(0.0));
+    return select(pow((c + 0.055) / 1.055, vec3<f32>(2.4)), c / 12.92, c <= vec3<f32>(0.04045));
 }
 
 // The colors without the alpha some pictures carry them multiplied by: in linear light

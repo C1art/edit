@@ -36,9 +36,8 @@ fn asc_cdl_applies_slope_offset_and_power_to_encoded_levels() -> Result<(), Rend
             ..Tone::NONE
         },
     )?;
-    // The shader's encoded levels are a 2.2 gamma, not the sRGB curve the picture is
-    // stored in, so the 0.26 the grey reads as becomes 0.52, 0.51 and 0.07.
-    assert!(near(output[0], [133, 131, 9]), "{:?}", output[0]);
+    // The grey's code value 0.25 becomes 0.5, 0.5 and 0.0625.
+    assert!(near(output[0], [128, 128, 16]), "{:?}", output[0]);
     Ok(())
 }
 

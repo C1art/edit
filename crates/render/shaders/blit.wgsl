@@ -243,7 +243,6 @@ const MID_GREY: f32 = 0.18;
 // Keeps a power's base above zero where the power itself can reach zero.
 const TINY: f32 = 1.0e-10;
 const LUMA: vec3<f32> = vec3<f32>(0.2126, 0.7152, 0.0722);
-const GAMMA: f32 = 2.2;
 // How far blacks at their limit lift pure black, in linear light.
 const BLACK_LIFT: f32 = 0.03;
 // Stops a wheel at its rim pushes its range toward the hue, and its level brightens it.
