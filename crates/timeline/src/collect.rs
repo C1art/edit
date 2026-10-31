@@ -22,11 +22,14 @@ pub struct FileCopy {
 }
 
 /// The project as it reads once its files are copied into `folder`, with the copies to
-/// make: every media file, proxy and LUT once, renamed where two share a name.
+/// make: every media file, proxy and LUT once, renamed where two share a name or would
+/// replace a file of `taken`, the names already in the folder, lowercased. Files already
+/// in the folder stay where they are.
 pub fn collect_files(
     sequence: &Sequence,
     folder: &Path,
     keep: Collect,
+    taken: &HashSet<String>,
 ) -> (Sequence, Vec<FileCopy>) {
     let mut collected = sequence.clone();
     if keep == Collect::UsedOnly {
@@ -39,7 +42,7 @@ pub fn collect_files(
         folder,
         copies: Vec::new(),
         targets: HashMap::new(),
-        names: HashSet::new(),
+        names: taken.clone(),
     };
     for item in Arc::make_mut(&mut collected.media) {
         if item.nest.is_none() && item.generator.is_none() {
@@ -91,6 +94,9 @@ impl Copier<'_> {
     fn copy(&mut self, from: &Path) -> PathBuf {
         if let Some(to) = self.targets.get(from) {
             return to.clone();
+        }
+        if from.parent() == Some(self.folder) {
+            return from.to_path_buf();
         }
         let stem = from.file_stem().unwrap_or_default().to_string_lossy();
         let extension = from
@@ -166,7 +172,9 @@ mod tests {
             timeline.apply(place).unwrap();
         }
         let folder = Path::new("/out");
-        let (collected, copies) = collect_files(timeline.sequence(), folder, Collect::UsedOnly);
+        let none = HashSet::new();
+        let (collected, copies) =
+            collect_files(timeline.sequence(), folder, Collect::UsedOnly, &none);
         let paths: Vec<&Path> = collected
             .media
             .iter()
@@ -181,7 +189,17 @@ mod tests {
             ]
         );
         assert_eq!(copies.len(), 2);
-        let (all, _) = collect_files(timeline.sequence(), folder, Collect::All);
+        let (all, _) = collect_files(timeline.sequence(), folder, Collect::All, &none);
         assert_eq!(all.media[2].path, Path::new("/out/unused.wav"));
+        let taken = HashSet::from(["take.mov".to_owned()]);
+        let (beside, _) = collect_files(timeline.sequence(), folder, Collect::UsedOnly, &taken);
+        assert_eq!(beside.media[0].path, Path::new("/out/take (2).mov"));
+        let (kept, copies) =
+            collect_files(timeline.sequence(), Path::new("/a"), Collect::All, &taken);
+        assert_eq!(kept.media[0].path, Path::new("/a/take.mov"));
+        assert_eq!(kept.media[1].path, Path::new("/a/Take (2).mov"));
+        assert!(copies
+            .iter()
+            .all(|copy| copy.from.parent() != Some(Path::new("/a"))));
     }
 }
