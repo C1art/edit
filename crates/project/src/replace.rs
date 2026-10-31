@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::{self, Write};
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 /// How long to wait for another program to let go of the file before saving fails.
@@ -16,8 +17,12 @@ const IN_USE_WAITS: [Duration; 5] = [
 /// leaves a half-written file where the last good one was.
 pub fn replace_file(path: &Path, contents: &[u8]) -> io::Result<()> {
     refuse_read_only(path)?;
+    // Unique per process and call, so two editors or threads saving the same file never
+    // write into one partial file.
+    static SAVES: AtomicU64 = AtomicU64::new(0);
+    let save = SAVES.fetch_add(1, Ordering::Relaxed);
     let mut partial = path.as_os_str().to_owned();
-    partial.push(".saving");
+    partial.push(format!(".{}-{save}.saving", std::process::id()));
     let partial = Path::new(&partial);
     let written = File::create(partial).and_then(|mut file| {
         file.write_all(contents)?;
