@@ -5,7 +5,9 @@
 use std::fmt::Write;
 use std::sync::Arc;
 
-use crate::{cut_window, Clip, FrameRate, Sequence, Ticks, Timecode, Track, TransitionKind};
+use crate::{
+    cut_window, Clip, FrameRate, Sequence, Ticks, TimeDisplay, Timecode, Track, TransitionKind,
+};
 
 const BLACK: &str = "BL";
 /// Media is named in comments rather than reels, which files don't have.
@@ -110,12 +112,21 @@ pub fn to_edl(sequence: &Sequence, title: &str, video_track: usize) -> String {
         (first, !channels.video)
     });
     let rate = sequence.format.frame_rate;
+    // The frame code mode covers every timecode in the list, so a sequence shown drop-frame
+    // writes them all that way, and its start time keeps the label it was given.
+    let (display, mode) = match sequence.time_display.dropped(rate) {
+        Some(_) => (TimeDisplay::Timecode, "DROP FRAME"),
+        None => (TimeDisplay::NonDropTimecode, "NON-DROP FRAME"),
+    };
     let timecode = |frame: i64, rate: FrameRate| {
         let position = rate.frame_start(frame, sequence.timebase);
-        Timecode::new(position, sequence.timebase, rate).to_string()
+        // Lists mark drop-frame by the last separator alone, as SMPTE writes it.
+        Timecode::shown(position, sequence.timebase, rate, display)
+            .to_string()
+            .replacen(';', ":", 2)
     };
     let first_frame = rate.frame_at(sequence.start_time, sequence.timebase);
-    let mut text = format!("TITLE: {title}\nFCM: NON-DROP FRAME\n");
+    let mut text = format!("TITLE: {title}\nFCM: {mode}\n");
     for (number, (event, channels)) in events.iter().enumerate() {
         let number = number + 1;
         let label = channels.label().unwrap_or("V");
@@ -396,6 +407,19 @@ mod tests {
         assert_eq!(
             events(&to_edl(&sequence, "Hour", 0)),
             ["001  AX       V     C        00:00:04:00 00:00:06:00 01:00:01:00 01:00:03:00"]
+        );
+    }
+
+    #[test]
+    fn a_sequence_shown_drop_frame_lists_drop_frame_timecode() {
+        let mut sequence = sequence(vec![clip(1, 1_800, 30, 0)], Vec::new());
+        sequence.timebase = Timebase::new(1001, 30_000).expect("valid timebase");
+        sequence.format.frame_rate = FrameRate::new(30_000, 1001).expect("valid rate");
+        let edl = to_edl(&sequence, "Drop", 0);
+        assert!(edl.starts_with("TITLE: Drop\nFCM: DROP FRAME\n"));
+        assert_eq!(
+            events(&edl),
+            ["001  AX       V     C        00:00:00;00 00:00:01;00 00:01:00;02 00:01:01;02"]
         );
     }
 
