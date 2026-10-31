@@ -65,8 +65,16 @@ impl ExportDialog {
             .get(&FolderUse::Output)
             .cloned()
             .or_else(|| {
-                let first = sequence.media.first()?;
+                let first = sequence
+                    .media
+                    .iter()
+                    .find(|item| item.generator.is_none() && item.nest.is_none())?;
                 first.path.parent().map(PathBuf::from)
+            })
+            .or_else(|| editor.project_path.as_deref()?.parent().map(PathBuf::from))
+            .filter(|folder| folder.is_absolute())
+            .or_else(|| {
+                std::env::var_os("USERPROFILE").map(|home| PathBuf::from(home).join("Videos"))
             })
             .unwrap_or_default();
         let format = ExportFormat::default();
@@ -303,6 +311,9 @@ pub(crate) fn prepare(
         (captions == CaptionExport::Sidecar).then(|| export_captions::sidecar_path(&path));
     let problem = if path.as_os_str().is_empty() {
         Some("Choose an output file first".to_owned())
+    } else if path.is_relative() {
+        // It would land wherever the editor happened to be started from.
+        Some("Give the output file's whole path, with its folder".to_owned())
     } else if let Some(taken) = std::iter::once(&path)
         .chain(&sidecar)
         .find(|path| editor.is_project_file(path))
