@@ -8,7 +8,7 @@ use std::time::Duration;
 use crossbeam::channel::{self, Receiver, Sender, TryRecvError};
 use egui::{Key, ProgressBar};
 use project::ProjectFile;
-use timeline::{collect_files, Collect, Sequence};
+use timeline::{collect_files, uncollect_failed, Collect, Sequence};
 
 use crate::editor::Editor;
 use crate::error::AppError;
@@ -196,10 +196,11 @@ fn collect(
         .filter_map(Result::ok)
         .map(|entry| entry.file_name().to_string_lossy().to_lowercase())
         .collect();
-    let (sequence, copies) = collect_files(&job.sequence, &job.folder, job.keep, &taken);
+    let (mut sequence, copies) = collect_files(&job.sequence, &job.folder, job.keep, &taken);
     let _ = events.send(CollectEvent::Planned(copies.len()));
     let project = unused_name(&job.folder, &job.name, &taken);
     let mut failed = Vec::new();
+    let mut uncopied = Vec::new();
     for copy in &copies {
         if stop.load(Ordering::Relaxed) {
             return Err(AppError::Cancelled);
@@ -207,10 +208,13 @@ fn collect(
         if copy.from != copy.to {
             if let Err(error) = copy_source(&copy.from, &copy.to) {
                 failed.push(format!("{} ({error})", copy.from.display()));
+                uncopied.push(copy.clone());
             }
         }
         let _ = events.send(CollectEvent::Copied);
     }
+    // The collected project keeps using the originals it has no copy of.
+    uncollect_failed(&mut sequence, &uncopied);
     ProjectFile::new(sequence).save(&project)?;
     Ok((project, failed))
 }

@@ -96,7 +96,7 @@ pub use bin::{Bin, BinId, BinSearch, SearchField};
 pub use blend::BlendMode;
 pub use caption::{captions_from_cues, Caption, CaptionStyle, Captions, CAPTION_MARGIN};
 pub use clip_line::ClipLine;
-pub use collect::{collect_files, Collect, FileCopy};
+pub use collect::{collect_files, uncollect_failed, Collect, FileCopy};
 pub use color::{ColorCorrection, ColorVignette, ColorWheel};
 pub use creative_look::CreativeLook;
 pub use curves::{Curve, CurvePoint, Curves, CURVE_RANGE};

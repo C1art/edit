@@ -44,12 +44,34 @@ pub fn collect_files(
         targets: HashMap::new(),
         names: taken.clone(),
     };
-    for item in Arc::make_mut(&mut collected.media) {
+    map_files(&mut collected, |path| copier.copy(path));
+    (collected, copier.copies)
+}
+
+/// Points the files of `copies` that couldn't be copied back at their originals.
+pub fn uncollect_failed(sequence: &mut Sequence, failed: &[FileCopy]) {
+    if failed.is_empty() {
+        return;
+    }
+    let originals: HashMap<&Path, &Path> = failed
+        .iter()
+        .map(|copy| (copy.to.as_path(), copy.from.as_path()))
+        .collect();
+    map_files(sequence, |path| {
+        originals
+            .get(path)
+            .map_or_else(|| path.to_owned(), |from| from.to_path_buf())
+    });
+}
+
+/// Rewrites the path of every file the project refers to: media, proxies and LUTs.
+fn map_files(sequence: &mut Sequence, mut map: impl FnMut(&Path) -> PathBuf) {
+    for item in Arc::make_mut(&mut sequence.media) {
         if item.nest.is_none() && item.generator.is_none() {
-            item.path = copier.copy(&item.path);
+            item.path = map(&item.path);
         }
         if let Some(proxy) = &mut item.proxy {
-            *proxy = copier.copy(proxy);
+            *proxy = map(proxy);
         }
     }
     let mut luts = |clip: &mut Clip| {
@@ -58,16 +80,16 @@ pub fn collect_files(
             .input_lut
             .iter_mut()
             .chain(color.look.iter_mut())
-            .for_each(|lut| *lut = copier.copy(lut));
+            .for_each(|lut| *lut = map(lut));
     };
-    for track in collected.video.iter_mut().chain(&mut collected.audio) {
+    for track in sequence.video.iter_mut().chain(&mut sequence.audio) {
         track
             .clips
             .iter_mut()
             .map(Arc::make_mut)
             .for_each(&mut luts);
     }
-    for nest in Arc::make_mut(&mut collected.media)
+    for nest in Arc::make_mut(&mut sequence.media)
         .iter_mut()
         .filter_map(|item| item.nest.as_mut())
     {
@@ -79,7 +101,6 @@ pub fn collect_files(
                 .for_each(&mut luts);
         }
     }
-    (collected, copier.copies)
 }
 
 struct Copier<'a> {
