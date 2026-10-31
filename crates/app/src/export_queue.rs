@@ -109,6 +109,9 @@ impl Editor {
                     } => progress = Some((frames_done, frames_total)),
                     ExportEvent::Measuring(fraction) => measuring = Some(fraction),
                     ExportEvent::Encoder(name) => encoder = Some(name),
+                    ExportEvent::Timings(timings) => {
+                        notices.push(format!("Export speed: {timings}"));
+                    }
                     ExportEvent::Warning(error) => notices.push(format!("Export: {error}")),
                     ExportEvent::Finished => ended = Some(Status::Done),
                     ExportEvent::Cancelled => ended = Some(Status::Cancelled),

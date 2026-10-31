@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
+use std::time::Instant;
 
 use audio::SampleRate;
 use crossbeam::channel::{Receiver, Sender};
@@ -14,6 +15,7 @@ use render::{Background, Compositor, LayerImage, Readback};
 use timeline::{Sequence, Ticks};
 
 use crate::export_sink::{Sink, Stills, Work};
+use crate::export_timings::ExportTimings;
 use crate::loudness::{measure_span, LoudnessTarget};
 use crate::previews::{self, Preview, PreviewPictures};
 use crate::sequence_mix::{SequenceMix, CHUNK_FRAMES};
@@ -65,6 +67,8 @@ pub enum ExportEvent {
     Measuring(f32),
     /// What encodes the video, such as "NVIDIA NVENC (hardware)", sent once it opens.
     Encoder(String),
+    /// Where the time went, sent just before `Finished`.
+    Timings(ExportTimings),
     Finished,
     /// The partial file has been removed and anything already at the path left alone.
     Cancelled,
@@ -298,11 +302,17 @@ impl Worker {
         let pictures = video.is_some() || stills.is_some();
         let mut previews = PreviewPictures::new(&self.settings.previews, &sequence);
         let mut pending: Option<Readback> = None;
+        let started = Instant::now();
+        let mut timings = ExportTimings {
+            frames: frames_total,
+            ..ExportTimings::default()
+        };
         // One step past the last frame hands over the last picture.
         for frame in frames.start..=frames.end {
             if self.cancel.load(Ordering::Relaxed) {
                 return Ok(Outcome::Cancelled);
             }
+            let mut since = Instant::now();
             // Decoding this frame overlaps the GPU finishing the one before.
             let layers = (pictures && frame < frames.end).then(|| {
                 let pts = rate.frame_start(frame, timebase);
@@ -317,10 +327,12 @@ impl Worker {
                     )
                 })
             });
+            ExportTimings::lap(&mut timings.decode, &mut since);
             if frame > frames.start {
                 let done = frame - 1;
                 if let Some(readback) = pending.take() {
                     let picture = readback.finish()?;
+                    ExportTimings::lap(&mut timings.gpu_wait, &mut since);
                     match stills {
                         Some((still, _)) => {
                             let file = still_path(&path, done - frames.start, frames_total, still);
@@ -329,6 +341,7 @@ impl Worker {
                         }
                         None => sink.send(Work::Picture(picture))?,
                     }
+                    ExportTimings::lap(&mut timings.writer_wait, &mut since);
                 }
 
                 // Audio keeps pace with the pictures so the muxer can interleave them.
@@ -339,7 +352,10 @@ impl Worker {
                         let frames = (audio_total - audio_written).min(CHUNK_FRAMES as i64);
                         let samples = usize::try_from(frames).unwrap_or(0) * 2;
                         let sound = mix.mix[..samples].iter().map(|sample| sample * gain);
-                        sink.send(Work::Sound(sound.collect()))?;
+                        let sound = sound.collect();
+                        ExportTimings::lap(&mut timings.audio_mix, &mut since);
+                        sink.send(Work::Sound(sound))?;
+                        ExportTimings::lap(&mut timings.writer_wait, &mut since);
                         audio_written += frames;
                     }
                 }
@@ -356,9 +372,12 @@ impl Worker {
                 let images: Vec<LayerImage<'_>> = layers.iter().map(Layer::image).collect();
                 self.compositor.composite(input_size, &images)?;
                 pending = Some(self.compositor.start_readback()?);
+                ExportTimings::lap(&mut timings.composite, &mut since);
             }
         }
-        sink.finish()?;
+        timings.writer = sink.finish()?;
+        timings.total = started.elapsed();
+        let _ = self.events.send(ExportEvent::Timings(timings));
         Ok(Outcome::Finished)
     }
 }

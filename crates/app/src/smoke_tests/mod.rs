@@ -2,6 +2,7 @@
 //! takes it down.
 
 mod commands;
+mod export_speed;
 mod layout;
 mod monkey;
 mod soak;

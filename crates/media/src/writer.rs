@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 use timeline::{Chapter, FrameRate, Timebase};
 
@@ -46,6 +47,7 @@ struct VideoStream {
     frame: Frame,
     converter: Converter,
     next_pts: i64,
+    converting: Duration,
 }
 
 struct AudioStream {
@@ -101,6 +103,7 @@ impl MediaWriter {
                     converter: Converter::new(&settings, &encoder)?,
                     encoder,
                     next_pts: 0,
+                    converting: Duration::ZERO,
                 })
             })
             .transpose()?;
@@ -142,11 +145,21 @@ impl MediaWriter {
             .video
             .as_mut()
             .ok_or(MediaError::InvalidSettings("export has no video"))?;
+        let converting = Instant::now();
         stream.converter.convert(rgba, &mut stream.frame)?;
+        stream.converting += converting.elapsed();
         stream.frame.set_timing(stream.next_pts, 1);
         stream.next_pts += 1;
         stream.encoder.send_frame(Some(&stream.frame))?;
         drain(&mut self.output, &mut self.packet, stream.as_target())
+    }
+
+    /// How long turning pictures into the encoder's pixel format has taken so far, the
+    /// rest of writing them being the encoding.
+    pub fn converting_time(&self) -> Duration {
+        self.video
+            .as_ref()
+            .map_or(Duration::ZERO, |stream| stream.converting)
     }
 
     /// Encodes the next stretch of interleaved stereo at the export sample rate.

@@ -406,6 +406,7 @@ fn poll(editor: &mut Editor) {
             }
             ExportEvent::Measuring(fraction) => running.progress.measuring(fraction),
             ExportEvent::Encoder(encoder) => running.progress.set_encoder(encoder),
+            ExportEvent::Timings(timings) => notices.push(format!("Export speed: {timings}")),
             ExportEvent::Warning(error) => notices.push(format!("Export: {error}")),
             ExportEvent::Finished => {
                 notices.push(format!("Exported {}", running.path.display()));

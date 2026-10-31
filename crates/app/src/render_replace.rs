@@ -200,7 +200,9 @@ impl Editor {
                             frames_done: done,
                             frames_total: total,
                         } => (*frames_done, *frames_total) = (done, total),
-                        ExportEvent::Measuring(_) | ExportEvent::Encoder(_) => {}
+                        ExportEvent::Measuring(_)
+                        | ExportEvent::Encoder(_)
+                        | ExportEvent::Timings(_) => {}
                         ExportEvent::Warning(warning) => self.notice(format!("Render: {warning}")),
                         ExportEvent::Finished => {
                             let sequence = self.timeline.sequence();

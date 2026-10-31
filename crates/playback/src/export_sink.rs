@@ -1,9 +1,11 @@
 use std::path::PathBuf;
 use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
 
 use crossbeam::channel::{self, Sender};
 use media::{MediaWriter, RgbaResizer, StillFormat};
 
+use crate::export_timings::{ExportTimings, WriterTimings};
 use crate::PlaybackError;
 
 /// What the export renders, in the order it goes into the file.
@@ -26,7 +28,7 @@ pub(crate) struct Stills {
 /// the next is decoded and composited. Dropping it without `Finish` abandons the file.
 pub(crate) struct Sink {
     work: Option<Sender<Work>>,
-    thread: Option<JoinHandle<Result<(), PlaybackError>>>,
+    thread: Option<JoinHandle<Result<WriterTimings, PlaybackError>>>,
 }
 
 /// Frames are tens of megabytes at 4K; a few cover the jitter between the two sides.
@@ -43,16 +45,24 @@ impl Sink {
             .spawn(move || {
                 let mut writer = writer;
                 let mut resizer = RgbaResizer::default();
+                let mut timings = WriterTimings::default();
+                let mut writing_video = Duration::ZERO;
                 for work in queued {
+                    let mut since = Instant::now();
                     match work {
                         Work::Picture(picture) => {
                             if let Some(writer) = &mut writer {
                                 writer.write_video(&picture)?;
+                                ExportTimings::lap(&mut writing_video, &mut since);
+                                timings.convert = writer.converting_time();
+                                timings.encode_video =
+                                    writing_video.saturating_sub(timings.convert);
                             }
                         }
                         Work::Sound(samples) => {
                             if let Some(writer) = &mut writer {
                                 writer.write_audio(&samples)?;
+                                ExportTimings::lap(&mut timings.encode_audio, &mut since);
                             }
                         }
                         Work::Still(path, picture) => {
@@ -63,6 +73,7 @@ impl Sink {
                                     resizer.resize(stills.input_size, stills.size, &picture)?
                                 };
                                 media::write_still(&path, stills.format, stills.size, &picture)?;
+                                ExportTimings::lap(&mut timings.stills, &mut since);
                             }
                         }
                         Work::Finish => {
@@ -73,7 +84,7 @@ impl Sink {
                         }
                     }
                 }
-                Ok(())
+                Ok(timings)
             })
             .map_err(PlaybackError::WorkerSpawn)?;
         Ok(Self {
@@ -92,22 +103,22 @@ impl Sink {
         if sent {
             Ok(())
         } else {
-            self.stop()
+            self.stop().map(|_| ())
         }
     }
 
-    /// Writes what's left and closes the file.
-    pub fn finish(mut self) -> Result<(), PlaybackError> {
+    /// Writes what's left and closes the file, handing back what the writing took.
+    pub fn finish(mut self) -> Result<WriterTimings, PlaybackError> {
         self.send(Work::Finish)?;
         self.stop()
     }
 
-    fn stop(&mut self) -> Result<(), PlaybackError> {
+    fn stop(&mut self) -> Result<WriterTimings, PlaybackError> {
         self.work = None;
         match self.thread.take().map(JoinHandle::join) {
             Some(Ok(result)) => result,
             Some(Err(panic)) => std::panic::resume_unwind(panic),
-            None => Ok(()),
+            None => Ok(WriterTimings::default()),
         }
     }
 }

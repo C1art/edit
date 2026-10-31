@@ -285,7 +285,7 @@ impl Editor {
                     running.frames_done = frames_done;
                     running.frames_total = frames_total;
                 }
-                ExportEvent::Measuring(_) | ExportEvent::Encoder(_) => {}
+                ExportEvent::Measuring(_) | ExportEvent::Encoder(_) | ExportEvent::Timings(_) => {}
                 ExportEvent::Warning(warning) => notices.push(format!("Render: {warning}")),
                 ExportEvent::Finished => {
                     let fingerprint = running.fingerprint;
