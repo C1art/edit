@@ -76,21 +76,28 @@ fn is_marker(path: &Path) -> bool {
 }
 
 /// Run on the project worker at start, before this session writes its own marker. The
-/// markers of crashed sessions are removed once read, so each is offered only once.
+/// marker of the work offered is removed, so it's offered only once; other crashed
+/// sessions with work keep theirs to be offered at a later start.
 pub fn find_recoverable() -> Option<Recoverable> {
     let markers = fs::read_dir(crate::project_store::app_folder()).ok()?;
-    markers
+    let (marker, newest) = markers
         .filter_map(|entry| Some(entry.ok()?.path()))
         .filter(|path| is_marker(path))
         .filter_map(|marker| {
             // A marker that can't be read is held by an editor still running.
             let marked_at = fs::metadata(&marker).and_then(|meta| meta.modified());
             let text = fs::read_to_string(&marker);
-            let recoverable = recoverable_from(text.ok()?, marked_at.ok()?);
-            let _ = fs::remove_file(&marker);
-            recoverable
+            match recoverable_from(text.ok()?, marked_at.ok()?) {
+                Some(recoverable) => Some((marker, recoverable)),
+                None => {
+                    let _ = fs::remove_file(&marker);
+                    None
+                }
+            }
         })
-        .max_by_key(|recoverable| recoverable.autosaved_at)
+        .max_by_key(|(_, recoverable)| recoverable.autosaved_at)?;
+    let _ = fs::remove_file(marker);
+    Some(newest)
 }
 
 fn recoverable_from(text: String, marked_at: SystemTime) -> Option<Recoverable> {
