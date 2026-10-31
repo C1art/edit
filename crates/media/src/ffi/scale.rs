@@ -2,6 +2,7 @@ use std::ptr::{self, NonNull};
 
 use ffmpeg_sys_next as sys;
 
+use super::sws_context::{borrowed_buffer_release, threaded_context};
 use super::sws_flags::{SWS_BILINEAR, SWS_FULL_CHR_H_INT};
 use timeline::FieldOrder;
 
@@ -223,9 +224,6 @@ impl Drop for Scaler {
 /// A context converting `key`'s pictures to RGBA on as many threads as there are
 /// cores, as a 4K picture takes one core longer than a frame lasts.
 fn new_context(key: ScalerKey) -> Result<NonNull<sys::SwsContext>, MediaError> {
-    // SAFETY: plain allocator call; null means out of memory.
-    let context =
-        NonNull::new(unsafe { sys::sws_alloc_context() }).ok_or(MediaError::OutOfMemory)?;
     let options = [
         (c"srcw", i64::from(key.width)),
         (c"srch", i64::from(key.height)),
@@ -238,38 +236,8 @@ fn new_context(key: ScalerKey) -> Result<NonNull<sys::SwsContext>, MediaError> {
         (c"sws_flags", i64::from(SWS_BILINEAR | SWS_FULL_CHR_H_INT)),
         (c"threads", 0),
     ];
-    // SAFETY: `context` is a fresh, uninitialized context and every name is one of its
-    // options; init validates the sizes and formats, failing on unsupported input.
-    let initialized = unsafe {
-        options
-            .iter()
-            .try_for_each(|(name, value)| {
-                check(sys::av_opt_set_int(
-                    context.as_ptr().cast(),
-                    name.as_ptr(),
-                    *value,
-                    0,
-                ))
-                .map(drop)
-            })
-            .and_then(|()| {
-                check(sys::sws_init_context(
-                    context.as_ptr(),
-                    ptr::null_mut(),
-                    ptr::null_mut(),
-                ))
-            })
-    };
-    if let Err(error) = initialized {
-        // SAFETY: the context is ours and freed exactly once here.
-        unsafe { sys::sws_freeContext(context.as_ptr()) };
-        return Err(error);
-    }
-    Ok(context)
+    threaded_context(&options)
 }
-
-/// Pixels handed to swscale stay owned by their `Vec`.
-unsafe extern "C" fn borrowed_buffer_release(_opaque: *mut std::ffi::c_void, _data: *mut u8) {}
 
 /// Untagged streams follow the common convention: HD and larger is BT.709, SD is BT.601.
 fn matrix_for(key: ScalerKey) -> i32 {
