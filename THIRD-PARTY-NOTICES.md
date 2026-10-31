@@ -31,5 +31,6 @@ license is in its source at <https://crates.io>. `ffmpeg-sys-next` is under the 
 
 ## Microsoft Visual C++ Runtime
 
-The installer installs the Visual C++ 2015-2022 Redistributable from Microsoft when it
-is missing, under Microsoft's own license terms.
+The Visual C++ runtime DLLs (`vcruntime140*.dll`, `msvcp140*.dll` and their companions)
+are installed next to `cledit.exe`, as Microsoft's Visual Studio license allows for its
+redistributable files.
