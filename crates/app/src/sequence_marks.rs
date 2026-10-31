@@ -234,7 +234,7 @@ impl Editor {
             self.notice("Open a clip in the source monitor to find its frame in the sequence");
             return;
         };
-        let (media, frame) = (source.source, source.viewer.player.position());
+        let (media, frame) = (source.source, source.media_position());
         let sequence = self.timeline.sequence();
         let mut showing: Vec<_> = sequence
             .tracks()
