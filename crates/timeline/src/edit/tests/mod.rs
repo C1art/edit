@@ -454,6 +454,7 @@ mod frame_size;
 mod generate;
 mod group;
 mod guide;
+mod history;
 mod hold;
 mod interpret;
 mod levels;
