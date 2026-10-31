@@ -319,7 +319,9 @@ impl Pool<'_> {
         if self.rename_in_place(ui, entry) {
             return;
         }
-        let building = self.proxies.and_then(|maker| maker.progress(item.id));
+        let building = self
+            .proxies
+            .and_then(|maker| maker.progress(item.id, &item.path));
         let offline = self.art.offline.contains(&item.id);
         let plain_row =
             matches!(self.view.layout, PoolLayout::List) && building.is_none() && !offline;

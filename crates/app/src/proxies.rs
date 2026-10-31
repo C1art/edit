@@ -23,7 +23,7 @@ struct Request {
 }
 
 pub enum ProxyEvent {
-    Progress(SourceId, f32),
+    Progress(SourceId, PathBuf, f32),
     /// The source, its media file and the proxy made of it.
     Finished(SourceId, PathBuf, Result<PathBuf, AppError>),
 }
@@ -38,8 +38,9 @@ pub struct FinishedProxy {
 pub struct ProxyMaker {
     requests: Sender<Request>,
     events: Receiver<ProxyEvent>,
-    /// Fraction done of each queued or running job.
-    jobs: HashMap<SourceId, f32>,
+    /// Fraction done of each queued or running job, by item and file, since an id names
+    /// another item once a different project is open.
+    jobs: HashMap<(SourceId, PathBuf), f32>,
     cancel: Arc<AtomicBool>,
 }
 
@@ -69,17 +70,22 @@ impl ProxyMaker {
     }
 
     pub fn request(&mut self, source: SourceId, path: PathBuf) {
-        if self.jobs.contains_key(&source) {
+        let job = (source, path);
+        if self.jobs.contains_key(&job) {
             return;
         }
-        if self.requests.send(Request { source, path }).is_ok() {
-            self.jobs.insert(source, 0.0);
+        let request = Request {
+            source,
+            path: job.1.clone(),
+        };
+        if self.requests.send(request).is_ok() {
+            self.jobs.insert(job, 0.0);
         }
     }
 
-    /// The fraction done, while a proxy for `source` is queued or being made.
-    pub fn progress(&self, source: SourceId) -> Option<f32> {
-        self.jobs.get(&source).copied()
+    /// The fraction done, while a proxy for `source` at `path` is queued or being made.
+    pub fn progress(&self, source: SourceId, path: &Path) -> Option<f32> {
+        self.jobs.get(&(source, path.to_owned())).copied()
     }
 
     pub fn is_busy(&self) -> bool {
@@ -91,13 +97,13 @@ impl ProxyMaker {
         let mut finished = Vec::new();
         for event in self.events.try_iter() {
             match event {
-                ProxyEvent::Progress(source, done) => {
-                    if let Some(progress) = self.jobs.get_mut(&source) {
+                ProxyEvent::Progress(source, path, done) => {
+                    if let Some(progress) = self.jobs.get_mut(&(source, path)) {
                         *progress = done;
                     }
                 }
                 ProxyEvent::Finished(source, media, result) => {
-                    self.jobs.remove(&source);
+                    self.jobs.remove(&(source, media.clone()));
                     finished.push(FinishedProxy {
                         source,
                         media,
@@ -151,13 +157,22 @@ impl Drop for ProxyMaker {
     }
 }
 
-/// Where the proxy of `media` goes: a `Proxies` folder beside it, as other editors do.
-pub fn proxy_path(media: &Path) -> PathBuf {
+/// Where a new proxy of `media` goes: a `Proxies` folder beside it, as other editors do,
+/// under a name no file there has yet. That keeps a proxy in use while its replacement is
+/// made, and keeps apart `clip.mov` and `clip.mp4`, whose names differ only in extension.
+fn proxy_path(media: &Path) -> PathBuf {
     let stem = media
         .file_stem()
         .map_or_else(|| "media".into(), |stem| stem.to_string_lossy());
     let folder = media.parent().unwrap_or(Path::new("")).join("Proxies");
-    folder.join(format!("{stem}_Proxy.mp4"))
+    let named = |number: usize| match number {
+        1 => folder.join(format!("{stem}_Proxy.mp4")),
+        _ => folder.join(format!("{stem}_Proxy {number}.mp4")),
+    };
+    (1..)
+        .map(named)
+        .find(|path| !path.exists())
+        .unwrap_or_else(|| named(1))
 }
 
 fn make(
@@ -180,7 +195,11 @@ fn make(
         let step = (done * PROGRESS_STEPS).floor() / PROGRESS_STEPS;
         if step > reported {
             reported = step;
-            let _ = events.send(ProxyEvent::Progress(request.source, step));
+            let _ = events.send(ProxyEvent::Progress(
+                request.source,
+                request.path.clone(),
+                step,
+            ));
         }
         ControlFlow::Continue(())
     })?;
