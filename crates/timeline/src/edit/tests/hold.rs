@@ -89,3 +89,35 @@ fn frame_hold_options_hold_a_whole_clip_on_one_frame_and_release_it() {
     timeline.apply(hold(None)).unwrap();
     assert_eq!(spans(&timeline, V1), [(100, 500, 600)]);
 }
+
+#[test]
+fn a_hold_made_on_a_remapped_clip_plays_on_from_its_frame_once_released() {
+    let (mut timeline, source) = timeline();
+    timeline
+        .apply(place(source, 0, 0, 300, PlaceMode::Overwrite))
+        .unwrap();
+    let video = clip_on(&timeline, V1, 0);
+    timeline
+        .apply(AddSpeedKeyframe {
+            clip: video,
+            at: Ticks(100),
+        })
+        .unwrap();
+    timeline
+        .apply(InsertFrameHold {
+            clips: vec![video],
+            at: Ticks(150),
+            length: Ticks(50),
+        })
+        .unwrap();
+    let hold = clip_on(&timeline, V1, 1);
+    timeline
+        .apply(SetFrameHold {
+            clips: vec![hold],
+            frame: None,
+        })
+        .unwrap();
+    let released = timeline.sequence().clip(hold).unwrap().1;
+    assert_eq!(released.source_time(released.start), Ticks(150));
+    assert_eq!(released.source_out(), Ticks(200));
+}

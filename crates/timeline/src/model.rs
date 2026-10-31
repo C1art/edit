@@ -214,9 +214,13 @@ impl Clip {
     /// tail and the source showing there. The caller moves `start`.
     pub(crate) fn trim_head(&mut self, delta: Ticks) {
         let old_in = self.source_in;
-        if let (Some(remap), false) = (&mut self.remap, self.hold) {
+        if let Some(remap) = &mut self.remap {
+            // A held clip keeps its frame, but its remap still follows the start so
+            // releasing the hold plays on from the right place.
             remap.shift(Ticks::ZERO - delta, Ticks::ZERO);
-            self.source_in = remap.source_at(Ticks::ZERO);
+            if !self.hold {
+                self.source_in = remap.source_at(Ticks::ZERO);
+            }
         } else if !self.reverse && !self.hold {
             self.source_in = self.source_in + self.rate().source_span(delta);
         }

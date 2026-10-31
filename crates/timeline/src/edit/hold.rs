@@ -84,7 +84,14 @@ impl Edit for InsertFrameHold {
         ops::shift(sequence, &rippled, self.at, self.length, &[]);
         ops::ripple_markers_and_captions(sequence, self.at, self.length);
         for (track, clip) in held {
+            // The remap is measured from the clip's start, so it's moved to the hold's,
+            // which a released hold then plays on from.
+            let remap = clip.remap.clone().map(|mut remap| {
+                remap.shift(clip.start - self.at, Ticks::ZERO);
+                remap
+            });
             let hold = Clip {
+                remap,
                 id: ClipId(sequence.ids.next()),
                 start: self.at,
                 duration: self.length,
