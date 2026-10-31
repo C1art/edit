@@ -31,7 +31,7 @@ echo "::endgroup::"
 
 echo "::group::Build"
 FFMPEG_DIR=$(cygpath -w "$ffmpeg") LIBCLANG_PATH='C:\Program Files\LLVM\bin' \
-  cargo build --release --locked -p app
+  cargo build --release --locked -p app --bin cledit --example update_probe
 echo "::endgroup::"
 
 echo "::group::Gather the files to install"
@@ -84,7 +84,33 @@ vpk pack --packId Cledit --packVersion "$version" --packDir dist \
 ls -l Releases
 echo "::endgroup::"
 
+echo "::group::Install check"
+bash scripts/check-install.sh fresh Releases/Cledit-win-Setup.exe "$version"
+echo "::endgroup::"
+
+# The update check installs the latest published release and updates it to this build: from
+# the local feed before publishing, or from GitHub, as users get it, once published.
+previous=$(curl -sSf -H "Authorization: Bearer $GITHUB_TOKEN" \
+  "https://api.github.com/repos/C1art/edit/releases/latest" | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p')
+previous_setup=""
+if [ -n "$previous" ] && [ "$previous" != "$version" ]; then
+  previous_setup="$RUNNER_TEMP/Cledit-$previous-Setup.exe"
+  curl -sSfL -o "$previous_setup" "$REPO_URL/releases/download/v$previous/Cledit-win-Setup.exe"
+else
+  echo "::notice::no earlier release to update from (latest is ${previous:-none})"
+fi
+probe=target/release/examples/update_probe.exe
+
 if [ "${PUBLISH:-false}" = true ]; then
   vpk upload github --repoUrl "$REPO_URL" --token "$GITHUB_TOKEN" --publish \
     --releaseName "Cledit $version" --tag "v$version" --targetCommitish "${GITHUB_SHA:?}"
+  feed=""
+else
+  feed=Releases
+fi
+
+if [ -n "$previous_setup" ]; then
+  echo "::group::Update check from $previous"
+  bash scripts/check-install.sh update "$previous_setup" "$probe" "$version" $feed
+  echo "::endgroup::"
 fi
