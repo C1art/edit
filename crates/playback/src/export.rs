@@ -16,6 +16,7 @@ use render::{Background, Compositor, LayerImage, Readback};
 use timeline::{Sequence, Ticks};
 
 use crate::export_decode::DecodeAhead;
+use crate::export_shutdown::RunningExport;
 use crate::export_sink::{Sink, Stills, Work};
 use crate::export_timings::ExportTimings;
 use crate::loudness::{measure_span, LoudnessTarget};
@@ -120,6 +121,7 @@ impl ExportJob {
             sequence,
             settings,
             events: sender,
+            _running: RunningExport::new(&cancel),
             cancel: Arc::clone(&cancel),
             stills_written: Vec::new(),
         };
@@ -165,6 +167,8 @@ struct Worker {
     partial: Option<PathBuf>,
     /// Every image a still sequence export has written, removed if it fails.
     stills_written: Vec<PathBuf>,
+    /// Dropped last, once anything left behind has been removed.
+    _running: RunningExport,
 }
 
 enum Outcome {

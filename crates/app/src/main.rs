@@ -174,9 +174,12 @@ fn main() -> eframe::Result {
         wgpu_options: gpu_setup::wgpu_configuration(),
         ..Default::default()
     };
-    eframe::run_native(
+    let ran = eframe::run_native(
         "Cledit",
         options,
         Box::new(|creation_context| Ok(Box::new(Editor::new(creation_context, initial, window)))),
-    )
+    );
+    // The window is gone; a quit during an export only gets this long to clean up.
+    playback::stop_exports(std::time::Duration::from_secs(5));
+    ran
 }
