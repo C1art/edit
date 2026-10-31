@@ -38,7 +38,7 @@ pub(crate) fn spawn(
         .name("audio-mix".into())
         .spawn(move || {
             AudioWorker {
-                mix: SequenceMix::new(writer.format().sample_rate),
+                mix: SequenceMix::live(writer.format().sample_rate),
                 sequence,
                 writer,
                 commands: channels.commands,

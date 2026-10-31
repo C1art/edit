@@ -1,8 +1,12 @@
 //! VST3 plugins in an effect chain. Loading one runs its own code for a while, so loaded
-//! instances are kept per thread and reused when a chain moves on to the next clip.
+//! instances are kept per thread and reused when a chain moves on to the next clip, and
+//! live playback has them loaded and unloaded on a worker so its sound never waits.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
+use std::sync::OnceLock;
+
+use crossbeam::channel::{self, Receiver, Sender, TryRecvError};
 
 use audio::SampleRate;
 use plugins::{ClassId, ParamId, Plugin};
@@ -20,6 +24,16 @@ struct Key {
     rate: u32,
 }
 
+/// How a mixing thread gets its plugins loaded.
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) enum PluginLoading {
+    /// On the thread itself, so every sample is processed: for exports and analysis.
+    InPlace,
+    /// On the plugin worker, the sound passing unchanged until the plugin is ready: for
+    /// live playback, which mustn't stall while a plugin starts or a DLL loads.
+    Background,
+}
+
 struct Loaded {
     plugin: Plugin,
     /// What the plugin saved of itself when loaded, to undo another chain's settings.
@@ -28,24 +42,70 @@ struct Loaded {
 
 thread_local! {
     static SPARE: RefCell<Vec<(Key, Loaded)>> = const { RefCell::new(Vec::new()) };
+    static LOADING: Cell<PluginLoading> = const { Cell::new(PluginLoading::InPlace) };
 }
 
-/// Unloads the thread's spare plugins when dropped. Left to the thread's end, they would
-/// unload while Windows holds the loader lock, which deadlocks against a plugin being
-/// loaded elsewhere and hangs plugins that wait for their own threads.
+/// Sets how the thread loads plugins, and unloads its spare plugins when dropped. Left to
+/// the thread's end, they would unload while Windows holds the loader lock, which
+/// deadlocks against a plugin being loaded elsewhere and hangs plugins that wait for their
+/// own threads.
 pub(crate) struct SparePlugins;
+
+impl SparePlugins {
+    pub(crate) fn new(loading: PluginLoading) -> Self {
+        LOADING.set(loading);
+        Self
+    }
+}
 
 impl Drop for SparePlugins {
     fn drop(&mut self) {
         let spares = SPARE.try_with(|spare| std::mem::take(&mut *spare.borrow_mut()));
-        drop(spares);
+        for (_, loaded) in spares.into_iter().flatten() {
+            unload(loaded);
+        }
     }
+}
+
+enum Job {
+    Load {
+        key: Key,
+        reply: Sender<Option<Loaded>>,
+    },
+    Unload(Box<Loaded>),
+}
+
+/// The one thread that loads and unloads live playback's plugins. It runs for the rest of
+/// the process once started; None if it couldn't be started.
+fn worker() -> Option<&'static Sender<Job>> {
+    static WORKER: OnceLock<Option<Sender<Job>>> = OnceLock::new();
+    WORKER
+        .get_or_init(|| {
+            let (jobs, incoming) = channel::unbounded::<Job>();
+            std::thread::Builder::new()
+                .name("vst3-loader".into())
+                .spawn(move || {
+                    for job in incoming {
+                        match job {
+                            // A unit gone before its plugin was ready drops it here.
+                            Job::Load { key, reply } => drop(reply.send(load(&key))),
+                            Job::Unload(loaded) => drop(loaded),
+                        }
+                    }
+                })
+                .ok()
+                .map(|_| jobs)
+        })
+        .as_ref()
 }
 
 pub(crate) struct PluginUnit {
     key: Key,
-    /// None when the plugin couldn't be loaded; its sound then passes unchanged.
+    /// None when the plugin couldn't be loaded, or isn't loaded yet; its sound then passes
+    /// unchanged.
     loaded: Option<Loaded>,
+    /// The plugin being loaded on the worker.
+    pending: Option<Receiver<Option<Loaded>>>,
     /// The effect's saved state the plugin was last given; empty for its defaults.
     restored: PluginState,
     /// The last value given to each of the effect's changed parameters.
@@ -61,15 +121,50 @@ impl PluginUnit {
             class_id: effect.class_id,
             rate: rate.0,
         };
-        let loaded = take_spare(&key).or_else(|| load(&key));
-        Self {
+        let mut unit = Self {
             key,
-            loaded,
+            loaded: None,
+            pending: None,
             restored: PluginState::default(),
             sent: Vec::new(),
             input: Default::default(),
             output: Default::default(),
+        };
+        match take_spare(&unit.key) {
+            Some(spare) => unit.loaded = Some(spare),
+            None => unit.start_loading(),
         }
+        unit
+    }
+
+    fn start_loading(&mut self) {
+        let worker = worker().filter(|_| LOADING.get() == PluginLoading::Background);
+        match worker {
+            Some(worker) => {
+                let (reply, ready) = channel::bounded(1);
+                let job = Job::Load {
+                    key: self.key.clone(),
+                    reply,
+                };
+                self.pending = worker.send(job).is_ok().then_some(ready);
+            }
+            None => self.loaded = load(&self.key),
+        }
+    }
+
+    /// The plugin, once it has finished loading.
+    fn ready(&mut self) -> Option<&mut Loaded> {
+        if let Some(pending) = &self.pending {
+            match pending.try_recv() {
+                Ok(loaded) => {
+                    self.loaded = loaded;
+                    self.pending = None;
+                }
+                Err(TryRecvError::Empty) => {}
+                Err(TryRecvError::Disconnected) => self.pending = None,
+            }
+        }
+        self.loaded.as_mut()
     }
 
     pub(crate) fn reset(&mut self) {
@@ -77,9 +172,12 @@ impl PluginUnit {
         if failed {
             // It may be left inactive, which plugins aren't made to process in; a fresh
             // instance is, once given the effect's state again.
-            self.loaded = load(&self.key);
+            if let Some(broken) = self.loaded.take() {
+                unload(broken);
+            }
             self.restored = PluginState::default();
             self.sent.clear();
+            self.start_loading();
         }
     }
 
@@ -94,6 +192,9 @@ impl PluginUnit {
     ) {
         if self.key.path != effect.path || self.key.class_id != effect.class_id {
             *self = Self::new(effect, rate);
+        }
+        if self.ready().is_none() {
+            return;
         }
         let Some(loaded) = &mut self.loaded else {
             return;
@@ -171,21 +272,39 @@ impl Drop for PluginUnit {
             return;
         };
         if loaded.plugin.set_state(&loaded.defaults).is_err() || loaded.plugin.reset().is_err() {
+            unload(loaded);
             return;
         }
         let key = self.key.clone();
         // A thread ending drops its spares itself, so `try_with` failing loses nothing.
-        let _ = SPARE.try_with(|spare| {
+        let surplus = SPARE.try_with(|spare| {
             let mut spare = spare.borrow_mut();
-            if spare
+            let kept = spare
                 .iter()
                 .filter(|(spare_key, _)| *spare_key == key)
-                .count()
-                < SPARE_INSTANCES
-            {
+                .count();
+            if kept < SPARE_INSTANCES {
                 spare.push((key, loaded));
+                None
+            } else {
+                Some(loaded)
             }
         });
+        if let Ok(Some(surplus)) = surplus {
+            unload(surplus);
+        }
+    }
+}
+
+/// Unloading runs the plugin's own code too, so live playback hands it to the worker.
+fn unload(loaded: Loaded) {
+    let background = LOADING
+        .try_with(Cell::get)
+        .is_ok_and(|loading| loading == PluginLoading::Background);
+    match worker().filter(|_| background) {
+        // A worker that's gone hands the plugin back, to be dropped here.
+        Some(worker) => drop(worker.send(Job::Unload(Box::new(loaded)))),
+        None => drop(loaded),
     }
 }
 
@@ -205,3 +324,7 @@ fn load(key: &Key) -> Option<Loaded> {
     let defaults = plugin.state().ok()?;
     Some(Loaded { plugin, defaults })
 }
+
+#[cfg(test)]
+#[path = "audio_plugin_tests.rs"]
+mod tests;
