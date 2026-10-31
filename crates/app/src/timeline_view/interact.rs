@@ -27,10 +27,22 @@ impl TimelineView {
         let rows = layout::rows(sequence, &self.heights, top);
         let (rate, timebase) = (sequence.format.frame_rate, sequence.timebase);
         let frame_time = |x: f32| scale::nearest_frame(scale.time(x), rate, timebase);
-        let (shift, command, alt) = response.ctx.input(|input| {
+        let (shift, command, alt, focused) = response.ctx.input(|input| {
             let modifiers = input.modifiers;
-            (modifiers.shift, modifiers.command, modifiers.alt)
+            (
+                modifiers.shift,
+                modifiers.command,
+                modifiers.alt,
+                input.focused,
+            )
         });
+        // The button's release goes to whichever window took focus, so a drag left
+        // running would follow the pointer with no button held and commit on a later
+        // click.
+        if !focused {
+            self.cancel_drag();
+        }
+        let primary = egui::PointerButton::Primary;
 
         if response.double_clicked() && self.tool.on_timeline() == Tool::Selection {
             if let Some(pos) = response.interact_pointer_pos() {
@@ -67,7 +79,7 @@ impl TimelineView {
             }
             return;
         }
-        if response.clicked() || response.drag_started() {
+        if response.clicked() || response.drag_started_by(primary) {
             self.edit_point = None;
         }
         if response.clicked() {
@@ -90,7 +102,9 @@ impl TimelineView {
             return;
         }
 
-        if response.drag_started() {
+        // Only the primary button drags, so a right-press that wanders a little opens the
+        // context menu instead of moving the clip.
+        if response.drag_started_by(primary) {
             let Some(pos) = response.interact_pointer_pos() else {
                 return;
             };
@@ -166,7 +180,7 @@ impl TimelineView {
             return;
         };
         let sequence = drag.unlinked.as_ref().unwrap_or(sequence);
-        if response.dragged() {
+        if response.dragged_by(primary) {
             if let Some(pos) = response.interact_pointer_pos() {
                 let edges = drag.gesture.moving_edges(sequence);
                 let mut delta = frame_time(pos.x) - drag.origin;
@@ -185,7 +199,10 @@ impl TimelineView {
                 drag.snapped_to = None;
                 if self.snapping {
                     let moving = drag.gesture.moving_clips(sequence);
-                    let targets = scale::snap_targets(sequence, &moving, playhead);
+                    let mut targets = scale::snap_targets(sequence, &moving, playhead);
+                    if drag.gesture.carries_neighbours() {
+                        targets.retain(|target| !edges.contains(target));
+                    }
                     delta = scale::snap(delta, &edges, &targets, scale.span(SNAP_POINTS));
                     drag.snapped_to = targets
                         .into_iter()
@@ -207,7 +224,7 @@ impl TimelineView {
                 }
             }
         }
-        if response.drag_stopped() {
+        if response.drag_stopped_by(primary) {
             let pending = self
                 .drag
                 .take()

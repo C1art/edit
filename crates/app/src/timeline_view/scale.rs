@@ -73,12 +73,17 @@ pub fn snap(delta: Ticks, edges: &[Ticks], targets: &[Ticks], threshold: Ticks) 
 /// Where moved or dropped clips snap to: the edges and markers of every clip but
 /// `moving`, the sequence's markers, the playhead and the start.
 pub fn snap_targets(sequence: &Sequence, moving: &[ClipId], playhead: Ticks) -> Vec<Ticks> {
+    let (rate, timebase) = (sequence.format.frame_rate, sequence.timebase);
     let mut targets: Vec<Ticks> = sequence
         .tracks()
         .flat_map(|(_, track)| &track.clips)
         .filter(|clip| !moving.contains(&clip.id))
         .flat_map(|clip| {
-            let marks = clip.shown_markers().map(|(position, _)| position);
+            // A marker on a sped-up or reversed clip can fall between frames, where a
+            // clip snapped to it would start part-way through one.
+            let marks = clip
+                .shown_markers()
+                .map(|(position, _)| nearest_frame(position, rate, timebase));
             [clip.start, clip.end()].into_iter().chain(marks)
         })
         .collect();

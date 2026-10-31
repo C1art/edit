@@ -147,6 +147,18 @@ impl Gesture {
         }
     }
 
+    /// Whether clips beside the grabbed edges move with them, so an edge where one
+    /// started is no place to snap to: snapping there would hold the drag still.
+    pub fn carries_neighbours(&self) -> bool {
+        match self {
+            Self::Roll { .. } | Self::Slide { .. } | Self::TransitionLength(_) => true,
+            Self::Trim { mode, .. } => *mode == TrimMode::Ripple,
+            Self::Move { .. } | Self::Stretch { .. } | Self::Slip { .. } | Self::Volume { .. } => {
+                false
+            }
+        }
+    }
+
     /// Clips whose own edges must not be snap targets.
     pub fn moving_clips(&self, sequence: &Sequence) -> Vec<ClipId> {
         match self {
