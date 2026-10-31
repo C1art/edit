@@ -70,6 +70,9 @@ impl eframe::App for Editor {
         self.poll_export_frame(&ctx);
         self.poll_export_queue(&ctx);
         self.poll_transcribing(&ctx);
+        // Every frame, as the project panel and source monitor draw from it too, with
+        // or without the timeline showing.
+        self.clip_art.poll(&ctx);
         if self.graphics.poll(&ctx) {
             ctx.request_repaint();
         }
