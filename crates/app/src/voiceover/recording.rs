@@ -105,16 +105,19 @@ fn record(
             continue;
         };
         input.drain(&mut samples);
-        if let Err(error) = writer.write(&samples) {
-            return Some(Event::Failed(format!(
-                "Cannot write the voiceover: {error}"
-            )));
-        }
+        // A full disk shouldn't cost what was already recorded, so the take ends there.
+        let written = writer.write(&samples).is_ok();
         samples.clear();
-        if stop || input.is_lost() {
+        if stop || input.is_lost() || !written {
             let path = path.clone();
             let (_, writer) = take?;
-            return Some(finish(path, writer, destination, &input));
+            return Some(match finish(path, writer, destination, &input) {
+                Event::Finished { media, .. } if !written => Event::Finished {
+                    media,
+                    warning: Some("Writing the voiceover failed; it ends there"),
+                },
+                event => event,
+            });
         }
     }
 }
@@ -141,8 +144,12 @@ fn finish(
     destination: &Destination,
     input: &AudioInput,
 ) -> Event {
+    // The file is left for the user to salvage what it holds.
     if let Err(error) = writer.finish() {
-        return Event::Failed(format!("Cannot write the voiceover: {error}"));
+        return Event::Failed(format!(
+            "Cannot finish the voiceover {}: {error}",
+            path.display()
+        ));
     }
     // What came in before the microphone went away or the computer fell behind is
     // still kept.
@@ -155,6 +162,9 @@ fn finish(
     };
     match crate::import::probe(&path, destination.timebase, destination.frame_rate) {
         Ok(media) => Event::Finished { media, warning },
-        Err(error) => Event::Failed(format!("Cannot read the voiceover back: {error}")),
+        Err(error) => Event::Failed(format!(
+            "Cannot read the voiceover {} back: {error}",
+            path.display()
+        )),
     }
 }
