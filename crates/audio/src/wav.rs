@@ -51,7 +51,15 @@ impl<W: Write + Seek> WavWriter<W> {
 
     /// Fills in the sizes and hands back the output.
     pub fn finish(mut self) -> io::Result<W> {
-        let riff_bytes = self.data_bytes.saturating_add(HEADER_BYTES - 8);
+        // RIFF chunks take an even number of bytes; the pad isn't counted as data.
+        let pad = self.data_bytes % 2;
+        if pad == 1 {
+            self.out.write_all(&[0])?;
+        }
+        let riff_bytes = self
+            .data_bytes
+            .saturating_add(pad)
+            .saturating_add(HEADER_BYTES - 8);
         self.out.seek(SeekFrom::Start(4))?;
         self.out.write_all(&riff_bytes.to_le_bytes())?;
         self.out
@@ -83,5 +91,16 @@ mod tests {
         assert_eq!(&bytes[44..50], &[0xff, 0xff, 0x7f, 0x01, 0x00, 0x80]);
         // Over full scale is clipped rather than wrapped.
         assert_eq!(&bytes[53..56], &[0xff, 0xff, 0x7f]);
+    }
+
+    #[test]
+    fn odd_data_is_padded_to_an_even_chunk() {
+        let mut writer = WavWriter::new(Cursor::new(Vec::new()), SampleRate(48_000)).unwrap();
+        writer.write(&[0.0]).unwrap();
+        let bytes = writer.finish().unwrap().into_inner();
+        let word = |at: usize| u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap());
+        assert_eq!(bytes.len(), 44 + 4);
+        assert_eq!(word(4), bytes.len() as u32 - 8);
+        assert_eq!(word(40), 3);
     }
 }
