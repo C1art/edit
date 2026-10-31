@@ -28,11 +28,15 @@ pub(crate) struct TextPanel {
     focused: bool,
     /// The word last scrolled into view while playing.
     followed: Option<usize>,
+    /// Drawn since the editor last took keys: a hidden panel keeps its selection and
+    /// focus but mustn't take Delete from the timeline.
+    drawn: bool,
 }
 
 pub(crate) fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
     header(editor, ui);
     ui.separator();
+    editor.text_panel.drawn = true;
     let revision = editor.timeline.revision();
     let width = (ui.available_width() - 16.0).max(80.0);
     let stale = editor
@@ -243,8 +247,19 @@ fn body(editor: &mut Editor, ui: &mut egui::Ui) {
 /// Delete and Escape for the panel's selected words, taken before the editor's own
 /// keys so they don't also act on the timeline.
 pub(crate) fn take_keys(editor: &mut Editor, ctx: &egui::Context) {
+    let revision = editor.timeline.revision();
     let panel = &mut editor.text_panel;
-    let Some(selection) = panel.selection.clone().filter(|_| panel.focused) else {
+    let drawn = std::mem::take(&mut panel.drawn);
+    // Word indices only mean the words laid out at the current revision.
+    let current = panel
+        .layout
+        .as_ref()
+        .is_some_and(|layout| layout.revision == revision);
+    let Some(selection) = panel
+        .selection
+        .clone()
+        .filter(|_| panel.focused && drawn && current)
+    else {
         return;
     };
     let deleting = ctx.input_mut(|input| {

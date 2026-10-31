@@ -14,6 +14,9 @@ impl Editor {
         self.pool.selected.clear();
         self.breakouts.clear();
         self.view.cancel_drag();
+        self.view.selection.clear();
+        self.text_panel = Default::default();
+        self.captions = Default::default();
         self.view.edit_point = None;
         self.view.gap = None;
         self.cancel_transcribing();
