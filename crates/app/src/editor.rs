@@ -49,6 +49,8 @@ pub struct Editor {
     /// Where the edits of the mouse press held in a side panel began, and the revision
     /// they left.
     pub(crate) press_mark: Option<(u64, u64)>,
+    /// The same for the files of an import still arriving.
+    pub(crate) import_mark: Option<(u64, u64)>,
     pub(crate) clip_art: ClipArt,
     /// Whether the monitors play proxies where media has them.
     pub(crate) use_proxies: bool,
@@ -266,6 +268,7 @@ impl Editor {
             render_previews,
             render_replace: None,
             press_mark: None,
+            import_mark: None,
             clip_art,
             use_proxies: false,
             scrub_audio: true,

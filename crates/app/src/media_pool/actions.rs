@@ -113,6 +113,13 @@ impl Editor {
         };
         let probed = importer.poll();
         let failures = importer.take_failures();
+        let busy = importer.is_busy();
+        // Files picked together arrive over several frames but undo as one import.
+        let revision = self.timeline.revision();
+        let mark = match self.import_mark {
+            Some((mark, seen)) if seen == revision => mark,
+            _ => self.timeline.edit_mark(),
+        };
         for Probed { replacing, media } in probed {
             match replacing {
                 Some(source) => {
@@ -145,6 +152,8 @@ impl Editor {
                 }
             }
         }
+        self.timeline.join_since(mark);
+        self.import_mark = busy.then(|| (mark, self.timeline.revision()));
         if let Some(notice) = failures_notice(&failures) {
             self.notice(notice);
         }

@@ -8,6 +8,7 @@ impl Editor {
         self.importer = Importer::new(self.timeline.sequence().timebase)
             .map_err(|error| self.notices.push(format!("Import disabled: {error}")))
             .ok();
+        self.import_mark = None;
         self.clipboard = None;
         self.nest_trail.clear();
         self.sequence_tabs.clear();
