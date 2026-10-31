@@ -154,7 +154,8 @@ pub fn auto_correction(stats: &ToneStats) -> BasicCorrection {
 /// saturation of `reference`.
 pub fn matched_correction(current: &ToneStats, reference: &ToneStats) -> BasicCorrection {
     let contrast = if current.log_spread > f32::EPSILON {
-        (reference.log_spread / current.log_spread - 1.0).clamp(-1.0, 1.0)
+        // Flattening all the way would leave nothing for exposure and balance to undo.
+        (reference.log_spread / current.log_spread - 1.0).clamp(-0.9, 1.0)
     } else {
         0.0
     };
@@ -307,5 +308,23 @@ mod tests {
         assert!(correction.temperature.abs() < 0.01 && correction.tint.abs() < 0.01);
         assert!(correction.exposure.abs() < 1e-4 && correction.contrast.abs() < 0.01);
         assert!((correction.saturation - 100.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn matching_a_flat_frame_gives_a_usable_correction() {
+        let current = tone_stats(&picture(0.04, 0.3, [1.0, 1.0, 1.0])).unwrap();
+        let slate = tone_stats(&picture(0.0, 0.0, [1.0, 1.0, 1.0])).unwrap();
+        let correction = matched_correction(&current, &slate);
+        let BasicCorrection {
+            temperature,
+            tint,
+            exposure,
+            contrast,
+            ..
+        } = correction;
+        assert!([temperature, tint, exposure, contrast]
+            .iter()
+            .all(|value| value.is_finite()));
+        assert!(contrast > -100.0);
     }
 }
