@@ -62,15 +62,17 @@ impl BlurTargets {
     /// `sigma` is the red, green, blue and alpha channels' across and then down, in
     /// layer pixels. Returns whether the blurred picture is premultiplied: a straight
     /// source is, when all its channels blur alike, so its colour doesn't bleed in from
-    /// transparent texels.
+    /// transparent texels. Not where `alpha_kept` is false, as its alpha is then replaced.
     pub(crate) fn write(
         &mut self,
         queue: &wgpu::Queue,
         (width, height): (u32, u32),
         sigma: [[f32; 4]; 2],
         source: Premultiplied,
+        alpha_kept: bool,
     ) -> Premultiplied {
         let premultiply = source == Premultiplied::No
+            && alpha_kept
             && sigma
                 .iter()
                 .all(|way| way.iter().all(|&each| each == way[3]));

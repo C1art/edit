@@ -251,8 +251,16 @@ impl Compositor {
             (_, AlphaInterpretation::Premultiplied) => Premultiplied::InLight,
             _ => Premultiplied::No,
         };
+        // Premultiplying by an alpha that is then ignored or inverted would leave black
+        // where the stored alpha was zero.
+        let adjust = &look.effects.adjust.alpha;
+        let alpha_kept = matches!(
+            look.effects.alpha,
+            AlphaInterpretation::Straight | AlphaInterpretation::Premultiplied
+        ) && !adjust.ignore
+            && !adjust.invert;
         if let Some(blur) = slot.blur.as_mut().filter(|_| slot.blurred) {
-            premultiplied = blur.write(&self.queue, size, sigma, premultiplied);
+            premultiplied = blur.write(&self.queue, size, sigma, premultiplied, alpha_kept);
         }
         let placement = Placement {
             premultiplied,
