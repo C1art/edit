@@ -40,10 +40,18 @@ impl AutoScroll {
 const MAX_TICKS_PER_POINT: f64 = 1.0e6;
 
 impl TimelineView {
-    /// Zooms by `factor` (above one zooms in) keeping time at screen x `anchor` fixed.
+    /// Zooms by `factor` (above one zooms in) keeping time at screen x `anchor` fixed;
+    /// without one, the playhead where it's in view, else the middle.
     pub fn zoom(&mut self, factor: f32, anchor: Option<f32>) {
-        let anchor = anchor.unwrap_or(self.width / 2.0);
         let scale = self.scale(0.0);
+        let anchor = anchor.unwrap_or_else(|| {
+            let playhead = scale.x(self.last_playhead);
+            if (0.0..=self.width).contains(&playhead) {
+                playhead
+            } else {
+                self.width / 2.0
+            }
+        });
         let fixed = scale.time(anchor);
         // A sequence fitted beyond the usual limit keeps its zoom rather than jumping in.
         let widest = MAX_TICKS_PER_POINT.max(self.ticks_per_point);

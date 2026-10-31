@@ -87,8 +87,10 @@ impl TimelineView {
                 let hit = layout::hit(sequence, &rows, &scale, pos);
                 if let Tool::TrackSelect(direction) = self.tool.on_timeline() {
                     let only = shift.then(|| hit_track(hit)).flatten();
+                    // The time under the pointer itself, so a click on a clip's first
+                    // or last frame takes it whichever side of the frame's middle it is.
                     self.selection =
-                        track_select::pick(sequence, frame_time(pos.x), direction, only);
+                        track_select::pick(sequence, scale.time(pos.x), direction, only);
                 } else if let Some((owner, grabbed, _)) = self
                     .band_hit(sequence, &rows, &scale, hit, pos)
                     .filter(|_| command && self.tool.on_timeline() == Tool::Selection)
@@ -249,6 +251,11 @@ impl TimelineView {
         hit: Hit,
         pointer: Pos2,
     ) -> Option<(BandOwner, BandHit, Rangef)> {
+        // A locked track's lines stay put like its clips.
+        let row_track = layout::row_at(rows, pointer.y).and_then(|row| sequence.track(row.track));
+        if row_track.is_some_and(|track| track.locked) {
+            return None;
+        }
         if let Some(row) =
             layout::row_at(rows, pointer.y).filter(|row| self.automation_shown.contains(&row.track))
         {
