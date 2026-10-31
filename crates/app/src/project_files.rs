@@ -72,6 +72,8 @@ impl Interchange {
 pub enum AfterDiscard {
     NewProject,
     Open(PathBuf),
+    /// A project that finished loading after the timeline was edited.
+    UseOpened,
     Quit,
 }
 
@@ -249,10 +251,8 @@ impl Editor {
                     Sequence::with_default_tracks(Timebase::HZ_90K, VideoFormat::default());
                 self.replace_sequence(sequence, None);
             }
-            AfterDiscard::Open(path) => match &mut self.store {
-                Some(store) => store.open(path),
-                None => self.notice("Cannot open: the project worker is not running"),
-            },
+            AfterDiscard::Open(path) => self.open_project(path),
+            AfterDiscard::UseOpened => self.use_parked_open(),
             AfterDiscard::Quit => {
                 self.quitting = true;
                 self.ctx.send_viewport_cmd(ViewportCommand::Close);
@@ -260,7 +260,7 @@ impl Editor {
         }
     }
 
-    fn replace_sequence(&mut self, sequence: Sequence, path: Option<PathBuf>) {
+    pub(crate) fn replace_sequence(&mut self, sequence: Sequence, path: Option<PathBuf>) {
         // Drop the source player first so its workers stop feeding the audio output.
         self.source = None;
         self.left_sources.clear();
@@ -313,18 +313,7 @@ impl Editor {
                     self.after_save = None;
                     self.notice(format!("Cannot save {}: {error}", quoted_name(&path)));
                 }
-                StoreEvent::Opened(path, Ok(sequence)) => match self.take_recovered(&path) {
-                    Some(project) => {
-                        self.replace_sequence(*sequence, project);
-                        // Not on disk as the project yet, and no revision of the new
-                        // timeline will ever reach this one.
-                        self.saved_revision = u64::MAX;
-                    }
-                    None => {
-                        self.remember_project(&path);
-                        self.replace_sequence(*sequence, Some(path));
-                    }
-                },
+                StoreEvent::Opened(path, Ok(sequence)) => self.opened(path, *sequence),
                 StoreEvent::CopySaved(path, result) => self.copy_saved(&path, result),
                 StoreEvent::Opened(path, Err(error)) => {
                     self.notice(format!("Cannot open {}: {error}", quoted_name(&path)));
@@ -484,6 +473,7 @@ pub fn discard_dialog(editor: &mut Editor, ctx: &egui::Context) {
             editor.save_project();
         }
         Choice::Discard => editor.after_discard(action),
+        Choice::Cancel if action == AfterDiscard::UseOpened => editor.drop_parked_open(),
         Choice::Cancel => {}
     }
 }

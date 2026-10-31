@@ -93,6 +93,7 @@ mod program_zoom;
 mod project_copy;
 mod project_files;
 mod project_manager;
+mod project_open;
 mod project_store;
 mod project_switch;
 mod proxies;

@@ -155,6 +155,7 @@ pub struct Editor {
     /// Counts the projects opened, so work started for an earlier one is ignored.
     pub(crate) project_generation: u64,
     pub(crate) confirm_discard: Option<AfterDiscard>,
+    pub(crate) opening: crate::project_open::Opening,
     pub(crate) confirm_revert: bool,
     /// Runs once the save in progress succeeds.
     pub(crate) after_save: Option<AfterDiscard>,
@@ -343,6 +344,7 @@ impl Editor {
             saved_preferences: None,
             project_path: None,
             confirm_discard: None,
+            opening: Default::default(),
             confirm_revert: false,
             after_save: None,
             autosave: Autosave::default(),
