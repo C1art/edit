@@ -186,9 +186,18 @@ fn smeared(uv: vec2<f32>) -> vec4<f32> {
 // #if style_blur.x
     let reach = vec2<f32>(sin(blur.y), -cos(blur.y)) * blur.x / picture_size();
     var sum = vec4<f32>(0.0);
+    var covered = vec3<f32>(0.0);
     for (var tap = 0; tap < BLUR_TAPS; tap++) {
         let along = f32(tap) / f32(BLUR_TAPS - 1) * 2.0 - 1.0;
-        sum += textureSampleLevel(source, source_sampler, uv + reach * along, 0.0);
+        let tap_color = textureSampleLevel(source, source_sampler, uv + reach * along, 0.0);
+        sum += tap_color;
+        covered += tap_color.rgb * tap_color.a;
+    }
+    // A straight picture's colors count by their coverage, so the color stored under
+    // its transparent parts doesn't smear in as a dark fringe.
+    let straight = placement.axis_y_opacity.w < 0.5 && placement.key_spill.z < 0.5;
+    if straight && sum.a > 1e-4 {
+        return vec4<f32>(covered / sum.a, sum.a / f32(BLUR_TAPS));
     }
     return sum / f32(BLUR_TAPS);
 // #else
