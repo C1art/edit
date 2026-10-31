@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 use crossbeam::channel::{self, Receiver, Sender};
 
 use crate::editor::Editor;
+use crate::export_captions::sidecar_path;
 use crate::same_path::same_path;
 
 /// How long an answer about an unchanged path holds, so files written or removed while
@@ -13,6 +14,8 @@ const RECHECK: Duration = Duration::from_secs(1);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Holder {
     File,
+    /// The captions file written beside the output.
+    Sidecar,
     Queue,
 }
 
@@ -31,6 +34,7 @@ struct Request {
     path: PathBuf,
     queued: Vec<PathBuf>,
     frames: bool,
+    sidecar: bool,
 }
 
 /// Looks on a thread of its own whether an export would replace something, as the
@@ -55,7 +59,13 @@ impl TargetCheck {
                         request = newest;
                     }
                     let on_disk = |path: &Path| {
-                        path.is_file() || request.frames && first_frame(path).is_file()
+                        if path.is_file() || request.frames && first_frame(path).is_file() {
+                            Some(Holder::File)
+                        } else if request.sidecar && sidecar_path(path).is_file() {
+                            Some(Holder::Sidecar)
+                        } else {
+                            None
+                        }
                     };
                     let target = check(&request.path, &request.queued, on_disk);
                     if answer.send((request.path, target)).is_err() {
@@ -72,12 +82,13 @@ impl TargetCheck {
         })
     }
 
-    /// What exporting to `path`, or to numbered `frames` beside it, would replace, or
-    /// `None` until the thread has looked.
+    /// What exporting to `path`, or to numbered `frames` beside it, and its captions to a
+    /// `sidecar` file, would replace, or `None` until the thread has looked.
     pub(crate) fn target(
         &mut self,
         path: &Path,
         frames: bool,
+        sidecar: bool,
         queued: impl FnOnce() -> Vec<PathBuf>,
     ) -> Option<&Target> {
         if let Some(newest) = self.answers.try_iter().last() {
@@ -92,6 +103,7 @@ impl TargetCheck {
                 path: path.to_owned(),
                 queued: queued(),
                 frames,
+                sidecar,
             };
             // The thread only stops when this is dropped.
             let _ = self.requests.send(request);
@@ -104,14 +116,12 @@ impl TargetCheck {
     }
 }
 
-fn check(path: &Path, queued: &[PathBuf], on_disk: impl Fn(&Path) -> bool) -> Target {
+fn check(path: &Path, queued: &[PathBuf], on_disk: impl Fn(&Path) -> Option<Holder>) -> Target {
     let holder = |path: &Path| {
         if queued.iter().any(|queued| same_path(queued, path)) {
             Some(Holder::Queue)
-        } else if on_disk(path) {
-            Some(Holder::File)
         } else {
-            None
+            on_disk(path)
         }
     };
     match holder(path) {
@@ -197,7 +207,10 @@ mod tests {
         let queued = [PathBuf::from("/out/Cut 3.mp4")];
         let check = |path: &str| {
             check(Path::new(path), &queued, |path| {
-                on_disk.iter().any(|file| file == path)
+                on_disk
+                    .iter()
+                    .any(|file| file == path)
+                    .then_some(Holder::File)
             })
         };
         let taken = |by, free: &str| Target::Taken {

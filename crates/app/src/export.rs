@@ -113,13 +113,21 @@ impl ExportDialog {
 
     /// What exporting would replace, after swapping a suggested file that's taken for a
     /// free one.
-    pub(crate) fn target(&mut self, queued: impl FnOnce() -> Vec<PathBuf>) -> Option<Target> {
+    /// `sequence` says whether the captions go to a sidecar file it would also replace.
+    pub(crate) fn target(
+        &mut self,
+        sequence: &Sequence,
+        queued: impl FnOnce() -> Vec<PathBuf>,
+    ) -> Option<Target> {
         let output = self.output();
-        let frames = matches!(self.format.format, Format::Stills(_));
+        let kind = self.format.format;
+        let frames = matches!(kind, Format::Stills(_));
+        let sidecar = export_captions::chosen(self.captions, kind.has_video(), sequence)
+            == CaptionExport::Sidecar;
         let target = self
             .target
             .as_mut()?
-            .target(&output, frames, queued)?
+            .target(&output, frames, sidecar, queued)?
             .clone();
         match target {
             Target::Taken {
@@ -191,7 +199,7 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
             ctx.request_repaint_after(export_progress::REFRESH);
         }
         None => {
-            let target = dialog.target(|| export_queue.pending_paths());
+            let target = dialog.target(sequence, || export_queue.pending_paths());
             let kind = dialog.format.format;
             let format = &mut dialog.format;
             settings(ui, format, sequence_size, |ui, format| {
@@ -286,6 +294,11 @@ fn replace_warning(ui: &mut egui::Ui, path: &mut String, by: Holder, free: Optio
     let name = quoted_name(Path::new(path.trim().trim_matches('"')));
     let warning = match by {
         Holder::File => format!("{name} already exists and will be replaced."),
+        Holder::Sidecar => {
+            let output = Path::new(path.trim().trim_matches('"'));
+            let captions = quoted_name(&export_captions::sidecar_path(output));
+            format!("{captions} already exists and the captions will replace it.")
+        }
         Holder::Queue => format!("A queued export already writes {name}."),
     };
     ui.horizontal(|ui| {

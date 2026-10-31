@@ -8,6 +8,7 @@ use egui::{Key, PopupCloseBehavior, RichText};
 
 use crate::editor::Editor;
 use crate::export::{self, ExportDialog};
+use crate::export_captions::sidecar_path;
 use crate::export_format::{ExportFormat, PRESETS};
 use crate::export_summary::summary;
 use crate::export_target::{Holder, Target};
@@ -94,6 +95,7 @@ fn popover(editor: &mut Editor, button: &egui::Response) {
     let export_queue = &editor.export_queue;
     let busy = export_queue.progress().is_some();
     let running = editor.export.as_ref().and_then(ExportDialog::running_path);
+    let sequence = editor.timeline.sequence();
     let Some(quick) = &mut editor.quick_export else {
         return;
     };
@@ -110,7 +112,7 @@ fn popover(editor: &mut Editor, button: &egui::Response) {
             ui.label("File");
             let field = egui::TextEdit::singleline(&mut export.path).desired_width(f32::INFINITY);
             ui.add(field);
-            let target = export.target(|| {
+            let target = export.target(sequence, || {
                 let queued = export_queue.pending_paths().into_iter();
                 queued.chain(running.map(Path::to_owned)).collect()
             });
@@ -118,6 +120,10 @@ fn popover(editor: &mut Editor, button: &egui::Response) {
                 let name = quoted_name(&export.output());
                 let warning = match by {
                     Holder::File => format!("{name} will be replaced"),
+                    Holder::Sidecar => {
+                        let captions = sidecar_path(&export.output());
+                        format!("{} will be replaced", quoted_name(&captions))
+                    }
                     Holder::Queue => format!("Another export already writes {name}"),
                 };
                 ui.colored_label(ui.visuals().warn_fg_color, warning);
