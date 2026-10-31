@@ -24,9 +24,14 @@ impl Player {
             .send(Command::Previews(Arc::clone(&self.previews)));
         player.looping = self.looping.clone();
         player.scrub_audio = self.scrub_audio;
+        player.speed = self.speed;
         player.seek(self.position());
-        if self.playing {
+        if let Some(shuttle) = self.shuttle {
+            player.shuttle(shuttle.rate());
+        } else if self.playing {
             player.play();
+            // Play In to Out and Play Around still end where they were going to.
+            player.stop = self.stop;
         }
         *self = player;
         Ok(())
