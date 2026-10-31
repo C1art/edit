@@ -44,6 +44,25 @@ fn asc_cdl_applies_slope_offset_and_power_to_encoded_levels() -> Result<(), Rend
 
 #[test]
 #[ignore = "needs a GPU"]
+fn a_cdl_power_of_zero_turns_black_white() -> Result<(), RenderError> {
+    let output = rendered(
+        &solid([0; 3]),
+        Tone {
+            cdl: Some(Cdl {
+                slope: [1.0; 3],
+                offset: [0.0; 3],
+                power: [0.0; 3],
+                saturation: 1.0,
+            }),
+            ..Tone::NONE
+        },
+    )?;
+    assert!(near(output[0], [255; 3]), "{:?}", output[0]);
+    Ok(())
+}
+
+#[test]
+#[ignore = "needs a GPU"]
 fn video_limiter_brings_peaks_down_to_the_clip_level_and_leaves_the_rest() -> Result<(), RenderError>
 {
     let pixels: Vec<u8> = (0..SIZE * SIZE)

@@ -69,7 +69,8 @@ fn cdl_graded(rgb: vec3<f32>) -> vec3<f32> {
     }
     // #if tone_cdl_offset.w
     let sloped = clamp(to_gamma(rgb) * slope.xyz + offset.xyz, vec3<f32>(0.0), vec3<f32>(1.0));
-    let graded = pow(sloped, placement.tone_cdl_power.xyz);
+    // A power of 0 is allowed, and pow(0, 0) is undefined.
+    let graded = pow(max(sloped, vec3<f32>(TINY)), placement.tone_cdl_power.xyz);
     let luma = dot(graded, LUMA);
     return to_linear(luma + slope.w * (graded - luma));
     // #else

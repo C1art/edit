@@ -59,7 +59,7 @@ fn secondary(rgb_in: vec3<f32>) -> vec3<f32> {
     let hue = vec3<f32>(1.5748 * w.y, -0.1873 * w.x - 0.4681 * w.y, 1.8556 * w.x);
     var rgb = rgb_in * white * exp2(hue * WHEEL_STOPS + vec3<f32>(w.z * LEVEL_STOPS));
     let pivot = vec3<f32>(MID_GREY);
-    rgb = pivot * pow(max(rgb, vec3<f32>(0.0)) / pivot, vec3<f32>(1.0 + balance.z));
+    rgb = pivot * pow(max(rgb, vec3<f32>(TINY)) / pivot, vec3<f32>(1.0 + balance.z));
     rgb = saturate_color(rgb, balance.w, 0.0);
     return mix(rgb_in, rgb, keyed);
     // #else

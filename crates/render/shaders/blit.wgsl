@@ -240,6 +240,8 @@ struct Placement {
 const OUTLINE_VEC4S: u32 = 32u;
 
 const MID_GREY: f32 = 0.18;
+// Keeps a power's base above zero where the power itself can reach zero.
+const TINY: f32 = 1.0e-10;
 const LUMA: vec3<f32> = vec3<f32>(0.2126, 0.7152, 0.0722);
 const GAMMA: f32 = 2.2;
 // How far blacks at their limit lift pure black, in linear light.
@@ -314,9 +316,11 @@ fn correct(rgb_in: vec3<f32>) -> vec3<f32> {
     let balance = placement.balance;
     let white = vec3<f32>(1.0 + 0.3 * balance.x, 1.0 - 0.3 * balance.y, 1.0 - 0.3 * balance.x);
     var rgb = rgb_in * white * exp2(tone.x);
-    // Contrast pivots on mid grey in log space, as a camera's tone curve does.
+    // Contrast pivots on mid grey in log space, as a camera's tone curve does. Full
+    // negative contrast makes the power 0, and pow(0, 0) is undefined, so black is kept
+    // just above zero.
     let pivot = vec3<f32>(MID_GREY);
-    rgb = pivot * pow(max(rgb, vec3<f32>(0.0)) / pivot, vec3<f32>(1.0 + tone.y));
+    rgb = pivot * pow(max(rgb, vec3<f32>(TINY)) / pivot, vec3<f32>(1.0 + tone.y));
     // #if tone.z tone.w finish.x finish.y wheels
     let luma = dot(rgb, LUMA);
     let highlight_weight = smoothstep(MID_GREY, 1.0, luma);
