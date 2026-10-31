@@ -99,11 +99,15 @@ pub(super) fn panel(editor: &mut Editor, ui: &mut egui::Ui) {
                 if level.double_clicked() {
                     db = 0.0;
                 }
-                send.level = if db <= *FADER_RANGE.start() {
-                    Gain::SILENT
-                } else {
-                    Gain::from_db(db)
-                };
+                // Only when moved: a level below the field's range would read back as
+                // silence, and any other change to the sends writes them all.
+                if level.changed() || level.double_clicked() {
+                    send.level = if db <= *FADER_RANGE.start() {
+                        Gain::SILENT
+                    } else {
+                        Gain::from_db(db)
+                    };
+                }
                 change = response_state(&level, change);
                 let mut balance = send.pan.value();
                 let pan = ui
