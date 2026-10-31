@@ -216,7 +216,7 @@ fn picture_at(uv: vec2<f32>) -> vec4<f32> {
 }
 
 fn encoded_luma(uv: vec2<f32>) -> f32 {
-    let encoded = to_gamma(max(input_grade(picture_at(uv).rgb), vec3<f32>(0.0)));
+    let encoded = to_gamma(max(graded(picture_at(uv)), vec3<f32>(0.0)));
     return dot(encoded, vec3<f32>(0.2126, 0.7152, 0.0722));
 }
 
@@ -242,10 +242,10 @@ fn restyle(rgb_in: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
 // #if style_grain.z
     if grain.z > 0.0 {
         let texel = 1.0 / vec2<f32>(textureDimensions(source));
-        let across = to_gamma(input_grade(picture_at(uv + vec2<f32>(texel.x, 0.0)).rgb))
-            - to_gamma(input_grade(picture_at(uv - vec2<f32>(texel.x, 0.0)).rgb));
-        let down = to_gamma(input_grade(picture_at(uv + vec2<f32>(0.0, texel.y)).rgb))
-            - to_gamma(input_grade(picture_at(uv - vec2<f32>(0.0, texel.y)).rgb));
+        let across = to_gamma(graded(picture_at(uv + vec2<f32>(texel.x, 0.0))))
+            - to_gamma(graded(picture_at(uv - vec2<f32>(texel.x, 0.0))));
+        let down = to_gamma(graded(picture_at(uv + vec2<f32>(0.0, texel.y))))
+            - to_gamma(graded(picture_at(uv - vec2<f32>(0.0, texel.y))));
         var edges = clamp((abs(across) + abs(down)) * 2.0, vec3<f32>(0.0), vec3<f32>(1.0));
         if grain.w < 0.5 {
             edges = vec3<f32>(1.0) - edges;
@@ -349,11 +349,8 @@ fn sharpen(rgb: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
     }
 // #if amounts.y
     let texel = 1.0 / vec2<f32>(textureDimensions(source));
-    // Neighbours pass through the input LUT too, so it doesn't read as detail.
-    let around = input_grade(textureSampleLevel(source, source_sampler, uv + vec2<f32>(texel.x, 0.0), 0.0).rgb)
-        + input_grade(textureSampleLevel(source, source_sampler, uv - vec2<f32>(texel.x, 0.0), 0.0).rgb)
-        + input_grade(textureSampleLevel(source, source_sampler, uv + vec2<f32>(0.0, texel.y), 0.0).rgb)
-        + input_grade(textureSampleLevel(source, source_sampler, uv - vec2<f32>(0.0, texel.y), 0.0).rgb);
+    let around = graded_at(uv + vec2<f32>(texel.x, 0.0)) + graded_at(uv - vec2<f32>(texel.x, 0.0))
+        + graded_at(uv + vec2<f32>(0.0, texel.y)) + graded_at(uv - vec2<f32>(0.0, texel.y));
     return max(rgb + amount * (rgb - around * 0.25), vec3<f32>(0.0));
 // #else
     return rgb;

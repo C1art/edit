@@ -1,6 +1,6 @@
 use crate::common;
 use crate::common::{compositor, filled, layer, solid};
-use render::{PixelEffects, RenderError};
+use render::{Detail, PixelEffects, RenderError, UnsharpMask};
 use timeline::{AlphaInterpretation, BlendMode, ColorSpace};
 
 fn interpreted(rgba: [u8; 4], alpha: AlphaInterpretation) -> Result<[u8; 3], RenderError> {
@@ -40,6 +40,35 @@ fn ignoring_alpha_shows_transparent_pixels_and_inverting_hides_opaque_ones() {
     assert_eq!(
         interpreted(opaque, AlphaInterpretation::Invert).unwrap(),
         [0; 3]
+    );
+}
+
+#[test]
+#[ignore = "needs a GPU"]
+fn sharpening_a_flat_hdr_picture_leaves_it_flat() {
+    let flat = |detail| {
+        let effects = PixelEffects {
+            color_space: ColorSpace::Rec2100Pq,
+            detail,
+            ..PixelEffects::NONE
+        };
+        drawn([148, 148, 148, 255], effects).unwrap()
+    };
+    let sharpened = flat(Detail {
+        unsharp: Some(UnsharpMask {
+            amount: 2.0,
+            radius: 2.0,
+            threshold: 0.0,
+        }),
+        ..Detail::NONE
+    });
+    let plain = flat(Detail::NONE);
+    assert!(
+        sharpened
+            .iter()
+            .zip(plain)
+            .all(|(&level, plain)| level.abs_diff(plain) <= 1),
+        "{sharpened:?} against {plain:?}"
     );
 }
 

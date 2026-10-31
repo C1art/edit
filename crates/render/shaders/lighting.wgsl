@@ -26,10 +26,10 @@ fn surface_normal(uv: vec2<f32>, picture: vec2<f32>, bump: f32, white_is_high: b
 // The surface's slope across and down at `uv`, from the picture's brightness.
 fn surface_slope(uv: vec2<f32>, step: vec2<f32>, white_is_high: bool) -> vec2<f32> {
     let level = vec4<f32>(
-        dot(picture_at(uv - vec2<f32>(step.x, 0.0)).rgb, LUMA),
-        dot(picture_at(uv + vec2<f32>(step.x, 0.0)).rgb, LUMA),
-        dot(picture_at(uv - vec2<f32>(0.0, step.y)).rgb, LUMA),
-        dot(picture_at(uv + vec2<f32>(0.0, step.y)).rgb, LUMA),
+        dot(graded(picture_at(uv - vec2<f32>(step.x, 0.0))), LUMA),
+        dot(graded(picture_at(uv + vec2<f32>(step.x, 0.0))), LUMA),
+        dot(graded(picture_at(uv - vec2<f32>(0.0, step.y))), LUMA),
+        dot(graded(picture_at(uv + vec2<f32>(0.0, step.y))), LUMA),
     );
     let sign = select(-1.0, 1.0, white_is_high);
     return vec2<f32>(level.y - level.x, level.w - level.z) * 0.5 * sign;
