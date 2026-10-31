@@ -54,6 +54,11 @@ impl Viewer {
         notices
     }
 
+    #[cfg(test)]
+    pub(crate) fn building_shaders(&self) -> bool {
+        self.monitor.as_ref().is_some_and(Monitor::building_shaders)
+    }
+
     pub fn set_scope(&mut self, scope: Option<Scope>) {
         if let Some(monitor) = &mut self.monitor {
             monitor.set_scope(scope);

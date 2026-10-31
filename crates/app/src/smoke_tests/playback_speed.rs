@@ -1,19 +1,21 @@
 //! Whether real footage plays smoothly through dissolves, and if not, what holds it up.
 //! Cuts the files into short pieces, alternating between them, with the default
-//! transition at every cut, then plays it all in real time as the Program monitor does,
-//! without sound. Run it in release:
+//! transition at every cut, then plays it all in real time: first only the Program
+//! monitor's player and picture, then in the whole editor with sound. Run it in release:
 //! `EDIT_BENCH_CLIPS="a.mp4;b.mp4" cargo test --release -p app playback_speed -- --ignored --nocapture`.
 
 use std::fmt;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use eframe::egui_wgpu::wgpu;
+use eframe::egui_wgpu::{self, wgpu};
 use playback::Player;
 use timeline::{ApplyTransitions, PlaceClip, PlaceMode, Ticks, Timebase, TrackKind};
 
-use super::{bench_clips, editor, gpu};
+use super::{bench_clips, editor, gpu, Screen};
+use crate::editor::Editor;
 use crate::monitor::Monitor;
+use crate::viewer::Viewer;
 
 const PIECES: i64 = 8;
 const PIECE_SECONDS: i64 = 4;
@@ -32,6 +34,9 @@ struct Tally {
     dropped: u64,
     /// Ticks still showing an older frame than the one due, as it wasn't decoded yet.
     behind: u32,
+    /// Ticks that moved on by other than one frame: skipped or repeated, which judders
+    /// even when nothing is dropped.
+    uneven: u32,
     over_budget: u32,
     total: Duration,
     slowest: Duration,
@@ -43,11 +48,12 @@ impl fmt::Display for Tally {
         write!(
             f,
             "{} frames shown, {} dropped; behind on decoding at {} of {} ticks; \
-             each tick {:.1} ms on average, slowest {:.1} ms, {} over {:.1} ms",
+             {} ticks uneven; each tick {:.1} ms on average, slowest {:.1} ms, {} over {:.1} ms",
             self.shown,
             self.dropped,
             self.behind,
             self.ticks,
+            self.uneven,
             mean.as_secs_f64() * 1e3,
             self.slowest.as_secs_f64() * 1e3,
             self.over_budget,
@@ -127,15 +133,11 @@ fn playback_speed() {
         eprintln!("Decoding on {decoder}");
     }
 
-    let (mut transitions, mut elsewhere) = (Tally::default(), Tally::default());
-    let mut waiting_on_shaders = 0;
+    let mut pass = Pass::default();
     player.play();
     let mut next_tick = Instant::now();
     while player.is_playing() {
-        next_tick += TICK;
-        if let Some(wait) = next_tick.checked_duration_since(Instant::now()) {
-            std::thread::sleep(wait);
-        }
+        wait_for(&mut next_tick);
         let start = Instant::now();
         let dropped_before = player.dropped_frames();
         let changed = player.update();
@@ -147,30 +149,139 @@ fn playback_speed() {
             }
         }
         monitor.catch_up(&ctx).expect("a frame shown");
-        // The app's window waits here for the GPU before showing the frame.
-        let _ = gpu.device.poll(wgpu::PollType::Wait {
-            submission_index: None,
-            timeout: None,
-        });
-        let took = start.elapsed();
-        let Some(frame) = player.current_frame() else {
-            continue;
+        wait_on_gpu(&gpu);
+        let tick = Tick {
+            took: start.elapsed(),
+            changed,
+            due,
+            dropped: player.dropped_frames() - dropped_before,
+            building_shaders: monitor.building_shaders(),
         };
-        let tally = if frame.layers.len() > 1 {
-            &mut transitions
+        pass.record(&player, tick);
+    }
+    drop((player, monitor));
+    eprintln!("Playing alone, without sound or the rest of the editor:");
+    pass.report();
+
+    // Again in the whole editor, as when playing in the app: the panels drawn every
+    // frame, and sound, whose clock the picture follows.
+    let mut screen = Screen::default();
+    editor.seek_program(Ticks::ZERO);
+    let ready = Instant::now();
+    while ready.elapsed() < Duration::from_secs(3) || editor_busy(&editor) {
+        screen.draw(&mut editor, Vec::new());
+        assert!(ready.elapsed() < Duration::from_secs(60), "never got ready");
+        std::thread::sleep(TICK);
+    }
+    eprintln!(
+        "In the editor, {}:",
+        if editor.audio.is_some() {
+            "with sound"
         } else {
-            &mut elsewhere
+            "without sound, as no output opened"
+        }
+    );
+    let mut pass = Pass::default();
+    program(&mut editor).player.play();
+    let mut next_tick = Instant::now();
+    while program(&mut editor).player.is_playing() {
+        wait_for(&mut next_tick);
+        let start = Instant::now();
+        let dropped_before = program(&mut editor).player.dropped_frames();
+        let shown_before = program(&mut editor)
+            .player
+            .current_frame()
+            .map(|frame| frame.pts);
+        screen.draw(&mut editor, Vec::new());
+        let viewer = program(&mut editor);
+        let due = rate.frame_at(viewer.player.position(), timebase);
+        wait_on_gpu(&gpu);
+        let tick = Tick {
+            took: start.elapsed(),
+            changed: viewer.player.current_frame().map(|frame| frame.pts) != shown_before,
+            due,
+            dropped: viewer.player.dropped_frames() - dropped_before,
+            building_shaders: viewer.building_shaders(),
+        };
+        pass.record(&viewer.player, tick);
+    }
+    pass.report();
+}
+
+fn program(editor: &mut Editor) -> &mut Viewer {
+    editor.program.as_mut().expect("a program monitor")
+}
+
+fn editor_busy(editor: &Editor) -> bool {
+    editor
+        .program
+        .as_ref()
+        .is_none_or(|viewer| viewer.player.current_frame().is_none() || viewer.building_shaders())
+}
+
+fn wait_for(next_tick: &mut Instant) {
+    *next_tick += TICK;
+    if let Some(wait) = next_tick.checked_duration_since(Instant::now()) {
+        std::thread::sleep(wait);
+    }
+}
+
+/// The app's window waits here for the GPU before showing the frame.
+fn wait_on_gpu(gpu: &egui_wgpu::RenderState) {
+    let _ = gpu.device.poll(wgpu::PollType::Wait {
+        submission_index: None,
+        timeout: None,
+    });
+}
+
+struct Tick {
+    took: Duration,
+    changed: bool,
+    /// The frame the clock had reached.
+    due: i64,
+    dropped: u64,
+    building_shaders: bool,
+}
+
+#[derive(Default)]
+struct Pass {
+    transitions: Tally,
+    elsewhere: Tally,
+    waiting_on_shaders: u32,
+    last_shown: Option<i64>,
+}
+
+impl Pass {
+    fn record(&mut self, player: &Player, tick: Tick) {
+        let Some(frame) = player.current_frame() else {
+            return;
+        };
+        let sequence = player.sequence();
+        let shown = player.frame_rate().frame_at(frame.pts, sequence.timebase);
+        let tally = if frame.layers.len() > 1 {
+            &mut self.transitions
+        } else {
+            &mut self.elsewhere
         };
         tally.ticks += 1;
-        tally.shown += u32::from(changed);
-        tally.dropped += player.dropped_frames() - dropped_before;
-        tally.behind += u32::from(rate.frame_at(frame.pts, timebase) < due);
-        tally.over_budget += u32::from(took > TICK);
-        tally.total += took;
-        tally.slowest = tally.slowest.max(took);
-        waiting_on_shaders += u32::from(monitor.building_shaders());
+        tally.shown += u32::from(tick.changed);
+        tally.dropped += tick.dropped;
+        tally.behind += u32::from(shown < tick.due);
+        let moved = self.last_shown.map(|last| shown - last);
+        tally.uneven += u32::from(moved.is_some_and(|moved| moved != 1));
+        tally.over_budget += u32::from(tick.took > TICK);
+        tally.total += tick.took;
+        tally.slowest = tally.slowest.max(tick.took);
+        self.waiting_on_shaders += u32::from(tick.building_shaders);
+        self.last_shown = Some(shown);
     }
-    eprintln!("During dissolves: {transitions}");
-    eprintln!("Elsewhere: {elsewhere}");
-    eprintln!("Ticks waiting on shaders being built: {waiting_on_shaders}");
+
+    fn report(&self) {
+        eprintln!("  During dissolves: {}", self.transitions);
+        eprintln!("  Elsewhere: {}", self.elsewhere);
+        eprintln!(
+            "  Ticks waiting on shaders being built: {}",
+            self.waiting_on_shaders
+        );
+    }
 }
