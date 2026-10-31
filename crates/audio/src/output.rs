@@ -205,19 +205,16 @@ fn fill(shared: &Shared, data: &mut [f32], channels: usize) {
     }
     let mut played = 0;
     for frame in data.chunks_mut(channels) {
-        let mut complete = true;
+        // The writer pushes a frame one sample at a time; taking part of one would put
+        // every later sample on the wrong channel.
+        if shared.queue.len() < frame.len() {
+            frame.fill(0.0);
+            continue;
+        }
         for sample in frame.iter_mut() {
-            match shared.queue.pop() {
-                Some(value) => *sample = value,
-                None => {
-                    *sample = 0.0;
-                    complete = false;
-                }
-            }
+            *sample = shared.queue.pop().unwrap_or(0.0);
         }
-        if complete {
-            played += 1;
-        }
+        played += 1;
     }
     shared.played.advance(played);
 }
@@ -312,6 +309,29 @@ impl AudioWriter {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_frame_half_pushed_waits_for_its_other_half() {
+        let shared = Shared {
+            queue: ArrayQueue::new(16),
+            played: Played::new(48_000),
+            paused: AtomicBool::new(false),
+            lost: AtomicBool::new(false),
+            session: Mutex::new(0),
+            next_session: AtomicU64::new(1),
+            format: OutputFormat {
+                sample_rate: SampleRate(48_000),
+                channels: 2,
+            },
+        };
+        let mut data = [9.0; 4];
+        shared.queue.push(1.0).unwrap();
+        fill(&shared, &mut data, 2);
+        assert_eq!(data, [0.0; 4]);
+        shared.queue.push(2.0).unwrap();
+        fill(&shared, &mut data, 2);
+        assert_eq!(data, [1.0, 2.0, 0.0, 0.0]);
+    }
 
     #[test]
     fn a_device_is_known_by_its_id_whatever_number_its_name_got() {
