@@ -112,11 +112,19 @@ impl Setting {
     }
 
     /// Where a file that couldn't be read is moved to, beside it.
+    /// The first free name to move an unreadable file to, so one set aside earlier is
+    /// kept too.
     pub fn unreadable_path(self) -> PathBuf {
         let path = self.path();
         let stem = path.file_stem().unwrap_or_default().to_string_lossy();
         let extension = path.extension().unwrap_or_default().to_string_lossy();
-        path.with_file_name(format!("{stem} (unreadable).{extension}"))
+        let named = |suffix: String| {
+            path.with_file_name(format!("{stem} (unreadable{suffix}).{extension}"))
+        };
+        std::iter::once(named(String::new()))
+            .chain((2..).map(|n| named(format!(" {n}"))))
+            .find(|candidate| !candidate.exists())
+            .unwrap_or_else(|| named(String::new()))
     }
 
     /// What the file holds, for messages about it.
