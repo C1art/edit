@@ -120,6 +120,11 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     if !done {
         return;
     }
+    // A nest may have been opened since the dialog was.
+    if editor.timeline.open_nest().is_some() {
+        editor.notice("A nested sequence uses the project's frame size");
+        return;
+    }
     let (_, width, height) = ASPECTS[settings.aspect];
     let (width, height) = reshaped((format.width, format.height), (width, height));
     let edit = ReframeSequence {

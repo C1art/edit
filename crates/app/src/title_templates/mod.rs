@@ -19,7 +19,9 @@ use crate::placing::{self, Landing};
 use crate::project_store::Setting;
 
 pub(crate) struct TemplateDialog {
-    clip: ClipId,
+    /// Taken when the dialog opens, so later edits or a project switch can't change
+    /// what is kept.
+    template: TitleTemplate,
     name: String,
     opened: bool,
 }
@@ -43,10 +45,12 @@ impl Editor {
             .seconds
             .and_then(|seconds| seconds_in(seconds, sequence.timebase));
         let name = builtin.name.to_owned();
-        let clip = placing::place_generated(self, name, built.generator, length, landing);
-        if let (Some(clip), Some(position)) = (clip, built.position) {
-            self.move_new_clip(clip, position);
-        }
+        self.as_one_edit(|editor| {
+            let clip = placing::place_generated(editor, name, built.generator, length, landing);
+            if let (Some(clip), Some(position)) = (clip, built.position) {
+                editor.move_new_clip(clip, position);
+            }
+        });
     }
 
     fn new_from_saved(&mut self, index: usize, landing: Landing) {
@@ -80,8 +84,14 @@ impl Editor {
             self.notice("Only titles and graphics can be kept as title templates");
             return;
         }
+        let template = sequence.clip(clip).and_then(|(_, placed)| {
+            TitleTemplate::from_media(String::new(), sequence, placed.source, placed.duration)
+        });
+        let Some(template) = template else {
+            return;
+        };
         self.template_dialog = Some(TemplateDialog {
-            clip,
+            template,
             name: format!("Template {:02}", self.title_templates.len() + 1),
             opened: true,
         });
@@ -96,7 +106,19 @@ impl Editor {
 
     pub(crate) fn load_title_templates(&mut self, text: &str) {
         match TemplatesFile::from_text(text) {
-            Ok(file) => self.title_templates = file.templates,
+            Ok(file) => {
+                // Templates kept before the file was read would otherwise be lost.
+                let early = std::mem::replace(&mut self.title_templates, file.templates);
+                let changed = !early.is_empty();
+                for template in early {
+                    self.title_templates
+                        .retain(|kept| kept.name != template.name);
+                    self.title_templates.push(template);
+                }
+                if changed {
+                    self.save_title_templates();
+                }
+            }
             Err(error) => self.unreadable_setting(Setting::TitleTemplates, error),
         }
     }
@@ -114,18 +136,9 @@ impl Editor {
         }
     }
 
-    /// Keeps `clip`'s title as `name`, replacing a template already called that.
-    fn keep_title_template(&mut self, clip: ClipId, name: String) {
-        let sequence = self.timeline.sequence();
-        let Some((_, placed)) = sequence.clip(clip) else {
-            return;
-        };
-        let length = placed.duration;
-        let Some(template) =
-            TitleTemplate::from_media(name.clone(), sequence, placed.source, length)
-        else {
-            return;
-        };
+    /// Keeps `template` as `name`, replacing a template already called that.
+    fn keep_title_template(&mut self, mut template: TitleTemplate, name: String) {
+        template.name.clone_from(&name);
         self.title_templates.retain(|kept| kept.name != name);
         self.title_templates.push(template);
         self.save_title_templates();
@@ -205,9 +218,10 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
         return;
     };
     let name = dialog.name.trim().to_owned();
-    let clip = dialog.clip;
-    editor.template_dialog = None;
+    let Some(dialog) = editor.template_dialog.take() else {
+        return;
+    };
     if keep && !name.is_empty() {
-        editor.keep_title_template(clip, name);
+        editor.keep_title_template(dialog.template, name);
     }
 }
