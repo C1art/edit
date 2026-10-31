@@ -144,6 +144,9 @@ pub(crate) enum Premultiplied {
     InLight,
     /// On the encoded values, as files store it, before the sampler decodes them.
     Encoded,
+    /// In linear light, and to be written multiplied on the encoded values instead, as
+    /// the UI blends what it draws.
+    InLightForUi,
 }
 
 /// Where a layer lands in normalized device coordinates (the canvas spans -1..1, +y
@@ -240,6 +243,7 @@ impl Placement {
             Premultiplied::No => 0.0,
             Premultiplied::InLight => 1.0,
             Premultiplied::Encoded => 2.0,
+            Premultiplied::InLightForUi => 3.0,
         };
         [cx, cy, xx, xy, yx, yy, self.opacity, premultiplied]
             .into_iter()

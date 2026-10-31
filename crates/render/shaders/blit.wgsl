@@ -459,9 +459,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
 // The colors without the alpha some pictures carry them multiplied by: in linear light
 // for composited ones, or on the encoded values for files, which the sampler decoded.
+// A frame drawn under the UI is multiplied again, the way the UI blends: on the values
+// the display target encodes.
 fn unpremultiplied(color: vec4<f32>) -> vec3<f32> {
     let premultiplied = placement.axis_y_opacity.w;
     let alpha = max(color.a, 1e-6);
+    if premultiplied > 2.5 {
+        return srgb_decode(srgb_encode(color.rgb / alpha) * color.a);
+    }
     if premultiplied > 1.5 {
         return srgb_decode(min(srgb_encode(color.rgb) / alpha, vec3<f32>(1.0)));
     }

@@ -427,7 +427,7 @@ impl Compositor {
         // alpha. Over black that alpha stays whole and dividing it out changes nothing.
         let working = Placement {
             premultiplied: if self.background == Background::UnderUi {
-                Premultiplied::No
+                Premultiplied::InLightForUi
             } else {
                 Premultiplied::InLight
             },
