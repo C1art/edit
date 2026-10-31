@@ -86,6 +86,12 @@ impl Monitor {
         Ok(())
     }
 
+    /// Whether a frame waits on shaders, or shaders are building for frames to come.
+    #[cfg(test)]
+    pub(crate) fn building_shaders(&self) -> bool {
+        self.pending.is_some() || self.compositor.compiling()
+    }
+
     pub fn set_scope(&mut self, scope: Option<Scope>) {
         self.compositor.set_scope(scope);
         if scope.is_some() == self.scope.is_some() {

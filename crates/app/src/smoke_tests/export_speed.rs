@@ -10,47 +10,24 @@ use std::time::Duration;
 use playback::{ExportEvent, ExportJob};
 use timeline::{ApplyTransitions, PlaceClip, PlaceMode, Ticks, Timebase, TrackKind};
 
-use super::{editor, gpu};
+use super::{bench_clips, editor, gpu};
 use crate::export::{prepare, ExportDialog};
 
 #[test]
 #[ignore = "exports the files in EDIT_BENCH_CLIPS; meaningful only in release"]
 fn export_speed() {
-    let Ok(clips) = std::env::var("EDIT_BENCH_CLIPS") else {
-        eprintln!("Set EDIT_BENCH_CLIPS to the files to export, separated by ';'");
-        return;
-    };
-    let flag = |name| std::env::var(name).is_ok_and(|value| value == "1");
     let gpu = gpu();
     let adapter = gpu.adapter.get_info();
     eprintln!("Drawing on {} with {:?}", adapter.name, adapter.backend);
     let mut editor = editor(Some(&gpu));
-    if flag("EDIT_BENCH_SOFTWARE_DECODE") {
-        media::set_hardware_decoding(false);
-    }
-    let (timebase, rate) = {
-        let sequence = editor.timeline.sequence();
-        (sequence.timebase, sequence.format.frame_rate)
+    let Some(media) = bench_clips::import(&mut editor) else {
+        return;
     };
-    for path in clips
-        .split(';')
-        .map(str::trim)
-        .filter(|path| !path.is_empty())
-    {
-        let media = crate::import::probe(std::path::Path::new(path), timebase, rate)
-            .unwrap_or_else(|error| panic!("{path}: {error}"));
-        editor.apply(media);
-    }
-    let media: Vec<_> = (editor.timeline.sequence().media.iter())
-        .map(|item| (item.id, item.duration))
-        .collect();
+    let timebase = editor.timeline.sequence().timebase;
     let longest = std::env::var("EDIT_BENCH_SECONDS")
         .ok()
         .and_then(|seconds| seconds.parse::<i64>().ok())
         .and_then(|seconds| Some(Ticks(seconds).rescale(Timebase::new(1, 1)?, timebase)));
-    if let Some(&(first, _)) = media.first() {
-        editor.match_format(first);
-    }
     for (source, duration) in media {
         let at = editor.timeline.sequence().duration();
         editor.apply(PlaceClip {
@@ -64,7 +41,7 @@ fn export_speed() {
             fill: None,
         });
     }
-    if flag("EDIT_BENCH_DISSOLVES") {
+    if bench_clips::flag("EDIT_BENCH_DISSOLVES") {
         let sequence = editor.timeline.sequence();
         let defaults = editor.transition_defaults;
         editor.apply(ApplyTransitions {

@@ -1,10 +1,12 @@
 //! Drives the whole editor headlessly, through eframe's test constructors, to find what
 //! takes it down.
 
+mod bench_clips;
 mod commands;
 mod export_speed;
 mod layout;
 mod monkey;
+mod playback_speed;
 mod soak;
 mod timing;
 mod usage;
