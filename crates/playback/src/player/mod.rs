@@ -192,10 +192,17 @@ impl Player {
     /// Plays these rendered files in place of the pictures they cover, from the next
     /// frame composed.
     pub fn set_previews(&mut self, previews: Vec<Preview>) {
+        if *self.previews == previews {
+            return;
+        }
         self.previews = Arc::new(previews);
         let _ = self
             .video_commands
             .send(Command::Previews(Arc::clone(&self.previews)));
+        // A paused frame was composed with the old list and nothing else would replace it.
+        if !self.is_playing() {
+            self.go_to(self.position(), false);
+        }
     }
 
     /// Plays `sequence` without seeking, for edits that change only levels, so faders
