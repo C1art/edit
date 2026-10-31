@@ -1,5 +1,5 @@
 use timeline::{
-    clamp_delta, ClipId, Edge, Edit, MoveClips, MoveMode, Slide, Slip, Ticks, TrackKind, Trim,
+    clamp_on_frames, ClipId, Edge, Edit, MoveClips, MoveMode, Slide, Slip, Ticks, TrackKind, Trim,
     TrimMode,
 };
 
@@ -24,7 +24,7 @@ impl Editor {
             audio_tracks: 0,
             mode: MoveMode::Overwrite,
         };
-        let delta = clamp_delta(sequence, target - first.start, make);
+        let delta = clamp_on_frames(sequence, target - first.start, first.start, make);
         if delta != Ticks::ZERO {
             self.apply(make(delta));
         }
@@ -67,7 +67,7 @@ impl Editor {
         let desired = rate.frame_start(rate.frame_at(from, timebase) + frames, timebase) - from;
         let clips = self.view.selection.clone();
         let make = |delta| edit(clips.clone(), delta);
-        let delta = clamp_delta(sequence, desired, make);
+        let delta = clamp_on_frames(sequence, desired, from, make);
         if delta != Ticks::ZERO {
             self.apply(make(delta));
         }
@@ -104,10 +104,10 @@ impl Editor {
             return;
         };
         let (to_head, to_tail) = (playhead - clip.start, playhead - clip.end());
-        let (edge, desired) = if to_head.0.abs() <= to_tail.0.abs() {
-            (Edge::Head, to_head)
+        let (edge, desired, at) = if to_head.0.abs() <= to_tail.0.abs() {
+            (Edge::Head, to_head, clip.start)
         } else {
-            (Edge::Tail, to_tail)
+            (Edge::Tail, to_tail, clip.end())
         };
         let id = clip.id;
         let make = |delta| Trim {
@@ -116,7 +116,7 @@ impl Editor {
             delta,
             mode: TrimMode::Normal,
         };
-        let delta = clamp_delta(sequence, desired, make);
+        let delta = clamp_on_frames(sequence, desired, at, make);
         if delta != Ticks::ZERO {
             self.apply(make(delta));
         }

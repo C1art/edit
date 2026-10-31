@@ -142,15 +142,23 @@ impl TimelineView {
                 }),
                 (None, None) => self.gesture(sequence, hit),
             };
-            self.drag = gesture.map(|gesture| Drag {
-                gesture,
-                links,
-                origin: frame_time(origin.x),
-                pending: None,
-                preview: None,
-                unlinked: matches!(links, LinkedSelection::Apart).then(|| gesture::apart(sequence)),
-                bounds: DeltaBounds::default(),
-                snapped_to: None,
+            let origin = frame_time(origin.x);
+            self.drag = gesture.map(|gesture| {
+                let grabbed = gesture
+                    .moving_edges(sequence)
+                    .into_iter()
+                    .min_by_key(|&edge| (edge - origin).0.unsigned_abs());
+                Drag {
+                    bounds: grabbed.map_or_else(DeltaBounds::default, DeltaBounds::on_frames),
+                    gesture,
+                    links,
+                    origin,
+                    pending: None,
+                    preview: None,
+                    unlinked: matches!(links, LinkedSelection::Apart)
+                        .then(|| gesture::apart(sequence)),
+                    snapped_to: None,
+                }
             });
         }
 

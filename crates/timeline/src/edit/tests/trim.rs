@@ -166,3 +166,53 @@ fn slide_trades_length_between_the_neighbors() {
         [(0, 130, 0), (130, 230, 300), (230, 300, 630)]
     );
 }
+
+#[test]
+fn clamping_on_frames_stops_at_the_last_whole_frame_before_the_limit() {
+    const FRAME: i64 = 3600;
+    let (mut timeline, _) = timeline();
+    timeline
+        .apply(ImportMedia {
+            name: "long".into(),
+            path: "long.mp4".into(),
+            duration: Ticks(100 * FRAME),
+            video: Some(timeline.sequence().format),
+            has_audio: false,
+            still: false,
+            interpreted_rate: None,
+            placed: None,
+            frame_fit: None,
+            timecode: None,
+        })
+        .unwrap();
+    let long = timeline.sequence().media[1].id;
+    timeline
+        .apply(place(long, 0, 0, 4 * FRAME, PlaceMode::Overwrite))
+        .unwrap();
+    timeline
+        .apply(place(
+            long,
+            6 * FRAME + 100,
+            0,
+            4 * FRAME,
+            PlaceMode::Overwrite,
+        ))
+        .unwrap();
+    let first = clip_on(&timeline, V1, 0);
+    let trim = |delta| Trim {
+        clips: vec![first],
+        edge: Edge::Tail,
+        delta,
+        mode: TrimMode::Normal,
+    };
+    let sequence = timeline.sequence();
+
+    assert_eq!(
+        clamp_delta(sequence, Ticks(5 * FRAME), trim),
+        Ticks(2 * FRAME + 100)
+    );
+    assert_eq!(
+        clamp_on_frames(sequence, Ticks(5 * FRAME), Ticks(4 * FRAME), trim),
+        Ticks(2 * FRAME)
+    );
+}

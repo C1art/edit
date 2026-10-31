@@ -1,4 +1,4 @@
-use timeline::{clamp_delta, ClipId, Edge, Roll, Sequence, TrackRef, Trim, TrimMode};
+use timeline::{clamp_on_frames, ClipId, Edge, Roll, Sequence, TrackRef, Trim, TrimMode};
 
 use crate::editor::Editor;
 use crate::keymap::Command;
@@ -136,7 +136,7 @@ impl Editor {
                     tracks: point.tracks.clone(),
                     delta,
                 };
-                let delta = clamp_delta(sequence, desired, make);
+                let delta = clamp_on_frames(sequence, desired, point.at, make);
                 self.apply(make(delta)).then_some(point.at + delta)
             }
             TrimType::RippleOut | TrimType::RippleIn => {
@@ -150,7 +150,7 @@ impl Editor {
                     delta,
                     mode: TrimMode::Ripple,
                 };
-                let delta = clamp_delta(sequence, desired, make);
+                let delta = clamp_on_frames(sequence, desired, point.at, make);
                 // A ripple keeps the incoming clip's start where it was.
                 let moved = match edge {
                     Edge::Head => point.at,

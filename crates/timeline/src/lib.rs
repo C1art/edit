@@ -102,7 +102,7 @@ pub use creative_look::CreativeLook;
 pub use curves::{Curve, CurvePoint, Curves, CURVE_RANGE};
 pub use ducking::{active_spans, ducked_volume};
 pub use edit::{
-    clamp_delta, is_through_edit, pauses, synchronized_clips, unused_time, AddBin,
+    clamp_delta, clamp_on_frames, is_through_edit, pauses, synchronized_clips, unused_time, AddBin,
     AddBlurredBackground, AddEdits, AddFrameHold, AddGenerated, AddMarker, AddMarkers, AddNest,
     AddSpeedKeyframe, AddSubmix, AddTrack, AddTracks, AdjustClips, ApplyEffect, ApplySpeedRamp,
     ApplyTransitions, Attribute, AutoDuck, AutomateToSequence, AutomatedPiece, BreakoutToMono,

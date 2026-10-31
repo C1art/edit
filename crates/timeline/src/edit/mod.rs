@@ -127,6 +127,17 @@ pub fn clamp_delta<E: Edit>(
     DeltaBounds::default().clamp(sequence, desired, make)
 }
 
+/// [`clamp_delta`] for an edit that moves `edge`, which a clamped delta leaves on a frame
+/// start rather than wherever the limit falls between frames.
+pub fn clamp_on_frames<E: Edit>(
+    sequence: &Sequence,
+    desired: Ticks,
+    edge: Ticks,
+    make: impl Fn(Ticks) -> E,
+) -> Ticks {
+    DeltaBounds::on_frames(edge).clamp(sequence, desired, make)
+}
+
 /// What clamping one edit has found out about which of its deltas are legal, so a drag
 /// that clamps every frame tries the edit only when the pointer goes somewhere new.
 /// It holds only while the sequence and everything about the edit but its delta stay
@@ -135,6 +146,8 @@ pub fn clamp_delta<E: Edit>(
 pub struct DeltaBounds {
     later: Side,
     earlier: Side,
+    /// The edge the edit moves, kept on a frame start when the delta is clamped.
+    edge: Option<Ticks>,
 }
 
 /// Distances from zero one way: the furthest found legal and the nearest found not.
@@ -145,6 +158,13 @@ struct Side {
 }
 
 impl DeltaBounds {
+    pub fn on_frames(edge: Ticks) -> Self {
+        Self {
+            edge: Some(edge),
+            ..Self::default()
+        }
+    }
+
     /// [`clamp_delta`], trying the edit only where earlier calls haven't settled it.
     pub fn clamp<E: Edit>(
         &mut self,
@@ -180,6 +200,25 @@ impl DeltaBounds {
             }
         }
         side.illegal = Some(bad);
-        Ticks(sign * side.legal)
+        let clamped = Ticks(sign * side.legal);
+        self.edge
+            .map_or(clamped, |edge| whole_frames(sequence, edge, clamped))
+    }
+}
+
+/// `delta` shortened to the nearest frame start for `edge` toward where it started, so a
+/// limit between frames never leaves a clip a sliver long or off the frame grid.
+fn whole_frames(sequence: &Sequence, edge: Ticks, delta: Ticks) -> Ticks {
+    let (rate, timebase) = (sequence.format.frame_rate, sequence.timebase);
+    let target = edge + delta;
+    let mut frame = rate.frame_at(target, timebase);
+    if delta < Ticks::ZERO && rate.frame_start(frame, timebase) < target {
+        frame += 1;
+    }
+    let aligned = rate.frame_start(frame, timebase) - edge;
+    if aligned.0.signum() == delta.0.signum() {
+        aligned
+    } else {
+        Ticks::ZERO
     }
 }
