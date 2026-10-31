@@ -46,14 +46,19 @@ impl Instance {
         component: &[u8],
         controller: &[u8],
     ) -> Result<(), PluginError> {
-        let stream = MemoryStream::new(component.to_vec());
-        // SAFETY: `stream` is a live IBStream for the duration of the call.
-        let result = unsafe { self.component.0.setState(stream_ptr(&stream)) };
-        check(result, "IComponent::setState")?;
-        stream.rewind();
-        // SAFETY: as above.
-        let result = unsafe { self.controller.setComponentState(stream_ptr(&stream)) };
-        optional(result, "IEditController::setComponentState")?;
+        // Changes queued before would reach the processor after the state and undo it.
+        self.buffers.discard_pending_parameters();
+        // A plugin without component state saved none, and may refuse an empty one.
+        if !component.is_empty() {
+            let stream = MemoryStream::new(component.to_vec());
+            // SAFETY: `stream` is a live IBStream for the duration of the call.
+            let result = unsafe { self.component.0.setState(stream_ptr(&stream)) };
+            optional(result, "IComponent::setState")?;
+            stream.rewind();
+            // SAFETY: as above.
+            let result = unsafe { self.controller.setComponentState(stream_ptr(&stream)) };
+            optional(result, "IEditController::setComponentState")?;
+        }
         if controller.is_empty() {
             return Ok(());
         }

@@ -63,6 +63,10 @@ impl ProcessBuffers {
         !self.input_changes.is_empty()
     }
 
+    pub(crate) fn discard_pending_parameters(&self) {
+        self.input_changes.clear();
+    }
+
     /// Lengths must already be validated as equal.
     pub(crate) fn process(
         &mut self,
