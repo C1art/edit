@@ -179,13 +179,21 @@ impl Editor {
                 }
             }
             Ok(Event::Finished { media, warning }) => {
-                let phase = std::mem::replace(&mut take.phase, Phase::Opening);
+                let at = match take.phase {
+                    Phase::Saving { at } | Phase::Recording { at, .. } => Some(at),
+                    _ => None,
+                };
                 let track = take.track;
+                // Stopping paused the program already, and it may have been played since;
+                // a take that ended by itself, as when the microphone is unplugged, pauses it.
+                if matches!(take.phase, Phase::Saving { .. }) {
+                    take.phase = Phase::Opening;
+                }
                 self.end_take();
                 if let Some(warning) = warning {
                     self.notice(warning);
                 }
-                if let Phase::Saving { at } | Phase::Recording { at, .. } = phase {
+                if let Some(at) = at {
                     self.place_take(media, at, track);
                 }
             }
