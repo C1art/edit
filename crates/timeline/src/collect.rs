@@ -116,7 +116,10 @@ impl Copier<'_> {
         if let Some(to) = self.targets.get(from) {
             return to.clone();
         }
-        if from.parent() == Some(self.folder) {
+        if from
+            .parent()
+            .is_some_and(|parent| same_folder(parent, self.folder))
+        {
             return from.to_path_buf();
         }
         let stem = from.file_stem().unwrap_or_default().to_string_lossy();
@@ -146,6 +149,12 @@ impl Copier<'_> {
         });
         to
     }
+}
+
+/// Windows ignores case in paths, so a file picked as `D:\Out\a.mp4` is already in
+/// a folder chosen as `d:\out`.
+fn same_folder(a: &Path, b: &Path) -> bool {
+    a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase()
 }
 
 #[cfg(test)]

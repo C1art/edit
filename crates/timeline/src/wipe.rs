@@ -76,8 +76,10 @@ impl Border {
         color: Rgb::WHITE,
     };
 
+    /// Only the default is left out of a saved file, so a colour picked before the
+    /// width is kept.
     pub(crate) fn is_none(&self) -> bool {
-        self.width == 0
+        *self == Self::NONE
     }
 }
 
