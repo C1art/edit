@@ -80,3 +80,45 @@ fn captions_in_range_become_titles_on_a_new_top_track_and_leave_the_others() {
     assert_eq!(timeline.sequence().captions.items.len(), 3);
     assert_eq!(timeline.sequence().video.len(), 2);
 }
+
+#[test]
+fn captions_ripple_with_an_insert_and_a_ripple_deleted_span() {
+    let (mut timeline, source) = timeline();
+    timeline
+        .apply(place(source, 0, 0, 400, PlaceMode::Overwrite))
+        .unwrap();
+    let items = vec![
+        caption(0, 100, "before"),
+        caption(150, 250, "across"),
+        caption(300, 400, "after"),
+    ];
+    timeline
+        .apply(SetCaptions {
+            captions: Captions {
+                items,
+                ..Captions::default()
+            },
+        })
+        .unwrap();
+    timeline
+        .apply(place(source, 200, 0, 50, PlaceMode::Insert))
+        .unwrap();
+    let spans = |timeline: &Timeline| -> Vec<_> {
+        let captions = &timeline.sequence().captions.items;
+        captions.iter().map(|c| (c.start.0, c.end.0)).collect()
+    };
+    assert_eq!(
+        spans(&timeline),
+        [(0, 100), (150, 200), (250, 300), (350, 450)]
+    );
+    // The insert split the first clip at 200; deleting its 0 to 200 takes the first two.
+    timeline
+        .apply(RippleDelete {
+            clips: vec![clip_on(&timeline, V1, 0)],
+        })
+        .unwrap();
+    assert_eq!(spans(&timeline), [(50, 100), (150, 250)]);
+    assert!(timeline.undo());
+    assert!(timeline.undo());
+    assert_eq!(spans(&timeline), [(0, 100), (150, 250), (300, 400)]);
+}

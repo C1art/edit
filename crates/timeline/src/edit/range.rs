@@ -177,6 +177,6 @@ pub(super) fn extract(
         ops::clear(sequence, track, range.clone(), &mut relinks)?;
     }
     ops::shift(sequence, &tracks, range.end, range.start - range.end, &[]);
-    ops::ripple_markers(sequence, range.end, range.start - range.end);
+    ops::ripple_markers_and_captions(sequence, range.end, range.start - range.end);
     Ok(())
 }

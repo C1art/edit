@@ -159,7 +159,7 @@ impl Edit for PasteClips {
                 ops::split(sequence, &tracks, self.at, &mut relinks);
                 let duration = self.clipboard.duration();
                 ops::shift(sequence, &tracks, self.at, duration, &[]);
-                ops::ripple_markers(sequence, self.at, duration);
+                ops::ripple_markers_and_captions(sequence, self.at, duration);
             }
             PasteMode::OntoFreeTracks => {
                 for &(track, _) in &placed {

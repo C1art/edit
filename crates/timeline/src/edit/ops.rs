@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 use std::sync::Arc;
 
-use crate::{Clip, ClipId, LinkId, Sequence, Ticks, TimelineError, TrackRef};
+use crate::{Caption, Clip, ClipId, LinkId, Sequence, Ticks, TimelineError, TrackRef};
 
 /// Splitting linked clips gives every right-hand piece of the same link a shared new
 /// link, so the pieces on either side of a cut stay linked to each other.
@@ -152,10 +152,15 @@ pub(crate) fn shift(
     }
 }
 
-/// Moves the sequence markers at or after `from` by `delta` when they ripple, dropping
-/// those in the span a negative `delta` closes up.
-pub(crate) fn ripple_markers(sequence: &mut Sequence, from: Ticks, delta: Ticks) {
-    if !sequence.ripple_markers || delta == Ticks::ZERO {
+/// Moves what is timed against the sequence at or after `from` by `delta`: markers when
+/// they ripple, and always the captions, which say what the rippled pictures show. A
+/// negative `delta` closes up the span before `from`, dropping what lies inside it.
+pub(crate) fn ripple_markers_and_captions(sequence: &mut Sequence, from: Ticks, delta: Ticks) {
+    if delta == Ticks::ZERO {
+        return;
+    }
+    ripple_captions(&mut sequence.captions.items, from, delta);
+    if !sequence.ripple_markers {
         return;
     }
     let closed = from + delta.min(Ticks::ZERO)..from;
@@ -165,6 +170,41 @@ pub(crate) fn ripple_markers(sequence: &mut Sequence, from: Ticks, delta: Ticks)
         .iter_mut()
         .filter(|marker| marker.at >= from)
         .for_each(|marker| marker.at = marker.at + delta);
+}
+
+/// A caption spanning an insert is cut there, as clips on the rippled tracks are, so
+/// both halves keep its text either side of the new material.
+fn ripple_captions(captions: &mut Vec<Caption>, from: Ticks, delta: Ticks) {
+    let closed_start = from + delta.min(Ticks::ZERO);
+    // A caption ending where material is inserted stays put; one starting there moves.
+    let moved = |time: Ticks, after: bool| match time {
+        time if time > from || (after && time == from) => time + delta,
+        time => time.min(closed_start),
+    };
+    let mut rippled = Vec::with_capacity(captions.len());
+    for caption in captions.drain(..) {
+        if delta > Ticks::ZERO && caption.start < from && from < caption.end {
+            rippled.push(Caption {
+                end: from,
+                ..caption.clone()
+            });
+            rippled.push(Caption {
+                start: from + delta,
+                end: caption.end + delta,
+                ..caption
+            });
+            continue;
+        }
+        let (start, end) = (moved(caption.start, true), moved(caption.end, false));
+        if start < end {
+            rippled.push(Caption {
+                start,
+                end,
+                ..caption
+            });
+        }
+    }
+    *captions = rippled;
 }
 
 /// Inserts `clip` in start order without checking for overlaps.

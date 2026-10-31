@@ -76,7 +76,7 @@ impl Edit for PlaceClip {
                 let tracks = ops::rippled_tracks(sequence, &targets);
                 ops::split(sequence, &tracks, self.at, &mut relinks);
                 ops::shift(sequence, &tracks, self.at, duration, &[]);
-                ops::ripple_markers(sequence, self.at, duration);
+                ops::ripple_markers_and_captions(sequence, self.at, duration);
             }
             PlaceMode::Overwrite => {
                 for &track in &targets {
