@@ -7,12 +7,12 @@ use timeline::{ExportOverlays, Sequence, Ticks};
 
 use crate::editor::Editor;
 use crate::export_captions::{self, CaptionExport};
-use crate::export_format::ExportFormat;
+use crate::export_format::{ExportFormat, Format};
 use crate::export_overlays;
 use crate::export_progress::{self, ExportProgress};
 use crate::export_settings::settings;
 use crate::export_summary::{length_text, span_length, summary};
-use crate::export_target::{Holder, Target, TargetCheck};
+use crate::export_target::{first_frame, Holder, Target, TargetCheck};
 use crate::path_dialog::FolderUse;
 use crate::project_files::{quoted_name, PathPurpose};
 use crate::same_path::same_path;
@@ -99,14 +99,28 @@ impl ExportDialog {
     }
 
     pub fn output(&self) -> PathBuf {
-        PathBuf::from(self.path.trim().trim_matches('"'))
+        let typed = PathBuf::from(self.path.trim().trim_matches('"'));
+        let bare = typed
+            .extension()
+            .is_none_or(|extension| extension.is_empty());
+        // FFmpeg picks the container by the extension, so a bare name gets the format's.
+        if bare && typed.file_name().is_some() {
+            typed.with_extension(self.format.format.extension())
+        } else {
+            typed
+        }
     }
 
     /// What exporting would replace, after swapping a suggested file that's taken for a
     /// free one.
     pub(crate) fn target(&mut self, queued: impl FnOnce() -> Vec<PathBuf>) -> Option<Target> {
         let output = self.output();
-        let target = self.target.as_mut()?.target(&output, queued)?.clone();
+        let frames = matches!(self.format.format, Format::Stills(_));
+        let target = self
+            .target
+            .as_mut()?
+            .target(&output, frames, queued)?
+            .clone();
         match target {
             Target::Taken {
                 free: Some(free), ..
@@ -314,6 +328,10 @@ pub(crate) fn prepare(
     };
     let sidecar =
         (captions == CaptionExport::Sidecar).then(|| export_captions::sidecar_path(&path));
+    // The project may read an image sequence the export would write over.
+    let frames = matches!(dialog.format.format, Format::Stills(_))
+        .then(|| media::sequence_pattern(&first_frame(&path)))
+        .flatten();
     let problem = if path.as_os_str().is_empty() {
         Some("Choose an output file first".to_owned())
     } else if path.is_relative() {
@@ -321,6 +339,7 @@ pub(crate) fn prepare(
         Some("Give the output file's whole path, with its folder".to_owned())
     } else if let Some(taken) = std::iter::once(&path)
         .chain(&sidecar)
+        .chain(&frames)
         .find(|path| editor.is_project_file(path))
     {
         Some(format!("{} is part of the project", quoted_name(taken)))

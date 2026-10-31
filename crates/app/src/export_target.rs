@@ -30,6 +30,7 @@ pub(crate) enum Target {
 struct Request {
     path: PathBuf,
     queued: Vec<PathBuf>,
+    frames: bool,
 }
 
 /// Looks on a thread of its own whether an export would replace something, as the
@@ -53,7 +54,10 @@ impl TargetCheck {
                     if let Some(newest) = asked.try_iter().last() {
                         request = newest;
                     }
-                    let target = check(&request.path, &request.queued, Path::is_file);
+                    let on_disk = |path: &Path| {
+                        path.is_file() || request.frames && first_frame(path).is_file()
+                    };
+                    let target = check(&request.path, &request.queued, on_disk);
                     if answer.send((request.path, target)).is_err() {
                         break;
                     }
@@ -68,10 +72,12 @@ impl TargetCheck {
         })
     }
 
-    /// What exporting to `path` would replace, or `None` until the thread has looked.
+    /// What exporting to `path`, or to numbered `frames` beside it, would replace, or
+    /// `None` until the thread has looked.
     pub(crate) fn target(
         &mut self,
         path: &Path,
+        frames: bool,
         queued: impl FnOnce() -> Vec<PathBuf>,
     ) -> Option<&Target> {
         if let Some(newest) = self.answers.try_iter().last() {
@@ -85,6 +91,7 @@ impl TargetCheck {
             let request = Request {
                 path: path.to_owned(),
                 queued: queued(),
+                frames,
             };
             // The thread only stops when this is dropped.
             let _ = self.requests.send(request);
@@ -114,6 +121,14 @@ fn check(path: &Path, queued: &[PathBuf], on_disk: impl Fn(&Path) -> bool) -> Ta
             free: numbered(path).find(|candidate| holder(candidate).is_none()),
         },
     }
+}
+
+/// The first image an image-sequence export to `path` writes. Exports of 10,000 frames
+/// or more number with more digits, but one that long over an old one is rare.
+pub(crate) fn first_frame(path: &Path) -> PathBuf {
+    let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+    let extension = path.extension().unwrap_or_default().to_string_lossy();
+    path.with_file_name(format!("{stem}0000.{extension}"))
 }
 
 /// "Name 2.mp4", "Name 3.mp4" and on beside `path`, counting on from a number its
