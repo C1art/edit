@@ -57,6 +57,28 @@ impl FrameRate {
         i64::try_from(frame).unwrap_or(if frame < 0 { i64::MIN } else { i64::MAX })
     }
 
+    /// The whole frames nearest `length`. Where a frame isn't a whole number of ticks,
+    /// as at 23.976 fps, frames alternate a tick longer and shorter, so a length of one
+    /// frame may be a tick short of it and `frame_at` would count none.
+    pub fn frames_in(self, length: Ticks, timebase: Timebase) -> i64 {
+        let numerator = i128::from(length.0) * i128::from(timebase.num()) * i128::from(self.num);
+        let denominator = i128::from(timebase.den()) * i128::from(self.den);
+        let whole = (numerator.abs() + denominator / 2) / denominator;
+        let frames = if numerator < 0 { -whole } else { whole };
+        i64::try_from(frames).unwrap_or(if frames < 0 { i64::MIN } else { i64::MAX })
+    }
+
+    /// `frames_in` as a length that starts and ends on frame starts.
+    pub fn whole_frames(self, length: Ticks, timebase: Timebase) -> Ticks {
+        let frames = self.frames_in(length, timebase);
+        let whole = self.frame_start(frames.saturating_abs(), timebase);
+        if frames < 0 {
+            Ticks::ZERO - whole
+        } else {
+            whole
+        }
+    }
+
     pub fn frame_start(self, frame: i64, timebase: Timebase) -> Ticks {
         let exact = Ticks(frame).rescale(self.frame_timebase(), timebase);
         // Rounding to nearest can land one tick past the frame's true start, which
@@ -244,6 +266,17 @@ mod tests {
         Some(rate) => rate,
         None => unreachable!(),
     };
+
+    #[test]
+    fn lengths_count_the_nearest_whole_frames() {
+        let film = FrameRate::new(24000, 1001).unwrap();
+        let ticks = Timebase::new(1, 90_000).unwrap();
+        let counts = [3753, 3754, -3753, -3754, 7507, 7508, 1876].map(Ticks);
+        assert_eq!(
+            counts.map(|length| film.frames_in(length, ticks)),
+            [1, 1, -1, -1, 2, 2, 0]
+        );
+    }
 
     #[test]
     fn file_timecode_labels_read_drop_frame_only_with_semicolons() {

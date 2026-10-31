@@ -51,7 +51,7 @@ pub(super) fn sync_badge(
     let frames = sequence
         .format
         .frame_rate
-        .frame_at(Ticks(offset.0.abs()), sequence.timebase);
+        .frames_in(Ticks(offset.0.abs()), sequence.timebase);
     let sign = if offset > Ticks::ZERO { '+' } else { '-' };
     let painter = painter.with_clip_rect(rect.shrink(1.0));
     let text = painter.layout_no_wrap(

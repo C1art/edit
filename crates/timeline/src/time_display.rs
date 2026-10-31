@@ -40,12 +40,15 @@ impl Sequence {
     /// A length as the sequence shows times; see `timecode_at` for a position.
     pub fn timecode(&self, length: Ticks) -> Timecode {
         let rate = self.format.frame_rate;
+        let length = rate.whole_frames(length, self.timebase);
         Timecode::shown(length, self.timebase, rate, self.time_display)
     }
 
     /// A position as the sequence shows times, counted from its start time.
     pub fn timecode_at(&self, position: Ticks) -> Timecode {
-        self.timecode(position + self.start_time)
+        // The frame showing at a position, so not rounded as a length is.
+        let (rate, display) = (self.format.frame_rate, self.time_display);
+        Timecode::shown(position + self.start_time, self.timebase, rate, display)
     }
 }
 

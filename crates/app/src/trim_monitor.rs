@@ -74,7 +74,7 @@ impl TrimMonitor {
                 Color32::WHITE,
             );
         }
-        let frames = rate.frame_at(view.delta, timebase);
+        let frames = rate.frames_in(view.delta, timebase);
         painter.text(
             area.center_top() + Vec2::new(0.0, 6.0),
             Align2::CENTER_TOP,
