@@ -34,7 +34,7 @@ pub enum PathPurpose {
     /// The picture for the Image Matte Key at an index in a clip's effects.
     ImageMatte(ClipId, usize),
     /// A picture to add as the top layer of a graphic.
-    GraphicPicture(SourceId),
+    GraphicPicture(ClipId),
 }
 
 pub struct PathPrompt {

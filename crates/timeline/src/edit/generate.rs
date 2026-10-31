@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
+use super::ops::clip_mut;
 use crate::generator::seconds;
 use crate::{
-    Edit, Generator, MediaItem, Sequence, SourceId, Ticks, TimelineError, GENERATED_SECONDS,
-    LEADER_SECONDS,
+    ClipId, Edit, Generator, MediaItem, Sequence, SourceId, Ticks, TimelineError,
+    GENERATED_SECONDS, LEADER_SECONDS,
 };
 
 /// Adds generated media to the pool, drawn at the sequence's frame size.
@@ -91,30 +92,86 @@ pub struct SetGenerator {
 
 impl Edit for SetGenerator {
     fn name(&self) -> &'static str {
-        match self.generator {
-            Generator::ColorMatte { .. } => "Change Matte Color",
-            Generator::Title(_) => "Edit Title",
-            Generator::AdjustmentLayer => "Change Adjustment Layer",
-            Generator::Shape(_) => "Edit Shape",
-            Generator::BarsAndTone | Generator::BlackVideo | Generator::TransparentVideo => {
-                "Change Synthetic Media"
-            }
-            Generator::CountingLeader(_) => "Change Counting Leader",
-            Generator::Graphic(_) => "Edit Graphic",
-        }
+        generator_edit_name(&self.generator)
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
-        let item = Arc::make_mut(&mut sequence.media)
-            .iter_mut()
-            .find(|item| item.id == self.source)
-            .ok_or(TimelineError::MediaNotFound(self.source))?;
-        match &mut item.generator {
-            Some(generator) if *generator != self.generator => {
-                *generator = self.generator.clone();
-                Ok(())
-            }
-            _ => Err(TimelineError::NothingToEdit),
+        set_generator(sequence, self.source, &self.generator)
+    }
+}
+
+/// Replaces what one clip of generated media draws. A clip sharing its media with other
+/// clips, as the halves of a cut title do, is first given a copy of its own, so editing
+/// one piece leaves the rest as they were.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetClipGenerator {
+    pub clip: ClipId,
+    pub generator: Generator,
+}
+
+impl Edit for SetClipGenerator {
+    fn name(&self) -> &'static str {
+        generator_edit_name(&self.generator)
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let source = clip_mut(sequence, self.clip)?.source;
+        let index = sequence
+            .media
+            .iter()
+            .position(|item| item.id == source)
+            .ok_or(TimelineError::MediaNotFound(source))?;
+        let unchanged = sequence.media[index].generator.as_ref() == Some(&self.generator);
+        if unchanged || sequence.media[index].generator.is_none() {
+            return Err(TimelineError::NothingToEdit);
         }
+        let shared = sequence
+            .all_clips()
+            .filter(|clip| clip.source == source || clip.unrendered == Some(source))
+            .nth(1)
+            .is_some();
+        let source = if shared {
+            let mut copy = sequence.media[index].clone();
+            copy.id = SourceId(sequence.ids.next());
+            let id = copy.id;
+            Arc::make_mut(&mut sequence.media).insert(index + 1, copy);
+            clip_mut(sequence, self.clip)?.source = id;
+            id
+        } else {
+            source
+        };
+        set_generator(sequence, source, &self.generator)
+    }
+}
+
+fn generator_edit_name(generator: &Generator) -> &'static str {
+    match generator {
+        Generator::ColorMatte { .. } => "Change Matte Color",
+        Generator::Title(_) => "Edit Title",
+        Generator::AdjustmentLayer => "Change Adjustment Layer",
+        Generator::Shape(_) => "Edit Shape",
+        Generator::BarsAndTone | Generator::BlackVideo | Generator::TransparentVideo => {
+            "Change Synthetic Media"
+        }
+        Generator::CountingLeader(_) => "Change Counting Leader",
+        Generator::Graphic(_) => "Edit Graphic",
+    }
+}
+
+fn set_generator(
+    sequence: &mut Sequence,
+    source: SourceId,
+    generator: &Generator,
+) -> Result<(), TimelineError> {
+    let item = Arc::make_mut(&mut sequence.media)
+        .iter_mut()
+        .find(|item| item.id == source)
+        .ok_or(TimelineError::MediaNotFound(source))?;
+    match &mut item.generator {
+        Some(current) if current != generator => {
+            *current = generator.clone();
+            Ok(())
+        }
+        _ => Err(TimelineError::NothingToEdit),
     }
 }

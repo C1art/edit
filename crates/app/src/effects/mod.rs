@@ -55,8 +55,8 @@ use std::path::PathBuf;
 use egui::RichText;
 use timeline::{
     preview, AudioEffect, Clip, ClipId, Edit, Generator, Look, Param, Sequence,
-    SetClipAudioEffects, SetClipLook, SetClipPan, SetClipVolume, SetGenerator, SourceId, TrackKind,
-    TrackRef, VideoEffect,
+    SetClipAudioEffects, SetClipGenerator, SetClipLook, SetClipPan, SetClipVolume, SourceId,
+    TrackKind, TrackRef, VideoEffect,
 };
 
 use crate::editor::Editor;
@@ -206,7 +206,7 @@ fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip, section
         .as_mut()
         .and_then(|generator| generated::controls(ui, generator, frame));
     if graphic_layers::take_picture_request(ui) {
-        editor.prompt_path(PathPurpose::GraphicPicture(clip.source));
+        editor.prompt_path(PathPurpose::GraphicPicture(clip.id));
     }
     if let Some(request) = text_style_row::take_request(ui.ctx()) {
         editor.text_style_request(request);
@@ -258,15 +258,15 @@ fn picture_controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip, section
         editor.prompt_path(PathPurpose::ImageMatte(clip.id, effect));
     }
     if let (Some(generator), Some(change)) = (drawing, drawing_change) {
-        let edit = SetGenerator {
-            source: clip.source,
+        let edit = SetClipGenerator {
+            clip: clip.id,
             generator,
         };
         editor.effects.drawing = None;
         match change {
             Change::Live => {
                 show_live(editor, &edit);
-                editor.effects.drawing = Some((edit.source, edit.generator));
+                editor.effects.drawing = Some((clip.source, edit.generator));
             }
             Change::Commit => {
                 editor.apply(edit);
@@ -444,15 +444,15 @@ pub(crate) fn set_image_matte(editor: &mut Editor, clip: ClipId, effect: usize, 
     });
 }
 
-pub(crate) fn add_graphic_picture(editor: &mut Editor, source: SourceId, path: PathBuf) {
-    let generator = editor
-        .timeline
-        .sequence()
-        .media_item(source)
+pub(crate) fn add_graphic_picture(editor: &mut Editor, clip: ClipId, path: PathBuf) {
+    let sequence = editor.timeline.sequence();
+    let generator = sequence
+        .clip(clip)
+        .and_then(|(_, clip)| sequence.media_item(clip.source))
         .and_then(|item| item.generator.as_ref())
         .and_then(|generator| graphic_layers::with_picture(generator, path));
     if let Some(generator) = generator {
-        editor.apply(SetGenerator { source, generator });
+        editor.apply(SetClipGenerator { clip, generator });
     }
 }
 

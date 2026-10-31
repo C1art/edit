@@ -1,7 +1,7 @@
 use egui::{Align2, Color32, CursorIcon, FontId, Pos2, Rect, Sense, Stroke, Vec2};
 use timeline::{
-    Generator, Graphic, GraphicContent, GraphicLayer, SetClipLook, SetGenerator, Shape, ShapeKind,
-    Ticks, Title,
+    Generator, Graphic, GraphicContent, GraphicLayer, SetClipGenerator, SetClipLook, Shape,
+    ShapeKind, Ticks, Title,
 };
 
 use crate::editor::Editor;
@@ -257,9 +257,8 @@ fn add_layer_to_selected(editor: &mut Editor, generator: &Generator, at: Vec2) -
             ..GraphicLayer::new(content)
         },
     );
-    let source = placed.source;
-    editor.apply(SetGenerator {
-        source,
+    editor.apply(SetClipGenerator {
+        clip: placed.id,
         generator: Generator::Graphic(graphic),
     });
     true

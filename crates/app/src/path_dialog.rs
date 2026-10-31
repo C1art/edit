@@ -111,8 +111,8 @@ pub fn path_dialog(editor: &mut Editor, ctx: &egui::Context) {
         PathPurpose::ImageMatte(clip, effect) => {
             crate::effects::set_image_matte(editor, clip, effect, path);
         }
-        PathPurpose::GraphicPicture(source) => {
-            crate::effects::add_graphic_picture(editor, source, path);
+        PathPurpose::GraphicPicture(clip) => {
+            crate::effects::add_graphic_picture(editor, clip, path);
         }
     }
 }

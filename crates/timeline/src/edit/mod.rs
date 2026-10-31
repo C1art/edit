@@ -65,7 +65,7 @@ pub use cleanup::{ConsolidateDuplicates, RemoveUnused};
 pub use enable::SetClipsEnabled;
 pub use frame_size::{FrameFit, SetToFrameSize};
 pub(crate) use generate::generated_item;
-pub use generate::{AddGenerated, SetGenerator};
+pub use generate::{AddGenerated, SetClipGenerator, SetGenerator};
 pub use group::SetGrouped;
 pub use guide::GuideEdit;
 pub use hold::{AddFrameHold, HoldFrame, InsertFrameHold, SetFrameHold};
