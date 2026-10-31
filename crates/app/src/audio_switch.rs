@@ -208,7 +208,12 @@ impl Editor {
                 self.notices.push(format!("No sound: {error}"));
             }
         }
-        self.audio = output;
+        if let Some(old) = std::mem::replace(&mut self.audio, output) {
+            // Closing a stream waits for its thread, which some drivers hold for a while.
+            let _ = std::thread::Builder::new()
+                .name("audio close".to_owned())
+                .spawn(move || drop(old));
+        }
     }
 }
 
