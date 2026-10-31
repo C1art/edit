@@ -443,13 +443,13 @@ impl Player {
                 self.video_ended = true;
             }
             Event::Warning(error) => self.warnings.push(error),
-            Event::Levels(levels) => {
+            Event::Levels { generation, levels } if generation == self.generation => {
                 if self.pending_levels.len() == LEVELS_QUEUE {
                     self.pending_levels.pop_front();
                 }
                 self.pending_levels.push_back(levels);
             }
-            Event::Seeked { .. } | Event::Ended { .. } => {}
+            Event::Seeked { .. } | Event::Ended { .. } | Event::Levels { .. } => {}
         }
     }
 

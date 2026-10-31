@@ -40,7 +40,7 @@ pub(crate) enum Event {
     /// A problem with one piece of media; playback carries on without it.
     Warning(PlaybackError),
     /// Peak levels of one mixed chunk, for meters.
-    Levels(Levels),
+    Levels { generation: u64, levels: Levels },
 }
 
 /// The net effect of a burst of commands.

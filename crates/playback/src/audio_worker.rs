@@ -51,6 +51,7 @@ pub(crate) fn spawn(
                 snippet: None,
                 stretch: None,
                 stretched: Vec::new(),
+                generation: 0,
             }
             .run();
         })
@@ -77,6 +78,9 @@ struct AudioWorker {
     /// Off normal speed, what keeps the faster or slower sound at its pitch.
     stretch: Option<MasterStretch>,
     stretched: Vec<f32>,
+    /// The seek the audio being made follows, so the player can drop meter readings
+    /// made before a later one.
+    generation: u64,
 }
 
 impl AudioWorker {
@@ -132,6 +136,7 @@ impl AudioWorker {
             self.writer.clear();
         }
         let frames_played = self.writer.frames_played();
+        self.generation = seek.generation;
         self.position = seek
             .position
             .rescale(self.sequence.timebase, self.mix.rate())
@@ -169,7 +174,10 @@ impl AudioWorker {
         for warning in warnings {
             let _ = self.events.send(Event::Warning(warning));
         }
-        let _ = self.events.send(Event::Levels(levels));
+        let _ = self.events.send(Event::Levels {
+            generation: self.generation,
+            levels,
+        });
         self.out.clear();
         let channels = self.writer.format().channels;
         match &mut self.stretch {
