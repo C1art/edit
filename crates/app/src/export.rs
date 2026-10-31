@@ -15,6 +15,7 @@ use crate::export_summary::{length_text, span_length, summary};
 use crate::export_target::{Holder, Target, TargetCheck};
 use crate::path_dialog::FolderUse;
 use crate::project_files::{quoted_name, PathPurpose};
+use crate::same_path::same_path;
 
 struct Running {
     job: ExportJob,
@@ -319,6 +320,20 @@ pub(crate) fn prepare(
         .find(|path| editor.is_project_file(path))
     {
         Some(format!("{} is part of the project", quoted_name(taken)))
+    } else if let Some(queued) = editor
+        .export_queue
+        .pending_paths()
+        .into_iter()
+        .find(|queued| {
+            std::iter::once(&path)
+                .chain(&sidecar)
+                .any(|ours| same_path(queued, ours))
+        })
+    {
+        Some(format!(
+            "A queued export already writes {}",
+            quoted_name(&queued)
+        ))
     } else if sequence.duration() == timeline::Ticks::ZERO {
         Some(EMPTY_SEQUENCE.to_owned())
     } else if has_video && !(width.is_multiple_of(2) && height.is_multiple_of(2)) {
