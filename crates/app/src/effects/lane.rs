@@ -2,6 +2,7 @@ use egui::{Color32, Id, Rect, Sense, Stroke};
 use timeline::{Clip, FrameRate, Interpolation, Param, Sequence, Ticks, Timebase};
 
 use super::key_icons::paint_key;
+use super::key_time::frame_within;
 use super::look::{Output, ANIMATED};
 use crate::mixer::Change;
 
@@ -225,9 +226,8 @@ impl Lane {
     fn source_at(&self, rect: Rect, x: f32) -> Ticks {
         let fraction = f64::from(((x - rect.left()) / rect.width()).clamp(0.0, 1.0));
         let offset = Ticks((self.clip.duration.0 as f64 * fraction).round() as i64);
-        let frame = self.rate.frame_at(self.clip.start + offset, self.timebase);
-        let position = self.rate.frame_start(frame, self.timebase);
-        let clip = &self.clip;
-        clip.source_time(position.clamp(clip.start, clip.end() - Ticks(1)))
+        let frames = (self.rate, self.timebase);
+        let position = frame_within(&self.clip, self.clip.start + offset, frames);
+        self.clip.source_time(position)
     }
 }

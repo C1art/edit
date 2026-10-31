@@ -61,7 +61,7 @@ fn keyed_frames(clip: &Clip, frames: (FrameRate, Timebase)) -> impl Iterator<Ite
 }
 
 fn key_time_at(clip: &Clip, playhead: Ticks, frames: (FrameRate, Timebase)) -> Ticks {
-    let playhead = playhead.clamp(clip.start, clip.end() - Ticks(1));
+    let playhead = frame_within(clip, playhead, frames);
     let time = clip.source_time(playhead);
     let mut keys = clip
         .look
@@ -76,6 +76,18 @@ fn key_time_at(clip: &Clip, playhead: Ticks, frames: (FrameRate, Timebase)) -> T
     keys.filter(|key| shown.contains(key))
         .min_by_key(|&key| (key - time).0.abs())
         .unwrap_or(time)
+}
+
+/// The start of the clip's frame at `position`, so the playhead past the clip's end
+/// keys its last frame where it starts and not a tick before the end.
+pub(super) fn frame_within(
+    clip: &Clip,
+    position: Ticks,
+    (rate, timebase): (FrameRate, Timebase),
+) -> Ticks {
+    let position = position.clamp(clip.start, clip.end() - Ticks(1));
+    rate.frame_start(rate.frame_at(position, timebase), timebase)
+        .max(clip.start)
 }
 
 /// The start of the frame showing source time `key`, within the clip.

@@ -108,7 +108,9 @@ impl Comparison {
 
     fn set_time(&mut self, sequence: &Sequence, time: Ticks) {
         let (rate, timebase) = (sequence.format.frame_rate, sequence.timebase);
-        let time = time.clamp(Ticks::ZERO, sequence.duration());
+        // The sequence's end shows nothing; its last frame starts a frame before.
+        let last = (sequence.duration() - Ticks(1)).max(Ticks::ZERO);
+        let time = time.clamp(Ticks::ZERO, last);
         self.time = rate.frame_start(rate.frame_at(time, timebase), timebase);
     }
 
