@@ -39,11 +39,12 @@ impl Edit for IntoSync {
         match self.method {
             SyncMethod::Move => clip.start = clip.start - offset,
             SyncMethod::Slip => {
-                let delta = source_in - clip.source_in;
+                let old_in = clip.source_in;
                 clip.source_in = source_in;
                 if let Some(remap) = &mut clip.remap {
-                    remap.shift(Ticks::ZERO, delta);
+                    remap.shift(Ticks::ZERO, source_in - old_in);
                 }
+                clip.carry_pins_through_slip(old_in);
             }
         }
         // Moving may carry it past a neighbour on its track.

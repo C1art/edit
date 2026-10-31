@@ -153,10 +153,12 @@ impl Edit for Slip {
             return Err(TimelineError::NothingToEdit);
         }
         for (_, clip) in ops::clips_mut(sequence, &ids) {
+            let old_in = clip.source_in;
             clip.source_in = clip.source_in + self.delta;
             if let Some(remap) = &mut clip.remap {
                 remap.shift(Ticks::ZERO, self.delta);
             }
+            clip.carry_pins_through_slip(old_in);
         }
         Ok(())
     }

@@ -60,6 +60,25 @@ impl Clip {
             carry(param, |time| time >= first, by);
         }
     }
+
+    /// Moves both ends' keyframes with a slip that moved the in and out points alike
+    /// from `old_in`, each keyframe once even where the intro and outro overlap.
+    pub(crate) fn carry_pins_through_slip(&mut self, old_in: Ticks) {
+        let by = self.source_in - old_in;
+        if self.pinned.is_unpinned() || by == Ticks::ZERO || !self.pins_follow_trims() {
+            return;
+        }
+        let old_out = self.source_out() - by;
+        let intro_end = (self.pinned.intro > Ticks::ZERO).then(|| old_in + self.pinned.intro);
+        let outro_start = (self.pinned.outro > Ticks::ZERO).then(|| old_out - self.pinned.outro);
+        let pinned = |time: Ticks| {
+            intro_end.is_some_and(|end| time <= end)
+                || outro_start.is_some_and(|start| time >= start)
+        };
+        for param in self.params_mut() {
+            carry(param, pinned, by);
+        }
+    }
 }
 
 /// Moves the keyframes `pinned` picks by `by`; where one lands on a keyframe left in
@@ -113,6 +132,22 @@ mod tests {
         assert_eq!(key_times(&clip), [50, 150, 500, 1_100, 1_200]);
         clip.trim_tail(Ticks(-700));
         assert_eq!(key_times(&clip), [50, 150, 400, 500]);
+    }
+
+    #[test]
+    fn slipping_carries_both_pinned_ends_and_leaves_the_middle() {
+        let mut sequence =
+            crate::Sequence::with_default_tracks(crate::Timebase::HZ_90K, Default::default());
+        let clip = keyed_clip();
+        let id = clip.id;
+        sequence.video[0].clips.push(clip.into());
+        let slip = crate::Slip {
+            clips: vec![id],
+            delta: Ticks(200),
+        };
+        slip.edit(&mut sequence).unwrap();
+        let slipped = &sequence.video[0].clips[0];
+        assert_eq!(key_times(slipped), [200, 300, 500, 1_100, 1_200]);
     }
 
     #[test]
