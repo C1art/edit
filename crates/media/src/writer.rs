@@ -3,10 +3,9 @@ use std::time::{Duration, Instant};
 
 use timeline::{Chapter, FrameRate, Timebase};
 
+use crate::audio_encoding::AudioEncoding;
 use crate::ffi::{Converter, Encoder, Frame, OutputContext, Packet, Received};
 use crate::{Acceleration, AudioCodec, MediaError, RateControl, VideoCodec};
-
-const STEREO: usize = 2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct VideoSettings {
@@ -50,22 +49,12 @@ struct VideoStream {
     converting: Duration,
 }
 
-struct AudioStream {
-    encoder: Encoder,
-    index: usize,
-    frame: Frame,
-    frame_size: usize,
-    /// Interleaved stereo waiting to fill a whole encoder frame.
-    pending: Vec<f32>,
-    next_pts: i64,
-}
-
 /// Encodes pictures and sound into a file, in the container the file extension names. Call [`MediaWriter::finish`] to make the file playable.
 pub struct MediaWriter {
     output: OutputContext,
     packet: Packet,
     video: Option<VideoStream>,
-    audio: Option<AudioStream>,
+    audio: Option<AudioEncoding>,
 }
 
 impl MediaWriter {
@@ -110,18 +99,8 @@ impl MediaWriter {
         let audio = audio
             .map(|settings| {
                 let encoder = Encoder::audio(&settings, global_header)?;
-                // Encoders taking any size get about 20 ms per frame.
-                let frame_size = encoder
-                    .frame_size()
-                    .unwrap_or(settings.sample_rate as usize / 50);
-                Ok::<_, MediaError>(AudioStream {
-                    index: output.add_stream(&encoder)?,
-                    frame: encoder.audio_frame(settings.sample_rate, frame_size)?,
-                    encoder,
-                    frame_size,
-                    pending: Vec::with_capacity(frame_size * STEREO * 2),
-                    next_pts: 0,
-                })
+                let index = output.add_stream(&encoder)?;
+                AudioEncoding::start(encoder, index, settings.sample_rate)
             })
             .transpose()?;
         output.set_chapters(chapters, timebase)?;
@@ -151,7 +130,8 @@ impl MediaWriter {
         stream.frame.set_timing(stream.next_pts, 1);
         stream.next_pts += 1;
         stream.encoder.send_frame(Some(&stream.frame))?;
-        drain(&mut self.output, &mut self.packet, stream.as_target())
+        drain(&mut self.output, &mut self.packet, stream)?;
+        self.mux_audio()
     }
 
     /// How long turning pictures into the encoder's pixel format has taken so far, the
@@ -164,102 +144,54 @@ impl MediaWriter {
 
     /// Encodes the next stretch of interleaved stereo at the export sample rate.
     pub fn write_audio(&mut self, stereo: &[f32]) -> Result<(), MediaError> {
-        let stream = self
-            .audio
+        self.audio
             .as_mut()
-            .ok_or(MediaError::InvalidSettings("export has no audio"))?;
-        stream.pending.extend_from_slice(stereo);
-        let whole = stream.frame_size * STEREO;
-        let mut offset = 0;
-        while stream.pending.len() - offset >= whole {
-            encode_audio(
-                &mut self.output,
-                &mut self.packet,
-                stream,
-                offset..offset + whole,
-            )?;
-            offset += whole;
+            .ok_or(MediaError::InvalidSettings("export has no audio"))?
+            .send(stereo.to_vec())?;
+        self.mux_audio()
+    }
+
+    /// Muxes the sound encoded so far.
+    fn mux_audio(&mut self) -> Result<(), MediaError> {
+        let Some(audio) = &self.audio else {
+            return Ok(());
+        };
+        for packet in audio.ready() {
+            self.output
+                .write_packet(&mut packet?, audio.index, audio.timebase)?;
         }
-        stream.pending.drain(..offset);
         Ok(())
     }
 
     /// Flushes the encoders and writes the container's index.
     pub fn finish(mut self) -> Result<(), MediaError> {
-        if let Some(stream) = &mut self.audio {
-            if !stream.pending.is_empty() {
-                let all = 0..stream.pending.len();
-                encode_audio(&mut self.output, &mut self.packet, stream, all)?;
-                stream.pending.clear();
+        if let Some(audio) = &mut self.audio {
+            let (index, timebase) = (audio.index, audio.timebase);
+            for packet in audio.finish() {
+                self.output.write_packet(&mut packet?, index, timebase)?;
             }
-            stream.encoder.send_frame(None)?;
-            drain(&mut self.output, &mut self.packet, stream.as_target())?;
         }
         if let Some(stream) = &mut self.video {
             stream.encoder.send_frame(None)?;
-            drain(&mut self.output, &mut self.packet, stream.as_target())?;
+            drain(&mut self.output, &mut self.packet, stream)?;
         }
         self.output.write_trailer()
     }
 }
 
-fn encode_audio(
-    output: &mut OutputContext,
-    packet: &mut Packet,
-    stream: &mut AudioStream,
-    range: std::ops::Range<usize>,
-) -> Result<(), MediaError> {
-    let samples = &stream.pending[range];
-    stream.frame.fill_stereo(samples, stream.frame_size)?;
-    let frames = (samples.len() / STEREO) as i64;
-    stream.frame.set_timing(stream.next_pts, frames);
-    stream.next_pts += frames;
-    stream.encoder.send_frame(Some(&stream.frame))?;
-    drain(output, packet, stream.as_target())
-}
-
-/// An encoder and where its packets go.
-struct Target<'a> {
-    encoder: &'a mut Encoder,
-    index: usize,
-    /// Duration to give packets the encoder left without one, in its timebase.
-    packet_duration: Option<i64>,
-}
-
-impl VideoStream {
-    fn as_target(&mut self) -> Target<'_> {
-        Target {
-            encoder: &mut self.encoder,
-            index: self.index,
-            // Every video packet is one frame, one tick of the encoder timebase.
-            packet_duration: Some(1),
-        }
-    }
-}
-
-impl AudioStream {
-    fn as_target(&mut self) -> Target<'_> {
-        Target {
-            encoder: &mut self.encoder,
-            index: self.index,
-            packet_duration: None,
-        }
-    }
-}
-
-/// Moves every packet the encoder has ready into the muxer.
+/// Moves every picture packet the encoder has ready into the muxer.
 fn drain(
     output: &mut OutputContext,
     packet: &mut Packet,
-    target: Target<'_>,
+    stream: &mut VideoStream,
 ) -> Result<(), MediaError> {
+    let timebase = stream.encoder.packet_timebase();
     loop {
-        match target.encoder.receive_packet(packet)? {
+        match stream.encoder.receive_packet(packet)? {
             Received::Frame => {
-                if let Some(duration) = target.packet_duration {
-                    packet.fill_duration(duration);
-                }
-                output.write_packet(packet, target.index, target.encoder)?;
+                // Every video packet is one frame, one tick of the encoder timebase.
+                packet.fill_duration(1);
+                output.write_packet(packet, stream.index, timebase)?;
             }
             Received::NeedsInput | Received::Drained => return Ok(()),
         }
@@ -329,7 +261,7 @@ mod tests {
                     writer.write_video(&picture).unwrap();
                 }
                 if audio.is_some() {
-                    writer.write_audio(&[0.25; 1920 * STEREO]).unwrap();
+                    writer.write_audio(&[0.25; 1920 * 2]).unwrap();
                 }
             }
             writer.finish().unwrap();

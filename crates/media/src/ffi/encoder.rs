@@ -198,6 +198,10 @@ impl Encoder {
         self.raw().time_base
     }
 
+    pub(crate) fn packet_timebase(&self) -> PacketTimebase {
+        PacketTimebase(self.timebase())
+    }
+
     pub(super) fn pixel_format(&self) -> sys::AVPixelFormat {
         self.raw().pix_fmt
     }
@@ -245,3 +249,8 @@ fn find(name: Option<&CStr>, id: sys::AVCodecID) -> *const sys::AVCodec {
 pub(super) fn number(value: impl ToString) -> Result<CString, MediaError> {
     CString::new(value.to_string()).map_err(|_| MediaError::InvalidSettings("option out of range"))
 }
+
+/// The timebase an encoder stamps its packets in, so they can be muxed where the
+/// encoder isn't.
+#[derive(Clone, Copy)]
+pub(crate) struct PacketTimebase(pub(super) sys::AVRational);

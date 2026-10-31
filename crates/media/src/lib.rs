@@ -1,3 +1,4 @@
+mod audio_encoding;
 mod block_match;
 mod channel_map;
 mod codec;

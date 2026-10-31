@@ -6,7 +6,7 @@ use ffmpeg_sys_next as sys;
 use timeline::{Chapter, Timebase};
 
 use super::error::check;
-use super::{Encoder, Packet};
+use super::{Encoder, Packet, PacketTimebase};
 use crate::MediaError;
 
 /// A muxer writing one file, with the container picked from the file extension.
@@ -133,9 +133,9 @@ impl OutputContext {
         &mut self,
         packet: &mut Packet,
         stream_index: usize,
-        encoder: &Encoder,
+        timebase: PacketTimebase,
     ) -> Result<(), MediaError> {
-        let timebase = encoder.timebase();
+        let timebase = timebase.0;
         let stream = self.stream_timebase(stream_index)?;
         let index = i32::try_from(stream_index).map_err(|_| MediaError::InvalidFrame)?;
         let raw = packet.as_mut_ptr();

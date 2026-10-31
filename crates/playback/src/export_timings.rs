@@ -25,6 +25,8 @@ pub struct WriterTimings {
     pub convert: Duration,
     /// Encoding and muxing pictures, past converting them.
     pub encode_video: Duration,
+    /// Handing sound to its encoding thread and muxing what comes back; the encoding
+    /// itself runs alongside.
     pub encode_audio: Duration,
     pub stills: Duration,
 }
@@ -46,7 +48,7 @@ impl fmt::Display for ExportTimings {
             f,
             "{} frames in {:.1} s ({:.1} fps). Render loop: waiting on decode {:.0}%, composite {:.0}%, \
              GPU wait {:.0}%, audio mix {:.0}%, waiting on writer {:.0}%. Writer: convert \
-             {:.0}%, encode video {:.0}%, encode audio {:.0}%",
+             {:.0}%, encode video {:.0}%, audio {:.0}%",
             self.frames,
             seconds,
             self.frames as f64 / seconds,

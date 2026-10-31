@@ -26,7 +26,7 @@ pub use d3d12::GpuSurface;
 #[cfg(windows)]
 pub(crate) use d3d12::Hold;
 pub(crate) use decoder::{Decoder, Received};
-pub(crate) use encoder::Encoder;
+pub(crate) use encoder::{Encoder, PacketTimebase};
 pub(crate) use format::InputContext;
 pub(crate) use frame::Frame;
 #[cfg(windows)]

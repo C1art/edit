@@ -25,6 +25,8 @@ pub enum MediaError {
     },
     /// The caller stopped the work before it finished.
     Cancelled,
+    /// A worker thread couldn't be started, or stopped without saying why.
+    Thread(String),
 }
 
 impl fmt::Display for MediaError {
@@ -55,6 +57,7 @@ impl fmt::Display for MediaError {
                 write!(f, "cannot write {}: {reason}", path.display())
             }
             Self::Cancelled => f.write_str("cancelled"),
+            Self::Thread(reason) => write!(f, "worker thread failed: {reason}"),
         }
     }
 }
