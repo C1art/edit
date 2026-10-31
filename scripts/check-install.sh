@@ -3,7 +3,7 @@
 # broken installer or update stops the release. Called by release.sh:
 #   check-install.sh fresh <Setup.exe> <version>
 #   check-install.sh update <earlier Setup.exe> <update_probe.exe> <version> [feed folder]
-set -euo pipefail
+set -Eeuo pipefail
 # The run's annotations are what can be read back without its logs, so failures go there.
 trap 'echo "::error::${BASH_SOURCE[0]}:${LINENO}: ${BASH_COMMAND} failed"' ERR
 export MSYS_NO_PATHCONV=1

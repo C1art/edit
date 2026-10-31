@@ -2,7 +2,7 @@
 # Builds Cledit, packs its installer with Velopack into ./Releases, and publishes it as a
 # GitHub release when PUBLISH is "true". Runs on the Windows runner from the release workflow;
 # it lives here rather than in the workflow so packaging changes need no workflow edit.
-set -euo pipefail
+set -Eeuo pipefail
 # The run's annotations are what can be read back without its logs, so failures go there.
 trap 'echo "::error::${BASH_SOURCE[0]}:${LINENO}: ${BASH_COMMAND} failed"' ERR
 
