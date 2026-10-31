@@ -113,7 +113,8 @@ impl Encoder {
         let codec = find(name, id);
         let encoder = Self::alloc(codec)?;
         // SAFETY: the context was just allocated and is exclusively owned; its default
-        // channel layout owns no memory, so overwriting it leaks nothing.
+        // channel layout owns no memory, so overwriting it leaks nothing. `codec` is
+        // valid, as allocating for it succeeded.
         unsafe {
             let raw = &mut *encoder.context.as_ptr();
             raw.sample_rate = i32::try_from(settings.sample_rate).map_err(|_| invalid())?;
@@ -121,12 +122,13 @@ impl Encoder {
                 num: 1,
                 den: raw.sample_rate,
             };
-            raw.sample_fmt = match settings.codec {
+            let preferred = match settings.codec {
                 AudioCodec::Aac | AudioCodec::Mp3 => sys::AVSampleFormat::AV_SAMPLE_FMT_FLTP,
                 AudioCodec::Opus => sys::AVSampleFormat::AV_SAMPLE_FMT_FLT,
                 AudioCodec::Flac | AudioCodec::Pcm16 => sys::AVSampleFormat::AV_SAMPLE_FMT_S16,
                 AudioCodec::Pcm24 => sys::AVSampleFormat::AV_SAMPLE_FMT_S32,
             };
+            raw.sample_fmt = sample_format(codec, preferred);
             if settings.codec.is_lossy() {
                 raw.bit_rate = i64::from(settings.bits_per_second);
             }
@@ -237,6 +239,41 @@ impl Drop for Encoder {
 }
 
 /// The encoder called `name`, or FFmpeg's default for `id` when it lacks that one.
+/// `preferred` when `codec` takes it, as the encoder named first does; otherwise one
+/// the frames can be filled in that a stand-in, such as Windows' own MP3 encoder when
+/// LAME is missing, takes.
+///
+/// # Safety
+/// `codec` must be a valid codec description.
+unsafe fn sample_format(
+    codec: *const sys::AVCodec,
+    preferred: sys::AVSampleFormat,
+) -> sys::AVSampleFormat {
+    use sys::AVSampleFormat::*;
+    let mut supported = Vec::new();
+    // SAFETY: per the caller, `codec` is valid; its format list, when there is one, is
+    // static and ends at AV_SAMPLE_FMT_NONE.
+    unsafe {
+        let mut format = (*codec).sample_fmts;
+        while !format.is_null() && *format != AV_SAMPLE_FMT_NONE {
+            supported.push(*format);
+            format = format.add(1);
+        }
+    }
+    if supported.is_empty() || supported.contains(&preferred) {
+        return preferred;
+    }
+    [
+        AV_SAMPLE_FMT_FLTP,
+        AV_SAMPLE_FMT_FLT,
+        AV_SAMPLE_FMT_S32,
+        AV_SAMPLE_FMT_S16,
+    ]
+    .into_iter()
+    .find(|format| supported.contains(format))
+    .unwrap_or(preferred)
+}
+
 fn find(name: Option<&CStr>, id: sys::AVCodecID) -> *const sys::AVCodec {
     // SAFETY: plain lookups returning static codec descriptions or null.
     unsafe {
