@@ -25,7 +25,7 @@ impl Edit for RemixClip {
         let (track, clip) = sequence
             .clip(self.clip)
             .ok_or(TimelineError::ClipNotFound(self.clip))?;
-        let plain = clip.speed.is_normal() && !clip.reverse && clip.remap.is_none();
+        let plain = clip.rate().is_normal() && !clip.reverse && clip.remap.is_none();
         let pieces_fit = self.pieces.iter().all(|piece| piece.start < piece.end);
         if track.kind != TrackKind::Audio || !plain || self.pieces.is_empty() || !pieces_fit {
             return Err(TimelineError::NothingToEdit);

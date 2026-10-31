@@ -45,15 +45,19 @@ impl Edit for CreateMulticam {
         for (item, start) in cameras {
             let start = start - earliest.unwrap_or(Ticks::ZERO);
             let link = item.has_audio.then(|| LinkId(sequence.ids.next()));
+            let conform = item.conform();
             let mut camera = || {
-                let mut clip = Clip::new(
-                    ClipId(sequence.ids.next()),
-                    item.id,
-                    start,
-                    item.duration,
-                    Ticks::ZERO,
-                );
-                clip.link = link;
+                let clip = Clip {
+                    conform,
+                    link,
+                    ..Clip::new(
+                        ClipId(sequence.ids.next()),
+                        item.id,
+                        start,
+                        conform.sequence_span(item.duration),
+                        Ticks::ZERO,
+                    )
+                };
                 Track {
                     clips: vec![clip.into()],
                     ..Track::default()

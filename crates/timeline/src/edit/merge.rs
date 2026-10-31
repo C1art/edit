@@ -45,14 +45,18 @@ impl Edit for MergeClips {
         let link = LinkId(sequence.ids.next());
         let mut nest = Nest::default();
         for (index, (item, start)) in items.iter().enumerate() {
-            let mut clip = Clip::new(
-                ClipId(sequence.ids.next()),
-                item.id,
-                *start - earliest.unwrap_or(Ticks::ZERO),
-                item.duration,
-                Ticks::ZERO,
-            );
-            clip.link = Some(link);
+            let conform = item.conform();
+            let mut clip = Clip {
+                conform,
+                link: Some(link),
+                ..Clip::new(
+                    ClipId(sequence.ids.next()),
+                    item.id,
+                    *start - earliest.unwrap_or(Ticks::ZERO),
+                    conform.sequence_span(item.duration),
+                    Ticks::ZERO,
+                )
+            };
             let track = |clip: Clip| Track {
                 clips: vec![clip.into()],
                 ..Track::default()

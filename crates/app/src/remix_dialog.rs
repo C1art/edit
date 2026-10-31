@@ -36,7 +36,7 @@ impl Editor {
             .find(|(track, _)| track.kind == TrackKind::Audio)
             .map(|(_, clip)| clip);
         match music {
-            Some(clip) if clip.speed.is_normal() && !clip.reverse && clip.remap.is_none() => {
+            Some(clip) if clip.rate().is_normal() && !clip.reverse && clip.remap.is_none() => {
                 self.remix_dialog = Some(RemixDialog {
                     clip: clip.id,
                     target: clip.duration,
