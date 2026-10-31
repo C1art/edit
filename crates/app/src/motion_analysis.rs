@@ -124,6 +124,7 @@ impl Editor {
         let sequence = self.timeline.sequence();
         // The clip or its stabilizer may have gone while the footage was read.
         let Some((_, found)) = sequence.clip(clip) else {
+            self.notice("Motion analysis finished, but its clip isn't in the open sequence");
             return;
         };
         let mut look = found.look.clone();

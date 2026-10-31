@@ -166,6 +166,7 @@ impl Editor {
             self.mask_track_job = None;
             self.effects.drop_look_preview();
             self.show_program(self.timeline.sequence().clone());
+            self.notice("The tracked mask isn't in the open sequence; nothing was kept");
             return;
         };
         self.mask_track_job = None;
