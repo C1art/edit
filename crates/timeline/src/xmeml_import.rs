@@ -7,7 +7,7 @@ use crate::xmeml_markers::XmlMarker;
 use crate::xml::{self, Element};
 use crate::{
     Alignment, Clip, ClipId, Edit, FrameRate, Gain, LinkId, MediaItem, Nest, Sequence, SourceId,
-    Ticks, TimelineError, Track, Transition, TransitionKind, VideoFormat,
+    Speed, Ticks, TimelineError, Track, Transition, TransitionKind, VideoFormat,
 };
 use resolve::{resolve, Item};
 
@@ -50,6 +50,15 @@ struct XmlClip {
     transition_in: Option<(TransitionKind, i64, Alignment)>,
     transition_out: Option<(TransitionKind, i64)>,
     markers: Vec<XmlMarker>,
+    retime: Option<Retime>,
+}
+
+/// A Time Remap filter's constant speed, which writers put on the picture only; `None`
+/// speed is a frame hold.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Retime {
+    speed: Option<Speed>,
+    reverse: bool,
 }
 
 /// Reads the first sequence in a Final Cut Pro XML document.
@@ -171,6 +180,7 @@ impl Reader {
             transition_in: None,
             transition_out: None,
             markers: XmlMarker::all(element),
+            retime: retime(element),
         };
         let out = element.number_at(&["out"]).unwrap_or(-1);
         Ok(Some(Item::Clip { clip, out }))
@@ -237,6 +247,17 @@ impl Edit for ImportXmeml {
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
         let timebase = sequence.timebase;
         let ticks = |rate: FrameRate, frames: i64| rate.frame_start(frames, timebase);
+        // The sound linked to a retimed picture plays at its speed.
+        let link_retimes: HashMap<usize, Retime> = self
+            .video
+            .iter()
+            .flatten()
+            .filter_map(|clip| Some((clip.link?, clip.retime?)))
+            .collect();
+        let retime_of = |clip: &XmlClip| {
+            clip.retime
+                .or_else(|| link_retimes.get(&clip.link?).copied())
+        };
         let used = |file: usize| {
             self.video
                 .iter()
@@ -244,7 +265,10 @@ impl Edit for ImportXmeml {
                 .flatten()
                 .filter(|clip| clip.file == file)
                 .map(|clip| {
-                    ticks(clip.rate, clip.source_in) + ticks(self.rate, clip.end - clip.start)
+                    let length = ticks(self.rate, clip.end - clip.start);
+                    let speed = retime_of(clip).map_or(Some(Speed::NORMAL), |retime| retime.speed);
+                    ticks(clip.rate, clip.source_in)
+                        + speed.map_or(Ticks(1), |speed| speed.source_span(length))
                 })
                 .max()
                 .unwrap_or(Ticks(1))
@@ -320,6 +344,13 @@ impl Edit for ImportXmeml {
                             ticks(self.rate, xml.end) - start,
                             ticks(xml.rate, xml.source_in),
                         );
+                        if let Some(retime) = retime_of(xml) {
+                            match retime.speed {
+                                Some(speed) => clip.speed = speed,
+                                None => clip.hold = true,
+                            }
+                            clip.reverse = retime.reverse;
+                        }
                         clip.disabled = xml.disabled;
                         clip.gain = xml.gain;
                         clip.link = xml.link.map(|index| links[index]);
@@ -408,6 +439,30 @@ fn rate_of(element: &Element) -> Option<FrameRate> {
         Some("TRUE") => FrameRate::new(timebase * 1000, 1001),
         _ => FrameRate::new(timebase, 1),
     }
+}
+
+fn retime(clip: &Element) -> Option<Retime> {
+    let effect = clip
+        .children("filter")
+        .filter_map(|filter| filter.child("effect"))
+        .find(|effect| effect.text_at(&["effectid"]) == Some("timeremap"))?;
+    let parameter = |id: &str| {
+        effect
+            .children("parameter")
+            .find(|parameter| parameter.text_at(&["parameterid"]) == Some(id))
+            .and_then(|parameter| parameter.text_at(&["value"]))
+            .map(str::trim)
+    };
+    let percent: f64 = parameter("speed")?.parse().ok()?;
+    // In hundredths of a percent, within the 1% to 10,000% clips allow.
+    let points = (percent.abs() * 100.0).round();
+    let speed = (points > 0.0)
+        .then(|| Speed::from_basis_points(points.clamp(100.0, 1_000_000.0) as u64))
+        .flatten();
+    Some(Retime {
+        speed,
+        reverse: parameter("reverse") == Some("TRUE") || percent < 0.0,
+    })
 }
 
 /// The Audio Levels filter's amplitude as gain.

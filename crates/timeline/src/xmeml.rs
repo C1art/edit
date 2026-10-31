@@ -10,8 +10,8 @@ use std::sync::Arc;
 
 use crate::file_url::path_url;
 use crate::{
-    cut_window, Alignment, Clip, ClipId, FrameRate, Marker, MediaItem, Sequence, Ticks, Track,
-    TrackKind, Transition,
+    cut_window, Alignment, Clip, ClipId, FrameRate, Marker, MediaItem, Sequence, Speed, Ticks,
+    Track, TrackKind, Transition,
 };
 
 /// `sequence` as an xmeml document, named `title`.
@@ -210,10 +210,20 @@ impl Writer<'_> {
             self.leaf("trackindex", 1);
             self.close("sourcetrack");
         }
+        // Other applications know neither interpreted rates nor speed ramps, so a clip
+        // plays at its overall rate: interpreted, and a ramp's average.
+        let rate = match &clip.remap {
+            Some(_) => Speed::stretch(
+                Ticks((clip.source_out() - clip.source_in).0.abs()),
+                clip.duration,
+            ),
+            None => Some(clip.rate()),
+        };
         let speed = if clip.hold {
             Some(0.0)
         } else {
-            (!clip.speed.is_normal() || clip.reverse).then(|| clip.speed.percent())
+            rate.filter(|rate| !rate.is_normal() || clip.reverse)
+                .map(Speed::percent)
         };
         if let Some(percent) = speed.filter(|_| kind == TrackKind::Video) {
             self.open("filter");

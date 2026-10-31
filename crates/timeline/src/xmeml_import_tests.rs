@@ -59,6 +59,11 @@ fn an_exported_sequence_reads_back_as_a_nest_of_the_same_cut() {
     let dissolve = Transition::new(TransitionKind::DipToBlack, Ticks(10));
     Arc::make_mut(&mut sequence.video[0].clips[1]).transition_in = Some(dissolve);
     Arc::make_mut(&mut sequence.audio[0].clips[0]).gain = Gain::from_db(-6.0);
+    for track in [&mut sequence.video[0], &mut sequence.audio[0]] {
+        let clip = Arc::make_mut(&mut track.clips[1]);
+        clip.speed = Speed::from_basis_points(20_000).unwrap();
+        clip.reverse = true;
+    }
     let marker = |at, duration, name: &str| Marker {
         id: MarkerId(900),
         at: Ticks(at),
@@ -83,6 +88,10 @@ fn an_exported_sequence_reads_back_as_a_nest_of_the_same_cut() {
     assert_eq!(spans(&nest.audio[0]), spans(&sequence.audio[0]));
     assert_eq!(nest.video[0].clips[1].transition_in, Some(dissolve));
     assert_eq!(nest.audio[0].clips[0].gain, Gain::from_db(-6.0));
+    for track in [&nest.video[0], &nest.audio[0]] {
+        let clip = &track.clips[1];
+        assert_eq!((clip.speed.percent(), clip.reverse), (200.0, true));
+    }
     assert_eq!(
         times(&nest.markers),
         [(20, 0, "Point", "a < b"), (60, 15, "Span", "a < b")]
