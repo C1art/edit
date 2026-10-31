@@ -78,6 +78,9 @@ fn hundredths_field(
         .custom_formatter(|hundredths, _| format!("{:.2} s", hundredths / 100.0))
         .custom_parser(|text| {
             let seconds = text.trim().trim_end_matches('s').trim();
-            seconds.parse::<f64>().ok().map(|seconds| seconds * 100.0)
+            seconds
+                .parse::<f64>()
+                .ok()
+                .map(|seconds| (seconds * 100.0).round())
         })
 }

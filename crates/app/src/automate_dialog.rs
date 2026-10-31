@@ -103,19 +103,22 @@ impl Editor {
         let audio_transition = settings
             .audio_transition
             .then(|| defaults.transition(sequence, TrackKind::Audio));
-        self.match_format(first);
         let mode = match settings.placement {
             Placement::InOrder => settings.mode,
             Placement::AtMarkers => PlaceMode::Overwrite,
         };
-        if self.apply(AutomateToSequence {
-            pieces,
-            video_track,
-            audio_track,
-            mode,
-            video_transition,
-            audio_transition,
-        }) {
+        let placed = self.as_one_edit(|editor| {
+            editor.match_format(first);
+            editor.apply(AutomateToSequence {
+                pieces,
+                video_track,
+                audio_track,
+                mode,
+                video_transition,
+                audio_transition,
+            })
+        });
+        if placed {
             self.seek_program(end);
         }
     }
