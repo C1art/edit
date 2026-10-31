@@ -8,6 +8,8 @@ pub enum PlaybackError {
     WorkerSpawn(std::io::Error),
     /// An export's decoding thread ended before its last frame.
     DecodeStopped,
+    /// An export's thread panicked, with the panic's message.
+    Crashed(String),
     /// A finished export could not be moved over the file at its path.
     Replace {
         path: std::path::PathBuf,
@@ -32,6 +34,7 @@ impl fmt::Display for PlaybackError {
             Self::Audio(error) => write!(f, "audio: {error}"),
             Self::WorkerSpawn(error) => write!(f, "cannot start decode thread: {error}"),
             Self::DecodeStopped => write!(f, "decoding stopped before the last frame"),
+            Self::Crashed(message) => write!(f, "the export stopped unexpectedly: {message}"),
             Self::Replace { path, error } => {
                 write!(f, "cannot replace {}: {error}", path.display())
             }
@@ -54,7 +57,7 @@ impl std::error::Error for PlaybackError {
             Self::WorkerSpawn(error) => Some(error),
             Self::Replace { error, .. } => Some(error),
             Self::ImageMatte { error, .. } => Some(error),
-            Self::Lut { .. } | Self::DecodeStopped => None,
+            Self::Lut { .. } | Self::DecodeStopped | Self::Crashed(_) => None,
         }
     }
 }

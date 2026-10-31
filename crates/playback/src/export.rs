@@ -145,6 +145,14 @@ impl Drop for ExportJob {
     }
 }
 
+fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
+    panic
+        .downcast_ref::<&str>()
+        .map(|message| (*message).to_owned())
+        .or_else(|| panic.downcast_ref::<String>().cloned())
+        .unwrap_or_else(|| "unknown error".to_owned())
+}
+
 struct Worker {
     sequence: Arc<Sequence>,
     settings: ExportSettings,
@@ -165,7 +173,12 @@ enum Outcome {
 
 impl Worker {
     fn run(mut self) {
-        let event = match self.render().and_then(|outcome| self.keep(outcome)) {
+        // A panic must still end the export, or its dialog waits on it forever.
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.render().and_then(|outcome| self.keep(outcome))
+        }))
+        .unwrap_or_else(|panic| Err(PlaybackError::Crashed(panic_message(panic.as_ref()))));
+        let event = match result {
             Ok(Outcome::Finished) => ExportEvent::Finished,
             Ok(Outcome::Cancelled) => {
                 self.remove_partial();
