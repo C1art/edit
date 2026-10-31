@@ -61,7 +61,7 @@ pub use reader::{MediaReader, Progress};
 pub use region_track::{track_region, RegionTrack, TrackDirection, TrackedFrame};
 pub use scenes::detect_scenes;
 pub use sequence::{
-    sequence_frame, sequence_frames, sequence_pattern, source_exists, source_files,
+    padded_pattern, sequence_frame, sequence_frames, sequence_pattern, source_exists, source_files,
 };
 pub use source_info::{SourceInfo, Streams, VideoInfo};
 pub use still::{write_still, StillFormat};

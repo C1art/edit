@@ -121,6 +121,8 @@ pub(crate) fn probe(
     timebase: Timebase,
     sequence_rate: FrameRate,
 ) -> Result<ImportMedia, MediaError> {
+    let padded = media::padded_pattern(path);
+    let path = padded.as_path();
     let reader = MediaReader::open(path, timebase)?;
     let info = reader.info();
     let first_frame = info
