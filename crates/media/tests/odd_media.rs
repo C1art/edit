@@ -45,6 +45,7 @@ const CASES: &[(&str, Expect)] = &[
         },
     ),
     ("corrupt_bytes.mp4", Expect::Damaged),
+    ("cover_art.mp3", Expect::Sound { seconds: 1.0 }),
     ("empty.mp4", Expect::Refused),
     (
         "gray16.png",
@@ -267,6 +268,9 @@ fn check(path: &Path, expect: Expect) -> Vec<String> {
         // AAC and AC-3 pad their last frame.
         if !(length - 0.001..=length + 0.05).contains(&heard) {
             problems.push(format!("{heard:.4} s of sound, expected {length}"));
+        }
+        if info.video.is_some() || !decoded.pictures.is_empty() {
+            problems.push("has a picture".into());
         }
     }
     if !matches!(expect, Expect::Damaged) {

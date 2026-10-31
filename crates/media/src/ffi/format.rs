@@ -87,7 +87,29 @@ impl InputContext {
         let index = unsafe {
             sys::av_find_best_stream(self.0.as_ptr(), media_type, -1, -1, ptr::null_mut(), 0)
         };
-        usize::try_from(index).ok()
+        let best = usize::try_from(index).ok()?;
+        if kind != StreamKind::Video || !self.is_cover_art(best) {
+            return Some(best);
+        }
+        // Music files carry their album art as a one-picture video stream; taken as the
+        // picture, a song would import as a still clip instead of sound.
+        (0..self.raw_streams().len()).find(|&index| {
+            self.stream_kind(index) == Some(StreamKind::Video) && !self.is_cover_art(index)
+        })
+    }
+
+    fn is_cover_art(&self, index: usize) -> bool {
+        // SAFETY: `stream` returns valid stream pointers owned by the open context.
+        self.stream(index).is_some_and(|stream| unsafe {
+            (*stream).disposition & sys::AV_DISPOSITION_ATTACHED_PIC != 0
+        })
+    }
+
+    fn stream_kind(&self, index: usize) -> Option<StreamKind> {
+        // SAFETY: `stream` returns valid stream pointers owned by the open context, and
+        // every stream has non-null `codecpar`.
+        let codec_type = unsafe { (*(*self.stream(index)?).codecpar).codec_type };
+        Some(stream_kind(codec_type))
     }
 
     pub(crate) fn stream_timebase(&self, index: usize) -> Option<Timebase> {
