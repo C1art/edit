@@ -37,6 +37,9 @@ impl Edit for MoveClips {
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        if (self.delta, self.video_tracks, self.audio_tracks) == (Ticks::ZERO, 0, 0) {
+            return Err(TimelineError::NothingToEdit);
+        }
         let ids = sequence.with_links(&self.clips);
         let moved = ops::remove(sequence, &ids);
         let Some(earliest) = moved.iter().map(|(_, clip)| clip.start).min() else {
