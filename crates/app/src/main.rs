@@ -1,4 +1,8 @@
+// Released builds open no console window beside the editor's own.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 mod add_tracks_dialog;
+mod app_icon;
 mod attributes_dialog;
 mod audio_meters;
 mod audio_switch;
@@ -152,6 +156,7 @@ fn main() -> eframe::Result {
         viewport: window.open(
             egui::ViewportBuilder::default()
                 .with_title("Edit")
+                .with_icon(app_icon::icon())
                 .with_drag_and_drop(true),
         ),
         centered: window.centered(),
