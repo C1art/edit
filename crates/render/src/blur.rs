@@ -59,39 +59,45 @@ impl BlurTargets {
         }
     }
 
-    /// `sigma` is the red, green, blue and alpha channels', in layer pixels. Returns
-    /// whether the blurred picture is premultiplied: a straight source is, when all its
-    /// channels blur alike, so its colour doesn't bleed in from transparent texels.
+    /// `sigma` is the red, green, blue and alpha channels' across and then down, in
+    /// layer pixels. Returns whether the blurred picture is premultiplied: a straight
+    /// source is, when all its channels blur alike, so its colour doesn't bleed in from
+    /// transparent texels.
     pub(crate) fn write(
         &mut self,
         queue: &wgpu::Queue,
         (width, height): (u32, u32),
-        sigma: [f32; 4],
+        sigma: [[f32; 4]; 2],
         source: Premultiplied,
     ) -> Premultiplied {
-        let premultiply = source == Premultiplied::No && sigma.iter().all(|&each| each == sigma[3]);
-        let across = [1.0 / width as f32, 0.0];
-        let down = [0.0, 1.0 / height as f32];
-        let (spacing, _) = tap_layout(sigma.into_iter().fold(0.0, f32::max));
-        self.prefiltered = spacing > 1.0;
+        let premultiply = source == Premultiplied::No
+            && sigma
+                .iter()
+                .all(|way| way.iter().all(|&each| each == way[3]));
+        let texel = [[1.0 / width as f32, 0.0], [0.0, 1.0 / height as f32]];
+        let spacing = sigma.map(|way| tap_layout(way.into_iter().fold(0.0, f32::max)).0);
+        self.prefiltered = spacing.iter().any(|&spacing| spacing > 1.0);
         let passes = if self.prefiltered {
-            // Gaussians add in variance, so the two together blur by `sigma`.
-            let narrow = sigma.map(|sigma| sigma.min(spacing));
-            let rest = [0, 1, 2, 3].map(|channel| {
-                (sigma[channel].powi(2) - narrow[channel].powi(2))
-                    .max(0.0)
-                    .sqrt()
-            });
-            vec![
-                uniform(across, narrow, premultiply),
-                uniform(across, rest, false),
-                uniform(down, narrow, false),
-                uniform(down, rest, false),
-            ]
+            [0, 1]
+                .into_iter()
+                .flat_map(|way| {
+                    // Gaussians add in variance, so the two together blur by `sigma`.
+                    let narrow = sigma[way].map(|sigma| sigma.min(spacing[way]));
+                    let rest = [0, 1, 2, 3].map(|channel| {
+                        (sigma[way][channel].powi(2) - narrow[channel].powi(2))
+                            .max(0.0)
+                            .sqrt()
+                    });
+                    [
+                        uniform(texel[way], narrow, premultiply && way == 0),
+                        uniform(texel[way], rest, false),
+                    ]
+                })
+                .collect()
         } else {
             vec![
-                uniform(across, sigma, premultiply),
-                uniform(down, sigma, false),
+                uniform(texel[0], sigma[0], premultiply),
+                uniform(texel[1], sigma[1], false),
             ]
         };
         for (buffer, bytes) in self.uniforms.iter().zip(&passes) {

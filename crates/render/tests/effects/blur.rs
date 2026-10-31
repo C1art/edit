@@ -91,3 +91,48 @@ fn a_wide_blur_spreads_a_thin_line_smoothly() -> Result<(), RenderError> {
     );
     Ok(())
 }
+
+#[test]
+#[ignore = "needs a GPU"]
+fn a_squashed_layer_blurs_alike_both_ways_on_the_canvas() -> Result<(), RenderError> {
+    const SIDE: u32 = 64;
+    // A white square in the middle of black.
+    let pixels: Vec<u8> = (0..SIDE * SIDE)
+        .flat_map(|index| {
+            let (x, y) = (index % SIDE, index / SIDE);
+            let inside = (30..34).contains(&x) && (30..34).contains(&y);
+            let shade = if inside { 255 } else { 0 };
+            [shade, shade, shade, 255]
+        })
+        .collect();
+    let mut picture = layer(&pixels, BlendMode::Normal);
+    picture.picture = Picture::Pixels {
+        width: SIDE,
+        height: SIDE,
+        rgba: &pixels,
+        source: None,
+    };
+    picture.look.scale = [1.0, 0.5];
+    picture.look.blur = [3.0; 4];
+    let mut compositor = compositor();
+    compositor.composite((SIDE, SIDE), &[picture])?;
+    let output = compositor.read_output()?;
+    let pixels = output.as_chunks::<4>().0;
+    let lit = |pixel: &[u8; 4]| pixel[0] > 4;
+    let across = pixels[(SIDE * SIDE / 2) as usize..][..SIDE as usize]
+        .iter()
+        .filter(|pixel| lit(pixel))
+        .count();
+    let down = pixels
+        .iter()
+        .skip(SIDE as usize / 2)
+        .step_by(SIDE as usize)
+        .filter(|pixel| lit(pixel))
+        .count();
+    // The square is half as tall as wide once squashed; its blur reaches as far.
+    assert!(
+        across.abs_diff(down + 2) <= 2,
+        "{across} across, {down} down"
+    );
+    Ok(())
+}
