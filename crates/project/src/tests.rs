@@ -246,6 +246,13 @@ fn project_round_trips_through_text() {
 }
 
 #[test]
+fn a_file_saved_with_a_byte_order_mark_still_reads() {
+    let project = sample();
+    let text = format!("\u{feff}{}", project.to_text().unwrap());
+    assert_eq!(ProjectFile::from_text(&text).unwrap(), project);
+}
+
+#[test]
 fn fields_added_later_default_when_missing() {
     let project = ProjectFile::new(Sequence::new(Timebase::HZ_90K, VideoFormat::default()));
     let text = format!(

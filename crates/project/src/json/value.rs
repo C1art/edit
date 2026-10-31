@@ -42,6 +42,8 @@ impl Value {
     }
 
     pub fn parse(text: &str) -> Result<Self, ProjectError> {
+        // Notepad and other Windows editors start a UTF-8 file they save with a BOM.
+        let text = text.strip_prefix('\u{feff}').unwrap_or(text);
         let mut parser = Parser {
             bytes: text.as_bytes(),
             at: 0,
