@@ -39,6 +39,9 @@ impl Edit for ReplaceClip {
             for clip in chosen.map(Arc::make_mut) {
                 clip.source = self.source;
                 clip.source_in = clip.source_in + shift;
+                if let Some(remap) = &mut clip.remap {
+                    remap.shift(Ticks::ZERO, shift);
+                }
                 clip.conform = conform;
                 // They marked moments in the old media.
                 clip.markers.clear();
