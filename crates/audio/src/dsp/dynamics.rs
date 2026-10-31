@@ -3,10 +3,10 @@ use crate::SampleRate;
 
 /// How fast a level follower lets go of a peak, so a gate holds through the dips of
 /// a waveform rather than closing at every zero crossing.
-const LEVEL_HOLD_MS: f32 = 20.0;
+pub(super) const LEVEL_HOLD_MS: f32 = 20.0;
 
 /// The per-sample coefficient of a one-pole smoother with a time constant of `ms`.
-fn smoothing(ms: f32, rate: SampleRate) -> f32 {
+pub(super) fn smoothing(ms: f32, rate: SampleRate) -> f32 {
     (-1.0 / (ms.max(0.01) * 0.001 * rate.0 as f32)).exp()
 }
 

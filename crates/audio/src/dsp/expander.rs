@@ -1,4 +1,5 @@
 use super::db_to_amplitude;
+use super::dynamics::{smoothing, LEVEL_HOLD_MS};
 use crate::SampleRate;
 
 const SILENCE_DB: f32 = -120.0;
@@ -12,11 +13,12 @@ const ATTACK_MS: f32 = 1.0;
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Expander {
     reduction_db: f32,
+    level: f32,
 }
 
 impl Expander {
     pub fn reset(&mut self) {
-        self.reduction_db = 0.0;
+        *self = Self::default();
     }
 
     pub fn process(
@@ -27,13 +29,15 @@ impl Expander {
         rate: SampleRate,
         samples: &mut [f32],
     ) {
-        let attack = (-1.0 / (ATTACK_MS * 0.001 * rate.0 as f32)).exp();
-        let release = (-1.0 / (release_ms.max(0.01) * 0.001 * rate.0 as f32)).exp();
+        let (attack, release) = (smoothing(ATTACK_MS, rate), smoothing(release_ms, rate));
+        let hold = smoothing(LEVEL_HOLD_MS, rate);
         let slope = ratio.max(1.0) - 1.0;
         for frame in samples.as_chunks_mut::<2>().0 {
-            let peak = frame[0].abs().max(frame[1].abs());
-            let level_db = match peak > 0.0 {
-                true => (20.0 * peak.log10()).max(SILENCE_DB),
+            // Held through the dips of the waveform, so a tone under the threshold
+            // isn't turned down at every zero crossing.
+            self.level = frame[0].abs().max(frame[1].abs()).max(self.level * hold);
+            let level_db = match self.level > 0.0 {
+                true => (20.0 * self.level.log10()).max(SILENCE_DB),
                 false => SILENCE_DB,
             };
             let target = ((threshold_db - level_db).max(0.0) * slope).min(MAX_REDUCTION_DB);
@@ -63,5 +67,27 @@ mod tests {
         // 10 dB under becomes 20 dB under.
         assert!((settle(-50.0) - -60.0).abs() < 0.01);
         assert!((settle(-20.0) - -20.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn a_tone_over_the_threshold_passes_whole_through_its_zero_crossings() {
+        let amplitude = db_to_amplitude(-20.0);
+        let tone: Vec<f32> = (0..9_600)
+            .flat_map(|frame| {
+                let sample =
+                    amplitude * (frame as f32 * 100.0 * std::f32::consts::TAU / 48_000.0).sin();
+                [sample, sample]
+            })
+            .collect();
+        let mut samples = tone.clone();
+        Expander::default().process(-30.0, 4.0, 5.0, SampleRate(48_000), &mut samples);
+        // Past the onset, where it rises from silence.
+        let worst = samples
+            .iter()
+            .zip(&tone)
+            .skip(2 * 2_400)
+            .map(|(out, input)| (out - input).abs())
+            .fold(0.0, f32::max);
+        assert!(worst < amplitude * 0.01, "{worst}");
     }
 }
