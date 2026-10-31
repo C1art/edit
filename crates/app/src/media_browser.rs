@@ -110,6 +110,8 @@ impl MediaBrowser {
                 }
                 Found::File(path) | Found::Missing(path, _) => {
                     if self.looking.take_if(|asked| *asked == path).is_some() {
+                        // A shown folder deleted since is asked about again only when due.
+                        self.listed_at = Some(Instant::now());
                         self.error = Some(format!("{} is not a folder", path.display()));
                         self.location = self
                             .folder

@@ -8,6 +8,8 @@ pub struct SpeedPrompt {
     clips: Vec<ClipId>,
     /// The source the clips play, which stays the same whatever the speed.
     source: Ticks,
+    /// The first clip's speed, which the percentage shows until it's changed.
+    shown: Speed,
     percent: f64,
     duration: Ticks,
     /// Whether the duration was typed last, so it's kept exactly instead of rounded
@@ -45,6 +47,7 @@ impl Editor {
         self.speed_prompt = Some(SpeedPrompt {
             clips: self.view.selection.clone(),
             source: clip.source_out() - clip.source_in,
+            shown: clip.speed,
             percent: clip.speed.percent(),
             duration: clip.duration,
             duration_typed: false,
@@ -127,6 +130,11 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     if !apply {
         return;
     }
+    let untouched = !prompt.duration_typed && prompt.percent == prompt.shown.percent();
+    if untouched {
+        keep_speeds(editor, prompt);
+        return;
+    }
     let speed = if prompt.duration_typed {
         Speed::stretch(prompt.source, prompt.duration)
     } else {
@@ -144,6 +152,29 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
         }
         None => editor.notice("Cannot change speed: the duration must be positive"),
     }
+}
+
+/// Applies only reverse and pitch, leaving each clip at its own exact speed.
+fn keep_speeds(editor: &mut Editor, prompt: SpeedPrompt) {
+    let sequence = editor.timeline.sequence();
+    let mut by_speed: Vec<(Speed, Vec<ClipId>)> = Vec::new();
+    for (_, clip) in sequence.clips_of(&prompt.clips) {
+        match by_speed.iter_mut().find(|(speed, _)| *speed == clip.speed) {
+            Some((_, clips)) => clips.push(clip.id),
+            None => by_speed.push((clip.speed, vec![clip.id])),
+        }
+    }
+    editor.as_one_edit(|editor| {
+        for (speed, clips) in by_speed {
+            editor.apply(SetClipSpeed {
+                clips,
+                speed,
+                ripple: prompt.ripple,
+                reverse: prompt.reverse,
+                maintain_pitch: prompt.maintain_pitch,
+            });
+        }
+    });
 }
 
 /// The percentage as typed, kept to hundredths of a percent.

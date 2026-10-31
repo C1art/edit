@@ -10,6 +10,9 @@ use timeline::{Sequence, SourceId};
 /// open are noticed.
 const RECHECK: Duration = Duration::from_secs(5);
 
+/// Which project a request was asked for, as source ids start over in each.
+type Generation = u64;
+
 enum Request {
     Check(Vec<(SourceId, PathBuf)>),
     /// Looks in a folder for files named as the missing ones were.
@@ -27,13 +30,14 @@ enum Reply {
 /// Which media files are missing, found out on a worker thread so the UI never touches
 /// the disk.
 pub struct OfflineMedia {
-    requests: Sender<Request>,
-    replies: Receiver<Reply>,
+    requests: Sender<(Generation, Request)>,
+    replies: Receiver<(Generation, Reply)>,
     missing: HashSet<SourceId>,
     /// The files last asked about, so a changed pool is checked straight away.
     checked: Vec<(SourceId, PathBuf)>,
     checked_at: Option<Instant>,
     checking: bool,
+    generation: Generation,
     /// Missing media the user chose to leave offline, so Link Media stops asking.
     pub(crate) left_offline: HashSet<SourceId>,
 }
@@ -45,7 +49,7 @@ impl OfflineMedia {
         thread::Builder::new()
             .name("offline media".to_owned())
             .spawn(move || {
-                for request in request_rx {
+                for (generation, request) in request_rx {
                     let reply = match request {
                         Request::Check(files) => Reply::Missing(
                             files
@@ -56,7 +60,7 @@ impl OfflineMedia {
                         ),
                         Request::Find { folder, wanted } => Reply::Found(find(&folder, wanted)),
                     };
-                    if reply_tx.send(reply).is_err() {
+                    if reply_tx.send((generation, reply)).is_err() {
                         break;
                     }
                 }
@@ -68,6 +72,7 @@ impl OfflineMedia {
             checked: Vec::new(),
             checked_at: None,
             checking: false,
+            generation: 0,
             left_offline: HashSet::new(),
         })
     }
@@ -101,6 +106,8 @@ impl OfflineMedia {
         self.left_offline.clear();
         self.checked.clear();
         self.checked_at = None;
+        self.checking = false;
+        self.generation += 1;
     }
 
     /// Asks for the other missing files in `folder`, where one of them was just found.
@@ -112,14 +119,18 @@ impl OfflineMedia {
             .map(|item| (item.id, item.path.clone()))
             .collect();
         // The worker answers in order, so a check already asked for can't undo this.
-        let _ = self.requests.send(Request::Find { folder, wanted });
+        let _ = self
+            .requests
+            .send((self.generation, Request::Find { folder, wanted }));
     }
 
     /// Takes the worker's answers and asks again when the pool changed or a while has
     /// passed. Returns files found for missing media.
     pub fn poll(&mut self, sequence: &Sequence) -> Vec<(SourceId, PathBuf)> {
         let mut found = Vec::new();
-        for reply in self.replies.try_iter() {
+        let current = self.generation;
+        let replies = self.replies.try_iter();
+        for (_, reply) in replies.filter(|(generation, _)| *generation == current) {
             match reply {
                 Reply::Missing(missing) => {
                     self.missing = missing;
@@ -146,7 +157,10 @@ impl OfflineMedia {
             .checked_at
             .is_none_or(|checked_at| checked_at.elapsed() >= RECHECK);
         if (stale || files != self.checked)
-            && self.requests.send(Request::Check(files.clone())).is_ok()
+            && self
+                .requests
+                .send((self.generation, Request::Check(files.clone())))
+                .is_ok()
         {
             self.checked = files;
             self.checked_at = Some(Instant::now());
