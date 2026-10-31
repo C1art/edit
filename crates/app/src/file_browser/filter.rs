@@ -63,7 +63,7 @@ pub const FRAME_IMAGES: FileFilter = FileFilter {
 };
 pub const PROJECTS: FileFilter = FileFilter {
     name: "Projects",
-    extensions: &[&[project::EXTENSION]],
+    extensions: &[&[project::EXTENSION, project::OLD_EXTENSION]],
 };
 
 impl FileFilter {

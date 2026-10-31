@@ -89,7 +89,7 @@ pub(crate) fn quoted_name(path: &Path) -> String {
 }
 
 pub fn is_project(path: &Path) -> bool {
-    has_extension(path, project::EXTENSION)
+    has_extension(path, project::EXTENSION) || has_extension(path, project::OLD_EXTENSION)
 }
 
 pub fn is_xml(path: &Path) -> bool {
