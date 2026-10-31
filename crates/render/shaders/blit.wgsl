@@ -367,16 +367,6 @@ fn saturate_color(rgb: vec3<f32>, saturation: f32, vibrance: f32) -> vec3<f32> {
     return max(mix(grey, rgb, amount), vec3<f32>(0.0));
 }
 
-// The sRGB curve exactly, so a LUT sees the code values the source was decoded from.
-fn srgb_encode(rgb: vec3<f32>) -> vec3<f32> {
-    let c = clamp(rgb, vec3<f32>(0.0), vec3<f32>(1.0));
-    return select(1.055 * pow(c, vec3<f32>(1.0 / 2.4)) - 0.055, c * 12.92, c <= vec3<f32>(0.0031308));
-}
-
-fn srgb_decode(c: vec3<f32>) -> vec3<f32> {
-    return select(pow((c + 0.055) / 1.055, vec3<f32>(2.4)), c / 12.92, c <= vec3<f32>(0.04045));
-}
-
 // Texel centers span the cube, so 0 and 1 land exactly on its first and last entries.
 fn lookup(lut: texture_3d<f32>, size: f32, rgb: vec3<f32>) -> vec3<f32> {
     let coord = srgb_encode(rgb) * ((size - 1.0) / size) + vec3<f32>(0.5 / size);
@@ -422,14 +412,6 @@ fn creative_grade(rgb_in: vec3<f32>) -> vec3<f32> {
     return rgb;
 }
 
-fn to_gamma(rgb: vec3<f32>) -> vec3<f32> {
-    return pow(max(rgb, vec3<f32>(0.0)), vec3<f32>(1.0 / GAMMA));
-}
-
-fn to_linear(rgb: vec3<f32>) -> vec3<f32> {
-    return pow(max(rgb, vec3<f32>(0.0)), vec3<f32>(GAMMA));
-}
-
 fn stylize(rgb_in: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
     // #if amounts.z amounts.w tint_black.w
     let amounts = placement.amounts;
@@ -455,25 +437,6 @@ fn stylize(rgb_in: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     return layer_color(in);
-}
-
-// The colors without the alpha some pictures carry them multiplied by: in linear light
-// for composited ones, or on the encoded values for files, which the sampler decoded.
-// A frame drawn under the UI is multiplied again, the way the UI blends: on the values
-// the display target encodes.
-fn unpremultiplied(color: vec4<f32>) -> vec3<f32> {
-    let premultiplied = placement.axis_y_opacity.w;
-    let alpha = max(color.a, 1e-6);
-    if premultiplied > 2.5 {
-        return srgb_decode(srgb_encode(color.rgb / alpha) * color.a);
-    }
-    if premultiplied > 1.5 {
-        return srgb_decode(min(srgb_encode(color.rgb) / alpha, vec3<f32>(1.0)));
-    }
-    if premultiplied > 0.5 {
-        return color.rgb / alpha;
-    }
-    return color.rgb;
 }
 
 fn in_crop(uv: vec2<f32>) -> bool {
