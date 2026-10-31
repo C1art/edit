@@ -3,6 +3,7 @@ use std::sync::Arc;
 use timeline::{Sequence, Ticks};
 
 use crate::previews::PreviewList;
+use crate::shuttle::PlayRate;
 use crate::{Levels, PlaybackError, Resolution};
 
 #[derive(Debug, Clone)]
@@ -25,6 +26,8 @@ pub(crate) struct Seek {
     /// Sounds a short stretch from `position` while paused, rather than readying the
     /// audio to play on from there.
     pub(crate) scrub: bool,
+    /// How fast playing on from `position` goes, always forwards.
+    pub(crate) speed: PlayRate,
 }
 
 #[derive(Debug)]

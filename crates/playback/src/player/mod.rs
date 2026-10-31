@@ -69,6 +69,8 @@ pub struct Player {
     /// The frame last shown while playing, to count the frames skipped after it.
     last_shown: Option<Ticks>,
     dropped: u64,
+    /// How fast playing goes, at the sound's own pitch.
+    speed: PlayRate,
 }
 
 /// Where playback started by [`Player::play_range`] ends.
@@ -151,6 +153,7 @@ impl Player {
             last_shown: None,
             dropped: 0,
             scrubbed: false,
+            speed: PlayRate::NORMAL,
         };
         player.seek(Ticks::ZERO);
         Ok(player)
@@ -232,6 +235,19 @@ impl Player {
         }
     }
 
+    pub fn speed(&self) -> PlayRate {
+        self.speed
+    }
+
+    /// Plays forwards at `speed` from now on, with the sound kept at its pitch.
+    pub fn set_speed(&mut self, speed: PlayRate) {
+        let speed = PlayRate(speed.0.clamp(10, 400));
+        if self.speed != speed {
+            self.speed = speed;
+            self.go_to(self.position(), false);
+        }
+    }
+
     pub fn current_frame(&self) -> Option<&ComposedFrame> {
         self.picker.current()
     }
@@ -292,7 +308,8 @@ impl Player {
         let frames = &self.frames;
         let changed = self.picker.advance(position, || frames.try_recv().ok());
         self.playing_at.set(self.playing.then_some(position));
-        if changed && self.playing {
+        // Off normal speed, skipping frames is how fast playing looks, not a fault.
+        if changed && self.playing && self.speed == PlayRate::NORMAL {
             self.count_dropped();
         }
         self.advance_shuttle();
@@ -381,7 +398,7 @@ impl Player {
         self.video_ended = false;
         let was_playing = self.playing;
         self.clock.stop(self.count());
-        self.clock.jump(position);
+        self.clock.jump(position, i64::from(self.speed.0));
         self.playing = was_playing;
         self.picker.reset(self.generation);
         self.pending_levels.clear();
@@ -390,6 +407,7 @@ impl Player {
             position,
             generation: self.generation,
             scrub,
+            speed: self.speed,
         }));
         // A scrub may have left the device running; audio readied while paused waits.
         if !self.playing && !scrub {

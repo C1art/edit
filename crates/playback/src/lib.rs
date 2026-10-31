@@ -38,6 +38,7 @@ mod layered;
 mod lighting_effects;
 mod lightning;
 mod loudness;
+mod master_stretch;
 mod mixdown;
 mod mono_mix;
 mod morph_cut;

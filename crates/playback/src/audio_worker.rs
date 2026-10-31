@@ -8,7 +8,9 @@ use crossbeam::channel::{Receiver, RecvTimeoutError, Sender};
 use timeline::Sequence;
 
 use crate::command::{coalesce, Coalesced, Command, Event, Seek};
+use crate::master_stretch::MasterStretch;
 use crate::sequence_mix::{SequenceMix, CHUNK_FRAMES};
+use crate::shuttle::PlayRate;
 
 /// How long the worker waits for room in the device queue before trying again.
 const BACKOFF: Duration = Duration::from_millis(4);
@@ -47,6 +49,8 @@ pub(crate) fn spawn(
                 sent: 0,
                 running: false,
                 snippet: None,
+                stretch: None,
+                stretched: Vec::new(),
             }
             .run();
         })
@@ -70,6 +74,9 @@ struct AudioWorker {
     /// While scrubbing, the chunks of the snippet still to mix; otherwise audio is made
     /// to play on.
     snippet: Option<usize>,
+    /// Off normal speed, what keeps the faster or slower sound at its pitch.
+    stretch: Option<MasterStretch>,
+    stretched: Vec<f32>,
 }
 
 impl AudioWorker {
@@ -133,6 +140,8 @@ impl AudioWorker {
         self.sent = 0;
         self.running = true;
         self.mix.reset();
+        self.stretch = (!seek.scrub && seek.speed != PlayRate::NORMAL)
+            .then(|| MasterStretch::new(seek.speed.0.unsigned_abs()));
         self.snippet = seek.scrub.then(|| {
             // A drag outrunning playback skips positions instead of falling behind.
             let behind = self.writer.queued_frames() >= SNIPPET_CHUNKS * CHUNK_FRAMES;
@@ -163,7 +172,14 @@ impl AudioWorker {
         let _ = self.events.send(Event::Levels(levels));
         self.out.clear();
         let channels = self.writer.format().channels;
-        remix_stereo(&self.mix.mix, channels, &mut self.out);
+        match &mut self.stretch {
+            Some(stretch) => {
+                self.stretched.clear();
+                stretch.push(&self.mix.mix, &mut self.stretched);
+                remix_stereo(&self.stretched, channels, &mut self.out);
+            }
+            None => remix_stereo(&self.mix.mix, channels, &mut self.out),
+        }
         if let Some(left) = &mut self.snippet {
             fade(&mut self.out, channels, *left == SNIPPET_CHUNKS, *left == 1);
             *left = left.saturating_sub(1);
