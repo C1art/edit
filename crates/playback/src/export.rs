@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::ops::{ControlFlow, Range};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Instant;
@@ -78,7 +78,8 @@ pub enum ExportEvent {
     Finished,
     /// The partial file has been removed and anything already at the path left alone.
     Cancelled,
-    /// The partial file has been removed and anything already at the path left alone.
+    /// The partial file has been removed and anything already at the path left alone,
+    /// except when only the final rename failed: then the finished file is kept.
     Failed(PlaybackError),
 }
 
@@ -185,7 +186,9 @@ impl Worker {
                 ExportEvent::Cancelled
             }
             Err(error) => {
-                self.remove_partial();
+                if !matches!(error, PlaybackError::Replace { .. }) {
+                    self.remove_partial();
+                }
                 ExportEvent::Failed(error)
             }
         };
@@ -197,6 +200,7 @@ impl Worker {
             project::rename_into_place(partial, &self.settings.path).map_err(|error| {
                 PlaybackError::Replace {
                     path: self.settings.path.clone(),
+                    kept: partial.clone(),
                     error,
                 }
             })?;
@@ -415,10 +419,13 @@ fn still_path(path: &Path, index: i64, count: i64, format: StillFormat) -> PathB
     path.with_file_name(format!("{stem}{index:0digits$}.{}", format.extension()))
 }
 
-/// Beside `path` with the same extension, which picks the container.
+/// Beside `path` with the same extension, which picks the container. Numbered per job,
+/// so a cancelled job still winding down never shares its file with a restart.
 fn partial_path(path: &Path) -> PathBuf {
+    static JOBS: AtomicU64 = AtomicU64::new(0);
+    let job = JOBS.fetch_add(1, Ordering::Relaxed);
     let mut name = path.file_stem().unwrap_or_default().to_owned();
-    name.push(".partial");
+    name.push(format!(".partial{job}"));
     if let Some(extension) = path.extension() {
         name.push(".");
         name.push(extension);

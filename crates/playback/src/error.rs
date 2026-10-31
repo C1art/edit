@@ -11,8 +11,10 @@ pub enum PlaybackError {
     /// An export's thread panicked, with the panic's message.
     Crashed(String),
     /// A finished export could not be moved over the file at its path.
+    /// The finished export stays at `kept`.
     Replace {
         path: std::path::PathBuf,
+        kept: std::path::PathBuf,
         error: std::io::Error,
     },
     Lut {
@@ -35,9 +37,12 @@ impl fmt::Display for PlaybackError {
             Self::WorkerSpawn(error) => write!(f, "cannot start decode thread: {error}"),
             Self::DecodeStopped => write!(f, "decoding stopped before the last frame"),
             Self::Crashed(message) => write!(f, "the export stopped unexpectedly: {message}"),
-            Self::Replace { path, error } => {
-                write!(f, "cannot replace {}: {error}", path.display())
-            }
+            Self::Replace { path, kept, error } => write!(
+                f,
+                "cannot replace {}: {error}; the finished export is kept as {}",
+                path.display(),
+                kept.display()
+            ),
             Self::Lut { path, reason } => {
                 write!(f, "cannot use the LUT {}: {reason}", path.display())
             }
