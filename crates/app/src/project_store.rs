@@ -347,9 +347,9 @@ fn handle(
             StoreEvent::Autosaved(path, result)
         }
         Request::ReadCaptions(path, timebase) => {
-            let result = std::fs::read_to_string(&path)
+            let result = std::fs::read(&path)
                 .map_err(AppError::from)
-                .and_then(|text| Ok(parse_srt(&text, timebase)?))
+                .and_then(|bytes| Ok(parse_srt(&timeline::decode_text(&bytes), timebase)?))
                 .map(captions_from_cues);
             StoreEvent::CaptionsRead(path, result)
         }
@@ -402,9 +402,9 @@ fn handle(
             StoreEvent::SettingHeld
         }
         Request::ReadInterchange(path) => {
-            let result = std::fs::read_to_string(&path)
+            let result = std::fs::read(&path)
                 .map_err(AppError::from)
-                .and_then(|text| Ok(read_xmeml(&text)?))
+                .and_then(|bytes| Ok(read_xmeml(&timeline::decode_text(&bytes))?))
                 .map(Box::new);
             StoreEvent::InterchangeRead(path, result)
         }
