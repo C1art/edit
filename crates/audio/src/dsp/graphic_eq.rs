@@ -50,8 +50,13 @@ impl<const N: usize> GraphicEqualizer<N> {
     pub fn process(&mut self, gains_db: [f32; N], rate: SampleRate, samples: &mut [f32]) {
         let highest = rate.0 as f32 * HIGHEST_FRACTION_OF_RATE;
         let settings = self.bands.iter_mut().zip(self.centers).zip(gains_db);
-        // A flat band leaves the sound as it is, so it is not worth filtering.
-        for ((band, hz), gain_db) in settings.filter(|(_, gain_db)| *gain_db != 0.0) {
+        for ((band, hz), gain_db) in settings {
+            // A flat band leaves the sound as it is, so it is not worth filtering; it
+            // forgets what it last filtered so it doesn't play that back on returning.
+            if gain_db == 0.0 {
+                band.reset();
+                continue;
+            }
             band.set(Coefficients::peaking(
                 rate,
                 hz.min(highest),
@@ -78,5 +83,24 @@ impl Default for GraphicEqualizer20 {
 impl Default for GraphicEqualizer30 {
     fn default() -> Self {
         Self::spaced(GRAPHIC_BANDS_30_HZ, 1.0 / 3.0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_band_brought_back_from_flat_does_not_replay_old_sound() {
+        let rate = SampleRate(48_000);
+        let mut eq = GraphicEqualizer10::default();
+        let mut gains = [0.0; 10];
+        gains[0] = 12.0;
+        let mut loud: Vec<f32> = (0..4_800).map(|i| (i as f32 * 0.004).sin()).collect();
+        eq.process(gains, rate, &mut loud);
+        let mut silence = vec![0.0; 4_800];
+        eq.process([0.0; 10], rate, &mut silence);
+        eq.process(gains, rate, &mut silence);
+        assert!(silence.iter().all(|&sample| sample == 0.0));
     }
 }
