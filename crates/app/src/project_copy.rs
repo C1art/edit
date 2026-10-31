@@ -17,7 +17,11 @@ pub fn copy_path(project: &Path) -> PathBuf {
 impl Editor {
     pub(crate) fn save_copy_to(&mut self, path: PathBuf) {
         let path = with_project_extension(path);
-        if self.project_path.as_ref() == Some(&path) {
+        if self
+            .project_path
+            .as_deref()
+            .is_some_and(|open| crate::same_path::same_path(open, &path))
+        {
             self.save_project();
             return;
         }
