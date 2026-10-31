@@ -192,10 +192,16 @@ fn wording(purpose: PathPurpose) -> (&'static str, &'static str, &'static str) {
 }
 
 fn import(editor: &mut Editor, paths: Vec<PathBuf>, image_sequence: bool) {
+    // Picking several frames of one sequence imports it once.
+    let mut patterns = Vec::new();
     for path in paths {
         if image_sequence {
             match media::sequence_pattern(&path) {
-                Some(pattern) => editor.import(pattern, None),
+                Some(pattern) if patterns.contains(&pattern) => {}
+                Some(pattern) => {
+                    patterns.push(pattern.clone());
+                    editor.import(pattern, None);
+                }
                 None => editor.notice(format!(
                     "{} has no frame number",
                     crate::project_files::quoted_name(&path)
