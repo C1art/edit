@@ -129,3 +129,26 @@ fn narrow_pixels_pillarbox_a_square_picture() {
         .collect();
     assert_eq!(row, [0, 255, 255, 0]);
 }
+
+#[test]
+#[ignore = "needs a GPU"]
+fn inverting_a_blurred_pictures_alpha_keeps_its_colors() {
+    let mut compositor = compositor();
+    let pixels = filled([200, 100, 50, 64]);
+    let mut picture = layer(&pixels, BlendMode::Normal);
+    picture.look.effects.alpha = AlphaInterpretation::Invert;
+    picture.look.blur = [4.0; 4];
+    compositor
+        .composite((common::SIZE, common::SIZE), &[picture])
+        .unwrap();
+    let pixel = compositor.read_output().unwrap();
+    let inverted = [pixel[0], pixel[1], pixel[2]];
+    let straight = interpreted([200, 100, 50, 191], AlphaInterpretation::Straight).unwrap();
+    assert!(
+        inverted
+            .iter()
+            .zip(straight)
+            .all(|(&level, straight)| level.abs_diff(straight) <= 2),
+        "{inverted:?} against {straight:?}"
+    );
+}

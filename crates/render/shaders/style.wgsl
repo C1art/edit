@@ -196,7 +196,8 @@ fn smeared(uv: vec2<f32>) -> vec4<f32> {
 // #endif
 }
 
-// The picture at the warped `uv`, smeared and offset; transparent past its edges.
+// The picture at the warped `uv`, smeared and offset; transparent past its edges. Its
+// alpha is the one stored, which a premultiplied picture's colors must be divided by.
 fn picture_at(uv: vec2<f32>) -> vec4<f32> {
     let offset = placement.style_warp;
     var color = smeared(uv);
@@ -205,14 +206,22 @@ fn picture_at(uv: vec2<f32>) -> vec4<f32> {
         color = mix(color, smeared(fract(uv - offset.xy)), offset.z);
     }
 // #endif
+    return color * picture_inside(uv);
+}
+
+fn picture_inside(uv: vec2<f32>) -> f32 {
+    return f32(all(uv >= vec2<f32>(0.0)) && all(uv <= vec2<f32>(1.0)));
+}
+
+// The stored alpha as Interpret Footage reads it: as is, ignored or inverted.
+fn interpreted_alpha(stored: f32, uv: vec2<f32>) -> f32 {
     let alpha = placement.key_spill.z;
     if alpha > 1.5 {
-        color.a = 1.0 - color.a;
+        return (1.0 - stored) * picture_inside(uv);
     } else if alpha > 0.5 {
-        color.a = 1.0;
+        return picture_inside(uv);
     }
-    let inside = all(uv >= vec2<f32>(0.0)) && all(uv <= vec2<f32>(1.0));
-    return color * f32(inside);
+    return stored;
 }
 
 fn encoded_luma(uv: vec2<f32>) -> f32 {

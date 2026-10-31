@@ -445,8 +445,11 @@ fn in_crop(uv: vec2<f32>) -> bool {
 
 // The picture at the warped `uv`, unpremultiplied and through the input LUT.
 fn source_color(uv: vec2<f32>) -> vec4<f32> {
-    var color = picture_at(magnified(uv));
-    color = vec4<f32>(color_managed(unpremultiplied(color)), color.a);
+    let at = magnified(uv);
+    let picture = picture_at(at);
+    // Divided by the alpha the colors were stored with, before Interpret Footage
+    // ignores or inverts it.
+    let color = vec4<f32>(color_managed(unpremultiplied(picture)), interpreted_alpha(picture.a, at));
     let drawn = patterned(generated(ramped(vec4<f32>(input_grade(color.rgb), color.a), uv), uv), uv);
     return flared(drawn, uv);
 }
