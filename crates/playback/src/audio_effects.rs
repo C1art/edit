@@ -23,6 +23,8 @@ const CHORUS_BASE_MS: f32 = 15.0;
 const FLANGER_BASE_MS: f32 = 1.0;
 /// A Butterworth response: flat, then rolling off without a bump.
 const BUTTERWORTH_Q: f32 = std::f32::consts::FRAC_1_SQRT_2;
+/// Frames between the points effect settings are read at.
+const SETTING_STEP: i64 = 64;
 
 enum Unit {
     Equalizer([Biquad; 3]),
@@ -89,288 +91,314 @@ impl EffectChain {
         }
     }
 
-    /// Runs `owner`'s `effects`, set as they are at `time` (source time for a clip,
-    /// sequence time for a track), over interleaved stereo `samples`.
+    /// Runs `owner`'s `effects` over interleaved stereo `samples`, whose first frame is
+    /// frame `first` of the mix, set as they are at `time_of` each frame (source time for
+    /// a clip, sequence time for a track).
     pub(crate) fn process(
         &mut self,
         owner: Option<ClipId>,
         effects: &[AudioEffect],
-        time: Ticks,
+        first: i64,
+        time_of: impl Fn(i64) -> Ticks,
         samples: &mut [f32],
     ) {
         self.follow(owner, effects);
         let rate = self.rate;
         for (effect, unit) in effects.iter().zip(&mut self.units) {
-            match (effect, unit) {
-                (AudioEffect::Amplify { gain }, Unit::Stateless) => {
-                    let gain = db_to_amplitude(gain.value_at(time));
-                    samples.iter_mut().for_each(|sample| *sample *= gain);
+            // A plugin follows its own automation within a block.
+            if matches!(unit, Unit::Plugin(_)) {
+                Self::run(effect, unit, rate, time_of(first), samples);
+                continue;
+            }
+            // Settings are read again on a grid of whole frames, so keyframes ramp
+            // smoothly and the sound is the same however the mix is split into blocks.
+            let mut frame = first;
+            let mut rest = &mut samples[..];
+            while !rest.is_empty() {
+                let grid = frame.div_euclid(SETTING_STEP) * SETTING_STEP;
+                let next = grid + SETTING_STEP;
+                let count = usize::try_from(next - frame).unwrap_or(1);
+                let length = (count * 2).min(rest.len());
+                let (block, after) = std::mem::take(&mut rest).split_at_mut(length);
+                Self::run(effect, unit, rate, time_of(grid), block);
+                rest = after;
+                frame = next;
+            }
+        }
+    }
+
+    fn run(
+        effect: &AudioEffect,
+        unit: &mut Unit,
+        rate: SampleRate,
+        time: Ticks,
+        samples: &mut [f32],
+    ) {
+        match (effect, unit) {
+            (AudioEffect::Amplify { gain }, Unit::Stateless) => {
+                let gain = db_to_amplitude(gain.value_at(time));
+                samples.iter_mut().for_each(|sample| *sample *= gain);
+            }
+            (AudioEffect::Balance { balance }, Unit::Stateless) => {
+                let balance = (balance.value_at(time) / 100.0).clamp(-1.0, 1.0);
+                let sides = [1.0 - balance.max(0.0), 1.0 + balance.min(0.0)];
+                for frame in samples.as_chunks_mut::<2>().0 {
+                    frame[0] *= sides[0];
+                    frame[1] *= sides[1];
                 }
-                (AudioEffect::Balance { balance }, Unit::Stateless) => {
-                    let balance = (balance.value_at(time) / 100.0).clamp(-1.0, 1.0);
-                    let sides = [1.0 - balance.max(0.0), 1.0 + balance.min(0.0)];
-                    for frame in samples.as_chunks_mut::<2>().0 {
-                        frame[0] *= sides[0];
-                        frame[1] *= sides[1];
-                    }
+            }
+            (AudioEffect::Bass { boost }, Unit::Filter(filter)) => {
+                let db = boost.value_at(time);
+                filter.set(Coefficients::low_shelf(rate, BASS_HZ, db));
+                filter.process(samples);
+            }
+            (AudioEffect::Treble { boost }, Unit::Filter(filter)) => {
+                let db = boost.value_at(time);
+                filter.set(Coefficients::high_shelf(rate, TREBLE_HZ, db));
+                filter.process(samples);
+            }
+            (AudioEffect::Notch { frequency, q }, Unit::Filter(filter)) => {
+                let (hz, q) = (frequency.value_at(time), q.value_at(time).max(0.1));
+                filter.set(Coefficients::notch(rate, hz, q));
+                filter.process(samples);
+            }
+            (
+                AudioEffect::HardLimiter {
+                    boost,
+                    ceiling,
+                    release,
+                },
+                Unit::Limiter(limiter),
+            ) => limiter.process(
+                boost.value_at(time),
+                ceiling.value_at(time),
+                release.value_at(time),
+                rate,
+                samples,
+            ),
+            (
+                AudioEffect::NoiseGate {
+                    threshold,
+                    attack,
+                    release,
+                },
+                Unit::Gate(gate),
+            ) => gate.process(
+                threshold.value_at(time),
+                attack.value_at(time),
+                release.value_at(time),
+                rate,
+                samples,
+            ),
+            (AudioEffect::Reverb { size, damping, mix }, Unit::Reverb(reverb)) => reverb.process(
+                size.value_at(time) / 100.0,
+                damping.value_at(time) / 100.0,
+                mix.value_at(time) / 100.0,
+                samples,
+            ),
+            (AudioEffect::ChannelVolume { left, right }, Unit::Stateless) => {
+                let sides = [left, right].map(|side| db_to_amplitude(side.value_at(time)));
+                for frame in samples.as_chunks_mut::<2>().0 {
+                    frame[0] *= sides[0];
+                    frame[1] *= sides[1];
                 }
-                (AudioEffect::Bass { boost }, Unit::Filter(filter)) => {
-                    let db = boost.value_at(time);
-                    filter.set(Coefficients::low_shelf(rate, BASS_HZ, db));
-                    filter.process(samples);
+            }
+            (AudioEffect::GraphicEqualizer { bands }, Unit::Graphic(equalizer)) => {
+                let gains = bands.each_ref().map(|band| band.value_at(time));
+                equalizer.process(gains, rate, samples);
+            }
+            (
+                AudioEffect::MultibandCompressor {
+                    low_crossover,
+                    high_crossover,
+                    low_threshold,
+                    mid_threshold,
+                    high_threshold,
+                    ratio,
+                    attack,
+                    release,
+                    makeup,
+                },
+                Unit::Multiband(compressor),
+            ) => {
+                let band = |threshold: &timeline::Param| CompressorSettings {
+                    threshold_db: threshold.value_at(time),
+                    ratio: ratio.value_at(time),
+                    attack_ms: attack.value_at(time),
+                    release_ms: release.value_at(time),
+                    makeup_db: makeup.value_at(time),
+                };
+                let settings = MultibandSettings {
+                    crossovers_hz: [low_crossover.value_at(time), high_crossover.value_at(time)],
+                    bands: [low_threshold, mid_threshold, high_threshold].map(band),
+                };
+                compressor.process(&settings, rate, samples);
+            }
+            (AudioEffect::FillLeftWithRight, Unit::Stateless) => {
+                for frame in samples.as_chunks_mut::<2>().0 {
+                    frame[0] = frame[1];
                 }
-                (AudioEffect::Treble { boost }, Unit::Filter(filter)) => {
-                    let db = boost.value_at(time);
-                    filter.set(Coefficients::high_shelf(rate, TREBLE_HZ, db));
-                    filter.process(samples);
+            }
+            (AudioEffect::FillRightWithLeft, Unit::Stateless) => {
+                for frame in samples.as_chunks_mut::<2>().0 {
+                    frame[1] = frame[0];
                 }
-                (AudioEffect::Notch { frequency, q }, Unit::Filter(filter)) => {
-                    let (hz, q) = (frequency.value_at(time), q.value_at(time).max(0.1));
-                    filter.set(Coefficients::notch(rate, hz, q));
-                    filter.process(samples);
+            }
+            (AudioEffect::SwapChannels, Unit::Stateless) => {
+                for frame in samples.as_chunks_mut::<2>().0 {
+                    frame.swap(0, 1);
                 }
-                (
-                    AudioEffect::HardLimiter {
-                        boost,
-                        ceiling,
-                        release,
-                    },
-                    Unit::Limiter(limiter),
-                ) => limiter.process(
-                    boost.value_at(time),
-                    ceiling.value_at(time),
-                    release.value_at(time),
+            }
+            (AudioEffect::Invert, Unit::Stateless) => {
+                samples.iter_mut().for_each(|sample| *sample = -*sample);
+            }
+            (
+                AudioEffect::Equalizer {
+                    low,
+                    mid,
+                    mid_frequency,
+                    high,
+                },
+                Unit::Equalizer(bands),
+            ) => {
+                let mid_hz = mid_frequency.value_at(time);
+                bands[0].set(Coefficients::low_shelf(
                     rate,
-                    samples,
-                ),
-                (
-                    AudioEffect::NoiseGate {
-                        threshold,
-                        attack,
-                        release,
-                    },
-                    Unit::Gate(gate),
-                ) => gate.process(
-                    threshold.value_at(time),
-                    attack.value_at(time),
-                    release.value_at(time),
+                    LOW_SHELF_HZ,
+                    low.value_at(time),
+                ));
+                bands[1].set(Coefficients::peaking(
                     rate,
-                    samples,
-                ),
-                (AudioEffect::Reverb { size, damping, mix }, Unit::Reverb(reverb)) => reverb
-                    .process(
-                        size.value_at(time) / 100.0,
-                        damping.value_at(time) / 100.0,
-                        mix.value_at(time) / 100.0,
-                        samples,
-                    ),
-                (AudioEffect::ChannelVolume { left, right }, Unit::Stateless) => {
-                    let sides = [left, right].map(|side| db_to_amplitude(side.value_at(time)));
-                    for frame in samples.as_chunks_mut::<2>().0 {
-                        frame[0] *= sides[0];
-                        frame[1] *= sides[1];
-                    }
-                }
-                (AudioEffect::GraphicEqualizer { bands }, Unit::Graphic(equalizer)) => {
-                    let gains = bands.each_ref().map(|band| band.value_at(time));
-                    equalizer.process(gains, rate, samples);
-                }
-                (
-                    AudioEffect::MultibandCompressor {
-                        low_crossover,
-                        high_crossover,
-                        low_threshold,
-                        mid_threshold,
-                        high_threshold,
-                        ratio,
-                        attack,
-                        release,
-                        makeup,
-                    },
-                    Unit::Multiband(compressor),
-                ) => {
-                    let band = |threshold: &timeline::Param| CompressorSettings {
-                        threshold_db: threshold.value_at(time),
-                        ratio: ratio.value_at(time),
-                        attack_ms: attack.value_at(time),
-                        release_ms: release.value_at(time),
-                        makeup_db: makeup.value_at(time),
-                    };
-                    let settings = MultibandSettings {
-                        crossovers_hz: [
-                            low_crossover.value_at(time),
-                            high_crossover.value_at(time),
-                        ],
-                        bands: [low_threshold, mid_threshold, high_threshold].map(band),
-                    };
-                    compressor.process(&settings, rate, samples);
-                }
-                (AudioEffect::FillLeftWithRight, Unit::Stateless) => {
-                    for frame in samples.as_chunks_mut::<2>().0 {
-                        frame[0] = frame[1];
-                    }
-                }
-                (AudioEffect::FillRightWithLeft, Unit::Stateless) => {
-                    for frame in samples.as_chunks_mut::<2>().0 {
-                        frame[1] = frame[0];
-                    }
-                }
-                (AudioEffect::SwapChannels, Unit::Stateless) => {
-                    for frame in samples.as_chunks_mut::<2>().0 {
-                        frame.swap(0, 1);
-                    }
-                }
-                (AudioEffect::Invert, Unit::Stateless) => {
-                    samples.iter_mut().for_each(|sample| *sample = -*sample);
-                }
-                (
-                    AudioEffect::Equalizer {
-                        low,
-                        mid,
-                        mid_frequency,
-                        high,
-                    },
-                    Unit::Equalizer(bands),
-                ) => {
-                    let mid_hz = mid_frequency.value_at(time);
-                    bands[0].set(Coefficients::low_shelf(
-                        rate,
-                        LOW_SHELF_HZ,
-                        low.value_at(time),
-                    ));
-                    bands[1].set(Coefficients::peaking(
-                        rate,
-                        mid_hz,
-                        BELL_Q,
-                        mid.value_at(time),
-                    ));
-                    bands[2].set(Coefficients::high_shelf(
-                        rate,
-                        HIGH_SHELF_HZ,
-                        high.value_at(time),
-                    ));
-                    bands.iter_mut().for_each(|band| band.process(samples));
-                }
-                (AudioEffect::HighPass { frequency }, Unit::Filter(filter)) => {
-                    let hz = frequency.value_at(time);
-                    filter.set(Coefficients::high_pass(rate, hz, BUTTERWORTH_Q));
-                    filter.process(samples);
-                }
-                (AudioEffect::LowPass { frequency }, Unit::Filter(filter)) => {
-                    let hz = frequency.value_at(time);
-                    filter.set(Coefficients::low_pass(rate, hz, BUTTERWORTH_Q));
-                    filter.process(samples);
-                }
-                (
-                    AudioEffect::Compressor {
-                        threshold,
-                        ratio,
-                        attack,
-                        release,
-                        makeup,
-                    },
-                    Unit::Compressor(compressor),
-                ) => {
-                    let settings = CompressorSettings {
-                        threshold_db: threshold.value_at(time),
-                        ratio: ratio.value_at(time),
-                        attack_ms: attack.value_at(time),
-                        release_ms: release.value_at(time),
-                        makeup_db: makeup.value_at(time),
-                    };
-                    compressor.process(&settings, rate, samples);
-                }
-                (
-                    AudioEffect::Delay {
-                        time: delay_time,
-                        feedback,
-                        mix,
-                    },
-                    Unit::Delay(delay),
-                ) => delay.process(
-                    delay_time.value_at(time),
-                    feedback.value_at(time) / 100.0,
+                    mid_hz,
+                    BELL_Q,
+                    mid.value_at(time),
+                ));
+                bands[2].set(Coefficients::high_shelf(
+                    rate,
+                    HIGH_SHELF_HZ,
+                    high.value_at(time),
+                ));
+                bands.iter_mut().for_each(|band| band.process(samples));
+            }
+            (AudioEffect::HighPass { frequency }, Unit::Filter(filter)) => {
+                let hz = frequency.value_at(time);
+                filter.set(Coefficients::high_pass(rate, hz, BUTTERWORTH_Q));
+                filter.process(samples);
+            }
+            (AudioEffect::LowPass { frequency }, Unit::Filter(filter)) => {
+                let hz = frequency.value_at(time);
+                filter.set(Coefficients::low_pass(rate, hz, BUTTERWORTH_Q));
+                filter.process(samples);
+            }
+            (
+                AudioEffect::Compressor {
+                    threshold,
+                    ratio,
+                    attack,
+                    release,
+                    makeup,
+                },
+                Unit::Compressor(compressor),
+            ) => {
+                let settings = CompressorSettings {
+                    threshold_db: threshold.value_at(time),
+                    ratio: ratio.value_at(time),
+                    attack_ms: attack.value_at(time),
+                    release_ms: release.value_at(time),
+                    makeup_db: makeup.value_at(time),
+                };
+                compressor.process(&settings, rate, samples);
+            }
+            (
+                AudioEffect::Delay {
+                    time: delay_time,
+                    feedback,
+                    mix,
+                },
+                Unit::Delay(delay),
+            ) => delay.process(
+                delay_time.value_at(time),
+                feedback.value_at(time) / 100.0,
+                mix.value_at(time) / 100.0,
+                samples,
+            ),
+            (
+                AudioEffect::DeEsser {
+                    threshold,
+                    reduction,
+                    frequency,
+                },
+                Unit::DeEsser(deesser),
+            ) => deesser.process(
+                threshold.value_at(time),
+                reduction.value_at(time),
+                frequency.value_at(time),
+                rate,
+                samples,
+            ),
+            (
+                AudioEffect::Chorus {
+                    rate: speed,
+                    depth,
+                    mix,
+                },
+                Unit::Sweep(delay),
+            ) => {
+                let sweep = Sweep {
+                    base_ms: CHORUS_BASE_MS,
+                    depth_ms: depth.value_at(time),
+                    rate_hz: speed.value_at(time),
+                    feedback: 0.0,
+                    mix: mix.value_at(time) / 100.0,
+                };
+                delay.process(&sweep, samples);
+            }
+            (
+                AudioEffect::Flanger {
+                    rate: speed,
+                    depth,
+                    feedback,
+                    mix,
+                },
+                Unit::Sweep(delay),
+            ) => {
+                let sweep = Sweep {
+                    base_ms: FLANGER_BASE_MS,
+                    depth_ms: depth.value_at(time),
+                    rate_hz: speed.value_at(time),
+                    feedback: feedback.value_at(time) / 100.0,
+                    mix: mix.value_at(time) / 100.0,
+                };
+                delay.process(&sweep, samples);
+            }
+            (AudioEffect::PitchShifter { semitones, mix }, Unit::Pitch(shifter)) => shifter
+                .process(
+                    semitones.value_at(time),
                     mix.value_at(time) / 100.0,
                     samples,
                 ),
-                (
-                    AudioEffect::DeEsser {
-                        threshold,
-                        reduction,
-                        frequency,
-                    },
-                    Unit::DeEsser(deesser),
-                ) => deesser.process(
-                    threshold.value_at(time),
-                    reduction.value_at(time),
-                    frequency.value_at(time),
-                    rate,
-                    samples,
-                ),
-                (
-                    AudioEffect::Chorus {
-                        rate: speed,
-                        depth,
-                        mix,
-                    },
-                    Unit::Sweep(delay),
-                ) => {
-                    let sweep = Sweep {
-                        base_ms: CHORUS_BASE_MS,
-                        depth_ms: depth.value_at(time),
-                        rate_hz: speed.value_at(time),
-                        feedback: 0.0,
-                        mix: mix.value_at(time) / 100.0,
-                    };
-                    delay.process(&sweep, samples);
-                }
-                (
-                    AudioEffect::Flanger {
-                        rate: speed,
-                        depth,
-                        feedback,
-                        mix,
-                    },
-                    Unit::Sweep(delay),
-                ) => {
-                    let sweep = Sweep {
-                        base_ms: FLANGER_BASE_MS,
-                        depth_ms: depth.value_at(time),
-                        rate_hz: speed.value_at(time),
-                        feedback: feedback.value_at(time) / 100.0,
-                        mix: mix.value_at(time) / 100.0,
-                    };
-                    delay.process(&sweep, samples);
-                }
-                (AudioEffect::PitchShifter { semitones, mix }, Unit::Pitch(shifter)) => shifter
-                    .process(
-                        semitones.value_at(time),
-                        mix.value_at(time) / 100.0,
-                        samples,
-                    ),
-                (AudioEffect::DeNoise { amount }, Unit::DeNoise(denoise)) => {
-                    denoise.process(amount.value_at(time) / 100.0, samples);
-                }
-                (
-                    AudioEffect::DeHum {
-                        frequency,
-                        harmonics,
-                        reduction,
-                    },
-                    Unit::DeHum(dehum),
-                ) => dehum.process(
-                    frequency.value_at(time),
-                    harmonics.value_at(time).round().max(1.0) as usize,
-                    reduction.value_at(time),
-                    rate,
-                    samples,
-                ),
-                (effect, Unit::More(unit)) => unit.process(effect, time, rate, samples),
-                (AudioEffect::Plugin(effect), Unit::Plugin(unit)) => {
-                    unit.process(effect, time, rate, samples);
-                }
-                _ => {}
+            (AudioEffect::DeNoise { amount }, Unit::DeNoise(denoise)) => {
+                denoise.process(amount.value_at(time) / 100.0, samples);
             }
+            (
+                AudioEffect::DeHum {
+                    frequency,
+                    harmonics,
+                    reduction,
+                },
+                Unit::DeHum(dehum),
+            ) => dehum.process(
+                frequency.value_at(time),
+                harmonics.value_at(time).round().max(1.0) as usize,
+                reduction.value_at(time),
+                rate,
+                samples,
+            ),
+            (effect, Unit::More(unit)) => unit.process(effect, time, rate, samples),
+            (AudioEffect::Plugin(effect), Unit::Plugin(unit)) => {
+                unit.process(effect, time, rate, samples);
+            }
+            _ => {}
         }
     }
 
@@ -429,4 +457,32 @@ impl EffectChain {
 
 pub(crate) fn db_to_amplitude(db: f32) -> f32 {
     10.0_f32.powf(db / 20.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use timeline::Param;
+
+    use super::*;
+
+    #[test]
+    fn keyframed_settings_follow_within_a_block_and_however_it_is_split() {
+        let mut gain = Param::from_value(-20.0);
+        gain.toggle_animation(Ticks(0));
+        gain.set_at(Ticks(1024), 0.0);
+        let effects = [AudioEffect::Amplify { gain }];
+        let run = |frames_per_call: usize| {
+            let mut chain = EffectChain::new(SampleRate(48_000));
+            let mut samples = vec![1.0f32; 2 * 1024];
+            for (index, part) in samples.chunks_mut(2 * frames_per_call).enumerate() {
+                let first = (index * frames_per_call) as i64;
+                chain.process(None, &effects, first, Ticks, part);
+            }
+            samples
+        };
+        let whole = run(1024);
+        assert_eq!(run(300), whole);
+        // -10 dB halfway, not the -20 dB the block started at.
+        assert!((20.0 * whole[2 * 512].log10() - -10.0).abs() < 0.2);
+    }
 }

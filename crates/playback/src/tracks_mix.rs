@@ -212,10 +212,11 @@ impl TracksMix {
                     }
                 }
                 if !clip.audio_effects.is_empty() {
-                    let at = clip.source_time(Ticks(from).rescale(self.rate, timebase));
+                    let rate = self.rate;
+                    let at = |frame| clip.source_time(Ticks(frame).rescale(rate, timebase));
                     voice
                         .effects
-                        .process(Some(clip.id), &clip.audio_effects, at, clip_mix);
+                        .process(Some(clip.id), &clip.audio_effects, from, at, clip_mix);
                 }
                 let (pairs, _) = clip_mix.as_chunks_mut::<2>();
                 apply_gain(pairs, from, |frame| {
@@ -230,8 +231,9 @@ impl TracksMix {
                 );
             }
             if !track.effects.is_empty() {
-                let at = Ticks(start).rescale(self.rate, timebase);
-                inserts.process(None, &track.effects, at, &mut self.track_mix);
+                let rate = self.rate;
+                let at = |frame| Ticks(frame).rescale(rate, timebase);
+                inserts.process(None, &track.effects, start, at, &mut self.track_mix);
             }
             let sends = (track, submixes);
             send(
@@ -269,7 +271,8 @@ impl TracksMix {
                 target,
             ));
         }
-        let at = Ticks(start).rescale(self.rate, timebase);
+        let rate = self.rate;
+        let at = |frame| Ticks(frame).rescale(rate, timebase);
         let buses = self.submix_mix.iter_mut().zip(&mut self.submix_inserts);
         let submix_levels = submixes
             .iter()
@@ -279,7 +282,7 @@ impl TracksMix {
                     return [0.0; 2];
                 }
                 if !submix.effects.is_empty() {
-                    inserts.process(None, &submix.effects, at, mix);
+                    inserts.process(None, &submix.effects, start, at, mix);
                 }
                 let volume = submix.volume.amplitude();
                 let [left, right] = submix.pan.balance();
@@ -287,7 +290,8 @@ impl TracksMix {
             })
             .collect();
         if !master_effects.is_empty() {
-            self.master_inserts.process(None, master_effects, at, out);
+            self.master_inserts
+                .process(None, master_effects, start, at, out);
         }
         MixLevels {
             tracks: track_levels,
