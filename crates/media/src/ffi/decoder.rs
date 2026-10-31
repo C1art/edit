@@ -195,6 +195,9 @@ fn receive(
     match code {
         sys::AVERROR_EOF => Ok(Received::Drained),
         code if code == sys::AVERROR(sys::EAGAIN) => Ok(Received::NeedsInput),
+        // Frame-threaded and hardware decoders report a corrupt packet here rather than
+        // when it is sent; it is skipped the same way, and decoding goes on.
+        sys::AVERROR_INVALIDDATA => Ok(Received::NeedsInput),
         code => check(code).map(|_| Received::Frame),
     }
 }
