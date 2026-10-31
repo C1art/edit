@@ -100,6 +100,7 @@ mod project_switch;
 mod proxies;
 mod proxy_offer;
 mod quick_export;
+mod quit_exports;
 mod recent_projects;
 mod recovery;
 mod reframe_analysis;

@@ -415,7 +415,11 @@ impl Editor {
     /// Asks before closing the window over unsaved changes, and keeps the title current.
     pub(crate) fn update_window(&mut self) {
         let ctx = self.ctx.clone();
-        let closing = ctx.input(|input| input.viewport().close_requested());
+        let mut closing = ctx.input(|input| input.viewport().close_requested());
+        if closing && self.exports_hold_close() {
+            ctx.send_viewport_cmd(ViewportCommand::CancelClose);
+            closing = false;
+        }
         let closes = closing && (self.quitting || !self.is_dirty());
         if closing && !closes {
             ctx.send_viewport_cmd(ViewportCommand::CancelClose);
@@ -474,7 +478,8 @@ pub fn discard_dialog(editor: &mut Editor, ctx: &egui::Context) {
         }
         Choice::Discard => editor.after_discard(action),
         Choice::Cancel if action == AfterDiscard::UseOpened => editor.drop_parked_open(),
-        Choice::Cancel => {}
+        // A later quit asks about the exports again.
+        Choice::Cancel => editor.exports_on_quit = Default::default(),
     }
 }
 

@@ -169,6 +169,7 @@ pub struct Editor {
     pub(crate) after_save: Option<AfterDiscard>,
     /// Set once the user chose to close, so the close request isn't questioned again.
     pub(crate) quitting: bool,
+    pub(crate) exports_on_quit: crate::quit_exports::ExportsOnQuit,
     pub(crate) autosave: Autosave,
     pub(crate) window_title: String,
     pub(crate) ctx: egui::Context,
@@ -361,6 +362,7 @@ impl Editor {
             after_save: None,
             autosave: Autosave::default(),
             quitting: false,
+            exports_on_quit: Default::default(),
             window_title: String::new(),
             ctx: creation_context.egui_ctx.clone(),
             export: None,

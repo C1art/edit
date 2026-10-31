@@ -3,6 +3,7 @@ use crate::editor::Editor;
 /// Draws whichever dialogs and floating windows are open, over the panels.
 pub(crate) fn show(editor: &mut Editor, ctx: &egui::Context) {
     crate::path_dialog::path_dialog(editor, ctx);
+    crate::quit_exports::dialog(editor, ctx);
     crate::project_files::discard_dialog(editor, ctx);
     crate::project_copy::revert_dialog(editor, ctx);
     crate::recovery::dialog(editor, ctx);
