@@ -52,7 +52,13 @@ pub(super) struct Slot {
     /// What the picture in the texture came from. Holding it keeps its address from
     /// being reused, so the same address means the same, unchanged picture.
     pub(super) uploaded: Option<Arc<dyn Any + Send + Sync>>,
+    /// The composite that last claimed it.
+    pub(super) used_at: u64,
 }
+
+/// Composites a slot past those in use waits before letting its textures go, so a
+/// frame with a few more layers now and then doesn't make them anew each time.
+const IDLE_COMPOSITES: u64 = 240;
 
 impl Slot {
     pub(super) fn placed(&self) -> &wgpu::BindGroup {
@@ -82,7 +88,23 @@ impl Compositor {
                 None => self.slots.push(slot),
             }
         }
+        self.slots[index].used_at = self.composites;
         index
+    }
+
+    /// Lets go of the slots past the first `used` that have long been idle, with the
+    /// textures and pictures they hold.
+    pub(super) fn release_idle(&mut self, used: usize) {
+        while self.slots.len() > used
+            && self
+                .slots
+                .last()
+                .is_some_and(|slot| self.composites.saturating_sub(slot.used_at) > IDLE_COMPOSITES)
+        {
+            if let Some(slot) = self.slots.pop() {
+                self.retire(slot.kind, slot.uploaded);
+            }
+        }
     }
 
     /// Keeps what a slot let go of until the GPU has finished the work queued so far,
@@ -280,6 +302,7 @@ impl Compositor {
             features: Features::NONE,
             grade: None,
             uploaded: None,
+            used_at: 0,
         }
     }
 }

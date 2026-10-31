@@ -114,6 +114,8 @@ pub struct Compositor {
     /// reading them so their decoder can't write over them first.
     #[cfg(windows)]
     retired: Vec<Arc<dyn std::any::Any + Send + Sync>>,
+    /// Composites so far, for letting idle slots go.
+    composites: u64,
 }
 
 impl Compositor {
@@ -139,6 +141,7 @@ impl Compositor {
             shared: crate::shared::SharedTextures::default(),
             #[cfg(windows)]
             retired: Vec::new(),
+            composites: 0,
         }
     }
 
@@ -237,7 +240,10 @@ impl Compositor {
         };
         self.blit.layers.take_missed();
         let mut steps = Vec::new();
-        let top = self.prepare(layers, canvas, &mut 0, &mut steps);
+        self.composites += 1;
+        let mut used = 0;
+        let top = self.prepare(layers, canvas, &mut used, &mut steps);
+        self.release_idle(used);
         let Some(targets) = &self.targets else {
             unreachable!("targets were created above");
         };
