@@ -93,6 +93,13 @@ fn transcribe(
         .to_str()
         .ok_or_else(|| SpeechError::Model("the model's path isn't valid Unicode".into()))?;
     let context = WhisperContext::new_with_params(model, WhisperContextParameters::default())?;
+    // English-only models can't detect a language: asked to, they guess one at random and
+    // then fail to encode.
+    let language = if context.is_multilingual() {
+        language
+    } else {
+        Some("en".to_owned())
+    };
     let mut state = context.create_state()?;
     let last_text_token = context.token_eot();
     let mut mix = MonoMix::new(piece, SampleRate(RATE as u32));
