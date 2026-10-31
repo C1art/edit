@@ -6,6 +6,7 @@ mod view;
 
 use std::path::{Path, PathBuf};
 
+use crate::same_path::same_path;
 pub use filter::*;
 use listing::natural_order;
 pub(crate) use listing::{Entry, Found, Lister, Place};
@@ -367,7 +368,11 @@ impl FileBrowser {
         }
         let parent = path.parent().map(Path::to_owned);
         if parent.as_ref() == self.folder.as_ref() {
-            let listed = self.entries.iter().find(|entry| entry.path == path);
+            // Windows names "cut.mp4" and "Cut.mp4" alike, so saving there replaces it.
+            let listed = self
+                .entries
+                .iter()
+                .find(|entry| same_path(&entry.path, &path));
             match listed {
                 Some(entry) if !entry.folder => return self.choose(vec![path], true),
                 None if self.mode == Mode::Save => return self.choose(vec![path], false),
