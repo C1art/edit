@@ -65,7 +65,14 @@ impl Edit for JoinThroughEdits {
                 let left = Arc::make_mut(&mut track.clips[index - 1]);
                 left.duration = left.duration + right.duration;
                 left.transition_out = right.transition_out;
-                left.markers.extend(right.markers);
+                left.pinned.outro = right.pinned.outro;
+                // A cut gives both pieces every marker of the clip.
+                for marker in right.markers {
+                    if !left.markers.contains(&marker) {
+                        left.markers.push(marker);
+                    }
+                }
+                left.markers.sort_by_key(|marker| marker.at);
                 joined = true;
             }
         }
