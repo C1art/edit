@@ -120,6 +120,11 @@ impl Editor {
         if let (Some(program), false) = (&mut self.program, self.side_tab == SideTab::Scopes) {
             program.set_scope(None);
         }
+        let held = ui.input(|input| input.pointer.primary_down());
+        self.joining_press(held, |editor| editor.side_tab_ui(ui));
+    }
+
+    fn side_tab_ui(&mut self, ui: &mut egui::Ui) {
         match self.side_tab {
             SideTab::EffectControls => effects::ui(self, ui),
             SideTab::LumetriColor => effects::lumetri_ui(self, ui),

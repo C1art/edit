@@ -89,6 +89,7 @@ mod pauses_dialog;
 mod placing;
 mod preferences;
 mod preferences_menu;
+mod press_join;
 mod program_zoom;
 mod project_copy;
 mod project_files;

@@ -46,6 +46,9 @@ pub struct Editor {
     pub(crate) offline: Option<crate::offline::OfflineMedia>,
     pub(crate) render_previews: Option<crate::render_previews::RenderPreviews>,
     pub(crate) render_replace: Option<crate::render_replace::RenderReplace>,
+    /// Where the edits of the mouse press held in a side panel began, and the revision
+    /// they left.
+    pub(crate) press_mark: Option<(u64, u64)>,
     pub(crate) clip_art: ClipArt,
     /// Whether the monitors play proxies where media has them.
     pub(crate) use_proxies: bool,
@@ -260,6 +263,7 @@ impl Editor {
             offline,
             render_previews,
             render_replace: None,
+            press_mark: None,
             clip_art,
             use_proxies: false,
             scrub_audio: true,
