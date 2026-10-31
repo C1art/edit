@@ -73,9 +73,13 @@ impl PluginUnit {
     }
 
     pub(crate) fn reset(&mut self) {
-        if let Some(loaded) = &mut self.loaded {
-            // A plugin that can't clear itself keeps its tail; nothing better to do.
-            let _ = loaded.plugin.reset();
+        let failed = (self.loaded.as_mut()).is_some_and(|loaded| loaded.plugin.reset().is_err());
+        if failed {
+            // It may be left inactive, which plugins aren't made to process in; a fresh
+            // instance is, once given the effect's state again.
+            self.loaded = load(&self.key);
+            self.restored = PluginState::default();
+            self.sent.clear();
         }
     }
 
