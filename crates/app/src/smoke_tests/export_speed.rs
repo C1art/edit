@@ -1,8 +1,9 @@
 //! How fast real footage exports with the Export Media dialog's default settings, and
 //! where the time goes. Run it in release with the files to place one after another:
 //! `EDIT_BENCH_CLIPS="a.mp4;b.mp4" cargo test --release -p app export_speed -- --ignored --nocapture`.
-//! `EDIT_BENCH_SECONDS` uses at most that much of each file, and `EDIT_BENCH_DISSOLVES=1`
-//! puts the default transitions at every cut.
+//! `EDIT_BENCH_SECONDS` uses at most that much of each file, `EDIT_BENCH_DISSOLVES=1`
+//! puts the default transitions at every cut, and `EDIT_BENCH_SOFTWARE_DECODE=1` turns
+//! hardware decoding off.
 
 use std::time::Duration;
 
@@ -19,8 +20,12 @@ fn export_speed() {
         eprintln!("Set EDIT_BENCH_CLIPS to the files to export, separated by ';'");
         return;
     };
+    let flag = |name| std::env::var(name).is_ok_and(|value| value == "1");
     let gpu = gpu();
     let mut editor = editor(Some(&gpu));
+    if flag("EDIT_BENCH_SOFTWARE_DECODE") {
+        media::set_hardware_decoding(false);
+    }
     let (timebase, rate) = {
         let sequence = editor.timeline.sequence();
         (sequence.timebase, sequence.format.frame_rate)
@@ -57,7 +62,7 @@ fn export_speed() {
             fill: None,
         });
     }
-    if std::env::var("EDIT_BENCH_DISSOLVES").is_ok_and(|value| value == "1") {
+    if flag("EDIT_BENCH_DISSOLVES") {
         let sequence = editor.timeline.sequence();
         let defaults = editor.transition_defaults;
         editor.apply(ApplyTransitions {
@@ -80,7 +85,12 @@ fn export_speed() {
     );
     let job = ExportJob::start(sequence, gpu.device.clone(), gpu.queue.clone(), settings)
         .expect("an export");
+    let mut shown_decoder = false;
     loop {
+        if let Some(decoder) = media::hardware_decoder().filter(|_| !shown_decoder) {
+            eprintln!("Decoding on {decoder}");
+            shown_decoder = true;
+        }
         for event in job.poll() {
             match event {
                 ExportEvent::Encoder(encoder) => eprintln!("Encoder: {encoder}"),
