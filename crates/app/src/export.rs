@@ -94,6 +94,10 @@ impl ExportDialog {
         }
     }
 
+    pub(crate) fn running_path(&self) -> Option<&Path> {
+        self.running.as_ref().map(|running| running.path.as_path())
+    }
+
     pub fn output(&self) -> PathBuf {
         PathBuf::from(self.path.trim().trim_matches('"'))
     }
@@ -324,6 +328,13 @@ pub(crate) fn prepare(
         .export_queue
         .pending_paths()
         .into_iter()
+        .chain(
+            editor
+                .export
+                .as_ref()
+                .and_then(ExportDialog::running_path)
+                .map(Path::to_owned),
+        )
         .find(|queued| {
             std::iter::once(&path)
                 .chain(&sidecar)
@@ -331,7 +342,7 @@ pub(crate) fn prepare(
         })
     {
         Some(format!(
-            "A queued export already writes {}",
+            "Another export already writes {}",
             quoted_name(&queued)
         ))
     } else if sequence.duration() == timeline::Ticks::ZERO {

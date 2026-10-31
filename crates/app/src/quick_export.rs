@@ -2,6 +2,8 @@
 //! few everyday presets, written in the background through the export queue so
 //! editing carries on.
 
+use std::path::Path;
+
 use egui::{Key, PopupCloseBehavior, RichText};
 
 use crate::editor::Editor;
@@ -91,6 +93,7 @@ fn popover(editor: &mut Editor, button: &egui::Response) {
     };
     let export_queue = &editor.export_queue;
     let busy = export_queue.progress().is_some();
+    let running = editor.export.as_ref().and_then(ExportDialog::running_path);
     let Some(quick) = &mut editor.quick_export else {
         return;
     };
@@ -107,12 +110,15 @@ fn popover(editor: &mut Editor, button: &egui::Response) {
             ui.label("File");
             let field = egui::TextEdit::singleline(&mut export.path).desired_width(f32::INFINITY);
             ui.add(field);
-            let target = export.target(|| export_queue.pending_paths());
+            let target = export.target(|| {
+                let queued = export_queue.pending_paths().into_iter();
+                queued.chain(running.map(Path::to_owned)).collect()
+            });
             if let Some(Target::Taken { by, .. }) = target {
                 let name = quoted_name(&export.output());
                 let warning = match by {
                     Holder::File => format!("{name} will be replaced"),
-                    Holder::Queue => format!("A queued export already writes {name}"),
+                    Holder::Queue => format!("Another export already writes {name}"),
                 };
                 ui.colored_label(ui.visuals().warn_fg_color, warning);
             }
