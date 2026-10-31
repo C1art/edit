@@ -35,8 +35,8 @@ impl Edit for SetClipSpeed {
         if !self.speed.is_in_range() {
             return Err(TimelineError::SpeedOutOfRange(first));
         }
-        let mut edit_points: Vec<(TrackRef, Ticks)> = Vec::with_capacity(ids.len());
-        let mut shift = None;
+        // Each clip ripples by its own change from its own end: (end, change, track, id).
+        let mut changes: Vec<(Ticks, Ticks, TrackRef, ClipId)> = Vec::with_capacity(ids.len());
         for &id in &ids {
             let (track_ref, clip) = sequence.clip(id).ok_or(TimelineError::ClipNotFound(id))?;
             let source = clip.source_out() - clip.source_in;
@@ -53,8 +53,7 @@ impl Edit for SetClipSpeed {
                     duration = duration.min(next.start - clip.start);
                 }
             }
-            edit_points.push((track_ref, clip.end()));
-            shift.get_or_insert(duration - clip.duration);
+            changes.push((clip.end(), duration - clip.duration, track_ref, id));
             let clip = ops::clip_mut(sequence, id)?;
             clip.speed = self.speed;
             clip.remap = None;
@@ -62,8 +61,16 @@ impl Edit for SetClipSpeed {
             clip.reverse = self.reverse;
             clip.maintain_pitch = self.maintain_pitch;
         }
-        if let (true, Some(shift)) = (self.ripple, shift) {
-            ripple(sequence, &edit_points, shift, &ids);
+        if self.ripple {
+            // Latest first, so a clip's ripple carries the later clips already changed.
+            changes.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+            for group in changes.chunk_by(|a, b| (a.0, a.1) == (b.0, b.1)) {
+                let (end, shift, ..) = group[0];
+                let edit_points: Vec<(TrackRef, Ticks)> =
+                    group.iter().map(|&(_, _, track, _)| (track, end)).collect();
+                let skip: Vec<ClipId> = group.iter().map(|&(.., id)| id).collect();
+                ripple(sequence, &edit_points, shift, &skip);
+            }
         }
         Ok(())
     }

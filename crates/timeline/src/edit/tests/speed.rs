@@ -180,3 +180,25 @@ fn fit_to_fill_changes_speed_so_the_source_range_fills_the_sequence_range() {
         assert_eq!(clip.speed, Speed::new(1, 2).unwrap());
     }
 }
+
+#[test]
+fn rippled_speed_change_of_neighbours_moves_each_by_its_own_change() {
+    let (mut timeline, source) = timeline();
+    for start in [0, 100, 200] {
+        timeline
+            .apply(place(source, start, 0, 100, PlaceMode::Overwrite))
+            .unwrap();
+    }
+    timeline
+        .apply(SetClipSpeed {
+            clips: vec![clip_on(&timeline, V1, 0), clip_on(&timeline, V1, 1)],
+            speed: Speed::new(1, 2).unwrap(),
+            ripple: true,
+            reverse: false,
+            maintain_pitch: false,
+        })
+        .unwrap();
+    let expected = vec![(0, 200, 0), (200, 400, 0), (400, 500, 0)];
+    assert_eq!(spans(&timeline, V1), expected);
+    assert_eq!(spans(&timeline, A1), expected);
+}
