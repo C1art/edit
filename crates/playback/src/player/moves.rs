@@ -58,11 +58,12 @@ impl Player {
         }
         self.pause();
         self.seek(range.start);
-        self.play();
+        // Set first so that the range plays as asked, rather than the loop.
         self.stop = Some(Stop {
             at: range.end,
             back_to,
         });
+        self.play();
     }
 
     pub fn is_looping(&self) -> bool {
@@ -81,7 +82,7 @@ impl Player {
             let (rate, timebase) = (self.frame_rate(), self.sequence.timebase);
             let last = rate.frame_start(rate.frame_at(stop.at - Ticks(1), timebase), timebase);
             self.seek(stop.back_to.unwrap_or(last));
-        } else if let Some(range) = self.looping.clone() {
+        } else if let Some(range) = self.looping.clone().filter(|_| self.stop.is_none()) {
             if position >= range.end {
                 self.go_to(range.start, false);
             }

@@ -337,15 +337,16 @@ impl Player {
         if let Some(range) = self
             .looping
             .clone()
-            .filter(|range| !range.contains(&self.position()))
+            .filter(|range| self.stop.is_none() && !range.contains(&self.position()))
         {
             self.go_to(range.start, false);
         } else if self.reached_end(self.position()) {
             self.seek(Ticks::ZERO);
         } else if reclaimed || self.scrubbed {
             // Another player used the device meanwhile, or scrubbing played out what was
-            // queued, so the audio must be made again from here.
-            self.seek(self.position());
+            // queued, so the audio must be made again from here. Not by seeking, which
+            // would forget where a range played now stops.
+            self.go_to(self.position(), false);
         }
         self.playing = true;
         self.dropped = 0;

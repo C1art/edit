@@ -141,3 +141,18 @@ fn a_morph_cut_shows_one_picture_blended_from_both_sides() {
     assert_eq!(frame.layers.len(), 1);
     assert!(matches!(frame.layers[0].picture, LayerPicture::Frame(_)));
 }
+
+#[test]
+#[ignore = "decodes a real file with FFmpeg in real time"]
+fn playing_around_the_playhead_ignores_a_loop_elsewhere() {
+    let mut player = Player::new(sequence(), None).unwrap();
+    pump_until(&mut player, |player| player.current_frame().is_some());
+    player.set_looping(Some(Ticks::ZERO..Ticks(25 * FRAME)));
+    player.seek(Ticks(60 * FRAME));
+    player.play_range(
+        Ticks(55 * FRAME)..Ticks(65 * FRAME),
+        Some(Ticks(60 * FRAME)),
+    );
+    pump_until(&mut player, |player| !player.is_playing());
+    assert_eq!(player.position(), Ticks(60 * FRAME));
+}
