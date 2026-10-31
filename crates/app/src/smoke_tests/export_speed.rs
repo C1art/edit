@@ -22,6 +22,8 @@ fn export_speed() {
     };
     let flag = |name| std::env::var(name).is_ok_and(|value| value == "1");
     let gpu = gpu();
+    let adapter = gpu.adapter.get_info();
+    eprintln!("Drawing on {} with {:?}", adapter.name, adapter.backend);
     let mut editor = editor(Some(&gpu));
     if flag("EDIT_BENCH_SOFTWARE_DECODE") {
         media::set_hardware_decoding(false);
