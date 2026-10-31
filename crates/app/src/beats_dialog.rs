@@ -31,6 +31,8 @@ struct Measuring {
     job: EnvelopeJob,
     start: Ticks,
     progress: f32,
+    /// The timeline revision listened to; what was heard is stale once it changes.
+    revision: u64,
 }
 
 impl Editor {
@@ -132,6 +134,7 @@ fn start(editor: &mut Editor) {
                 job,
                 start: span.start,
                 progress: 0.0,
+                revision: editor.timeline.revision(),
             });
         }
         Err(error) => editor.notice(format!("Cannot listen for beats: {error}")),
@@ -145,6 +148,10 @@ fn mark(editor: &mut Editor, levels: &[f32]) {
     let Some(measuring) = dialog.measuring else {
         return;
     };
+    if editor.timeline.revision() != measuring.revision {
+        editor.notice("The sequence changed while listening; run Add Markers at Beats again");
+        return;
+    }
     let sequence = editor.timeline.sequence();
     let timebase = sequence.timebase;
     let Some(found) = beats(levels, (measuring.start, window(timebase)), timebase) else {
@@ -166,6 +173,10 @@ fn mark(editor: &mut Editor, levels: &[f32]) {
                 .map(|at| clip.source_time(at))
                 .collect(),
         ),
+        None if dialog.on_clip => {
+            editor.notice("The music clip is gone; no markers were added");
+            return;
+        }
         _ => (MarkerOwner::Sequence, placed),
     };
     let count = at.len();

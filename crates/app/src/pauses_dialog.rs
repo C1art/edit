@@ -19,8 +19,8 @@ const WINDOWS_PER_SECOND: u32 = 50;
 pub(crate) struct PausesDialog {
     /// The selected audio clips, which are listened to.
     heard: Vec<ClipId>,
-    /// The tracks holding the selection, which pauses are cut from.
-    tracks: Vec<TrackRef>,
+    /// The selected clips, whose tracks pauses are cut from.
+    cut: Vec<ClipId>,
     threshold_db: f32,
     shortest_ms: i64,
     padding_ms: i64,
@@ -32,6 +32,8 @@ struct Measuring {
     job: EnvelopeJob,
     start: Ticks,
     progress: f32,
+    /// The timeline revision listened to; what was heard is stale once it changes.
+    revision: u64,
 }
 
 impl Editor {
@@ -51,12 +53,10 @@ impl Editor {
             self.notice("Select clips with sound to find pauses in");
             return;
         }
-        let mut tracks: Vec<TrackRef> = placed.iter().map(|&(track, _)| track).collect();
-        tracks.sort_unstable();
-        tracks.dedup();
+        let cut = placed.iter().map(|&(_, id)| id).collect();
         self.pauses_dialog = Some(PausesDialog {
             heard,
-            tracks,
+            cut,
             threshold_db: -40.0,
             shortest_ms: 500,
             padding_ms: 150,
@@ -174,6 +174,7 @@ fn start(editor: &mut Editor) {
                 job,
                 start: span.start,
                 progress: 0.0,
+                revision: editor.timeline.revision(),
             });
         }
         Err(error) => editor.notice(format!("Cannot listen for pauses: {error}")),
@@ -187,6 +188,10 @@ fn cut(editor: &mut Editor, levels: &[f32]) {
     let Some(measuring) = dialog.measuring else {
         return;
     };
+    if editor.timeline.revision() != measuring.revision {
+        editor.notice("The sequence changed while listening; run Remove Pauses again");
+        return;
+    }
     let sequence = editor.timeline.sequence();
     let rules = PauseRules {
         threshold_db: dialog.threshold_db,
@@ -205,6 +210,11 @@ fn cut(editor: &mut Editor, levels: &[f32]) {
         within,
         (sequence.format.frame_rate, sequence.timebase),
     );
+    let mut tracks: Vec<TrackRef> = (dialog.cut.iter())
+        .filter_map(|&id| sequence.clip(id).map(|(track, _)| track))
+        .collect();
+    tracks.sort_unstable();
+    tracks.dedup();
     let removed = found
         .iter()
         .fold(Ticks::ZERO, |sum, pause| sum + (pause.end - pause.start));
@@ -213,7 +223,7 @@ fn cut(editor: &mut Editor, levels: &[f32]) {
         Timebase::new(1, 10).map_or(0, |tenth| removed.rescale(sequence.timebase, tenth).0);
     if editor.apply(RemovePauses {
         pauses: found,
-        tracks: dialog.tracks,
+        tracks,
         ripple: dialog.ripple,
     }) {
         let (whole, tenth) = (tenths / 10, tenths % 10);
