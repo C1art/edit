@@ -10,7 +10,7 @@ fn caption(start: i64, end: i64, text: &str) -> Caption {
 }
 
 #[test]
-fn imported_cues_are_sorted_and_trimmed_and_overlaps_are_refused() {
+fn imported_cues_are_sorted_and_overlaps_shown_together_and_refused_in_edits() {
     let cues = vec![
         caption(500, 900, "third"),
         caption(0, 300, "first"),
@@ -18,8 +18,19 @@ fn imported_cues_are_sorted_and_trimmed_and_overlaps_are_refused() {
         caption(900, 950, "  "),
     ];
     let items = captions_from_cues(cues);
-    let spans: Vec<_> = items.iter().map(|c| (c.start.0, c.end.0)).collect();
-    assert_eq!(spans, [(0, 200), (200, 500), (500, 900)]);
+    let spans: Vec<_> = items
+        .iter()
+        .map(|c| (c.start.0, c.end.0, c.text.as_str()))
+        .collect();
+    assert_eq!(
+        spans,
+        [
+            (0, 200, "first"),
+            (200, 300, "first\nsecond"),
+            (300, 500, "second"),
+            (500, 900, "third")
+        ]
+    );
 
     let (mut timeline, _) = timeline();
     let mut captions = Captions {
@@ -38,7 +49,7 @@ fn imported_cues_are_sorted_and_trimmed_and_overlaps_are_refused() {
     captions.items[1].end = Ticks(600);
     assert_eq!(
         timeline.apply(SetCaptions { captions }),
-        Err(TimelineError::CaptionOutOfOrder(Ticks(500)))
+        Err(TimelineError::CaptionOutOfOrder(Ticks(300)))
     );
 }
 
@@ -121,4 +132,15 @@ fn captions_ripple_with_an_insert_and_a_ripple_deleted_span() {
     assert!(timeline.undo());
     assert!(timeline.undo());
     assert_eq!(spans(&timeline), [(0, 100), (150, 250), (300, 400)]);
+}
+
+#[test]
+fn cues_starting_together_are_kept_as_one_caption_until_the_shorter_ends() {
+    let cues = vec![caption(0, 500, "top"), caption(0, 300, "bottom")];
+    let items = captions_from_cues(cues);
+    let spans: Vec<_> = items
+        .iter()
+        .map(|c| (c.start.0, c.end.0, c.text.as_str()))
+        .collect();
+    assert_eq!(spans, [(0, 300, "top\nbottom"), (300, 500, "top")]);
 }

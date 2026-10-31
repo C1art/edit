@@ -95,15 +95,42 @@ impl Captions {
 }
 
 /// Cues as subtitle files have them, in any order and possibly overlapping, made into
-/// captions: sorted, each cut short where the next starts, and empty ones dropped.
+/// captions that follow one another: where cues overlap, such as two speakers shown at
+/// once, the overlap is a caption of their lines together, earliest first.
 pub fn captions_from_cues(mut cues: Vec<Caption>) -> Vec<Caption> {
-    cues.sort_by_key(|cue| cue.start);
-    let starts: Vec<Ticks> = cues.iter().skip(1).map(|cue| cue.start).collect();
-    for (cue, next) in cues.iter_mut().zip(starts) {
-        cue.end = cue.end.min(next);
-    }
     cues.retain(|cue| cue.start < cue.end && !cue.text.trim().is_empty());
-    cues
+    cues.sort_by_key(|cue| cue.start);
+    let mut bounds: Vec<Ticks> = cues.iter().flat_map(|cue| [cue.start, cue.end]).collect();
+    bounds.sort_unstable();
+    bounds.dedup();
+    let mut captions: Vec<Caption> = Vec::new();
+    let (mut next, mut showing, mut shown) = (0, Vec::new(), Vec::new());
+    for pair in bounds.windows(2) {
+        let (start, end) = (pair[0], pair[1]);
+        showing.retain(|&index: &usize| cues[index].end > start);
+        while cues.get(next).is_some_and(|cue| cue.start <= start) {
+            showing.push(next);
+            next += 1;
+        }
+        let continues = showing == shown && captions.last().is_some_and(|last| last.end == start);
+        match captions.last_mut() {
+            Some(last) if continues => last.end = end,
+            _ if showing.is_empty() => {}
+            _ => {
+                let lines: Vec<&str> = showing
+                    .iter()
+                    .map(|&index| cues[index].text.as_str())
+                    .collect();
+                captions.push(Caption {
+                    start,
+                    end,
+                    text: lines.join("\n"),
+                });
+            }
+        }
+        shown.clone_from(&showing);
+    }
+    captions
 }
 
 #[cfg(test)]
