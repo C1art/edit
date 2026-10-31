@@ -170,11 +170,17 @@ impl Editor {
     }
 
     fn use_output(&mut self, output: Option<AudioOutput>) {
-        let players = [
+        let mut players: Vec<_> = [
             self.program.as_mut().map(|program| &mut program.player),
             self.source.as_mut().map(|source| &mut source.viewer.player),
-        ];
-        for player in players.into_iter().flatten() {
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        // Each new writer takes the device from the one before, so the player that is
+        // playing goes last and keeps it.
+        players.sort_by_key(|player| player.is_playing());
+        for player in players {
             if let Err(error) = player.set_output(output.as_ref().map(AudioOutput::writer)) {
                 self.notices.push(format!("No sound: {error}"));
             }
