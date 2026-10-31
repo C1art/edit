@@ -123,7 +123,8 @@ impl Rows {
                 self.param(ui, "Speed", &mut bolt.speed, 0.0..=60.0, "/s");
                 let seed = &mut bolt.random_seed;
                 self.choice(ui, "Random Seed", |ui| {
-                    ui.add(egui::DragValue::new(seed)).changed()
+                    ui.add(egui::DragValue::new(seed).update_while_editing(false))
+                        .changed()
                 });
             }
             _ => {}

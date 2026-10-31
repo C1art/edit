@@ -15,6 +15,7 @@ pub(super) fn stroke_row(ui: &mut egui::Ui, stroke: &mut Option<TextStroke>) -> 
             change = color_button(ui, &mut stroke.color).or(change);
             let width = ui.add(
                 egui::DragValue::new(&mut stroke.width)
+                    .update_while_editing(false)
                     .range(1..=100)
                     .suffix(" px"),
             );
@@ -49,6 +50,7 @@ pub(super) fn gradient_row(
         }
         if gradient.kind == GradientKind::Linear {
             let angle = egui::DragValue::new(&mut gradient.angle)
+                .update_while_editing(false)
                 .range(-360..=360)
                 .suffix("°");
             change = response_state(&ui.add(angle).on_hover_text("Angle"), change);
@@ -74,10 +76,12 @@ pub(super) fn shadow_rows(
         if *shadow {
             change = color_button(ui, &mut edited.color).or(change);
             let opacity = egui::DragValue::new(&mut edited.opacity)
+                .update_while_editing(false)
                 .range(0..=100)
                 .suffix("%");
             change = response_state(&ui.add(opacity).on_hover_text("Opacity"), change);
             let angle = egui::DragValue::new(&mut edited.angle)
+                .update_while_editing(false)
                 .range(-360..=360)
                 .suffix("°");
             change = response_state(&ui.add(angle).on_hover_text("Angle"), change);
@@ -92,7 +96,10 @@ pub(super) fn shadow_rows(
             ] {
                 ui.horizontal(|ui| {
                     ui.label(name);
-                    let drag = egui::DragValue::new(value).range(0..=200).suffix(" px");
+                    let drag = egui::DragValue::new(value)
+                        .update_while_editing(false)
+                        .range(0..=200)
+                        .suffix(" px");
                     change = response_state(&ui.add(drag), change);
                 });
             }

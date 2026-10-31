@@ -291,6 +291,7 @@ impl Rows {
             ui.add_sized([72.0, 18.0], egui::Label::new(text));
             let mut value = param.value_at(time);
             let mut drag = DragValue::new(&mut value)
+                .update_while_editing(false)
                 .speed(drag_speed(&range))
                 .range(range.clone())
                 .max_decimals(2)

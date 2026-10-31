@@ -84,6 +84,7 @@ pub(super) fn controls(editor: &mut Editor, ui: &mut egui::Ui, clip: &Clip) {
                     super::controls::label_column(ui, "Speed");
                     let response = ui.add(
                         DragValue::new(&mut percent)
+                            .update_while_editing(false)
                             .range(1.0..=10_000.0)
                             .max_decimals(2)
                             .suffix("%"),

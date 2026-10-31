@@ -61,6 +61,7 @@ pub(super) fn animation_controls(ui: &mut egui::Ui, layer: &mut GraphicLayer) ->
         ui.horizontal(|ui| {
             ui.label("Delay");
             let delay = egui::DragValue::new(&mut animation.delay)
+                .update_while_editing(false)
                 .range(0..=600)
                 .suffix(" fr");
             let delay = ui
@@ -71,6 +72,7 @@ pub(super) fn animation_controls(ui: &mut egui::Ui, layer: &mut GraphicLayer) ->
         ui.horizontal(|ui| {
             ui.label("Length");
             let length = egui::DragValue::new(&mut animation.length)
+                .update_while_editing(false)
                 .range(1..=600)
                 .suffix(" fr");
             change = response_state(&ui.add(length), change);

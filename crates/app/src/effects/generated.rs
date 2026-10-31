@@ -75,6 +75,7 @@ pub(super) fn text_controls(ui: &mut egui::Ui, title: &mut Title) -> Option<Chan
             ui.label("Size");
             let size = ui.add(
                 egui::DragValue::new(&mut title.size)
+                    .update_while_editing(false)
                     .range(4..=1000)
                     .suffix(" px"),
             );
@@ -97,13 +98,18 @@ pub(super) fn text_controls(ui: &mut egui::Ui, title: &mut Title) -> Option<Chan
     pairs(ui, 200.0, |ui| {
         ui.horizontal(|ui| {
             ui.label("Tracking");
-            let tracking = ui.add(egui::DragValue::new(&mut title.tracking).range(-200..=1000));
+            let tracking = ui.add(
+                egui::DragValue::new(&mut title.tracking)
+                    .update_while_editing(false)
+                    .range(-200..=1000),
+            );
             change = response_state(&tracking, change);
         });
         ui.horizontal(|ui| {
             ui.label("Leading");
             let leading = ui.add(
                 egui::DragValue::new(&mut title.leading)
+                    .update_while_editing(false)
                     .range(-500..=500)
                     .suffix(" px"),
             );
@@ -148,6 +154,7 @@ fn background_rows(ui: &mut egui::Ui, title: &mut Title) -> Option<Change> {
             let style = &mut title.background_style;
             let opacity = ui.add(
                 egui::DragValue::new(&mut style.opacity)
+                    .update_while_editing(false)
                     .range(0..=100)
                     .suffix(" %"),
             );
@@ -167,12 +174,18 @@ fn background_rows(ui: &mut egui::Ui, title: &mut Title) -> Option<Change> {
             change = Some(Change::Commit);
         }
         if let Some(padding) = &mut style.padding {
-            let size = ui.add(egui::DragValue::new(padding).range(0..=1000).suffix(" px"));
+            let size = ui.add(
+                egui::DragValue::new(padding)
+                    .update_while_editing(false)
+                    .range(0..=1000)
+                    .suffix(" px"),
+            );
             change = response_state(&size, change);
         }
         ui.label("Corners");
         let corners = ui.add(
             egui::DragValue::new(&mut style.radius)
+                .update_while_editing(false)
                 .range(0..=1000)
                 .suffix(" px"),
         );
@@ -235,6 +248,7 @@ fn motion_controls(ui: &mut egui::Ui, motion: &mut TitleMotion) -> Option<Change
             ui.label(label);
             let drag = ui.add(
                 egui::DragValue::new(frames)
+                    .update_while_editing(false)
                     .range(0..=100_000)
                     .suffix(" fr"),
             );
@@ -264,7 +278,12 @@ pub(super) fn shape_controls(ui: &mut egui::Ui, shape: &mut Shape, height: u32) 
         for (label, length) in [("Width", &mut shape.width), ("Height", &mut shape.height)] {
             ui.horizontal(|ui| {
                 ui.label(label);
-                let drag = ui.add(egui::DragValue::new(length).range(1..=8000).suffix(" px"));
+                let drag = ui.add(
+                    egui::DragValue::new(length)
+                        .update_while_editing(false)
+                        .range(1..=8000)
+                        .suffix(" px"),
+                );
                 change = response_state(&drag, change);
             });
         }
@@ -275,6 +294,7 @@ pub(super) fn shape_controls(ui: &mut egui::Ui, shape: &mut Shape, height: u32) 
             let limit = shape.width.min(shape.height) / 2;
             let radius = ui.add(
                 egui::DragValue::new(&mut shape.corner_radius)
+                    .update_while_editing(false)
                     .range(0..=limit)
                     .suffix(" px"),
             );

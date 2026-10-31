@@ -268,6 +268,7 @@ fn strip(editor: &mut Editor, ui: &mut egui::Ui, channel: Channel) {
             db = db.max(*FADER_RANGE.start());
             let fader = ui.add(
                 Slider::new(&mut db, FADER_RANGE)
+                    .update_while_editing(false)
                     .vertical()
                     .show_value(false)
                     .step_by(0.1),
@@ -297,7 +298,11 @@ fn strip(editor: &mut Editor, ui: &mut egui::Ui, channel: Channel) {
             let mut value = pan.value();
             ui.spacing_mut().slider_width = 56.0;
             let knob = ui
-                .add(Slider::new(&mut value, -100..=100).show_value(false))
+                .add(
+                    Slider::new(&mut value, -100..=100)
+                        .update_while_editing(false)
+                        .show_value(false),
+                )
                 .on_hover_text(format!("Balance {value} (double-click to centre)"));
             if knob.double_clicked() {
                 value = 0;

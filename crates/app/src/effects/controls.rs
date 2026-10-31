@@ -100,7 +100,12 @@ impl Rows {
     ) {
         ui.horizontal(|ui| {
             label_column(ui, label);
-            let response = ui.add(DragValue::new(value).range(range).suffix(suffix));
+            let response = ui.add(
+                DragValue::new(value)
+                    .update_while_editing(false)
+                    .range(range)
+                    .suffix(suffix),
+            );
             self.output.change = response_state(&response, self.output.change);
         });
     }

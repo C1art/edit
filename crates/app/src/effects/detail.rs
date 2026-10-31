@@ -66,7 +66,8 @@ impl Rows {
                 );
                 let seed = &mut noise.random_seed;
                 self.choice(ui, "Random Seed", |ui| {
-                    ui.add(egui::DragValue::new(seed)).changed()
+                    ui.add(egui::DragValue::new(seed).update_while_editing(false))
+                        .changed()
                 });
                 let phase = &mut noise.noise_phase;
                 self.param(ui, "Noise Phase", phase, -3600.0..=3600.0, "°");

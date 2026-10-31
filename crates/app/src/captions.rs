@@ -187,6 +187,7 @@ fn style_controls(ui: &mut egui::Ui, captions: &mut Captions) -> Option<Change> 
             ui.label("Size");
             let size = ui.add(
                 egui::DragValue::new(&mut style.size)
+                    .update_while_editing(false)
                     .range(12..=200)
                     .suffix(" px"),
             );

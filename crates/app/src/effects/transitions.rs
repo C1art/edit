@@ -84,7 +84,12 @@ fn transition_row(
             });
         if let Some(transition) = &mut chosen {
             let mut frames = rate.frame_at(transition.duration, timebase);
-            let response = ui.add(DragValue::new(&mut frames).range(1..=600).suffix(" fr"));
+            let response = ui.add(
+                DragValue::new(&mut frames)
+                    .update_while_editing(false)
+                    .range(1..=600)
+                    .suffix(" fr"),
+            );
             if response.changed() {
                 transition.duration = rate.frame_start(frames, timebase);
             }
@@ -150,6 +155,7 @@ fn wipe_row(ui: &mut egui::Ui, label: &str, transition: &mut Transition) {
         let border = &mut transition.border;
         ui.add(
             DragValue::new(&mut border.width)
+                .update_while_editing(false)
                 .range(0..=200)
                 .suffix(" px"),
         )
@@ -167,7 +173,10 @@ fn wipe_row(ui: &mut egui::Ui, label: &str, transition: &mut Transition) {
         }
         ui.label("Softness");
         let mut softness = (transition.softness() * 100.0).round() as u8;
-        let soften = DragValue::new(&mut softness).range(0..=100).suffix("%");
+        let soften = DragValue::new(&mut softness)
+            .update_while_editing(false)
+            .range(0..=100)
+            .suffix("%");
         if ui.add(soften).changed() {
             transition.softness = Some(softness);
         }

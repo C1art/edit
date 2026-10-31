@@ -200,6 +200,7 @@ impl Row {
         ui.label(property.label());
         let response = ui.add(
             egui::DragValue::new(&mut value)
+                .update_while_editing(false)
                 .range(property.range())
                 .suffix(property.suffix())
                 .max_decimals(2),

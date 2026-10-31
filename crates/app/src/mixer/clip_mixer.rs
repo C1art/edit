@@ -78,6 +78,7 @@ fn strip(editor: &mut Editor, ui: &mut egui::Ui, track_ref: TrackRef) {
                 meter_bar(ui, meter.unwrap_or([METER_FLOOR; 2]));
                 let fader = ui.add(
                     Slider::new(&mut db, FADER_RANGE)
+                        .update_while_editing(false)
                         .vertical()
                         .show_value(false)
                         .step_by(0.1),
@@ -112,7 +113,11 @@ fn strip(editor: &mut Editor, ui: &mut egui::Ui, track_ref: TrackRef) {
             let mut balance = pan.value_at(at);
             ui.spacing_mut().slider_width = 56.0;
             let knob = ui
-                .add(Slider::new(&mut balance, -100.0..=100.0).show_value(false))
+                .add(
+                    Slider::new(&mut balance, -100.0..=100.0)
+                        .update_while_editing(false)
+                        .show_value(false),
+                )
                 .on_hover_text(format!("Balance {balance:.0} (double-click to centre)"));
             if knob.double_clicked() {
                 balance = 0.0;

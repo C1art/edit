@@ -179,6 +179,7 @@ fn layer_controls(ui: &mut egui::Ui, layer: &mut GraphicLayer, frame: [u32; 2]) 
         ui.label("Position");
         for (axis, value) in ["X", "Y"].into_iter().zip(&mut layer.offset) {
             let drag = egui::DragValue::new(value)
+                .update_while_editing(false)
                 .range(-20_000..=20_000)
                 .prefix(format!("{axis} "))
                 .suffix(" px");
@@ -192,6 +193,7 @@ fn layer_controls(ui: &mut egui::Ui, layer: &mut GraphicLayer, frame: [u32; 2]) 
         ui.horizontal(|ui| {
             ui.label("Scale");
             let scale = egui::DragValue::new(&mut layer.scale)
+                .update_while_editing(false)
                 .range(1..=2000)
                 .suffix(" %");
             change = response_state(&ui.add(scale), change);
@@ -199,6 +201,7 @@ fn layer_controls(ui: &mut egui::Ui, layer: &mut GraphicLayer, frame: [u32; 2]) 
         ui.horizontal(|ui| {
             ui.label("Rotation");
             let rotation = egui::DragValue::new(&mut layer.rotation)
+                .update_while_editing(false)
                 .range(-3600..=3600)
                 .suffix("°");
             change = response_state(&ui.add(rotation), change);
@@ -206,6 +209,7 @@ fn layer_controls(ui: &mut egui::Ui, layer: &mut GraphicLayer, frame: [u32; 2]) 
         ui.horizontal(|ui| {
             ui.label("Opacity");
             let opacity = egui::DragValue::new(&mut layer.opacity)
+                .update_while_editing(false)
                 .range(0..=100)
                 .suffix(" %");
             change = response_state(&ui.add(opacity), change);

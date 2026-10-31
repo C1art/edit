@@ -101,6 +101,7 @@ pub(super) fn panel(editor: &mut Editor, ui: &mut egui::Ui) {
                 let level = ui
                     .add(
                         DragValue::new(&mut db)
+                            .update_while_editing(false)
                             .range(FADER_RANGE)
                             .speed(0.1)
                             .max_decimals(1)
@@ -124,6 +125,7 @@ pub(super) fn panel(editor: &mut Editor, ui: &mut egui::Ui) {
                 let pan = ui
                     .add(
                         DragValue::new(&mut balance)
+                            .update_while_editing(false)
                             .range(-100..=100)
                             .prefix("Pan "),
                     )
