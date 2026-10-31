@@ -23,6 +23,7 @@ mod dialog;
 mod dialogs;
 mod dropped_frames;
 mod duck_dialog;
+mod edit_apply;
 mod editor;
 mod effect_presets;
 mod effects;

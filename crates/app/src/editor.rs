@@ -4,10 +4,7 @@ use std::sync::Arc;
 
 use audio::AudioOutput;
 use eframe::egui_wgpu::RenderState;
-use timeline::{
-    Clipboard, Edit, Marker, Sequence, SetSequenceFormat, SourceId, Ticks, Timebase, Timeline,
-    TimelineError, VideoFormat,
-};
+use timeline::{Clipboard, Marker, Sequence, SourceId, Ticks, Timebase, Timeline, VideoFormat};
 
 use crate::autosave::Autosave;
 use crate::captions::CaptionPanel;
@@ -408,28 +405,6 @@ impl Editor {
         self.notices.drain(..excess);
     }
 
-    pub(crate) fn apply(&mut self, edit: impl Edit) -> bool {
-        match self.timeline.apply(edit) {
-            Ok(()) => true,
-            Err(TimelineError::NothingToEdit) => false,
-            Err(error) => {
-                self.notice(format!("Cannot edit: {error}"));
-                false
-            }
-        }
-    }
-
-    /// Applies an edit that changes only levels, or nothing that plays at all, handing it
-    /// to the program player without the seek a structural edit needs, so playback
-    /// carries on uninterrupted.
-    pub(crate) fn apply_levels(&mut self, edit: impl Edit) {
-        if !self.apply(edit) {
-            return;
-        }
-        self.shown_revision = self.timeline.revision();
-        self.mix_program(self.timeline.sequence().clone());
-    }
-
     /// Opens a project file or imports anything else.
     pub(crate) fn open_path(&mut self, path: PathBuf) {
         if is_project(&path) {
@@ -461,32 +436,6 @@ impl Editor {
         self.sync_program();
         if let Some(program) = &mut self.program {
             program.player.seek(position);
-        }
-    }
-
-    /// An empty sequence takes on the format of the first video placed in it.
-    /// Runs an action of several edits so that it undoes as one step.
-    pub(crate) fn as_one_edit<T>(&mut self, act: impl FnOnce(&mut Self) -> T) -> T {
-        let mark = self.timeline.edit_mark();
-        let result = act(self);
-        self.timeline.join_since(mark);
-        result
-    }
-
-    pub(crate) fn match_format(&mut self, source: SourceId) {
-        let sequence = self.timeline.sequence();
-        // A nest shares the project's format, which its contents shouldn't decide.
-        if sequence.duration() > Ticks::ZERO || self.timeline.open_nest().is_some() {
-            return;
-        }
-        let Some(format) = sequence
-            .media_item(source)
-            .and_then(|item| item.played_format())
-        else {
-            return;
-        };
-        if format != sequence.format {
-            self.apply(SetSequenceFormat { format });
         }
     }
 }
