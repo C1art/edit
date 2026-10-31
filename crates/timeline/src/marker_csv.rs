@@ -5,11 +5,12 @@ use crate::{MarkerKind, Sequence};
 const HEADER: &str = "Marker Name,Description,In,Out,Duration,Marker Type,Color,URL";
 
 /// The sequence markers in time order as comma-separated values, one row each, timed as
-/// the sequence shows times.
+/// the sequence shows times. The text starts with a byte order mark, without which Excel
+/// reads the file in the system's code page and garbles any name outside ASCII.
 pub fn markers_csv(sequence: &Sequence) -> String {
     let mut markers: Vec<_> = sequence.markers.iter().collect();
     markers.sort_by_key(|marker| marker.at);
-    let mut text = format!("{HEADER}\r\n");
+    let mut text = format!("\u{feff}{HEADER}\r\n");
     for marker in markers {
         let url = match &marker.kind {
             MarkerKind::WebLink { url } => url.as_str(),
