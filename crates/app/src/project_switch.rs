@@ -11,7 +11,11 @@ impl Editor {
         self.clipboard = None;
         self.nest_trail.clear();
         self.sequence_tabs.clear();
-        self.pool.selected.clear();
+        self.pool.forget_items();
+        self.proxy_offer.forget_pending();
+        // Dropping a running render cancels it.
+        self.render_replace = None;
+        self.effects.forget_clips();
         self.breakouts.clear();
         self.view.cancel_drag();
         self.view.selection.clear();

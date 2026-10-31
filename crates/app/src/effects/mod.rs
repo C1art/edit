@@ -118,6 +118,22 @@ pub struct EffectControls {
     ken_burns: bool,
 }
 
+impl EffectControls {
+    /// Drops the closed project's uncommitted values and key selection, keeping which
+    /// overlays are shown.
+    pub(crate) fn drop_look_preview(&mut self) {
+        self.adjusting = None;
+    }
+
+    pub(crate) fn forget_clips(&mut self) {
+        *self = Self {
+            cropping: self.cropping,
+            ken_burns: self.ken_burns,
+            ..Self::default()
+        };
+    }
+}
+
 pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
     let sequence = editor.timeline.sequence();
     // Linked video and audio are selected together and adjusted side by side.

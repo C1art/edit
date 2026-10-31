@@ -54,6 +54,10 @@ pub(crate) struct ProxyOffer {
 }
 
 impl ProxyOffer {
+    pub(crate) fn forget_pending(&mut self) {
+        self.pending.clear();
+    }
+
     pub(crate) fn imported(&mut self, item: &MediaItem) {
         if self.choice != HeavyMedia::Ignore && is_heavy(item) {
             self.pending.push(item.id);

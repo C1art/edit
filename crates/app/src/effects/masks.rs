@@ -26,7 +26,12 @@ pub(super) fn controls(
             ui.horizontal(|ui| {
                 let title = format!("Mask ({}) – {}", index + 1, mask.shape.name());
                 ui.label(RichText::new(title).strong());
-                if ui.small_button("Remove").clicked() {
+                // Tracking writes back to a mask by its index.
+                let removable = rows.tracking.is_none();
+                if ui
+                    .add_enabled(removable, egui::Button::new("Remove").small())
+                    .clicked()
+                {
                     removed = Some(index);
                 }
             });

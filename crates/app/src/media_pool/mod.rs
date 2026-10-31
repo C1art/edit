@@ -93,6 +93,14 @@ pub struct PoolView {
 }
 
 impl PoolView {
+    /// Drops what was picked, typed or asked about in the closed project.
+    pub(crate) fn forget_items(&mut self) {
+        self.selected.clear();
+        self.renaming = None;
+        self.removing = None;
+        self.revealing = None;
+    }
+
     /// Selects `source` alone and brings it into view.
     pub(crate) fn reveal(&mut self, source: SourceId) {
         self.selected = vec![source];

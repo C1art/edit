@@ -162,7 +162,10 @@ impl Editor {
             self.notice(format!("Cannot track the mask further: {error}"));
         }
         let Some((edit, last)) = self.tracked_look() else {
+            // The clip or mask went away mid-track: show the program as it is.
             self.mask_track_job = None;
+            self.effects.drop_look_preview();
+            self.show_program(self.timeline.sequence().clone());
             return;
         };
         self.mask_track_job = None;
