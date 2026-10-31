@@ -13,6 +13,9 @@ use crate::pixel_effects::{linear, pixel_effects, transform_opacity};
 const BLURRINESS_PER_SIGMA: f32 = 2.0;
 /// The Sharpen effect's default amount, as a share.
 const SHARPEN_DEFAULT: f32 = 0.5;
+/// Below this motion scale a picture is too small to see, and smearing it further would
+/// only blow its blur up toward infinity.
+const MIN_SMEAR_SCALE: f32 = 0.01;
 
 /// `look` for a picture of `media`, drawn with the pixel shape, alpha and color space
 /// it's interpreted with.
@@ -47,14 +50,16 @@ pub(crate) fn layer_look(
     let mut effects = pixel_effects(&look.effects, time, timebase);
     // Lumetri's sharpen at 100 is the Sharpen effect's default.
     effects.sharpen += SHARPEN_DEFAULT * percent(&look.color.sharpen).max(0.0);
+    let scale = look
+        .motion
+        .scale_at(time)
+        .map(|percent| percent / 100.0 * reveal.zoom);
+    let rotation_degrees = value(&look.motion.rotation);
     LayerLook {
         offset,
-        scale: look
-            .motion
-            .scale_at(time)
-            .map(|percent| percent / 100.0 * reveal.zoom),
+        scale,
         anchor: look.motion.anchor.each_ref().map(value),
-        rotation_degrees: value(&look.motion.rotation),
+        rotation_degrees,
         crop: [&crop.left, &crop.top, &crop.right, &crop.bottom].map(percent),
         opacity: percent(&look.opacity) * transform_opacity(&look.effects, time) * reveal.fade,
         opacity_masks: opacity_masks(&look.masks, &look.effects, time),
@@ -74,7 +79,11 @@ pub(crate) fn layer_look(
             })
         }),
         wash: reveal.wash,
-        effects: smeared(turned(effects, reveal, canvas), reveal, canvas),
+        effects: smeared(
+            turned(effects, reveal, canvas),
+            [0, 1].map(|axis| reveal.smear[axis] * canvas[axis]),
+            (rotation_degrees, scale),
+        ),
         blend: reveal.blend.unwrap_or(look.blend),
         reach: Reach::Everywhere,
         pixel_aspect: 1.0,
@@ -82,14 +91,26 @@ pub(crate) fn layer_look(
     }
 }
 
-/// `effects` blurred along the transition's motion, in place of the clip's own
-/// directional blur.
-fn smeared(mut effects: PixelEffects, reveal: Reveal, canvas: [f32; 2]) -> PixelEffects {
-    let [x, y] = [0, 1].map(|axis| reveal.smear[axis] * canvas[axis]);
-    if x != 0.0 || y != 0.0 {
-        effects.style.blur_length = x.hypot(y);
-        effects.style.blur_direction = x.atan2(-y);
+/// `effects` blurred along the transition's motion of `smear` canvas pixels, in place
+/// of the clip's own directional blur. The blur runs across the picture before motion
+/// turns, scales or flips it, so the motion is taken back through those first.
+fn smeared(
+    mut effects: PixelEffects,
+    smear: [f32; 2],
+    (rotation_degrees, scale): (f32, [f32; 2]),
+) -> PixelEffects {
+    if smear == [0.0; 2] {
+        return effects;
     }
+    let (sin, cos) = rotation_degrees.to_radians().sin_cos();
+    let [x, y] = smear;
+    let turned_back = [x * cos + y * sin, y * cos - x * sin];
+    let [x, y] = [0, 1].map(|axis| {
+        let flip = if effects.flip[axis] { -1.0 } else { 1.0 };
+        turned_back[axis] * flip / scale[axis].abs().max(MIN_SMEAR_SCALE)
+    });
+    effects.style.blur_length = x.hypot(y);
+    effects.style.blur_direction = x.atan2(-y);
     effects
 }
 
@@ -242,4 +263,18 @@ pub(crate) fn layer_mask(mask: &Mask, time: Ticks) -> Option<LayerMask> {
         intersect: false,
         outline,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_smear_runs_across_a_turned_and_shrunk_picture_along_its_own_axes() {
+        let effects = smeared(PixelEffects::NONE, [100.0, 0.0], (90.0, [0.5, 0.5]));
+        assert!((effects.style.blur_length - 200.0).abs() < 1e-3);
+        // A picture turned a quarter clockwise moves sideways on the canvas along its
+        // own vertical.
+        assert!(effects.style.blur_direction.sin().abs() < 1e-3);
+    }
 }
