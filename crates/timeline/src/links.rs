@@ -97,7 +97,7 @@ impl Sequence {
                     group
                         .iter()
                         .filter(|other| other.id != clip.id)
-                        .map(|other| clip.start - other.position_of(clip.source_in))
+                        .map(|other| sync_offset(clip, other))
                         .find(|&offset| offset != Ticks::ZERO)
                         .map(|offset| (clip.id, offset))
                 })
@@ -112,9 +112,16 @@ impl Sequence {
             .flat_map(|(_, track)| track.clips.iter().map(Arc::as_ref))
             .filter(|other| other.id != clip.id && other.link == Some(link))
             .filter(|other| other.source == clip.source)
-            .map(|other| (other, clip.start - other.position_of(clip.source_in)))
+            .map(|other| (other, sync_offset(clip, other)))
             .find(|&(_, offset)| offset != Ticks::ZERO)
     }
+}
+
+/// How much later `clip` plays its first source frame than `other` plays the same
+/// frame; measured the same way on both, so a reversed or remapped pair that matches
+/// reads as in sync.
+fn sync_offset(clip: &Clip, other: &Clip) -> Ticks {
+    clip.position_of(clip.source_in) - other.position_of(clip.source_in)
 }
 
 fn sorted_ids(clips: Vec<(TrackRef, &Clip)>) -> Vec<ClipId> {
