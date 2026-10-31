@@ -1,4 +1,4 @@
-# Edit
+# Cledit
 
 A non-linear video editor for Windows 11, written in Rust. It aims at the everyday
 feature set of Premiere Pro: a multi-track timeline with frame-accurate editing, effects,
@@ -46,12 +46,12 @@ On Windows 11 (x64):
    Whisper are built with them.
 3. Download a **shared** FFmpeg 8 build for Windows (for example a `-shared` build from
    gyan.dev or BtbN) and set `FFMPEG_DIR` to the folder holding its `include` and `lib`.
-   Put its `bin` folder on `PATH`, or copy its DLLs next to `app.exe`, to run.
+   Put its `bin` folder on `PATH`, or copy its DLLs next to `cledit.exe`, to run.
 4. Build and run:
 
    ```
    cargo run -p app                 # debug
-   cargo build --release            # target\release\app.exe
+   cargo build --release            # target\release\cledit.exe
    ```
 
 Release builds open without a console window.
@@ -59,11 +59,12 @@ Release builds open without a console window.
 ## Where things are kept
 
 Preferences, workspaces, autosaves, cached waveforms, presets, templates and downloaded
-speech models live in `%APPDATA%\Edit`. Projects are `.editproj` files wherever you save
+speech models live in `%APPDATA%\Cledit` (a `%APPDATA%\Edit` folder from before the
+rename is moved there on first start). Projects are `.editproj` files wherever you save
 them. VST3 plugins are found in `C:\Program Files\Common Files\VST3`.
 
 Speech models are downloaded on first use from Hugging Face (whisper.cpp's `ggml` files);
-any model file put in `%APPDATA%\Edit\models` with the expected name works offline.
+any model file put in `%APPDATA%\Cledit\models` with the expected name works offline.
 
 ## Tests and benchmarks
 
@@ -97,8 +98,6 @@ clip a Lumetri grade and a Gaussian blur.
 ## Known limits
 
 - Windows only. Other platforms build for development but aren't supported.
-- The window has the app's icon; `app.exe` itself shows the default icon in Explorer,
-  as embedding one needs a resource-compiler build dependency.
 - Only VST3 audio effects are hosted: no instruments, CLAP or AU.
 - Speech recognition runs on the CPU.
 - The working color space is Rec.709; HDR sources are converted into it.

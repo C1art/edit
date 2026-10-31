@@ -168,7 +168,7 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &Context) {
     let ago = offered.autosaved_at.elapsed().unwrap_or_default();
     let mut recover = None;
     crate::dialog::window(ctx, "Recover Unsaved Work").show(ctx, |ui| {
-        ui.label("Edit didn't close normally last time.");
+        ui.label("Cledit didn't close normally last time.");
         ui.label(format!(
             "Changes to {what} were autosaved {} but never saved.",
             ago_text(ago)

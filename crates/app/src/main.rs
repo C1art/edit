@@ -57,6 +57,7 @@ mod gpu_setup;
 mod graphics_tools;
 mod guides;
 mod history_panel;
+mod icon_art;
 mod icons;
 mod import;
 mod installed_fonts;
@@ -160,11 +161,12 @@ use window_state::WindowState;
 
 fn main() -> eframe::Result {
     let initial: Vec<PathBuf> = std::env::args_os().skip(1).map(PathBuf::from).collect();
+    project_store::adopt_old_app_folder();
     let window = WindowState::load();
     let options = eframe::NativeOptions {
         viewport: window.open(
             egui::ViewportBuilder::default()
-                .with_title("Edit")
+                .with_title("Cledit")
                 .with_icon(app_icon::icon())
                 .with_drag_and_drop(true),
         ),
@@ -173,7 +175,7 @@ fn main() -> eframe::Result {
         ..Default::default()
     };
     eframe::run_native(
-        "Edit",
+        "Cledit",
         options,
         Box::new(|creation_context| Ok(Box::new(Editor::new(creation_context, initial, window)))),
     )

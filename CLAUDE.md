@@ -16,6 +16,7 @@ A non-linear video editor for Windows 11, built in Rust. The end goal is feature
 - Windows APIs: `windows` (D3D12/DXGI texture sharing and other Win32 calls), as a `cfg(windows)` dependency
 - Speech: `whisper-rs` (whisper.cpp, CPU), as a `cfg(windows)` dependency
 - Plugins: `vst3` bindings and `libloading` for hosting VST3 effects, as `cfg(windows)` dependencies
+- Exe resources: `embed-resource` (build dependency of `app`) for the exe's icon and version info
 - Ask before adding any dependency not listed here.
 
 ## Structure
@@ -29,7 +30,7 @@ Cargo workspace. Dependencies flow downward only; `timeline` and `project` never
 - `crates/audio/` — cpal output stream, rubato resampling, mixer
 - `crates/playback/` — engine that schedules decode, render and audio against the master clock
 - `crates/project/` — project file format, serde, versioned migrations
-- `crates/speech/` — Whisper transcription and model downloads into `%APPDATA%\Edit\models`
+- `crates/speech/` — Whisper transcription and model downloads into `%APPDATA%\Cledit\models`
 - `crates/plugins/` — VST3 scanning, loading, processing and editor windows
 - `crates/plugin_fixture/` — a minimal VST3 `cdylib` that plugin tests load
 - `tests/fixtures/` — small media files used by integration tests

@@ -11,7 +11,7 @@ use vst3::{Class, ComWrapper, Interface};
 use super::message::{AttributeList, HostMessage};
 use super::strings::copy_utf16;
 
-const HOST_NAME: &str = "Edit";
+const HOST_NAME: &str = "Cledit";
 
 /// The host context passed to `initialize`. Stateless, so plugins may call it from any thread.
 pub(crate) struct HostApplication;

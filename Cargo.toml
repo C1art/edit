@@ -31,6 +31,7 @@ whisper-rs = "0.16"
 # VST3 audio plugin hosting.
 vst3 = "0.3"
 libloading = "0.9"
+embed-resource = "3"
 # For sharing decoded pictures with the GPU on Windows, at the versions wgpu uses, and
 # for the system file dialogs.
 windows = { version = "0.62", features = [

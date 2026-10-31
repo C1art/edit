@@ -25,7 +25,7 @@ impl Editor {
             .and_then(|path| path.file_stem())
             .map_or_else(|| "Untitled".into(), |stem| stem.to_string_lossy());
         let mark = if self.is_dirty() { "*" } else { "" };
-        let title = format!("{name}{mark} - Edit");
+        let title = format!("{name}{mark} - Cledit");
         if self.window_title != title {
             ctx.send_viewport_cmd(ViewportCommand::Title(title.clone()));
             self.window_title = title;

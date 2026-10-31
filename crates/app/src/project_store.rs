@@ -146,11 +146,28 @@ impl Setting {
     }
 }
 
-/// Where the editor keeps files of its own: `%APPDATA%\Edit`.
+const APP_FOLDER_NAME: &str = "Cledit";
+/// The folder's name from before the app was called Cledit.
+const OLD_APP_FOLDER_NAME: &str = "Edit";
+
+/// Where the editor keeps files of its own: `%APPDATA%\Cledit`.
 pub fn app_folder() -> PathBuf {
-    std::env::var_os("APPDATA")
-        .map_or_else(std::env::temp_dir, PathBuf::from)
-        .join("Edit")
+    app_data().join(APP_FOLDER_NAME)
+}
+
+fn app_data() -> PathBuf {
+    std::env::var_os("APPDATA").map_or_else(std::env::temp_dir, PathBuf::from)
+}
+
+/// Carries preferences, shortcuts, autosaves and downloaded models over from the
+/// folder used before the rename, once, before anything reads the new one.
+pub fn adopt_old_app_folder() {
+    let old = app_data().join(OLD_APP_FOLDER_NAME);
+    let new = app_folder();
+    if old.is_dir() && !new.exists() {
+        // Failing leaves the old folder in place, and the app starts with defaults.
+        let _ = std::fs::rename(old, new);
+    }
 }
 
 /// Reads and writes project files on a worker thread so the UI never touches the disk.
