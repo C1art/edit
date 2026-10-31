@@ -2,6 +2,7 @@ mod dsp;
 mod error;
 mod input;
 mod output;
+mod played;
 mod remix;
 mod resampler;
 mod wav;

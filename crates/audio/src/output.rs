@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use crossbeam::queue::ArrayQueue;
 
+use crate::played::Played;
 use crate::{AudioError, SampleRate};
 
 /// Enough queued audio to ride out a slow decode without making seeks feel sluggish.
@@ -18,7 +19,7 @@ pub struct OutputFormat {
 #[derive(Debug)]
 struct Shared {
     queue: ArrayQueue<f32>,
-    frames_played: AtomicU64,
+    played: Played,
     paused: AtomicBool,
     /// Set once the device goes away or the stream can no longer play.
     lost: AtomicBool,
@@ -133,7 +134,7 @@ impl AudioOutput {
             queue: ArrayQueue::new(
                 (format.sample_rate.0 as usize * channels * QUEUE_SECONDS).max(channels),
             ),
-            frames_played: AtomicU64::new(0),
+            played: Played::new(format.sample_rate.0),
             paused: AtomicBool::new(true),
             lost: AtomicBool::new(false),
             session: Mutex::new(0),
@@ -199,6 +200,7 @@ impl AudioOutput {
 fn fill(shared: &Shared, data: &mut [f32], channels: usize) {
     if shared.paused.load(Ordering::Acquire) {
         data.fill(0.0);
+        shared.played.advance(0);
         return;
     }
     let mut played = 0;
@@ -217,7 +219,7 @@ fn fill(shared: &Shared, data: &mut [f32], channels: usize) {
             played += 1;
         }
     }
-    shared.frames_played.fetch_add(played, Ordering::Release);
+    shared.played.advance(played);
 }
 
 fn lock(session: &Mutex<u64>) -> std::sync::MutexGuard<'_, u64> {
@@ -287,7 +289,7 @@ impl AudioWriter {
     /// Frames the device has taken from the queue since the output was opened; this is the
     /// master clock.
     pub fn frames_played(&self) -> u64 {
-        self.shared.frames_played.load(Ordering::Acquire)
+        self.shared.played.frames()
     }
 
     pub fn set_paused(&self, paused: bool) {
