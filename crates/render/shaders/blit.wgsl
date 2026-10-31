@@ -457,6 +457,20 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     return layer_color(in);
 }
 
+// The colors without the alpha some pictures carry them multiplied by: in linear light
+// for composited ones, or on the encoded values for files, which the sampler decoded.
+fn unpremultiplied(color: vec4<f32>) -> vec3<f32> {
+    let premultiplied = placement.axis_y_opacity.w;
+    let alpha = max(color.a, 1e-6);
+    if premultiplied > 1.5 {
+        return srgb_decode(min(srgb_encode(color.rgb) / alpha, vec3<f32>(1.0)));
+    }
+    if premultiplied > 0.5 {
+        return color.rgb / alpha;
+    }
+    return color.rgb;
+}
+
 fn in_crop(uv: vec2<f32>) -> bool {
     return all(uv >= placement.crop.xy) && all(uv <= vec2<f32>(1.0) - placement.crop.zw);
 }
@@ -464,10 +478,7 @@ fn in_crop(uv: vec2<f32>) -> bool {
 // The picture at the warped `uv`, unpremultiplied and through the input LUT.
 fn source_color(uv: vec2<f32>) -> vec4<f32> {
     var color = picture_at(magnified(uv));
-    if placement.axis_y_opacity.w > 0.5 {
-        color = vec4<f32>(color.rgb / max(color.a, 1e-6), color.a);
-    }
-    color = vec4<f32>(color_managed(color.rgb), color.a);
+    color = vec4<f32>(color_managed(unpremultiplied(color)), color.a);
     let drawn = patterned(generated(ramped(vec4<f32>(input_grade(color.rgb), color.a), uv), uv), uv);
     return flared(drawn, uv);
 }

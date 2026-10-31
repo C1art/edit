@@ -1,5 +1,6 @@
 use crate::blit::{self, Blit};
 use crate::compositor::extent;
+use crate::placement::Premultiplied;
 use crate::WORKING_FORMAT;
 
 /// More taps per side than this and the taps spread apart instead.
@@ -66,9 +67,9 @@ impl BlurTargets {
         queue: &wgpu::Queue,
         (width, height): (u32, u32),
         sigma: [f32; 4],
-        source_premultiplied: bool,
-    ) -> bool {
-        let premultiply = !source_premultiplied && sigma.iter().all(|&each| each == sigma[3]);
+        source: Premultiplied,
+    ) -> Premultiplied {
+        let premultiply = source == Premultiplied::No && sigma.iter().all(|&each| each == sigma[3]);
         let across = [1.0 / width as f32, 0.0];
         let down = [0.0, 1.0 / height as f32];
         let (spacing, _) = tap_layout(sigma.into_iter().fold(0.0, f32::max));
@@ -96,7 +97,11 @@ impl BlurTargets {
         for (buffer, bytes) in self.uniforms.iter().zip(&passes) {
             queue.write_buffer(buffer, 0, bytes);
         }
-        source_premultiplied || premultiply
+        if premultiply {
+            Premultiplied::InLight
+        } else {
+            source
+        }
     }
 
     pub(crate) fn draw(&self, encoder: &mut wgpu::CommandEncoder, blit: &Blit) {

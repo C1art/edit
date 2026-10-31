@@ -45,6 +45,18 @@ fn ignoring_alpha_shows_transparent_pixels_and_inverting_hides_opaque_ones() {
 
 #[test]
 #[ignore = "needs a GPU"]
+fn a_premultiplied_file_is_divided_by_alpha_before_decoding() {
+    // Half-covering white, stored as files do with the code values halved: over black
+    // that is half of white's light.
+    let shown = interpreted([128, 128, 128, 128], AlphaInterpretation::Premultiplied).unwrap();
+    assert!(
+        shown.iter().all(|&level| level.abs_diff(188) <= 2),
+        "got {shown:?}"
+    );
+}
+
+#[test]
+#[ignore = "needs a GPU"]
 fn sharpening_a_flat_hdr_picture_leaves_it_flat() {
     let flat = |detail| {
         let effects = PixelEffects {

@@ -136,6 +136,16 @@ impl LayerLook {
     }
 }
 
+/// Whether, and how, the picture's colors are already multiplied by its alpha.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Premultiplied {
+    No,
+    /// In linear light, as composited.
+    InLight,
+    /// On the encoded values, as files store it, before the sampler decodes them.
+    Encoded,
+}
+
 /// Where a layer lands in normalized device coordinates (the canvas spans -1..1, +y
 /// up): the center of the uncropped picture and the vectors along its full width and
 /// height, top to bottom.
@@ -154,8 +164,7 @@ pub(crate) struct Placement {
     pub(crate) wash: f32,
     pub(crate) effects: PixelEffects,
     pub(crate) blend: BlendMode,
-    /// Whether the picture's colors are already multiplied by its alpha.
-    pub(crate) premultiplied: bool,
+    pub(crate) premultiplied: Premultiplied,
     /// What the shader reads of the layer's lookups.
     pub(crate) grade: [f32; 4],
 }
@@ -174,7 +183,7 @@ impl Placement {
         wash: 0.0,
         effects: PixelEffects::NONE,
         blend: BlendMode::Normal,
-        premultiplied: false,
+        premultiplied: Premultiplied::No,
         grade: [0.0; 4],
     };
 
@@ -207,7 +216,7 @@ impl Placement {
             wash: look.wash.clamp(0.0, 1.0),
             effects: look.effects,
             blend: look.blend,
-            premultiplied: false,
+            premultiplied: Premultiplied::No,
             grade: [0.0; 4],
         }
     }
@@ -227,7 +236,11 @@ impl Placement {
         let [xx, xy] = self.axis_x;
         let [yx, yy] = self.axis_y;
         let color = &self.color;
-        let premultiplied = if self.premultiplied { 1.0 } else { 0.0 };
+        let premultiplied = match self.premultiplied {
+            Premultiplied::No => 0.0,
+            Premultiplied::InLight => 1.0,
+            Premultiplied::Encoded => 2.0,
+        };
         [cx, cy, xx, xy, yx, yy, self.opacity, premultiplied]
             .into_iter()
             .chain(self.crop)

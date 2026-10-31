@@ -8,7 +8,7 @@ use crate::blit::Blit;
 use crate::blur::BlurTargets;
 use crate::grade::Grade;
 use crate::layer_shader::Features;
-use crate::placement::{fit_scale, Placement, Reach};
+use crate::placement::{fit_scale, Placement, Premultiplied, Reach};
 use crate::yuv::{ChromaLayout, ChromaRows, PlaneRows, PlaneTextures};
 use crate::WORKING_FORMAT;
 
@@ -241,8 +241,12 @@ impl Compositor {
             slot.blur = Some(blur);
         }
         // Compositing leaves a group's colors multiplied by its coverage.
-        let mut premultiplied = slot.kind == SlotKind::Group
-            || look.effects.alpha == AlphaInterpretation::Premultiplied;
+        let mut premultiplied = match (slot.kind, look.effects.alpha) {
+            (SlotKind::Group, _) => Premultiplied::InLight,
+            (SlotKind::Picture, AlphaInterpretation::Premultiplied) => Premultiplied::Encoded,
+            (_, AlphaInterpretation::Premultiplied) => Premultiplied::InLight,
+            _ => Premultiplied::No,
+        };
         if let Some(blur) = slot.blur.as_mut().filter(|_| slot.blurred) {
             premultiplied = blur.write(&self.queue, size, sigma, premultiplied);
         }

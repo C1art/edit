@@ -13,11 +13,7 @@ fn graded_at(uv: vec2<f32>) -> vec3<f32> {
 // A neighbouring texel brought to the working space as `source_color` brings the
 // pixel itself, so an HDR or premultiplied picture's neighbours compare like for like.
 fn graded(color: vec4<f32>) -> vec3<f32> {
-    var rgb = color.rgb;
-    if placement.axis_y_opacity.w > 0.5 {
-        rgb = rgb / max(color.a, 1e-6);
-    }
-    return input_grade(color_managed(rgb));
+    return input_grade(color_managed(unpremultiplied(color)));
 }
 
 // Unsharp Mask: adds back the difference from a disc blur where it passes the

@@ -11,7 +11,7 @@ use crate::blit::{self, Blit, DISPLAY_FORMAT};
 use crate::grade::Grade;
 use crate::layer_pipelines::LayerPass;
 use crate::layer_shader::Features;
-use crate::placement::{LayerLook, Placement};
+use crate::placement::{LayerLook, Placement, Premultiplied};
 use crate::scope::{Scope, ScopeTrace};
 use crate::yuv::YuvConverter;
 use crate::{RenderError, WORKING_FORMAT};
@@ -153,7 +153,7 @@ impl Compositor {
         self.yuv.build_in_background();
         // What a plain frame needs, so the first one is ready as soon as possible.
         let working = Placement {
-            premultiplied: true,
+            premultiplied: Premultiplied::InLight,
             ..Placement::FULL
         };
         let working = self.blit.features(&working.to_bytes());
@@ -426,7 +426,11 @@ impl Compositor {
         // Layers blend into the working frame with their colors multiplied by their
         // alpha. Over black that alpha stays whole and dividing it out changes nothing.
         let working = Placement {
-            premultiplied: self.background != Background::UnderUi,
+            premultiplied: if self.background == Background::UnderUi {
+                Premultiplied::No
+            } else {
+                Premultiplied::InLight
+            },
             ..Placement::FULL
         };
         let working_features = self.blit.write_placement(&self.queue, &placement, working);
