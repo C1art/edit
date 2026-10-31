@@ -1,7 +1,9 @@
 //! Whether real footage plays smoothly through dissolves, and if not, what holds it up.
 //! Cuts the files into short pieces, alternating between them, with the default
 //! transition at every cut, then plays it all in real time: first only the Program
-//! monitor's player and picture, then in the whole editor with sound. Run it in release:
+//! monitor's player and picture, then in the whole editor with sound. With
+//! `EDIT_BENCH_EFFECTS=1` every clip also gets a Lumetri grade and a Gaussian blur. Run
+//! it in release:
 //! `EDIT_BENCH_CLIPS="a.mp4;b.mp4" cargo test --release -p app playback_speed -- --ignored --nocapture`.
 
 use std::fmt;
@@ -102,6 +104,9 @@ fn playback_speed() {
         video: defaults.transition(sequence, TrackKind::Video),
         audio: defaults.transition(sequence, TrackKind::Audio),
     });
+    if bench_clips::flag("EDIT_BENCH_EFFECTS") {
+        bench_clips::add_effects(&mut editor);
+    }
 
     let sequence = Arc::new(editor.timeline.sequence().clone());
     let format = sequence.format;

@@ -209,6 +209,12 @@ impl Default for TimelineView {
 }
 
 impl TimelineView {
+    /// How far the clips are scrolled across and the tracks down.
+    #[cfg(test)]
+    pub(crate) fn scrolled(&self) -> (Ticks, f32) {
+        (self.scroll, self.scroll_y)
+    }
+
     /// Drops selected clips that no longer exist, e.g. after undo.
     pub fn prune_selection(&mut self, sequence: &Sequence) {
         let present: HashSet<ClipId> = sequence

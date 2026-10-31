@@ -2,8 +2,8 @@
 //! where the time goes. Run it in release with the files to place one after another:
 //! `EDIT_BENCH_CLIPS="a.mp4;b.mp4" cargo test --release -p app export_speed -- --ignored --nocapture`.
 //! `EDIT_BENCH_SECONDS` uses at most that much of each file, `EDIT_BENCH_DISSOLVES=1`
-//! puts the default transitions at every cut, and `EDIT_BENCH_SOFTWARE_DECODE=1` turns
-//! hardware decoding off.
+//! puts the default transitions at every cut, `EDIT_BENCH_EFFECTS=1` grades and blurs
+//! every clip, and `EDIT_BENCH_SOFTWARE_DECODE=1` turns hardware decoding off.
 
 use std::time::Duration;
 
@@ -49,6 +49,9 @@ fn export_speed() {
             video: defaults.transition(sequence, TrackKind::Video),
             audio: defaults.transition(sequence, TrackKind::Audio),
         });
+    }
+    if bench_clips::flag("EDIT_BENCH_EFFECTS") {
+        bench_clips::add_effects(&mut editor);
     }
 
     let mut dialog = ExportDialog::new(&editor);

@@ -5,12 +5,15 @@ mod bench_clips;
 mod commands;
 mod export_speed;
 mod full_screen;
+mod large_project;
 mod layout;
 mod monkey;
 mod playback_speed;
 mod soak;
 mod timing;
+mod transcription;
 mod usage;
+mod vst3_plugin;
 
 use std::future::Future;
 use std::path::PathBuf;
@@ -90,6 +93,17 @@ impl Screen {
     const FRAME_SECONDS: f32 = 1.0 / 60.0;
 
     pub(super) fn draw(&mut self, editor: &mut Editor, events: Vec<egui::Event>) {
+        let mut output = self.run(editor, events);
+        output.textures_delta.clear();
+    }
+
+    /// Draws a frame and hands back what egui made of it, to be tessellated as a window
+    /// would.
+    pub(super) fn run(
+        &mut self,
+        editor: &mut Editor,
+        events: Vec<egui::Event>,
+    ) -> egui::FullOutput {
         self.time += f64::from(Self::FRAME_SECONDS);
         let modifiers = events
             .iter()
@@ -110,8 +124,7 @@ impl Screen {
             ..Default::default()
         };
         let ctx = editor.ctx.clone();
-        let mut output = ctx.run_ui(input, |ui| eframe::App::ui(editor, ui, &mut self.frame));
-        output.textures_delta.clear();
+        ctx.run_ui(input, |ui| eframe::App::ui(editor, ui, &mut self.frame))
     }
 }
 
