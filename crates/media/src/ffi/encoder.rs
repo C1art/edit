@@ -250,16 +250,8 @@ unsafe fn sample_format(
     preferred: sys::AVSampleFormat,
 ) -> sys::AVSampleFormat {
     use sys::AVSampleFormat::*;
-    let mut supported = Vec::new();
-    // SAFETY: per the caller, `codec` is valid; its format list, when there is one, is
-    // static and ends at AV_SAMPLE_FMT_NONE.
-    unsafe {
-        let mut format = (*codec).sample_fmts;
-        while !format.is_null() && *format != AV_SAMPLE_FMT_NONE {
-            supported.push(*format);
-            format = format.add(1);
-        }
-    }
+    // SAFETY: per the caller, `codec` is valid.
+    let supported = unsafe { supported_sample_formats(codec) };
     if supported.is_empty() || supported.contains(&preferred) {
         return preferred;
     }
@@ -272,6 +264,54 @@ unsafe fn sample_format(
     .into_iter()
     .find(|format| supported.contains(format))
     .unwrap_or(preferred)
+}
+
+/// The sample formats `codec` takes; empty when it takes any.
+///
+/// # Safety
+/// `codec` must be a valid codec description.
+#[cfg(ffmpeg_supported_config)]
+unsafe fn supported_sample_formats(codec: *const sys::AVCodec) -> Vec<sys::AVSampleFormat> {
+    let mut list: *const std::ffi::c_void = ptr::null();
+    let mut count = 0;
+    // SAFETY: per the caller, `codec` is valid; a null context asks for the codec's
+    // defaults, and the out-pointers are live locals.
+    let status = unsafe {
+        sys::avcodec_get_supported_config(
+            ptr::null(),
+            codec,
+            sys::AVCodecConfig::AV_CODEC_CONFIG_SAMPLE_FORMAT,
+            0,
+            &mut list,
+            &mut count,
+        )
+    };
+    let count = usize::try_from(count).unwrap_or(0);
+    if status < 0 || list.is_null() || count == 0 {
+        return Vec::new();
+    }
+    // SAFETY: on success the list holds `count` sample formats and lives as long as the
+    // codec, which is static.
+    unsafe { std::slice::from_raw_parts(list.cast::<sys::AVSampleFormat>(), count) }.to_vec()
+}
+
+/// The sample formats `codec` takes; empty when it takes any.
+///
+/// # Safety
+/// `codec` must be a valid codec description.
+#[cfg(not(ffmpeg_supported_config))]
+unsafe fn supported_sample_formats(codec: *const sys::AVCodec) -> Vec<sys::AVSampleFormat> {
+    let mut supported = Vec::new();
+    // SAFETY: per the caller, `codec` is valid; its format list, when there is one, is
+    // static and ends at AV_SAMPLE_FMT_NONE.
+    unsafe {
+        let mut format = (*codec).sample_fmts;
+        while !format.is_null() && *format != sys::AVSampleFormat::AV_SAMPLE_FMT_NONE {
+            supported.push(*format);
+            format = format.add(1);
+        }
+    }
+    supported
 }
 
 fn find(name: Option<&CStr>, id: sys::AVCodecID) -> *const sys::AVCodec {
