@@ -138,12 +138,14 @@ impl Editor {
     }
 
     pub(crate) fn cut(&mut self) {
+        // Lifting nothing would close a gap instead.
+        if self.view.selection.is_empty() {
+            return;
+        }
         self.copy();
         self.lift();
     }
 
-    /// Pastes at the playhead, onto the targeted tracks where they are set, and parks
-    /// the playhead after the pasted clips.
     /// Pastes at the playhead: a plain paste onto the tracks the clips came from, moved up
     /// past anything in the way; an insert onto the targeted tracks.
     pub(crate) fn paste(&mut self, mode: PasteMode) {
