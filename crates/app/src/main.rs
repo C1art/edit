@@ -148,6 +148,7 @@ mod unreadable_setting;
 mod viewer;
 mod voiceover;
 mod vst;
+mod window_close;
 mod window_state;
 mod workspaces;
 

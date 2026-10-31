@@ -17,6 +17,7 @@ mod paint;
 mod rubber_band;
 mod scale;
 mod scrub;
+mod targets;
 mod time_scrollbar;
 mod tool;
 mod track_follow;
@@ -32,8 +33,7 @@ use std::collections::{BTreeSet, HashSet};
 use egui::{Rect, Sense};
 use timeline::{
     AddTrack, ClipId, ClipLine, DeltaBounds, Edge, LinkedSelection, MarkerId, MarkerOwner,
-    RemoveTrack, RenameTrack, Sequence, SetTrackSwitch, Ticks, TimeDisplay, Timeline, TrackKind,
-    TrackRef,
+    RemoveTrack, RenameTrack, Sequence, SetTrackSwitch, Ticks, TimeDisplay, Timeline, TrackRef,
 };
 
 use crate::clip_art::ClipArt;
@@ -47,6 +47,7 @@ use header::HeaderAction;
 pub use markers::color as marker_color;
 pub use paint::label_color;
 use scale::TimeScale;
+pub use targets::Targets;
 pub use tool::{Direction, Tool};
 pub use track_heights::TrackHeights;
 pub use trim_view::TrimView;
@@ -58,44 +59,6 @@ const RULER_HEIGHT: f32 = 26.0;
 const SNAP_POINTS: f32 = 8.0;
 /// About ten seconds across a typical timeline panel.
 const DEFAULT_TICKS_PER_POINT: f64 = 900.0;
-
-/// The tracks that Insert and Overwrite place source video and audio on.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Targets {
-    pub video: Option<usize>,
-    pub audio: Option<usize>,
-}
-
-impl Default for Targets {
-    fn default() -> Self {
-        Self {
-            video: Some(0),
-            audio: Some(0),
-        }
-    }
-}
-
-impl Targets {
-    fn contains(&self, track: TrackRef) -> bool {
-        let target = match track.kind {
-            TrackKind::Video => self.video,
-            TrackKind::Audio => self.audio,
-        };
-        target == Some(track.index)
-    }
-
-    fn toggle(&mut self, track: TrackRef) {
-        let target = match track.kind {
-            TrackKind::Video => &mut self.video,
-            TrackKind::Audio => &mut self.audio,
-        };
-        *target = if *target == Some(track.index) {
-            None
-        } else {
-            Some(track.index)
-        };
-    }
-}
 
 #[derive(Debug, Default)]
 pub struct TimelineOutput {
