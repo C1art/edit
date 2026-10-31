@@ -48,7 +48,11 @@ fn transcode(
     let timebase = Timebase::HZ_90K;
     let mut reader = MediaReader::open_streams(source, timebase, Streams::Video)?;
     let info = reader.info().clone();
-    let video = info.video.ok_or(MediaError::NoPlayableStream)?;
+    let video = info
+        .video
+        // A picture of unknown size would make a proxy too small to stand in for it.
+        .filter(|video| video.width > 0 && video.height > 0)
+        .ok_or(MediaError::NoPlayableStream)?;
     let rate = video.frame_rate.unwrap_or(FrameRate::FPS_25);
     let (width, height) = proxy_size((video.width, video.height), max_height);
     reader.set_video_size(Some((width, height)))?;
