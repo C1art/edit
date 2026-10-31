@@ -6,8 +6,11 @@ struct Blur {
     step_taps: vec4<f32>,
     // Each channel's sigma, in taps.
     sigma: vec4<f32>,
+    // 1 when straight colors are to be multiplied by their alpha before averaging,
+    // so the transparent black around a picture doesn't darken its blurred edge.
+    premultiply: vec4<f32>,
     // The rest of the shared uniform buffer.
-    reserved: array<vec4<f32>, 3>,
+    reserved: array<vec4<f32>, 2>,
 };
 
 struct VertexOutput {
@@ -43,7 +46,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     for (var i = -taps; i <= taps; i++) {
         let distance = vec4<f32>(f32(i)) / sigma;
         let weight = exp(-0.5 * distance * distance);
-        sum += textureSampleLevel(source, source_sampler, in.uv + step * f32(i), 0.0) * weight;
+        var tap = textureSampleLevel(source, source_sampler, in.uv + step * f32(i), 0.0);
+        if blur.premultiply.x > 0.5 {
+            tap = vec4<f32>(tap.rgb * tap.a, tap.a);
+        }
+        sum += tap * weight;
         weights += weight;
     }
     return sum / weights;

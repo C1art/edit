@@ -240,13 +240,14 @@ impl Compositor {
                 BlurTargets::new(&self.device, &self.blit, &slot.view, &slot.placement, size);
             slot.blur = Some(blur);
         }
+        // Compositing leaves a group's colors multiplied by its coverage.
+        let mut premultiplied = slot.kind == SlotKind::Group
+            || look.effects.alpha == AlphaInterpretation::Premultiplied;
         if let Some(blur) = slot.blur.as_ref().filter(|_| slot.blurred) {
-            blur.write(&self.queue, size, sigma);
+            premultiplied = blur.write(&self.queue, size, sigma, premultiplied);
         }
         let placement = Placement {
-            // Compositing leaves a group's colors multiplied by its coverage.
-            premultiplied: slot.kind == SlotKind::Group
-                || look.effects.alpha == AlphaInterpretation::Premultiplied,
+            premultiplied,
             grade: Grade::uniform(layer.grade.as_deref(), look.color.look_intensity),
             ..Placement::new(shown, canvas, look)
         };

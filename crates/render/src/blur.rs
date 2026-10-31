@@ -57,12 +57,26 @@ impl BlurTargets {
         }
     }
 
-    /// `sigma` is the red, green, blue and alpha channels', in layer pixels.
-    pub(crate) fn write(&self, queue: &wgpu::Queue, (width, height): (u32, u32), sigma: [f32; 4]) {
+    /// `sigma` is the red, green, blue and alpha channels', in layer pixels. Returns
+    /// whether the blurred picture is premultiplied: a straight source is, when all its
+    /// channels blur alike, so its colour doesn't bleed in from transparent texels.
+    pub(crate) fn write(
+        &self,
+        queue: &wgpu::Queue,
+        (width, height): (u32, u32),
+        sigma: [f32; 4],
+        source_premultiplied: bool,
+    ) -> bool {
+        let premultiply = !source_premultiplied && sigma.iter().all(|&each| each == sigma[3]);
         let horizontal = [1.0 / width as f32, 0.0];
         let vertical = [0.0, 1.0 / height as f32];
-        queue.write_buffer(&self.horizontal_uniform, 0, &uniform(horizontal, sigma));
-        queue.write_buffer(&self.vertical_uniform, 0, &uniform(vertical, sigma));
+        queue.write_buffer(
+            &self.horizontal_uniform,
+            0,
+            &uniform(horizontal, sigma, premultiply),
+        );
+        queue.write_buffer(&self.vertical_uniform, 0, &uniform(vertical, sigma, false));
+        source_premultiplied || premultiply
     }
 
     pub(crate) fn draw(&self, encoder: &mut wgpu::CommandEncoder, blit: &Blit) {
@@ -84,13 +98,14 @@ impl BlurTargets {
 }
 
 /// Taps reach three of the widest sigma each side.
-fn uniform(texel: [f32; 2], sigma: [f32; 4]) -> Vec<u8> {
+fn uniform(texel: [f32; 2], sigma: [f32; 4], premultiply: bool) -> Vec<u8> {
     let widest = sigma.into_iter().fold(0.0, f32::max);
     let (spacing, taps) = tap_layout(widest);
     [texel[0] * spacing, texel[1] * spacing, 0.0, taps]
         .into_iter()
         .chain(sigma.map(|sigma| sigma / spacing))
-        .chain([0.0; 12])
+        .chain([f32::from(u8::from(premultiply)), 0.0, 0.0, 0.0])
+        .chain([0.0; 8])
         .flat_map(f32::to_le_bytes)
         .collect()
 }
