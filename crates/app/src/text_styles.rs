@@ -36,7 +36,23 @@ impl Editor {
 
     pub(crate) fn load_text_styles(&mut self, text: &str) {
         match TextStylesFile::from_text(text) {
-            Ok(file) => self.text_styles = Arc::new(file.styles),
+            Ok(file) => {
+                // Styles kept before the file was read would otherwise be lost, and the
+                // file saved with only them.
+                let early = std::mem::take(Arc::make_mut(&mut self.text_styles));
+                let mut styles = file.styles;
+                let changed = !early.is_empty();
+                for style in early {
+                    match styles.iter_mut().find(|kept| kept.name == style.name) {
+                        Some(kept) => *kept = style,
+                        None => styles.push(style),
+                    }
+                }
+                self.text_styles = Arc::new(styles);
+                if changed {
+                    self.save_text_styles();
+                }
+            }
             Err(error) => self.unreadable_setting(Setting::TextStyles, error),
         }
     }
