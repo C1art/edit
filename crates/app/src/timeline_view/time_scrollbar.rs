@@ -119,7 +119,8 @@ impl TimelineView {
     /// Scrolls and zooms so the view runs from `start` to `end`.
     fn show_span(&mut self, start: Ticks, end: Ticks) {
         let span = (end - start).0.max(1) as f64;
-        self.ticks_per_point = (span / f64::from(self.width.max(1.0))).clamp(1.0, 1.0e6);
+        // The thumb spans no more than the scrollbar, so a long sequence can be shown whole.
+        self.ticks_per_point = (span / f64::from(self.width.max(1.0))).max(1.0);
         self.scroll = start;
     }
 }

@@ -37,13 +37,17 @@ impl AutoScroll {
     }
 }
 
+const MAX_TICKS_PER_POINT: f64 = 1.0e6;
+
 impl TimelineView {
     /// Zooms by `factor` (above one zooms in) keeping time at screen x `anchor` fixed.
     pub fn zoom(&mut self, factor: f32, anchor: Option<f32>) {
         let anchor = anchor.unwrap_or(self.width / 2.0);
         let scale = self.scale(0.0);
         let fixed = scale.time(anchor);
-        self.ticks_per_point = (self.ticks_per_point / f64::from(factor)).clamp(1.0, 1.0e6);
+        // A sequence fitted beyond the usual limit keeps its zoom rather than jumping in.
+        let widest = MAX_TICKS_PER_POINT.max(self.ticks_per_point);
+        self.ticks_per_point = (self.ticks_per_point / f64::from(factor)).clamp(1.0, widest);
         self.scroll = (fixed - self.scale(0.0).span(anchor)).max(Ticks::ZERO);
     }
 
