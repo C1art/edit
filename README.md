@@ -106,3 +106,10 @@ clip a Lumetri grade and a Gaussian blur.
 ## Layout
 
 A Cargo workspace; see `CLAUDE.md` for the crates, rules and conventions.
+
+## License
+
+Cledit is free software under the [GNU General Public License v3.0 or later](LICENSE).
+The installer ships a GPL build of FFmpeg, which is why Cledit is GPL as well; see
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for what it includes and where each
+part's source is.
