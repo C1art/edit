@@ -254,6 +254,8 @@ impl FileBrowser {
             .copied()
             .filter(|&index| selected.contains(&entries[index].path))
             .collect();
+        // Its row may now hold another entry, or none.
+        self.anchor = None;
     }
 
     fn selected_paths(&self) -> impl Iterator<Item = &Path> {
