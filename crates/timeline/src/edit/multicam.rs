@@ -246,6 +246,12 @@ fn flat_pieces(sequence: &Sequence, id: ClipId) -> Option<(TrackRef, Vec<Clip>)>
                     key.time = key.time + shift;
                 }
             }
+            // Each piece keeps the markers it plays, so none is repeated across them.
+            let played = piece.source_in..piece.source_in + piece.duration;
+            piece.markers.retain_mut(|marker| {
+                marker.at = marker.at + shift;
+                played.contains(&marker.at)
+            });
             piece
         })
         .collect();

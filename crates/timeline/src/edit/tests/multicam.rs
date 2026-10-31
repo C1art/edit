@@ -89,6 +89,14 @@ fn flattening_shows_the_camera_clips_where_they_play_with_keyframes_on_the_same_
     let mut look = crate::Look::default();
     look.opacity.toggle_animation(Ticks(450));
     timeline.apply(SetClipLook { clip, look }).unwrap();
+    for at in [100, 450] {
+        timeline
+            .apply(AddMarker {
+                owner: MarkerOwner::Clip(clip),
+                at: Ticks(at),
+            })
+            .unwrap();
+    }
     timeline
         .apply(FlattenMulticam { clips: vec![clip] })
         .unwrap();
@@ -101,6 +109,8 @@ fn flattening_shows_the_camera_clips_where_they_play_with_keyframes_on_the_same_
     assert_eq!((video.source, audio.source), (first, first));
     assert!(video.link.is_some() && video.link == audio.link);
     assert_eq!(video.look.opacity.keys[0].time, Ticks(150));
+    let marked: Vec<Ticks> = video.markers.iter().map(|marker| marker.at).collect();
+    assert_eq!(marked, [Ticks(150)]);
     assert!(sequence.multicam_of(video).is_none());
     assert!(sequence.media_item(cameras).is_some());
 }
