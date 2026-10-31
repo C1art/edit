@@ -68,7 +68,10 @@ impl Chord {
                 Some(Self::new(false, true, false, Key::Delete))
             }
             Event::Cut => Some(Self::new(true, modifiers.shift, false, Key::X)),
-            Event::Paste(_) => Some(Self::new(true, modifiers.shift && ctrl, false, Key::V)),
+            // An image on the system clipboard, as from Snipping Tool, still pastes clips.
+            Event::Paste(_) | Event::PasteImage(_) => {
+                Some(Self::new(true, modifiers.shift && ctrl, false, Key::V))
+            }
             _ => None,
         }
     }
