@@ -8,7 +8,8 @@ use crate::editor::Editor;
 /// How long to wait before trying a device again after none could be opened, so one
 /// plugged in later is picked up.
 const RETRY: Duration = Duration::from_secs(5);
-/// How long a device list stays fresh while the Preferences menu shows it.
+/// How long a device list stays fresh while the Preferences menu shows it, or while a
+/// stand-in plays for the chosen device.
 const RELIST: Duration = Duration::from_secs(2);
 
 /// Opens the audio device on a worker, since that can take a while, and moves playback to
@@ -27,6 +28,8 @@ pub(crate) struct AudioSwitch {
     listing: Option<Receiver<Vec<OutputDevice>>>,
     listed_at: Option<Instant>,
     devices: Vec<OutputDevice>,
+    /// Whether a device list arrived since the chosen device was last looked for.
+    relisted: bool,
 }
 
 struct Opening {
@@ -60,7 +63,10 @@ impl AudioSwitch {
     pub(crate) fn devices(&mut self) -> &[OutputDevice] {
         if let Some(listing) = &self.listing {
             match listing.try_recv() {
-                Ok(devices) => self.devices = devices,
+                Ok(devices) => {
+                    self.devices = devices;
+                    self.relisted = true;
+                }
                 Err(TryRecvError::Empty) => return &self.devices,
                 Err(TryRecvError::Disconnected) => {}
             }
@@ -91,8 +97,25 @@ impl Editor {
         if switch.opening.is_some() {
             return;
         }
+        // Playing through a stand-in while the chosen device was away: go back to it once
+        // it's listed again.
+        let stand_in = match (&self.audio, &switch.chosen) {
+            (Some(output), Some(chosen)) => !output.is_lost() && !output.device().is(chosen),
+            _ => false,
+        };
+        let returned = stand_in && {
+            switch.devices();
+            ctx.request_repaint_after(RELIST);
+            let listed = switch
+                .chosen
+                .as_ref()
+                .is_some_and(|chosen| switch.devices.iter().any(|device| device.is(chosen)));
+            std::mem::take(&mut switch.relisted) && listed
+        };
         let reopen = match &self.audio {
-            Some(output) => output.is_lost() || switch.opened_for.as_ref() != Some(&switch.chosen),
+            Some(output) => {
+                returned || output.is_lost() || switch.opened_for.as_ref() != Some(&switch.chosen)
+            }
             None => switch.retry_at.is_none_or(|at| Instant::now() >= at),
         };
         if !reopen {
