@@ -107,6 +107,7 @@ pub struct Compositor {
     /// Whether the output texture was recreated for a frame left pending, so the next
     /// frame shown must report it.
     unshown_target: bool,
+    pub(crate) readback_buffers: crate::readback::ReadbackBuffers,
     #[cfg(windows)]
     shared: crate::shared::SharedTextures,
     /// Decoded pictures replaced since the last submit, kept until the GPU is done
@@ -133,6 +134,7 @@ impl Compositor {
             scope: None,
             background: Background::Black,
             unshown_target: false,
+            readback_buffers: Default::default(),
             #[cfg(windows)]
             shared: crate::shared::SharedTextures::default(),
             #[cfg(windows)]
