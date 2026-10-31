@@ -86,6 +86,17 @@ impl EditorWindow {
         }
     }
 
+    /// Asks the window to close; [`EditorEvent::Closed`] follows once it has.
+    pub fn close(&self) {
+        let _ = self.commands.send(Command::Close);
+        self.wake();
+    }
+
+    /// Whether the window is on screen yet, and not yet closed.
+    pub fn is_shown(&self) -> bool {
+        self.window.load(Ordering::Acquire) != 0
+    }
+
     /// What has happened since the last call, without waiting.
     pub fn events(&self) -> impl Iterator<Item = EditorEvent> + '_ {
         self.events.try_iter()
@@ -102,8 +113,7 @@ impl EditorWindow {
 
 impl Drop for EditorWindow {
     fn drop(&mut self) {
-        let _ = self.commands.send(Command::Close);
-        self.wake();
+        self.close();
     }
 }
 

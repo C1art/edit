@@ -78,7 +78,7 @@ pub fn scan(folders: &[PathBuf]) -> Vec<PluginInfo> {
     bundles.dedup();
     bundles
         .iter()
-        .flat_map(|bundle| effect_classes(bundle))
+        .flat_map(|bundle| bundle_effects(bundle).unwrap_or_default())
         .collect()
 }
 
@@ -101,11 +101,11 @@ fn is_bundle_name(path: &Path) -> bool {
         .is_some_and(|extension| extension.eq_ignore_ascii_case("vst3"))
 }
 
-fn effect_classes(bundle: &Path) -> Vec<PluginInfo> {
-    let Ok(module) = bundle_binary(bundle).and_then(|binary| SharedModule::open(&binary)) else {
-        return Vec::new();
-    };
-    module
+/// The audio-effect classes of one `.vst3` bundle, or why it could not be read. Like
+/// [`scan`], this runs the plugin's code.
+pub fn bundle_effects(bundle: &Path) -> Result<Vec<PluginInfo>, PluginError> {
+    let module = bundle_binary(bundle).and_then(|binary| SharedModule::open(&binary))?;
+    Ok(module
         .classes()
         .into_iter()
         .filter(|class| {
@@ -124,7 +124,7 @@ fn effect_classes(bundle: &Path) -> Vec<PluginInfo> {
             category: class.category,
             subcategories: class.subcategories,
         })
-        .collect()
+        .collect())
 }
 
 /// Resolves a bundle directory to its binary for this platform. A file is returned as

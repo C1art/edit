@@ -24,5 +24,5 @@ mod types;
 pub use editor::{EditorEvent, EditorSetup, EditorWindow};
 pub use error::PluginError;
 pub use plugin::Plugin;
-pub use scan::{default_folders, scan};
+pub use scan::{bundle_effects, default_folders, scan};
 pub use types::{ClassId, ParamId, ParameterFlags, ParameterInfo, PluginInfo, Tail};
