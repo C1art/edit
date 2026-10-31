@@ -14,12 +14,13 @@ use media::{
 use render::{Background, Compositor, LayerImage, Readback};
 use timeline::{Sequence, Ticks};
 
+use crate::export_decode::DecodeAhead;
 use crate::export_sink::{Sink, Stills, Work};
 use crate::export_timings::ExportTimings;
 use crate::loudness::{measure_span, LoudnessTarget};
-use crate::previews::{self, Preview, PreviewPictures};
+use crate::previews::Preview;
 use crate::sequence_mix::{SequenceMix, CHUNK_FRAMES};
-use crate::{compose, Layer, PlaybackError, Resolution};
+use crate::{Layer, PlaybackError};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExportSettings {
@@ -295,12 +296,15 @@ impl Worker {
         let to_audio = |time: Ticks| time.rescale(timebase, audio_rate).0;
         let audio_total = to_audio(rate.frame_start(frames.end, timebase));
         let mut audio_written = to_audio(rate.frame_start(frames.start, timebase));
-        let mut tracks = Vec::new();
-        let mut warned = Vec::new();
         let mut warnings = Vec::new();
 
         let pictures = video.is_some() || stills.is_some();
-        let mut previews = PreviewPictures::new(&self.settings.previews, &sequence);
+        let decoding = pictures
+            .then(|| {
+                let frames = frames.clone();
+                DecodeAhead::start(Arc::clone(&sequence), &self.settings.previews, frames)
+            })
+            .transpose()?;
         let mut pending: Option<Readback> = None;
         let started = Instant::now();
         let mut timings = ExportTimings {
@@ -313,19 +317,15 @@ impl Worker {
                 return Ok(Outcome::Cancelled);
             }
             let mut since = Instant::now();
-            // Decoding this frame overlaps the GPU finishing the one before.
-            let layers = (pictures && frame < frames.end).then(|| {
-                let pts = rate.frame_start(frame, timebase);
-                previews::previewed(&mut previews, pts, Resolution::Full).unwrap_or_else(|| {
-                    compose::layers_at(
-                        &sequence,
-                        pts,
-                        &mut tracks,
-                        &mut warned,
-                        &mut warnings,
-                        Resolution::Full,
-                    )
-                })
+            let decoded = match &decoding {
+                Some(decoding) if frame < frames.end => {
+                    Some(decoding.next().ok_or(PlaybackError::DecodeStopped)?)
+                }
+                _ => None,
+            };
+            let layers = decoded.map(|decoded| {
+                warnings.extend(decoded.warnings);
+                decoded.layers
             });
             ExportTimings::lap(&mut timings.decode, &mut since);
             if frame > frames.start {

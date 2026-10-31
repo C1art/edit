@@ -22,6 +22,7 @@ mod effect_masks;
 mod envelope;
 mod error;
 mod export;
+mod export_decode;
 mod export_sink;
 mod export_timings;
 mod frame_blend;
