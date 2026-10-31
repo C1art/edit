@@ -17,6 +17,7 @@ use crate::editor::Editor;
 use automation::{AutomationMode, Pass};
 pub(crate) use inserts::{effects as channel_effects, set_effects as set_channel_effects};
 use recording::{automate, mode_picker};
+pub(crate) use recording::{finish_passes, finish_stopped_passes};
 
 /// Fader travel shown, in dB; the bottom stop means silence.
 const FADER_RANGE: std::ops::RangeInclusive<f32> = -60.0..=15.0;

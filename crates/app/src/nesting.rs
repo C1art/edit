@@ -145,6 +145,7 @@ impl Editor {
 
     pub(crate) fn show_nest(&mut self, nest: Option<SourceId>) -> bool {
         // Opening a nest changes what is shown, not the project.
+        crate::mixer::finish_passes(self);
         let clean = !self.is_dirty();
         if !self.timeline.set_open_nest(nest) {
             return false;

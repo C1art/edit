@@ -41,5 +41,7 @@ impl Editor {
         self.clip_rename = None;
         self.marker_dialog = None;
         self.fit_clip = None;
+        // Its automation modes and passes are for the closed project's tracks.
+        self.mixer = Default::default();
     }
 }

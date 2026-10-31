@@ -32,9 +32,7 @@ pub(super) fn automate(
     db: f32,
     touched: bool,
 ) -> bool {
-    let playing = editor.program.as_ref().is_some_and(|program| {
-        program.player.is_playing() && program.player.rate() > PlayRate::STOPPED
-    });
+    let playing = playing(editor);
     let playhead = editor.playhead();
     let last = editor.mixer.passes.get(&track).map(Pass::last);
     // Looping or seeking back starts a new pass rather than writing over this one.
@@ -59,6 +57,28 @@ pub(super) fn automate(
         live(editor, &SetTrackAutomation { track, automation });
     }
     true
+}
+
+fn playing(editor: &Editor) -> bool {
+    editor.program.as_ref().is_some_and(|program| {
+        program.player.is_playing() && program.player.rate() > PlayRate::STOPPED
+    })
+}
+
+/// Commits every pass into the sequence they were recorded on, before another is shown.
+pub(crate) fn finish_passes(editor: &mut Editor) {
+    let tracks: Vec<TrackRef> = editor.mixer.passes.keys().copied().collect();
+    for track in tracks {
+        finish_pass(editor, track);
+    }
+}
+
+/// Commits the passes once playback stops, whichever panel is showing: only the
+/// mixer's faders would otherwise end them.
+pub(crate) fn finish_stopped_passes(editor: &mut Editor) {
+    if !editor.mixer.passes.is_empty() && !playing(editor) {
+        finish_passes(editor);
+    }
 }
 
 fn finish_pass(editor: &mut Editor, track: TrackRef) {
