@@ -6,6 +6,7 @@ mod deinterlace;
 mod error;
 mod ffi;
 mod fit;
+mod frame_grid;
 mod frames;
 mod motion;
 mod peaks;

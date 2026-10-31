@@ -117,3 +117,20 @@ fn threads_that_converted_a_planar_picture_can_exit() {
         .recv_timeout(std::time::Duration::from_secs(20))
         .expect("a thread that converted a picture never finished exiting");
 }
+
+#[test]
+#[ignore = "decodes a real file with FFmpeg"]
+fn millisecond_stamped_pictures_land_on_their_frames() {
+    let path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/odd/ntsc_ms.mkv");
+    let mut reader = MediaReader::open(&path, TB).unwrap();
+    let rate = reader.info().video.as_ref().unwrap().frame_rate.unwrap();
+    let mut pts = Vec::new();
+    while let Some(frame) = reader.next_frame().unwrap() {
+        if let DecodedFrame::Video(video) = frame {
+            pts.push(video.pts);
+        }
+    }
+    let expected: Vec<Ticks> = (0..30).map(|frame| rate.frame_start(frame, TB)).collect();
+    assert_eq!(pts, expected);
+}

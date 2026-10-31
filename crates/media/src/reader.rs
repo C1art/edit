@@ -7,6 +7,7 @@ use crate::ffi::{
     Decoder, Frame, InputContext, Packet, Picture, Received, SampleConverter, Scaler,
     OUTPUT_CHANNELS,
 };
+use crate::frame_grid::on_grid;
 use crate::seek_landing::Landing;
 use crate::seek_trim::{SeekTrim, Trimmed};
 use crate::sequence::open_input;
@@ -81,6 +82,8 @@ pub struct MediaReader {
     landing: Option<Landing>,
     /// Between pictures, for those the container leaves unstamped.
     picture_step: Ticks,
+    /// The frame rate pictures are stamped on, when the media declares one.
+    grid: Option<FrameRate>,
     state: ReadState,
     info: SourceInfo,
     channel_map: Option<ChannelMap>,
@@ -157,11 +160,8 @@ impl MediaReader {
         let rate = info.video.as_ref().and_then(|video| video.frame_rate);
         let tag = rate.zip(input.timecode_tag());
         info.timecode = tag.and_then(|(rate, tag)| TypedTimecode::frame_of_label(&tag, rate));
-        let picture_step = info
-            .video
-            .as_ref()
-            .and_then(|video| video.frame_rate)
-            .map_or(Ticks::ZERO, |rate| rate.frame_start(1, timebase));
+        let grid = info.video.as_ref().and_then(|video| video.frame_rate);
+        let picture_step = grid.map_or(Ticks::ZERO, |rate| rate.frame_start(1, timebase));
         Ok(Self {
             start: input.start_time().map_or(Ticks::ZERO, to_ticks),
             input,
@@ -174,6 +174,7 @@ impl MediaReader {
             decoded: None,
             landing: None,
             picture_step,
+            grid,
             state: ReadState::Reading,
             info,
             channel_map: None,
@@ -407,7 +408,10 @@ impl MediaReader {
                 .set_keep_on_gpu(video.converter.keeps_planes());
             video.decoder.send_packet(packet)?;
             while let Received::Frame = video.decoder.receive_frame(&mut self.frame)? {
-                let pts = clock.pts(&self.frame, video.timebase, video.next_pts);
+                let mut pts = clock.pts(&self.frame, video.timebase, video.next_pts);
+                if let Some(rate) = self.grid {
+                    pts = on_grid(pts, rate, self.timebase, video.timebase);
+                }
                 let picture = video.decoder.take_picture(&mut self.frame)?;
                 video.next_pts = pts + self.picture_step;
                 self.decoded = Some(pts);
