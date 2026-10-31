@@ -58,6 +58,8 @@ fn save(
     format: StillFormat,
 ) -> Result<Vec<PlaybackError>, PlaybackError> {
     let (rate, timebase) = (sequence.format.frame_rate, sequence.timebase);
+    // The playhead parked at the end shows the last frame, not the black after it.
+    let time = time.min(sequence.duration() - Ticks(1)).max(Ticks::ZERO);
     let frame = rate.frame_start(rate.frame_at(time, timebase), timebase);
     let mut warnings = Vec::new();
     let layers = compose::layers_at(
