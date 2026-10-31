@@ -230,9 +230,10 @@ pub(crate) fn menu(ui: &mut egui::Ui, title: &str, content: impl FnOnce(&mut egu
 
 /// Lays out a menu's items so they scroll when the window is too short to show them all.
 pub(crate) fn scrolling_menu(ui: &mut egui::Ui, content: impl FnOnce(&mut egui::Ui)) {
-    // Leaves room for the popup's own frame and shadow below the last item.
-    let room = ui.ctx().content_rect().bottom() - ui.max_rect().top() - 12.0;
-    let room = room.max(80.0);
+    // Sized from the window, not from where the popup opened: the popup moves above or
+    // below the pointer to fit its size, so a size taken from its position chases itself
+    // and the menu flickers. The margin leaves room for its frame and shadow.
+    let room = (ui.ctx().content_rect().height() - 24.0).max(80.0);
     // The popup is only as tall as last frame's items, so the area asks for the
     // room itself rather than taking what's available.
     egui::ScrollArea::vertical()
