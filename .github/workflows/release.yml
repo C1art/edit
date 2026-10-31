@@ -4,6 +4,7 @@ name: release
 # Cargo version as a GitHub release (tagging it when the tag doesn't exist yet). A pull
 # request into main, or a run by hand without "publish", builds and packs only and keeps the
 # installer as a workflow artifact, so a broken Windows build shows up before a release.
+# The build and packing steps are in scripts/release.sh.
 on:
   push:
     tags: ["v*"]
@@ -24,11 +25,6 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # Must match the velopack crate in Cargo.toml: the app and its installer speak one format.
-  VPK_VERSION: "1.2.161"
-  # FFmpeg 8 is what ffmpeg-sys-next 9 binds; the GPL build carries x264 and x265.
-  FFMPEG_BUILD: ffmpeg-n8.1-latest-win64-gpl-shared-8.1
-  REPO_URL: https://github.com/C1art/edit
   CARGO_TERM_COLOR: always
   PUBLISH: ${{ github.ref_type == 'tag' || inputs.publish == true }}
 
@@ -43,87 +39,16 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Read the version
-        run: |
-          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
-          echo "VERSION=$version" >> "$GITHUB_ENV"
-          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
-            echo "::error::tag $GITHUB_REF_NAME does not match the Cargo version $version"
-            exit 1
-          fi
-
-      - name: Download FFmpeg
-        run: |
-          curl -sSfL -o "$RUNNER_TEMP/ffmpeg.zip" \
-            "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/$FFMPEG_BUILD.zip"
-          unzip -q "$RUNNER_TEMP/ffmpeg.zip" -d "$RUNNER_TEMP"
-          ffmpeg_dir=$(cygpath -w "$RUNNER_TEMP/$FFMPEG_BUILD")
-          echo "FFMPEG_DIR=$ffmpeg_dir" >> "$GITHUB_ENV"
-          echo "LIBCLANG_PATH=C:\\Program Files\\LLVM\\bin" >> "$GITHUB_ENV"
-          sed -n 's/.*FFMPEG_VERSION "\(.*\)"/\1/p' \
-            "$RUNNER_TEMP/$FFMPEG_BUILD/include/libavutil/ffversion.h" > "$RUNNER_TEMP/ffmpeg-version"
-          echo "FFmpeg $(cat "$RUNNER_TEMP/ffmpeg-version")"
-
       - uses: Swatinem/rust-cache@v2
 
-      - name: Build
-        run: cargo build --release --locked -p app
-
-      - name: Gather the files to install
-        run: |
-          mkdir dist
-          cp target/release/cledit.exe LICENSE dist/
-          cp "$RUNNER_TEMP/$FFMPEG_BUILD"/bin/*.dll dist/
-          ffmpeg_version=$(cat "$RUNNER_TEMP/ffmpeg-version")
-          {
-            cat THIRD-PARTY-NOTICES.md
-            echo
-            echo "## FFmpeg in this release"
-            echo
-            echo "FFmpeg $ffmpeg_version, from $FFMPEG_BUILD.zip of BtbN/FFmpeg-Builds."
-            echo "Source: https://github.com/FFmpeg/FFmpeg/tree/${ffmpeg_version##*-g}" | sed 's/-[0-9]*$//'
-          } > dist/THIRD-PARTY-NOTICES.md
-          cp "$(ls target/release/build/app-*/out/cledit.ico | head -1)" "$RUNNER_TEMP/cledit.ico"
-          ls -l dist
-
-      - name: Write the release notes
-        run: |
-          notes="docs/releases/$VERSION.md"
-          if [ ! -f "$notes" ]; then
-            notes="$RUNNER_TEMP/notes.md"
-            previous=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)
-            git log --format='%s' ${previous:+$previous..}HEAD \
-              | grep -E '^(feat|fix|perf)(\(|!|:)' | sed 's/^/- /' > "$notes" || true
-          fi
-          cp "$notes" "$RUNNER_TEMP/release-notes.md"
-          cat "$RUNNER_TEMP/release-notes.md"
-
-      - name: Install vpk
-        run: dotnet tool install -g vpk --version "$VPK_VERSION"
-
-      - name: Pack
+      - name: Build, pack and publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Earlier releases let vpk make delta packages; the first release has none.
-          vpk download github --repoUrl "$REPO_URL" --token "$GITHUB_TOKEN" || true
-          vpk pack --packId Cledit --packVersion "$VERSION" --packDir dist \
-            --mainExe cledit.exe --packTitle Cledit --packAuthors Clart \
-            --icon "$RUNNER_TEMP/cledit.ico" --framework vcredist143-x64 \
-            --releaseNotes "$RUNNER_TEMP/release-notes.md"
-          ls -l Releases
+        run: bash scripts/release.sh
 
       - name: Keep the installer (dry run)
         if: env.PUBLISH != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: Cledit-${{ env.VERSION }}
+          name: Cledit-installer
           path: Releases
-
-      - name: Publish
-        if: env.PUBLISH == 'true'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          vpk upload github --repoUrl "$REPO_URL" --token "$GITHUB_TOKEN" --publish \
-            --releaseName "Cledit $VERSION" --tag "v$VERSION" --targetCommitish "$GITHUB_SHA"
