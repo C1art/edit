@@ -1,4 +1,5 @@
-use std::fs;
+use std::fs::{self, File};
+use std::io::{Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
@@ -25,20 +26,74 @@ pub(crate) struct Recovery {
     marked: Option<Option<PathBuf>>,
 }
 
-/// Present while the editor runs and removed when it closes, so finding it at start means
-/// the last session ended in a crash. It names the open project, whose autosaves then
-/// hold whatever work was lost.
-fn marker_path() -> PathBuf {
-    crate::project_store::app_folder().join("Running.txt")
+/// Present while an editor runs and removed when it closes, so one found at start that
+/// no running editor holds means a session ended in a crash. It names the open project,
+/// whose autosaves then hold whatever work was lost.
+#[derive(Default)]
+pub struct SessionMarker(Option<(PathBuf, File)>);
+
+impl SessionMarker {
+    pub fn mark(&mut self, project: Option<&Path>) -> std::io::Result<()> {
+        let file = match &mut self.0 {
+            Some((_, file)) => file,
+            None => {
+                let folder = crate::project_store::app_folder();
+                fs::create_dir_all(&folder)?;
+                let path = folder.join(format!("Running {}.txt", std::process::id()));
+                let file = open_held(&path)?;
+                &mut self.0.insert((path, file)).1
+            }
+        };
+        let text = project.map_or_else(String::new, |path| path.to_string_lossy().into_owned());
+        file.set_len(0)?;
+        file.seek(SeekFrom::Start(0))?;
+        file.write_all(text.as_bytes())
+    }
+
+    pub fn end(&mut self) -> std::io::Result<()> {
+        let Some((path, file)) = self.0.take() else {
+            return Ok(());
+        };
+        drop(file);
+        fs::remove_file(path)
+    }
 }
 
-/// Run on the project worker at start, before this session writes its own marker.
+/// Opens the marker so that no other editor can read or remove it while this one runs;
+/// the system lets go of it when the process ends, crash or not.
+fn open_held(path: &Path) -> std::io::Result<File> {
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(windows)]
+    std::os::windows::fs::OpenOptionsExt::share_mode(&mut options, 0);
+    options.open(path)
+}
+
+fn is_marker(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.starts_with("Running") && name.ends_with(".txt"))
+}
+
+/// Run on the project worker at start, before this session writes its own marker. The
+/// markers of crashed sessions are removed once read, so each is offered only once.
 pub fn find_recoverable() -> Option<Recoverable> {
-    let marker = marker_path();
-    let marked_at = fs::metadata(&marker)
-        .and_then(|meta| meta.modified())
-        .ok()?;
-    let text = fs::read_to_string(&marker).ok()?;
+    let markers = fs::read_dir(crate::project_store::app_folder()).ok()?;
+    markers
+        .filter_map(|entry| Some(entry.ok()?.path()))
+        .filter(|path| is_marker(path))
+        .filter_map(|marker| {
+            // A marker that can't be read is held by an editor still running.
+            let marked_at = fs::metadata(&marker).and_then(|meta| meta.modified());
+            let text = fs::read_to_string(&marker);
+            let recoverable = recoverable_from(text.ok()?, marked_at.ok()?);
+            let _ = fs::remove_file(&marker);
+            recoverable
+        })
+        .max_by_key(|recoverable| recoverable.autosaved_at)
+}
+
+fn recoverable_from(text: String, marked_at: SystemTime) -> Option<Recoverable> {
     let project = Some(PathBuf::from(text.trim())).filter(|path| !path.as_os_str().is_empty());
     let modified = |path: &Path| fs::metadata(path).and_then(|meta| meta.modified()).ok();
     let autosaves = (0..SLOTS)
@@ -64,22 +119,6 @@ fn newest_unsaved(
     autosaves
         .filter(|(_, at)| *at > after)
         .max_by_key(|(_, at)| *at)
-}
-
-pub fn mark_session(project: Option<&Path>) -> std::io::Result<()> {
-    let marker = marker_path();
-    if let Some(folder) = marker.parent() {
-        fs::create_dir_all(folder)?;
-    }
-    let text = project.map_or_else(String::new, |path| path.to_string_lossy().into_owned());
-    fs::write(marker, text)
-}
-
-pub fn end_session() -> std::io::Result<()> {
-    match fs::remove_file(marker_path()) {
-        Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error),
-        _ => Ok(()),
-    }
 }
 
 impl Editor {

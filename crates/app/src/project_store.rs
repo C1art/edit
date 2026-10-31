@@ -157,8 +157,9 @@ impl ProjectStore {
         let worker = thread::Builder::new()
             .name("project".to_owned())
             .spawn(move || {
+                let mut marker = recovery::SessionMarker::default();
                 for request in request_rx {
-                    if event_tx.send(handle(request)).is_err() {
+                    if event_tx.send(handle(request, &mut marker)).is_err() {
                         break;
                     }
                 }
@@ -284,7 +285,7 @@ impl Drop for ProjectStore {
     }
 }
 
-fn handle(request: Request) -> StoreEvent {
+fn handle(request: Request, marker: &mut recovery::SessionMarker) -> StoreEvent {
     match request {
         Request::Save {
             path,
@@ -376,11 +377,11 @@ fn handle(request: Request) -> StoreEvent {
         // The marker only matters after a crash, so failing to keep it isn't worth
         // interrupting anyone over.
         Request::MarkSession(project) => {
-            let _ = recovery::mark_session(project.as_deref());
+            let _ = marker.mark(project.as_deref());
             StoreEvent::SessionMarked
         }
         Request::EndSession => {
-            let _ = recovery::end_session();
+            let _ = marker.end();
             StoreEvent::SessionMarked
         }
     }
