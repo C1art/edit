@@ -1,5 +1,6 @@
+use std::cmp::Reverse;
+
 use crate::edit::ops;
-use crate::edit::trim::ripple;
 use crate::{
     ClipId, Edge, Edit, Sequence, Speed, Ticks, TimeInterpolation, TimelineError, TrackRef,
 };
@@ -35,26 +36,49 @@ impl Edit for SetClipSpeed {
         if !self.speed.is_in_range() {
             return Err(TimelineError::SpeedOutOfRange(first));
         }
-        // Each clip ripples by its own change from its own end: (end, change, track, id).
-        let mut changes: Vec<(Ticks, Ticks, TrackRef, ClipId)> = Vec::with_capacity(ids.len());
+        let mut changes: Vec<Change> = Vec::with_capacity(ids.len());
+        // How much of each clip's new length the next clip on its track leaves no room for.
+        let mut cut_short = Vec::with_capacity(ids.len());
         for &id in &ids {
-            let (track_ref, clip) = sequence.clip(id).ok_or(TimelineError::ClipNotFound(id))?;
+            let (track, clip) = sequence.clip(id).ok_or(TimelineError::ClipNotFound(id))?;
             let source = clip.source_out() - clip.source_in;
             let rate = self.speed.times(clip.conform);
-            let mut duration = rate.sequence_span(source).max(Ticks(1));
-            if !self.ripple {
-                let next = sequence.track(track_ref).and_then(|track| {
-                    track
-                        .clips
-                        .iter()
-                        .find(|other| other.start >= clip.end() && other.id != id)
-                });
-                if let Some(next) = next {
-                    duration = duration.min(next.start - clip.start);
-                }
-            }
-            changes.push((clip.end(), duration - clip.duration, track_ref, id));
-            let clip = ops::clip_mut(sequence, id)?;
+            let duration = rate.sequence_span(source).max(Ticks(1));
+            let next = sequence.track(track).and_then(|track| {
+                track
+                    .clips
+                    .iter()
+                    .find(|other| other.start >= clip.end() && other.id != id)
+            });
+            let room = next.map_or(duration, |next| next.start - clip.start);
+            cut_short.push((clip.link, (duration - room).max(Ticks::ZERO)));
+            changes.push(Change {
+                track,
+                id,
+                start: clip.start,
+                end: clip.end(),
+                by: duration - clip.duration,
+            });
+        }
+        for (index, change) in changes.iter_mut().enumerate() {
+            // Linked clips are cut short alike, so they still play the same source.
+            let (link, own) = cut_short[index];
+            let short = match link {
+                Some(link) if !self.ripple => cut_short
+                    .iter()
+                    .filter(|(other, _)| *other == Some(link))
+                    .map(|&(_, short)| short)
+                    .max()
+                    .unwrap_or(own),
+                _ if !self.ripple => own,
+                _ => Ticks::ZERO,
+            };
+            let (_, clip) = sequence
+                .clip(change.id)
+                .ok_or(TimelineError::ClipNotFound(change.id))?;
+            let duration = (clip.duration + change.by - short).max(Ticks(1));
+            change.by = duration - clip.duration;
+            let clip = ops::clip_mut(sequence, change.id)?;
             clip.speed = self.speed;
             clip.remap = None;
             clip.duration = duration;
@@ -62,17 +86,71 @@ impl Edit for SetClipSpeed {
             clip.maintain_pitch = self.maintain_pitch;
         }
         if self.ripple {
-            // Latest first, so a clip's ripple carries the later clips already changed.
-            changes.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
-            for group in changes.chunk_by(|a, b| (a.0, a.1) == (b.0, b.1)) {
-                let (end, shift, ..) = group[0];
-                let edit_points: Vec<(TrackRef, Ticks)> =
-                    group.iter().map(|&(_, _, track, _)| (track, end)).collect();
-                let skip: Vec<ClipId> = group.iter().map(|&(.., id)| id).collect();
-                ripple(sequence, &edit_points, shift, &skip);
-            }
+            ripple_changes(sequence, changes);
         }
         Ok(())
+    }
+}
+
+/// A clip whose length changed by `by`, and where it was before.
+struct Change {
+    track: TrackRef,
+    id: ClipId,
+    start: Ticks,
+    end: Ticks,
+    by: Ticks,
+}
+
+/// Moves what follows the changed clips. Changes one after another on a track add up,
+/// while clips side by side on different tracks, such as the two sides of an L-cut,
+/// move what follows them by the largest of their changes, so it all stays in sync.
+fn ripple_changes(sequence: &mut Sequence, mut changes: Vec<Change>) {
+    let edited: Vec<TrackRef> = changes.iter().map(|change| change.track).collect();
+    let rippled = ops::rippled_tracks(sequence, &edited);
+    changes.sort_by_key(|change| change.start);
+    let mut columns: Vec<Vec<Change>> = Vec::new();
+    for change in changes {
+        match columns.last_mut() {
+            Some(column) if column.iter().any(|other| change.start < other.end) => {
+                column.push(change);
+            }
+            _ => columns.push(vec![change]),
+        }
+    }
+    // Latest first, so each column's ripple carries the later ones already moved.
+    for mut column in columns.into_iter().rev() {
+        column.sort_by_key(|change| Reverse(change.end));
+        let ids: Vec<ClipId> = column.iter().map(|change| change.id).collect();
+        // Each track's total change and the last end of its changed clips.
+        let mut tracks: Vec<(TrackRef, Ticks, Ticks)> = Vec::new();
+        for change in &column {
+            if rippled.contains(&change.track) {
+                ops::shift(
+                    sequence,
+                    &[change.track],
+                    change.end,
+                    change.by,
+                    &[change.id],
+                );
+            }
+            match tracks.iter_mut().find(|(track, ..)| *track == change.track) {
+                Some((_, total, _)) => *total = *total + change.by,
+                None => tracks.push((change.track, change.by, change.end)),
+            }
+        }
+        let Some(shift) = tracks.iter().map(|&(_, total, _)| total).max() else {
+            continue;
+        };
+        let end = column[0].end;
+        for &track in &rippled {
+            match tracks.iter().find(|(edited, ..)| *edited == track) {
+                Some(&(_, total, last)) => {
+                    ops::shift(sequence, &[track], last + total, shift - total, &ids);
+                }
+                None => ops::shift(sequence, &[track], end, shift, &ids),
+            }
+        }
+        ops::ripple_markers_and_captions(sequence, end, shift);
     }
 }
 
