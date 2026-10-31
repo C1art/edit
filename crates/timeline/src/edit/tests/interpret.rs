@@ -96,3 +96,35 @@ fn reinterpreting_pixels_keeps_clip_lengths_and_the_files_own_shape_clears_it() 
         Err(TimelineError::NothingToEdit)
     );
 }
+
+#[test]
+fn time_remapping_an_interpreted_clip_keeps_the_frames_it_plays() {
+    let (mut timeline, source) = timeline();
+    timeline
+        .apply(place(source, 0, 0, 200, PlaceMode::Overwrite))
+        .unwrap();
+    interpret(&mut timeline, source, FrameRate::new(25, 2));
+    let video = clip_on(&timeline, V1, 0);
+    let at = |timeline: &Timeline| {
+        timeline
+            .sequence()
+            .clip(video)
+            .unwrap()
+            .1
+            .source_time(Ticks(250))
+    };
+    let before = at(&timeline);
+    timeline
+        .apply(AddSpeedKeyframe {
+            clip: video,
+            at: Ticks(100),
+        })
+        .unwrap();
+    assert_eq!(at(&timeline), before);
+    timeline.apply(RemoveTimeRemap { clip: video }).unwrap();
+    assert_eq!(at(&timeline), before);
+    assert_eq!(
+        timeline.sequence().clip(video).unwrap().1.speed,
+        crate::Speed::NORMAL
+    );
+}

@@ -35,7 +35,7 @@ impl Edit for AddSpeedKeyframe {
                 clip.remap = Some(TimeRemap::constant(
                     clip.source_in,
                     clip.duration,
-                    clip.speed,
+                    clip.rate(),
                 ));
                 clip.speed = Speed::NORMAL;
             }
@@ -154,7 +154,8 @@ impl Edit for RemoveTimeRemap {
             }
             let source = clip.source_out() - clip.source_in;
             clip.speed = Speed::stretch(source, clip.duration)
-                .ok_or(TimelineError::SpeedOutOfRange(self.clip))?;
+                .ok_or(TimelineError::SpeedOutOfRange(self.clip))?
+                .over(clip.conform);
             clip.remap = None;
         }
         Ok(())
