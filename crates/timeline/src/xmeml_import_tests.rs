@@ -128,3 +128,16 @@ fn a_centred_dissolve_of_an_odd_frame_count_reads_back_at_its_cut() {
     let clips = &nest.video[0].clips;
     assert_eq!((clips[0].end(), clips[1].start), (Ticks(50), Ticks(50)));
 }
+
+#[test]
+fn the_start_time_is_written_as_timecode_the_way_the_sequence_shows_it() {
+    let timebase = Timebase::new(1001, 30_000).unwrap();
+    let mut sequence = Sequence::new(timebase, VideoFormat::default());
+    sequence.format.frame_rate = FrameRate::new(30_000, 1001).unwrap();
+    // One hour of drop-frame labels, which is 108 frames fewer than a nominal hour.
+    sequence.start_time = Ticks(107_892);
+    let xml = crate::to_xmeml(&sequence, "Hour");
+    assert!(xml.contains("<string>01:00:00;00</string>"), "{xml}");
+    assert!(xml.contains("<frame>107892</frame>"));
+    assert!(xml.contains("<displayformat>DF</displayformat>"));
+}

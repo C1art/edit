@@ -11,7 +11,7 @@ use std::sync::Arc;
 use crate::file_url::path_url;
 use crate::{
     cut_window, Alignment, Clip, ClipId, FrameRate, Marker, MediaItem, Sequence, Speed, Ticks,
-    Track, TrackKind, Transition,
+    TimeDisplay, Timecode, Track, TrackKind, Transition,
 };
 
 /// `sequence` as an xmeml document, named `title`.
@@ -84,6 +84,7 @@ impl Writer<'_> {
         self.leaf("name", escape(title));
         self.leaf("duration", self.frames(sequence.duration()));
         self.rate();
+        self.start_timecode();
         self.markers(&sequence.markers);
         self.open("media");
         self.open("video");
@@ -337,6 +338,26 @@ impl Writer<'_> {
         self.leaf("timebase", rate.nominal());
         self.leaf("ntsc", flag(is_ntsc(rate)));
         self.close("rate");
+    }
+
+    /// The sequence's start time, which clip times count from, labeled the way the
+    /// sequence shows timecode.
+    fn start_timecode(&mut self) {
+        let sequence = self.sequence;
+        let rate = sequence.format.frame_rate;
+        let (display, format) = match sequence.time_display.dropped(rate) {
+            Some(_) => (TimeDisplay::Timecode, "DF"),
+            None => (TimeDisplay::NonDropTimecode, "NDF"),
+        };
+        let label = Timecode::shown(sequence.start_time, sequence.timebase, rate, display)
+            .to_string()
+            .replacen(';', ":", 2);
+        self.open("timecode");
+        self.rate();
+        self.leaf("string", label);
+        self.leaf("frame", self.frames(sequence.start_time));
+        self.leaf("displayformat", format);
+        self.close("timecode");
     }
 
     fn frames(&self, time: Ticks) -> i64 {
