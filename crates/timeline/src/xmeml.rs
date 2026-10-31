@@ -127,16 +127,22 @@ impl Writer<'_> {
                         // Both clips run on under a transition at their cut.
                         start = -1;
                         let (before, after) = cut_window(previous, clip, transition);
-                        let alignment = match transition.alignment {
-                            Alignment::Center => "center",
-                            Alignment::StartAtCut => "start",
-                            Alignment::EndAtCut => "end",
+                        let cut = self.frames(clip.start);
+                        let length =
+                            self.frames(clip.start + after) - self.frames(clip.start - before);
+                        // Readers put a centred transition's cut at start + length / 2, so
+                        // an odd length is split around the cut the same way.
+                        let (first, alignment) = match transition.alignment {
+                            Alignment::Center => (cut - length / 2, "center"),
+                            Alignment::StartAtCut => (cut, "start"),
+                            Alignment::EndAtCut => (cut - length, "end"),
                         };
-                        (clip.start - before, clip.start + after, alignment)
+                        (first, first + length, alignment)
                     }
                     None => {
                         let length = transition.duration.min(clip.duration);
-                        (clip.start, clip.start + length, "start-black")
+                        let span = (self.frames(clip.start), self.frames(clip.start + length));
+                        (span.0, span.1, "start-black")
                     }
                 };
                 self.transition(transition, kind, span);
@@ -148,11 +154,8 @@ impl Writer<'_> {
             self.clip_item(clip, kind, start, end);
             if let Some(transition) = clip.transition_out.filter(|_| next.is_none()) {
                 let length = transition.duration.min(clip.duration);
-                self.transition(
-                    transition,
-                    kind,
-                    (clip.end() - length, clip.end(), "end-black"),
-                );
+                let span = (self.frames(clip.end() - length), self.frames(clip.end()));
+                self.transition(transition, kind, (span.0, span.1, "end-black"));
             }
         }
         self.leaf("enabled", flag(!track.muted));
@@ -160,11 +163,12 @@ impl Writer<'_> {
         self.close("track");
     }
 
-    fn transition(&mut self, transition: Transition, kind: TrackKind, span: (Ticks, Ticks, &str)) {
+    /// `span` is the first and end frame and the alignment.
+    fn transition(&mut self, transition: Transition, kind: TrackKind, span: (i64, i64, &str)) {
         let (start, end, alignment) = span;
         self.open("transitionitem");
-        self.leaf("start", self.frames(start));
-        self.leaf("end", self.frames(end));
+        self.leaf("start", start);
+        self.leaf("end", end);
         self.leaf("alignment", alignment);
         self.rate();
         self.open("effect");

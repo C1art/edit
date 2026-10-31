@@ -21,10 +21,10 @@ fn times(markers: &[Marker]) -> Vec<(i64, i64, &str, &str)> {
         .collect()
 }
 
-#[test]
-fn an_exported_sequence_reads_back_as_a_nest_of_the_same_cut() {
+/// Two clips of one file cut together on V1 and A1, at ticks 0 and 50.
+fn two_clips(timebase: Timebase) -> Sequence {
     let format = VideoFormat::default();
-    let mut sequence = Sequence::new(Timebase::new(1, 25).expect("valid"), format);
+    let mut sequence = Sequence::new(timebase, format);
     sequence.video.resize_with(1, Default::default);
     sequence.audio.resize_with(1, Default::default);
     let mut timeline = Timeline::new(sequence);
@@ -55,7 +55,12 @@ fn an_exported_sequence_reads_back_as_a_nest_of_the_same_cut() {
         };
         timeline.apply(place).unwrap();
     }
-    let mut sequence = timeline.sequence().clone();
+    timeline.sequence().clone()
+}
+
+#[test]
+fn an_exported_sequence_reads_back_as_a_nest_of_the_same_cut() {
+    let mut sequence = two_clips(Timebase::new(1, 25).expect("valid"));
     let dissolve = Transition::new(TransitionKind::DipToBlack, Ticks(10));
     Arc::make_mut(&mut sequence.video[0].clips[1]).transition_in = Some(dissolve);
     Arc::make_mut(&mut sequence.audio[0].clips[0]).gain = Gain::from_db(-6.0);
@@ -106,4 +111,20 @@ fn an_exported_sequence_reads_back_as_a_nest_of_the_same_cut() {
         .collect();
     assert_eq!(links[0], links[1]);
     assert_ne!(links[0][0], links[0][1]);
+}
+
+#[test]
+fn a_centred_dissolve_of_an_odd_frame_count_reads_back_at_its_cut() {
+    // Two ticks a frame, so the dissolve's half before the cut ends mid-frame.
+    let mut sequence = two_clips(Timebase::new(1, 50).expect("valid"));
+    let dissolve = Transition::new(TransitionKind::CrossDissolve, Ticks(26));
+    Arc::make_mut(&mut sequence.video[0].clips[1]).transition_in = Some(dissolve);
+    let mut timeline = Timeline::new(sequence.clone());
+
+    let import = read_xmeml(&crate::to_xmeml(&sequence, "Cut")).unwrap();
+    timeline.apply(import).unwrap();
+
+    let nest = timeline.sequence().media[1].nest.as_ref().unwrap();
+    let clips = &nest.video[0].clips;
+    assert_eq!((clips[0].end(), clips[1].start), (Ticks(50), Ticks(50)));
 }
