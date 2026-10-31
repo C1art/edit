@@ -167,6 +167,9 @@ pub struct Editor {
     pub(crate) confirm_revert: bool,
     /// Runs once the save in progress succeeds.
     pub(crate) after_save: Option<AfterDiscard>,
+    /// Where the newest save still running is writing, so Save during a Save As goes to
+    /// the new file rather than the one the project is still named after.
+    pub(crate) saving_to: Option<PathBuf>,
     /// Set once the user chose to close, so the close request isn't questioned again.
     pub(crate) quitting: bool,
     pub(crate) exports_on_quit: crate::quit_exports::ExportsOnQuit,
@@ -360,6 +363,7 @@ impl Editor {
             opening: Default::default(),
             confirm_revert: false,
             after_save: None,
+            saving_to: None,
             autosave: Autosave::default(),
             quitting: false,
             exports_on_quit: Default::default(),

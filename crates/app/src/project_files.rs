@@ -159,7 +159,7 @@ impl Editor {
     }
 
     pub(crate) fn save_project(&mut self) {
-        match self.project_path.clone() {
+        match self.saving_to.clone().or_else(|| self.project_path.clone()) {
             Some(path) => self.save_project_to(path),
             None => self.prompt_path(PathPurpose::SaveProject),
         }
@@ -173,7 +173,10 @@ impl Editor {
             revision: self.timeline.revision(),
         };
         match &mut self.store {
-            Some(store) => store.save(path, sequence, mark),
+            Some(store) => {
+                self.saving_to = Some(path.clone());
+                store.save(path, sequence, mark);
+            }
             None => self.notice("Cannot save: the project worker is not running"),
         }
     }
@@ -269,6 +272,7 @@ impl Editor {
         self.saved_revision = revision;
         self.project_path = path;
         self.after_save = None;
+        self.saving_to = None;
         self.autosave.forget();
         if let Some(offline) = &mut self.offline {
             offline.forget();
@@ -303,12 +307,25 @@ impl Editor {
                 StoreEvent::Saved(path, mark, Ok(())) => {
                     self.remember_project(&path);
                     self.saved_revision = mark.revision;
+                    let newest = self.saving_to.as_ref() == Some(&path);
+                    if newest {
+                        self.saving_to = None;
+                    }
                     self.project_path = Some(path);
-                    if let Some(action) = self.after_save.take() {
-                        self.after_discard(action);
+                    // A save that doesn't cover the latest edits mustn't close the project:
+                    // wait for the newer save, or drop the request if none is coming.
+                    if mark.revision == self.timeline.revision() {
+                        if let Some(action) = self.after_save.take() {
+                            self.after_discard(action);
+                        }
+                    } else if newest {
+                        self.after_save = None;
                     }
                 }
                 StoreEvent::Saved(path, _, Err(error)) => {
+                    if self.saving_to.as_ref() == Some(&path) {
+                        self.saving_to = None;
+                    }
                     self.after_save = None;
                     self.notice(format!("Cannot save {}: {error}", quoted_name(&path)));
                 }
