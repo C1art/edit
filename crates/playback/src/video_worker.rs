@@ -207,12 +207,16 @@ impl VideoWorker {
         for warning in warnings {
             let _ = self.channels.events.send(Event::Warning(warning));
         }
+        // A step per frame even when composing can't get ahead, so the next clip, often
+        // far into a long group of pictures in recordings, is ready when it comes up
+        // instead of decoding from its keyframe there and stalling.
+        self.prerolling =
+            pts.is_none_or(|pts| preroll(sequence, pts, &mut self.tracks, self.resolution));
         self.pending = Some(ComposedFrame {
             pts: pts.unwrap_or(Ticks::ZERO),
             layers,
         });
         self.composed = true;
-        self.prerolling = true;
     }
 
     fn previewed(&mut self, pts: Ticks) -> Option<Vec<Layer>> {

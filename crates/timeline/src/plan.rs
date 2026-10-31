@@ -111,6 +111,19 @@ pub fn track_layers_at<'a>(
     vec![layer(current, reveal)]
 }
 
+/// Where `clip` on `track` first shows: before its start when a transition into it
+/// reaches back over the clip before.
+pub fn shows_from(track: &Track, clip: &Clip) -> Ticks {
+    let previous = track
+        .clips
+        .iter()
+        .find(|previous| previous.end() == clip.start);
+    match (clip.transition_in, previous) {
+        (Some(transition), Some(previous)) => clip.start - cut_window(previous, clip, transition).0,
+        _ => clip.start,
+    }
+}
+
 /// How far a transition at the cut between `outgoing` and `incoming` reaches before and
 /// after the cut, as aligned, but never further than either clip's own length.
 pub fn cut_window(outgoing: &Clip, incoming: &Clip, transition: Transition) -> (Ticks, Ticks) {
@@ -184,6 +197,8 @@ mod tests {
         // Past its out point the outgoing clip keeps reading its media.
         assert_eq!(at(110), vec![(1, 110, 1.0), (2, 510, 0.75)]);
         assert_eq!(at(120), vec![(2, 520, 1.0)]);
+        assert_eq!(shows_from(&track, &track.clips[1]), Ticks(80));
+        assert_eq!(shows_from(&track, &track.clips[0]), Ticks(0));
     }
 
     #[test]

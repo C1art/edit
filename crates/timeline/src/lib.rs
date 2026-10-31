@@ -184,7 +184,7 @@ pub use motion_preset::MotionPreset;
 pub use multicam::MulticamLayout;
 pub use nest::Nest;
 pub use param::Param;
-pub use plan::{cut_window, track_layers_at, PlannedLayer};
+pub use plan::{cut_window, shows_from, track_layers_at, PlannedLayer};
 pub use preset::EffectPreset;
 pub use reframe::{AutoReframe, ReframeMotion, SubjectPath};
 pub use remap::{Anchor, TimeRemap};

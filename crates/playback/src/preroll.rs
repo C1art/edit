@@ -1,4 +1,4 @@
-use timeline::{track_layers_at, ClipId, Sequence, Ticks, Timebase};
+use timeline::{shows_from, track_layers_at, ClipId, Sequence, Ticks, Timebase};
 
 use crate::compose::{decodes_planes, TrackDecoders};
 use crate::Resolution;
@@ -25,10 +25,11 @@ pub(crate) fn preroll(
         let next = track
             .clips
             .iter()
-            .filter(|clip| pts < clip.start && clip.start <= pts + lead)
-            .min_by_key(|clip| clip.start);
+            .map(|clip| (clip, shows_from(track, clip)))
+            .filter(|&(_, shown)| pts < shown && shown <= pts + lead)
+            .min_by_key(|&(_, shown)| shown);
         // A reversed clip starts from the end of its pictures and decodes backwards.
-        let Some(clip) = next.filter(|clip| !clip.disabled && !clip.reverse) else {
+        let Some((clip, shown)) = next.filter(|(clip, _)| !clip.disabled && !clip.reverse) else {
             continue;
         };
         let Some(media) = sequence
@@ -45,7 +46,10 @@ pub(crate) fn preroll(
             continue;
         };
         decoder.keep_planes(decodes_planes(clip));
-        let first = clip.source_time(clip.start);
+        // Readied for where it first shows, not its start: a transition into it can show
+        // it earlier, and readying it for later would pull its decoder past the pictures
+        // the transition shows, making every frame of it seek.
+        let first = clip.source_time(shown).max(Ticks::ZERO);
         if let Ok(false) = decoder.preroll(media, first, resolution, 1) {
             return true;
         }
