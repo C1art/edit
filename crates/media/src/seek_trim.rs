@@ -4,6 +4,19 @@ use timeline::{Ticks, Timebase};
 
 use crate::AudioBuffer;
 
+/// Audio stamped this far from where the last buffer ended is taken as following on
+/// from it: stamps are rounded, and a lost packet leaves a far larger gap.
+const AUDIO_SLACK: Timebase = match Timebase::new(1, 200) {
+    Some(timebase) => timebase,
+    None => Timebase::HZ_90K,
+};
+/// The most silence put in one gap, in seconds: more is a broken stamp rather than lost
+/// sound.
+const MAX_GAP: (Ticks, Timebase) = match Timebase::new(1, 1) {
+    Some(seconds) => (Ticks(10), seconds),
+    None => (Ticks(900_000), Timebase::HZ_90K),
+};
+
 /// What a seek keeps: pictures, still as the decoder left them, and sound.
 pub(crate) enum Trimmed<P> {
     Video(Ticks, P),
@@ -17,6 +30,8 @@ pub(crate) struct SeekTrim<P> {
     timebase: Timebase,
     video_target: Option<Ticks>,
     audio_target: Option<Ticks>,
+    /// Where the audio passed on so far ends.
+    audio_end: Option<Ticks>,
     held_video: Option<(Ticks, P)>,
     ready: VecDeque<Trimmed<P>>,
 }
@@ -27,6 +42,8 @@ impl<P> SeekTrim<P> {
             timebase,
             video_target: None,
             audio_target: None,
+            // Read from the start, the sound starts at the media's start too.
+            audio_end: Some(Ticks::ZERO),
             held_video: None,
             ready: VecDeque::new(),
         }
@@ -35,6 +52,7 @@ impl<P> SeekTrim<P> {
     pub(crate) fn reset(&mut self, target: Ticks) {
         self.video_target = Some(target);
         self.audio_target = Some(target);
+        self.audio_end = None;
         self.held_video = None;
         self.ready.clear();
     }
@@ -46,6 +64,7 @@ impl<P> SeekTrim<P> {
         let ready = std::mem::take(&mut self.ready);
         self.video_target = Some(target);
         self.audio_target = Some(target);
+        self.audio_end = None;
         if let Some((pts, picture)) = held {
             self.push_video(pts, picture);
         }
@@ -76,16 +95,31 @@ impl<P> SeekTrim<P> {
         self.ready.push_back(Trimmed::Video(pts, picture));
     }
 
+    /// Passes on audio from the target onwards, with silence where the stream starts
+    /// after the target or skips ahead, and without what it plays twice, so that each
+    /// sample plays when its stamp says, as each picture does.
     pub(crate) fn push_audio(&mut self, mut buffer: AudioBuffer) {
-        if let Some(target) = self.audio_target {
-            if buffer.end(self.timebase) <= target {
-                return;
-            }
-            if buffer.pts < target {
-                buffer.trim_start_to(target, self.timebase);
-            }
-            self.audio_target = None;
+        let timebase = self.timebase;
+        let (expected, slack) = match (self.audio_target, self.audio_end) {
+            (Some(target), _) => (target, Ticks::ZERO),
+            (None, Some(end)) => (end, Ticks(1).rescale(AUDIO_SLACK, timebase)),
+            (None, None) => (buffer.pts, Ticks::ZERO),
+        };
+        if buffer.end(timebase) <= expected {
+            return;
         }
+        self.audio_target = None;
+        let (max_gap, seconds) = MAX_GAP;
+        if buffer.pts + slack < expected {
+            buffer.trim_start_to(expected, timebase);
+        } else if buffer.pts > expected + slack
+            && buffer.pts - expected <= max_gap.rescale(seconds, timebase)
+        {
+            if let Some(silence) = buffer.silence_before(expected, timebase) {
+                self.ready.push_back(Trimmed::Audio(silence));
+            }
+        }
+        self.audio_end = Some(buffer.end(self.timebase));
         self.ready.push_back(Trimmed::Audio(buffer));
     }
 
@@ -202,5 +236,37 @@ mod tests {
         assert_eq!(first.frames(), 95);
         assert_eq!(first.samples[0], 10.0);
         assert_eq!(second.pts, Ticks(200));
+    }
+
+    #[test]
+    fn audio_starting_after_the_target_is_preceded_by_silence() {
+        let mut trim = SeekTrim::<()>::new(tb());
+        trim.reset(Ticks(100));
+        trim.push_audio(audio(150, 100));
+        let out = drain(&mut trim);
+        let [Trimmed::Audio(silence), Trimmed::Audio(sound)] = out.as_slice() else {
+            panic!("expected silence then sound");
+        };
+        assert_eq!((silence.pts, silence.frames()), (Ticks(100), 50));
+        assert!(silence.samples.iter().all(|&sample| sample == 0.0));
+        assert_eq!(sound.pts, Ticks(150));
+    }
+
+    #[test]
+    fn a_gap_in_the_audio_is_filled_and_an_overlap_dropped() {
+        let mut trim = SeekTrim::<()>::new(tb());
+        trim.reset(Ticks(0));
+        trim.push_audio(audio(0, 100));
+        trim.push_audio(audio(130, 100));
+        trim.push_audio(audio(210, 100));
+        let out = drain(&mut trim);
+        let spans: Vec<(i64, usize)> = out
+            .iter()
+            .filter_map(|frame| match frame {
+                Trimmed::Audio(buffer) => Some((buffer.pts.0, buffer.frames())),
+                Trimmed::Video(..) => None,
+            })
+            .collect();
+        assert_eq!(spans, [(0, 100), (100, 30), (130, 100), (230, 80)]);
     }
 }

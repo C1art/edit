@@ -9,7 +9,7 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
-use media::{DecodedFrame, MediaReader};
+use media::{DecodedFrame, MediaReader, Streams};
 use timeline::{Ticks, Timebase};
 
 const TB: Timebase = Timebase::HZ_90K;
@@ -332,4 +332,41 @@ fn odd_media_is_refused_or_plays() {
         }
     }
     assert!(report.is_empty(), "\n{}", report.join("\n"));
+}
+
+#[test]
+#[ignore = "decodes a real file with FFmpeg"]
+fn audio_that_starts_late_keeps_its_place() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/odd/audio_starts_late.mp4");
+    let mut reader = MediaReader::open_streams(&path, TB, Streams::Audio).unwrap();
+    let first_sound = |reader: &mut MediaReader| loop {
+        match reader.next_frame().unwrap() {
+            Some(DecodedFrame::Audio(audio)) => break audio,
+            Some(_) => {}
+            None => panic!("no sound"),
+        }
+    };
+    let opening = first_sound(&mut reader);
+    assert_eq!(opening.pts, Ticks::ZERO);
+    assert!(opening.samples.iter().all(|&sample| sample == 0.0));
+    let mut heard = opening.frames();
+    while let Some(frame) = reader.next_frame().unwrap() {
+        if let DecodedFrame::Audio(audio) = frame {
+            heard += audio.frames();
+        }
+    }
+    // The sound starts 0.478 s in and lasts 1.021 s.
+    let seconds = heard as f64 / 48_000.0;
+    assert!((1.49..1.52).contains(&seconds), "{seconds:.3} s heard");
+
+    reader.seek(Ticks(SECOND / 4)).unwrap();
+    let before = first_sound(&mut reader);
+    assert_eq!(before.pts, Ticks(SECOND / 4));
+    assert!(before.samples.iter().all(|&sample| sample == 0.0));
+
+    reader.seek(Ticks(SECOND)).unwrap();
+    let during = first_sound(&mut reader);
+    assert_eq!(during.pts, Ticks(SECOND));
+    assert!(during.samples.iter().any(|&sample| sample != 0.0));
 }
