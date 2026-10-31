@@ -237,6 +237,17 @@ impl TimelineView {
         self.drag = None;
     }
 
+    /// Drops what refers to the sequence shown, before another takes its place.
+    pub(crate) fn leave_sequence(&mut self) {
+        self.cancel_drag();
+        self.selection.clear();
+        self.gap = None;
+        self.edit_point = None;
+        self.renaming = None;
+        self.context_empty = None;
+        self.context_marker = None;
+    }
+
     fn scale(&self, left: f32) -> TimeScale {
         TimeScale {
             left,
@@ -290,7 +301,10 @@ impl TimelineView {
             Sense::click_and_drag(),
         );
         let top = tracks.top() - self.scroll_y;
-        if !self.navigate(&response, tracks, timeline.sequence()) {
+        if self.navigate(&response, tracks, timeline.sequence()) {
+            // A tool switched mid-drag would otherwise never see the release.
+            self.cancel_drag();
+        } else {
             self.handle_gestures(&response, timeline, scale, top, playhead, &mut output);
             self.show_cursor(&response, timeline.sequence(), &scale, top);
             self.show_drag_readout(&response, timeline.sequence());

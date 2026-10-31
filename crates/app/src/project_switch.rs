@@ -18,12 +18,9 @@ impl Editor {
         self.render_replace = None;
         self.effects.forget_clips();
         self.breakouts.clear();
-        self.view.cancel_drag();
-        self.view.selection.clear();
+        self.view.leave_sequence();
         self.text_panel = Default::default();
         self.captions = Default::default();
-        self.view.edit_point = None;
-        self.view.gap = None;
         self.cancel_transcribing();
         self.essential_sound = Default::default();
         self.clip_sync = None;

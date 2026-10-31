@@ -153,9 +153,7 @@ impl Editor {
         if clean {
             self.saved_revision = self.timeline.revision();
         }
-        self.view.selection.clear();
-        self.view.gap = None;
-        self.view.edit_point = None;
+        self.view.leave_sequence();
         true
     }
 
