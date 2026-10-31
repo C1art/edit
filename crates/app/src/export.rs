@@ -368,7 +368,10 @@ pub(crate) fn prepare(
         Some(EMPTY_SEQUENCE.to_owned())
     } else if has_video && !(width.is_multiple_of(2) && height.is_multiple_of(2)) {
         Some(format!("The frame size must be even, not {width}×{height}"))
-    } else if range.as_ref().is_some_and(|range| range.is_empty()) {
+    } else if range
+        .as_ref()
+        .is_some_and(|range| range.is_empty() || range.start >= sequence.duration())
+    {
         Some("The in mark is past the end of the sequence".to_owned())
     } else {
         None
