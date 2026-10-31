@@ -247,11 +247,15 @@ impl MediaReader {
         // Demuxers such as MP3's and AC-3's refuse a target before their first packet.
         let start = self.start.rescale(self.timebase, MICROSECONDS).0;
         self.input.seek(target.max(start))?;
+        // Frames that come without a time of their own follow on from the target, not
+        // from wherever decoding was before the seek.
         if let Some(video) = &mut self.video {
             video.decoder.flush();
+            video.next_pts = position;
         }
         if let Some(audio) = &mut self.audio {
             audio.decoder.flush();
+            audio.next_pts = position;
         }
         self.trim.reset(position);
         self.decoded = None;

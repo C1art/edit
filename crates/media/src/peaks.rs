@@ -48,7 +48,14 @@ impl Peaks {
     /// shorter than a bucket read the bucket they start in.
     pub fn max_in(&self, start: Ticks, end: Ticks, timebase: Timebase) -> f32 {
         let mut low = start.rescale(timebase, PEAK_TIMEBASE).0.max(0);
-        let mut high = end.rescale(timebase, PEAK_TIMEBASE).0.max(low + 1);
+        // Past the audio there is nothing to find, and a range the top level can't halve
+        // away would otherwise miss it.
+        let length = i64::try_from(self.buckets().len()).unwrap_or(i64::MAX);
+        let mut high = end
+            .rescale(timebase, PEAK_TIMEBASE)
+            .0
+            .max(low + 1)
+            .min(length);
         let mut peak = 0;
         // Climbs the levels, taking the odd bucket at either edge before halving the range,
         // so every bucket in the span is covered exactly once.
@@ -189,5 +196,8 @@ mod tests {
         assert_eq!(span(0, 10_000), 200.0 / 255.0);
         assert_eq!(span(7_330, 7_700), 10.0 / 255.0);
         assert_eq!(span(20_000, 21_000), 0.0);
+        assert_eq!(span(0, 25_000), 200.0 / 255.0);
+        let single = Peaks::from_buckets(vec![200]);
+        assert_eq!(single.max_in(ms(0), ms(2), Timebase::HZ_90K), 200.0 / 255.0);
     }
 }

@@ -190,14 +190,21 @@ fn receive(
     context: NonNull<sys::AVCodecContext>,
     frame: &mut Frame,
 ) -> Result<Received, MediaError> {
-    // SAFETY: the context is open and `frame` is a valid, exclusively borrowed frame.
-    let code = unsafe { sys::avcodec_receive_frame(context.as_ptr(), frame.as_mut_ptr()) };
-    match code {
-        sys::AVERROR_EOF => Ok(Received::Drained),
-        code if code == sys::AVERROR(sys::EAGAIN) => Ok(Received::NeedsInput),
-        // Frame-threaded and hardware decoders report a corrupt packet here rather than
-        // when it is sent; it is skipped the same way, and decoding goes on.
-        sys::AVERROR_INVALIDDATA => Ok(Received::NeedsInput),
-        code => check(code).map(|_| Received::Frame),
+    // Frame-threaded and hardware decoders report a corrupt packet here rather than when
+    // it is sent. It is skipped the same way, and the frames queued behind it are still
+    // asked for, which matters most while draining, when no more packets will follow.
+    for _ in 0..MAX_CORRUPT_IN_A_ROW {
+        // SAFETY: the context is open and `frame` is a valid, exclusively borrowed frame.
+        let code = unsafe { sys::avcodec_receive_frame(context.as_ptr(), frame.as_mut_ptr()) };
+        return match code {
+            sys::AVERROR_EOF => Ok(Received::Drained),
+            code if code == sys::AVERROR(sys::EAGAIN) => Ok(Received::NeedsInput),
+            sys::AVERROR_INVALIDDATA => continue,
+            code => check(code).map(|_| Received::Frame),
+        };
     }
+    Ok(Received::NeedsInput)
 }
+
+/// More corrupt packets than a frame-threaded decoder can hold at once.
+const MAX_CORRUPT_IN_A_ROW: usize = 256;
