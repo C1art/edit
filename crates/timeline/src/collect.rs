@@ -65,7 +65,7 @@ pub fn uncollect_failed(sequence: &mut Sequence, failed: &[FileCopy]) {
 }
 
 /// Rewrites the path of every file the project refers to: media, proxies and LUTs.
-fn map_files(sequence: &mut Sequence, mut map: impl FnMut(&Path) -> PathBuf) {
+pub(crate) fn map_files(sequence: &mut Sequence, mut map: impl FnMut(&Path) -> PathBuf) {
     for item in Arc::make_mut(&mut sequence.media) {
         if item.nest.is_none() && item.generator.is_none() {
             item.path = map(&item.path);

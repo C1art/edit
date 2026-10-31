@@ -361,3 +361,23 @@ fn ultra_keys_saved_before_spill_suppression_keep_their_edge_desaturation() {
 }
 
 mod damaged;
+
+#[test]
+fn a_project_moved_together_with_its_media_finds_it_again() {
+    let root = std::env::temp_dir().join(format!("cledit-moved-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let (before, after) = (root.join("before"), root.join("after"));
+    std::fs::create_dir_all(before.join("media")).unwrap();
+    let media = before.join("media").join("take.wav");
+    std::fs::write(&media, b"").unwrap();
+    let mut project = sample();
+    Arc::make_mut(&mut project.sequence.media)[0].path = media;
+    project.save(&before.join("cut.editproj")).unwrap();
+    std::fs::rename(&before, &after).unwrap();
+    let moved = ProjectFile::load(&after.join("cut.editproj"));
+    std::fs::remove_dir_all(&root).unwrap();
+    assert_eq!(
+        moved.unwrap().sequence.media[0].path,
+        after.join("media").join("take.wav")
+    );
+}

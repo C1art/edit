@@ -5,7 +5,7 @@ mod replace;
 mod templates;
 mod text_styles;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use timeline::Sequence;
@@ -26,13 +26,26 @@ const VERSION_FIELD: &str = "format_version";
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProjectFile {
     pub format_version: u32,
+    /// The folder the project was saved in, so media moved along with it is found again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub saved_in: Option<PathBuf>,
     pub sequence: Sequence,
+}
+
+/// A project as `save` writes it, borrowing the sequence rather than copying it.
+#[derive(Serialize)]
+struct Saving<'a> {
+    format_version: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    saved_in: Option<&'a Path>,
+    sequence: &'a Sequence,
 }
 
 impl ProjectFile {
     pub fn new(sequence: Sequence) -> Self {
         Self {
             format_version: FORMAT_VERSION,
+            saved_in: None,
             sequence,
         }
     }
@@ -55,11 +68,23 @@ impl ProjectFile {
     }
 
     pub fn save(&self, path: &Path) -> Result<(), ProjectError> {
-        Ok(replace_file(path, self.to_text()?.as_bytes())?)
+        let saving = Saving {
+            format_version: self.format_version,
+            saved_in: path.parent().filter(|folder| folder.is_absolute()),
+            sequence: &self.sequence,
+        };
+        let text = json::to_value(&saving)?.to_text();
+        Ok(replace_file(path, text.as_bytes())?)
     }
 
+    /// Reads the project at `path`. If it was moved since it was saved, files missing from
+    /// where they were are looked for where they'd be had they moved along with it.
     pub fn load(path: &Path) -> Result<Self, ProjectError> {
-        Self::from_text(&std::fs::read_to_string(path)?)
+        let mut project = Self::from_text(&std::fs::read_to_string(path)?)?;
+        if let (Some(saved_in), Some(now_in)) = (&project.saved_in, path.parent()) {
+            timeline::follow_moved_project(&mut project.sequence, saved_in, now_in, Path::exists);
+        }
+        Ok(project)
     }
 }
 
