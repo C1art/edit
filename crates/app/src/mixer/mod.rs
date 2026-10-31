@@ -14,6 +14,7 @@ use timeline::{
 };
 
 use crate::editor::Editor;
+use crate::track_follow::TrackMoves;
 use automation::{AutomationMode, Pass};
 pub(crate) use inserts::{effects as channel_effects, set_effects as set_channel_effects};
 use recording::{automate, mode_picker};
@@ -61,6 +62,18 @@ pub struct Mixer {
 }
 
 impl Mixer {
+    pub(crate) fn follow_tracks(&mut self, moves: &TrackMoves) {
+        let modes = std::mem::take(&mut self.modes).into_iter();
+        self.modes = modes
+            .filter_map(|(track, mode)| Some((moves.of(track)?, mode)))
+            .collect();
+        let passes = std::mem::take(&mut self.passes).into_iter();
+        self.passes = passes
+            .filter_map(|(track, pass)| Some((moves.of(track)?, pass)))
+            .collect();
+        self.sends.follow_tracks(moves);
+    }
+
     fn mode(&self, track: TrackRef) -> AutomationMode {
         self.modes.get(&track).copied().unwrap_or_default()
     }

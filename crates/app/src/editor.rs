@@ -90,6 +90,7 @@ pub struct Editor {
     pub(crate) comparison: Option<crate::comparison::Comparison>,
     /// The timeline revision the program viewer is playing.
     pub(crate) shown_revision: u64,
+    pub(crate) track_order: crate::track_follow::TrackOrder,
     pub(crate) focus: Focus,
     pub(crate) view: TimelineView,
     pub(crate) mixer: Mixer,
@@ -244,6 +245,7 @@ impl Editor {
         .ok();
         let mut editor = Self {
             shown_revision: timeline.revision(),
+            track_order: Default::default(),
             recovery: Default::default(),
             saved_revision: timeline.revision(),
             project_generation: 0,

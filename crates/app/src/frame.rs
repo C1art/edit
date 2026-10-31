@@ -13,6 +13,7 @@ impl Editor {
             return;
         }
         self.shown_revision = revision;
+        self.follow_tracks();
         self.prune_nest_trail();
         self.prune_sequence_tabs();
         self.view.prune_selection(self.timeline.sequence());

@@ -4,6 +4,7 @@ use egui::{CursorIcon, Rect, Sense};
 use timeline::{Sequence, TrackKind, TrackRef};
 
 use super::layout::Row;
+use crate::track_follow::TrackMoves;
 
 pub const DEFAULT_HEIGHT: f32 = 46.0;
 /// Just fits the header's switches.
@@ -27,6 +28,13 @@ impl TrackHeights {
 
     pub fn set(&mut self, track: TrackRef, height: f32) {
         self.0.insert(track, height.clamp(MIN_HEIGHT, MAX_HEIGHT));
+    }
+
+    pub fn follow_tracks(&mut self, moves: &TrackMoves) {
+        let heights = std::mem::take(&mut self.0).into_iter();
+        self.0 = heights
+            .filter_map(|(track, height)| Some((moves.of(track)?, height)))
+            .collect();
     }
 
     /// Steps every track of `kind` taller, or shorter when `taller` is false.

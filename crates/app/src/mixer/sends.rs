@@ -4,6 +4,7 @@ use timeline::{Gain, Pan, SendTap, SetTrackSends, TrackRef, TrackSend};
 use super::{inserts, response_state, Change, FADER_RANGE};
 use crate::editor::Editor;
 use crate::icons;
+use crate::track_follow::TrackMoves;
 
 /// The track whose sends are open below the strips, and their settings while a
 /// control is being dragged.
@@ -11,6 +12,16 @@ use crate::icons;
 pub(super) struct Sends {
     open: Option<TrackRef>,
     adjusting: Option<(TrackRef, Vec<TrackSend>)>,
+}
+
+impl Sends {
+    pub(super) fn follow_tracks(&mut self, moves: &TrackMoves) {
+        self.open = self.open.and_then(|track| moves.of(track));
+        self.adjusting = self
+            .adjusting
+            .take()
+            .and_then(|(track, sends)| Some((moves.of(track)?, sends)));
+    }
 }
 
 /// A track strip's button for its sends, naming how many there are.
