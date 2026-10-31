@@ -121,7 +121,10 @@ pub(crate) fn sequence_menu(editor: &mut Editor, ui: &mut egui::Ui) {
         .clicked()
     {
         let sequence = editor.timeline.sequence();
-        let range = sequence.marks.range(sequence.duration());
+        // Captions can run past the last clip, as end credits from a subtitle file do.
+        let last_caption = sequence.captions.items.last().map(|caption| caption.end);
+        let end = sequence.duration().max(last_caption.unwrap_or_default());
+        let range = sequence.marks.range(end);
         if !editor.apply(timeline::CaptionsToTitles { range }) {
             editor.notice("No captions between In and Out");
         }
