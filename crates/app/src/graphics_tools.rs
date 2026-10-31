@@ -233,30 +233,42 @@ fn add_layer_to_selected(editor: &mut Editor, generator: &Generator, at: Vec2) -
         Generator::Graphic(graphic) => Some(graphic.clone()),
         other => Graphic::layered(other),
     };
-    let content = match generator {
-        Generator::Title(title) => GraphicContent::Text(title.clone()),
-        Generator::Shape(shape) => GraphicContent::Shape(*shape),
-        _ => return false,
-    };
     let Some(mut graphic) = graphic else {
         return false;
     };
-    // Into the graphic's own pixels, undoing its position and scale; turns are left as
-    // they are, since layers don't turn.
+    // Into the graphic's own pixels, undoing its position, anchor and scale, so the
+    // layer shows where and as big as it was drawn; turns are left as they are, since
+    // layers don't turn.
     let time = keyframe_time(editor, placed);
     let motion = &placed.look.motion;
     let [x, y] = motion.position.each_ref().map(|axis| axis.value_at(time));
+    let [anchor_x, anchor_y] = motion.anchor.each_ref().map(|axis| axis.value_at(time));
     let [width, height] = motion
         .scale_at(time)
         .map(|percent| (percent / 100.0).max(0.01));
-    let offset = [(at.x - x) / width, (at.y - y) / height].map(|value| value.round() as i32);
-    graphic.layers.insert(
-        0,
-        GraphicLayer {
-            offset,
-            ..GraphicLayer::new(content)
-        },
-    );
+    let offset = [
+        (at.x - x) / width + anchor_x,
+        (at.y - y) / height + anchor_y,
+    ]
+    .map(|value| value.round() as i32);
+    let mut layer = match generator {
+        Generator::Title(title) => {
+            let mut layer = GraphicLayer::new(GraphicContent::Text(title.clone()));
+            layer.scale = (100.0 / (width * height).sqrt()).round() as u32;
+            layer
+        }
+        Generator::Shape(shape) => {
+            let unscaled = |side: u32, scale: f32| (side as f32 / scale).round() as u32;
+            GraphicLayer::new(GraphicContent::Shape(timeline::Shape {
+                width: unscaled(shape.width, width),
+                height: unscaled(shape.height, height),
+                ..*shape
+            }))
+        }
+        _ => return false,
+    };
+    layer.offset = offset;
+    graphic.layers.insert(0, layer);
     editor.apply(SetClipGenerator {
         clip: placed.id,
         generator: Generator::Graphic(graphic),
