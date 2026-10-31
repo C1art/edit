@@ -38,9 +38,8 @@ pub fn handle(editor: &mut Editor, ctx: &egui::Context) {
             editor.switch_angle(angle);
         }
     }
-    if editor.full_screen && ctx.input_mut(|input| input.consume_key(Modifiers::NONE, Key::Escape))
-    {
-        editor.full_screen = false;
+    if editor.full_screen {
+        crate::full_screen::keys(editor, ctx);
     }
     while let Some(command) = take_press(ctx, |chord| editor.keymap.command(chord)) {
         run(editor, command);

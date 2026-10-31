@@ -4,6 +4,7 @@
 mod bench_clips;
 mod commands;
 mod export_speed;
+mod full_screen;
 mod layout;
 mod monkey;
 mod playback_speed;

@@ -221,7 +221,7 @@ pub fn out_point(player: &Player) -> Ticks {
     rate.frame_start(frame + 1, timebase).min(player.duration())
 }
 
-fn scrub_bar(ui: &mut egui::Ui, player: &mut Player, marks: Marks) {
+pub(crate) fn scrub_bar(ui: &mut egui::Ui, player: &mut Player, marks: Marks) {
     let size = egui::vec2(ui.available_width(), SCRUB_HEIGHT);
     let (rect, response) = ui.allocate_exact_size(size, Sense::click_and_drag());
     let painter = ui.painter_at(rect);
