@@ -199,6 +199,8 @@ impl Timeline {
         }
         let joined = self.undo_stack.split_off(self.undo_stack.len() - count);
         self.undo_stack.push(Box::new(Joined(joined)));
+        // Marks count undo steps, so an enclosing join still finds where it began.
+        self.executed -= (count - 1) as u64;
     }
 
     pub fn undo_name(&self) -> Option<&'static str> {

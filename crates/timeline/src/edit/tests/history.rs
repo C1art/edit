@@ -26,3 +26,21 @@ fn joined_edits_undo_and_redo_as_one_step() {
     assert!(timeline.redo().unwrap());
     assert_eq!(timeline.sequence(), &after);
 }
+
+#[test]
+fn a_join_around_an_earlier_join_keeps_older_steps_apart() {
+    let (mut timeline, _) = timeline();
+    let add_track = || AddTrack {
+        kind: TrackKind::Video,
+    };
+    timeline.apply(add_track()).unwrap();
+    let steps = timeline.done().count();
+    let outer = timeline.edit_mark();
+    let inner = timeline.edit_mark();
+    timeline.apply(add_track()).unwrap();
+    timeline.apply(add_track()).unwrap();
+    timeline.join_since(inner);
+    timeline.apply(add_track()).unwrap();
+    timeline.join_since(outer);
+    assert_eq!(timeline.done().count(), steps + 1);
+}
