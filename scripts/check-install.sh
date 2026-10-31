@@ -4,6 +4,8 @@
 #   check-install.sh fresh <Setup.exe> <version>
 #   check-install.sh update <earlier Setup.exe> <update_probe.exe> <version> [feed folder]
 set -euo pipefail
+# The run's annotations are what can be read back without its logs, so failures go there.
+trap 'echo "::error::${BASH_SOURCE[0]}:${LINENO}: ${BASH_COMMAND} failed"' ERR
 export MSYS_NO_PATHCONV=1
 
 root="$(cygpath -u "$LOCALAPPDATA")/Cledit"
@@ -57,7 +59,7 @@ check_dependencies() {
       fi
     done
   done
-  echo "Checked the DLLs of $(ls "$current"/*.exe "$current"/*.dll | wc -l) files"
+  echo "::notice::checked the DLLs that $(ls "$current"/*.exe "$current"/*.dll | wc -l) installed files load"
 }
 
 check_file_type() {
@@ -75,7 +77,7 @@ check_starts() {
   local pid=$!
   sleep 20
   if kill -0 "$pid" 2>/dev/null; then
-    echo "Cledit was still running after 20 seconds"
+    echo "::notice::Cledit was still running 20 seconds after starting"
     stop_cledit
   else
     local status=0
@@ -128,4 +130,4 @@ if [ "$failures" -gt 0 ]; then
   echo "::error::$failures install check(s) failed"
   exit 1
 fi
-echo "Install checks passed"
+echo "::notice::install check passed: $1 $([ "$1" = update ] && echo "$2 to $4" || echo "$3")"
