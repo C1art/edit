@@ -61,6 +61,8 @@ impl RenderPreviews {
 
     /// For a timeline replaced by another, whose revisions start again.
     pub(crate) fn forget(&mut self) {
+        self.worker.forget();
+        self.segments.clear();
         self.revision = None;
         self.asked = None;
         self.sent = None;
@@ -74,7 +76,12 @@ impl RenderPreviews {
             .map(|(range, fingerprint)| (range.clone(), self.rendered.contains(fingerprint)))
     }
 
-    pub(crate) fn previews(&self) -> Vec<Preview> {
+    /// The rendered segments, when they are worked out for `revision`; an edit since
+    /// may have changed what they show.
+    pub(crate) fn previews(&self, revision: u64) -> Vec<Preview> {
+        if self.revision != Some(revision) {
+            return Vec::new();
+        }
         self.segments
             .iter()
             .filter(|(_, fingerprint)| self.rendered.contains(fingerprint))
@@ -112,7 +119,6 @@ impl Editor {
             previews.revision = Some(worked_out);
             previews.segments = segments;
         }
-        let current = previews.revision == Some(revision);
         if previews.job.is_some() {
             ctx.request_repaint_after(crate::export_progress::REFRESH);
             notices.extend(self.advance_render());
@@ -122,10 +128,10 @@ impl Editor {
         };
         // The multi-camera view shows each camera, not the program alone; until the
         // segments catch up with an edit, a preview could show what was there before.
-        let wanted = if self.multicam_layout.is_some() || !current {
+        let wanted = if self.multicam_layout.is_some() {
             Vec::new()
         } else {
-            previews.previews()
+            previews.previews(revision)
         };
         if previews.sent.as_ref() != Some(&wanted) {
             if let Some(program) = &mut self.program {

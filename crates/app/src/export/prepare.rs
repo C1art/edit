@@ -38,7 +38,9 @@ pub(crate) fn prepare(
     let overlays = Some(dialog.overlays).filter(|overlays| has_video && !overlays.is_empty());
     let differs = export_overlays::differs_from_program(&dialog.overlays, captions, sequence);
     let previews = match &editor.render_previews {
-        Some(previews) if dialog.use_previews && !differs => previews.previews(),
+        Some(previews) if dialog.use_previews && !differs => {
+            previews.previews(editor.timeline.revision())
+        }
         _ => Vec::new(),
     };
     let sidecar =
