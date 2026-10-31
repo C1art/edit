@@ -405,6 +405,9 @@ impl Editor {
                     ));
                 }
                 StoreEvent::SettingWritten(_, Ok(())) => {}
+                StoreEvent::SettingSetAside(setting, result) => {
+                    self.setting_set_aside(setting, result);
+                }
                 StoreEvent::SettingWritten(setting, Err(error)) => {
                     self.notice(format!(
                         "Cannot save {} to {}: {error}",

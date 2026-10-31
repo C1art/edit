@@ -56,7 +56,7 @@ impl Editor {
     pub(crate) fn load_presets(&mut self, text: &str) {
         match PresetsFile::from_text(text) {
             Ok(file) => self.presets = file.presets,
-            Err(error) => self.notice(format!("Cannot read effect presets: {error}")),
+            Err(error) => self.unreadable_setting(Setting::Presets, error),
         }
     }
 

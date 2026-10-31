@@ -97,7 +97,7 @@ impl Editor {
     pub(crate) fn load_title_templates(&mut self, text: &str) {
         match TemplatesFile::from_text(text) {
             Ok(file) => self.title_templates = file.templates,
-            Err(error) => self.notice(format!("Cannot read title templates: {error}")),
+            Err(error) => self.unreadable_setting(Setting::TitleTemplates, error),
         }
     }
 

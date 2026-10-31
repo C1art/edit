@@ -33,6 +33,8 @@ enum Request {
     },
     ReadSetting(Setting),
     WriteSetting(Setting, String),
+    /// Renames a settings file that couldn't be read, so saving over it loses nothing.
+    SetAsideSetting(Setting),
     /// A Final Cut Pro XML file to read a sequence from.
     ReadInterchange(PathBuf),
     /// A sequence written for another editor, such as an EDL.
@@ -60,6 +62,8 @@ pub enum StoreEvent {
     /// The settings file's text, or none where there is no file yet.
     SettingRead(Setting, Result<Option<String>, AppError>),
     SettingWritten(Setting, Result<(), AppError>),
+    /// Where an unreadable settings file now is.
+    SettingSetAside(Setting, Result<PathBuf, AppError>),
     InterchangeRead(PathBuf, Result<Box<ImportXmeml>, AppError>),
     InterchangeWritten(PathBuf, Result<(), AppError>),
     Recoverable(Option<Recoverable>),
@@ -105,6 +109,14 @@ impl Setting {
             Self::Window => "Window.txt",
             Self::Preferences => "Preferences.txt",
         })
+    }
+
+    /// Where a file that couldn't be read is moved to, beside it.
+    pub fn unreadable_path(self) -> PathBuf {
+        let path = self.path();
+        let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+        let extension = path.extension().unwrap_or_default().to_string_lossy();
+        path.with_file_name(format!("{stem} (unreadable).{extension}"))
     }
 
     /// What the file holds, for messages about it.
@@ -226,6 +238,10 @@ impl ProjectStore {
         self.send(Request::WriteSetting(setting, text));
     }
 
+    pub fn set_aside_setting(&mut self, setting: Setting) {
+        self.send(Request::SetAsideSetting(setting));
+    }
+
     /// Looks for work lost when the last session crashed; ask before marking this one.
     pub fn find_recoverable(&mut self) {
         self.send(Request::FindRecoverable);
@@ -336,6 +352,14 @@ fn handle(request: Request) -> StoreEvent {
                 .and_then(|()| project::replace_file(&path, text.as_bytes()))
                 .map_err(AppError::from);
             StoreEvent::SettingWritten(setting, result)
+        }
+        Request::SetAsideSetting(setting) => {
+            let path = setting.path();
+            let aside = setting.unreadable_path();
+            let result = std::fs::rename(&path, &aside)
+                .map(|()| aside)
+                .map_err(AppError::from);
+            StoreEvent::SettingSetAside(setting, result)
         }
         Request::ReadInterchange(path) => {
             let result = std::fs::read_to_string(&path)

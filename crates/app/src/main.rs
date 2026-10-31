@@ -140,6 +140,7 @@ mod transparency_grid;
 mod transport;
 mod trim_monitor;
 mod ui_mode;
+mod unreadable_setting;
 mod viewer;
 mod voiceover;
 mod vst;

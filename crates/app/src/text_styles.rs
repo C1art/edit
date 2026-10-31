@@ -37,7 +37,7 @@ impl Editor {
     pub(crate) fn load_text_styles(&mut self, text: &str) {
         match TextStylesFile::from_text(text) {
             Ok(file) => self.text_styles = Arc::new(file.styles),
-            Err(error) => self.notice(format!("Cannot read text styles: {error}")),
+            Err(error) => self.unreadable_setting(Setting::TextStyles, error),
         }
     }
 
