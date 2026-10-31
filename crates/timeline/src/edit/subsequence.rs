@@ -66,6 +66,10 @@ impl Edit for MakeSubsequence {
             video: copy.video,
             audio: copy.audio,
             markers,
+            captions: crate::Captions {
+                items: copy.captions.within(range.clone()),
+                ..copy.captions
+            },
             ..Nest::default()
         };
         renumber(&mut nest, &mut sequence.ids);
