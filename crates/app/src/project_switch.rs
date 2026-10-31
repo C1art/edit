@@ -29,6 +29,7 @@ impl Editor {
         self.multicam_sync = None;
         self.scene_job = None;
         self.motion_job = None;
+        self.motion_queue.clear();
         self.reframe_jobs = Default::default();
         self.tone_analysis = None;
         self.mask_track_job = None;

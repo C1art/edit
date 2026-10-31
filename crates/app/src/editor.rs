@@ -80,6 +80,8 @@ pub struct Editor {
     pub(crate) scene_job: Option<crate::scene_edits::SceneJob>,
     pub(crate) still_job: Option<playback::StillJob>,
     pub(crate) motion_job: Option<crate::motion_analysis::MotionJob>,
+    /// Clips waiting for their motion to be analyzed after the running one.
+    pub(crate) motion_queue: std::collections::VecDeque<timeline::ClipId>,
     pub(crate) reframe_jobs: crate::reframe_analysis::ReframeJobs,
     pub(crate) tone_analysis: Option<crate::color_match::ToneAnalysis>,
     pub(crate) mask_track_job: Option<crate::mask_tracking::MaskTrackJob>,
@@ -288,6 +290,7 @@ impl Editor {
             scene_job: None,
             still_job: None,
             motion_job: None,
+            motion_queue: Default::default(),
             reframe_jobs: Default::default(),
             tone_analysis: None,
             mask_track_job: None,

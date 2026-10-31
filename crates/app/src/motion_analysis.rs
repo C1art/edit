@@ -26,8 +26,8 @@ impl Editor {
     /// Starts tracking the camera through `clip`'s footage, for its Warp Stabilizer or Rolling Shutter Repair.
     pub(crate) fn analyze_motion(&mut self, clip: ClipId) {
         if let Some(job) = &self.motion_job {
-            if job.clip != clip {
-                self.notice("Another clip's motion is still being analyzed");
+            if job.clip != clip && !self.motion_queue.contains(&clip) {
+                self.motion_queue.push_back(clip);
             }
             return;
         }
@@ -91,19 +91,29 @@ impl Editor {
         let motion = loop {
             match job.events.try_recv() {
                 Ok(Event::Progress(done)) => job.progress = done,
-                Ok(Event::Done(motion)) => break motion,
+                Ok(Event::Done(motion)) => break Some(motion),
                 Err(TryRecvError::Empty) => {
                     ctx.request_repaint_after(Duration::from_millis(100));
                     return;
                 }
-                Err(TryRecvError::Disconnected) => {
-                    self.motion_job = None;
-                    return;
-                }
+                Err(TryRecvError::Disconnected) => break None,
             }
         };
         let clip = job.clip;
         self.motion_job = None;
+        if let Some(motion) = motion {
+            self.take_motion(clip, motion);
+        }
+        // A queued clip deleted meanwhile starts nothing, so the next one goes instead.
+        while self.motion_job.is_none() {
+            let Some(next) = self.motion_queue.pop_front() else {
+                break;
+            };
+            self.analyze_motion(next);
+        }
+    }
+
+    fn take_motion(&mut self, clip: ClipId, motion: Result<Motion, MediaError>) {
         let motion = match motion {
             Ok(motion) => motion,
             Err(error) => {
