@@ -50,11 +50,16 @@ impl SessionMarker {
         file.write_all(text.as_bytes())
     }
 
+    /// Called when the editor closes normally. Its untitled autosaves go too: named for
+    /// this process, no later session would look at them.
     pub fn end(&mut self) -> std::io::Result<()> {
         let Some((path, file)) = self.0.take() else {
             return Ok(());
         };
         drop(file);
+        for slot in 0..SLOTS {
+            let _ = fs::remove_file(autosave_path(None, slot, std::process::id()));
+        }
         fs::remove_file(path)
     }
 }
@@ -69,10 +74,13 @@ fn open_held(path: &Path) -> std::io::Result<File> {
     options.open(path)
 }
 
-fn is_marker(path: &Path) -> bool {
-    path.file_name()
-        .and_then(|name| name.to_str())
-        .is_some_and(|name| name.starts_with("Running") && name.ends_with(".txt"))
+/// The process id a session marker's file name holds.
+fn marker_session(path: &Path) -> Option<u32> {
+    let name = path.file_name()?.to_str()?;
+    name.strip_prefix("Running ")?
+        .strip_suffix(".txt")?
+        .parse()
+        .ok()
 }
 
 /// Run on the project worker at start, before this session writes its own marker. The
@@ -82,12 +90,12 @@ pub fn find_recoverable() -> Option<Recoverable> {
     let markers = fs::read_dir(crate::project_store::app_folder()).ok()?;
     let (marker, newest) = markers
         .filter_map(|entry| Some(entry.ok()?.path()))
-        .filter(|path| is_marker(path))
-        .filter_map(|marker| {
+        .filter_map(|path| Some((marker_session(&path)?, path)))
+        .filter_map(|(session, marker)| {
             // A marker that can't be read is held by an editor still running.
             let marked_at = fs::metadata(&marker).and_then(|meta| meta.modified());
             let text = fs::read_to_string(&marker);
-            match recoverable_from(text.ok()?, marked_at.ok()?) {
+            match recoverable_from(text.ok()?, marked_at.ok()?, session) {
                 Some(recoverable) => Some((marker, recoverable)),
                 None => {
                     let _ = fs::remove_file(&marker);
@@ -100,11 +108,11 @@ pub fn find_recoverable() -> Option<Recoverable> {
     Some(newest)
 }
 
-fn recoverable_from(text: String, marked_at: SystemTime) -> Option<Recoverable> {
+fn recoverable_from(text: String, marked_at: SystemTime, session: u32) -> Option<Recoverable> {
     let project = Some(PathBuf::from(text.trim())).filter(|path| !path.as_os_str().is_empty());
     let modified = |path: &Path| fs::metadata(path).and_then(|meta| meta.modified()).ok();
     let autosaves = (0..SLOTS)
-        .map(|slot| autosave_path(project.as_deref(), slot))
+        .map(|slot| autosave_path(project.as_deref(), slot, session))
         .filter_map(|path| modified(&path).map(|at| (path, at)));
     let project_saved_at = project.as_deref().and_then(modified);
     let (autosave, autosaved_at) = newest_unsaved(marked_at, project_saved_at, autosaves)?;

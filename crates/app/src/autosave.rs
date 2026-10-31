@@ -60,20 +60,28 @@ impl Editor {
         let Some(store) = &mut self.store else {
             return;
         };
-        let path = autosave_path(self.project_path.as_deref(), self.autosave.slot);
+        let path = autosave_path(
+            self.project_path.as_deref(),
+            self.autosave.slot,
+            std::process::id(),
+        );
         store.autosave(path, self.timeline.project().clone());
         self.autosave.saved = Some(revision);
         self.autosave.slot = (self.autosave.slot + 1) % SLOTS;
     }
 }
 
-pub(crate) fn autosave_path(project: Option<&Path>, slot: usize) -> PathBuf {
-    let folder = match project.and_then(Path::parent) {
-        Some(folder) => folder.join("Auto-Save"),
-        None => crate::project_store::app_folder().join("Auto-Save"),
-    };
-    let stem = project
-        .and_then(Path::file_stem)
-        .map_or_else(|| "Untitled".into(), |stem| stem.to_string_lossy());
-    folder.join(format!("{stem}-{}.{}", slot + 1, project::EXTENSION))
+/// Where autosave `slot` of `project` goes. Untitled work is told apart by the `session`
+/// (process id) that made it, so editors open at once don't overwrite each other's.
+pub(crate) fn autosave_path(project: Option<&Path>, slot: usize, session: u32) -> PathBuf {
+    let number = slot + 1;
+    let extension = project::EXTENSION;
+    match project.and_then(|path| Some((path.parent()?, path.file_stem()?))) {
+        Some((folder, stem)) => folder
+            .join("Auto-Save")
+            .join(format!("{}-{number}.{extension}", stem.to_string_lossy())),
+        None => crate::project_store::app_folder()
+            .join("Auto-Save")
+            .join(format!("Untitled {session}-{number}.{extension}")),
+    }
 }
