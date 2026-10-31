@@ -1,3 +1,8 @@
+NOTE: This project is fully "vibecoded", mostly as an experiment inspired by the Adobe
+reverse engineering projects. If you stumbled across this repo, keep in mind that while
+I have done my best to ensure that all of the source is safe and stable, I cannot guarantee
+anything. Install and/or build at your own risk!
+
 # Cledit
 
 A non-linear video editor for Windows 11, written in Rust. It aims at the everyday
