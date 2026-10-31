@@ -9,6 +9,8 @@ use crate::PlaybackError;
 const CHANNELS: usize = 2;
 /// Source frames read at once when playing backwards, a second at 48 kHz.
 const BACKWARD_BLOCK: i64 = 48_000;
+/// Source frames read and dropped before each backward block, for a resampler to settle.
+const BACKWARD_LEAD_IN: i64 = 1_024;
 
 /// Stereo frames of a media item's audio at the output rate.
 pub(crate) trait FrameSource {
@@ -204,11 +206,17 @@ impl<S: FrameSource> ClipAudio<S> {
                 && needed.end <= end(self);
             if !inside {
                 let start = (needed.start - BACKWARD_BLOCK).max(0);
-                let frames = usize::try_from(needed.end - start).unwrap_or(0);
+                // Each block seeks, which starts a resampler afresh; what it gives while
+                // it settles is read ahead of the block and dropped, so it can't click.
+                let lead = BACKWARD_LEAD_IN.min(start);
+                let frames = usize::try_from(needed.end - start + lead).unwrap_or(0);
                 self.window.clear();
                 self.window.resize(frames * CHANNELS, 0.0);
+                self.source
+                    .read(pool, media, start - lead, &mut self.window)?;
+                let settling = usize::try_from(lead).unwrap_or(0) * CHANNELS;
+                self.window.drain(..settling.min(self.window.len()));
                 self.window_start = start;
-                self.source.read(pool, media, start, &mut self.window)?;
             }
             return Ok(());
         }
@@ -377,6 +385,21 @@ mod tests {
         let expected: Vec<f32> = (0..12).map(|k| 1_099.0 - k as f32).collect();
         assert_eq!(heard, expected);
         assert_eq!(clip.source.reads, [0]);
+    }
+
+    #[test]
+    fn each_backward_block_is_read_from_ahead_of_it_and_plays_only_its_own_frames() {
+        let read = ClipRead {
+            reverse: true,
+            ..forward(200_000, Speed::NORMAL)
+        };
+        let mut clip = ClipAudio::new(Ramp::default());
+        let mut out = vec![0.0; 4 * CHANNELS];
+        clip.mix_into(&pool(), &media(), &read, 0, &mut out)
+            .unwrap();
+        assert_eq!(left(&out), [200_999.0, 200_998.0, 200_997.0, 200_996.0]);
+        let block_start = clip.window_start;
+        assert_eq!(clip.source.reads, [block_start - BACKWARD_LEAD_IN]);
     }
 
     #[test]
