@@ -114,3 +114,54 @@ fn flattening_shows_the_camera_clips_where_they_play_with_keyframes_on_the_same_
     assert!(sequence.multicam_of(video).is_none());
     assert!(sequence.media_item(cameras).is_some());
 }
+
+#[test]
+fn flattening_a_camera_interpreted_at_another_rate_keeps_its_rate() {
+    let (mut timeline, _) = timeline();
+    let format = timeline.sequence().format;
+    timeline
+        .apply(ImportMedia {
+            name: "fast".into(),
+            path: "fast.mp4".into(),
+            duration: Ticks(1600),
+            video: Some(format),
+            has_audio: false,
+            still: false,
+            interpreted_rate: FrameRate::new(50, 1),
+            placed: None,
+            frame_fit: None,
+            timecode: None,
+        })
+        .unwrap();
+    let sources: Vec<SourceId> = timeline.sequence().media.iter().map(|m| m.id).collect();
+    timeline
+        .apply(CreateMulticam {
+            sources,
+            starts: vec![Ticks(0), Ticks(0)],
+            name: "Cameras".into(),
+        })
+        .unwrap();
+    let cameras = timeline.sequence().media[2].id;
+    timeline
+        .apply(place(cameras, 0, 100, 400, PlaceMode::Overwrite))
+        .unwrap();
+    let clip = clip_on(&timeline, V1, 0);
+    timeline
+        .apply(SwitchAngle {
+            clip,
+            angle: 1,
+            at: None,
+        })
+        .unwrap();
+    let clip = clip_on(&timeline, V1, 0);
+    timeline
+        .apply(FlattenMulticam { clips: vec![clip] })
+        .unwrap();
+    let flat = &timeline.sequence().video[0].clips[0];
+    assert_eq!((flat.start, flat.duration), (Ticks(0), Ticks(400)));
+    // Played twice as fast, 100 ticks into the multi-camera source is 200 into the file.
+    assert_eq!(
+        (flat.source_in, flat.source_out()),
+        (Ticks(200), Ticks(1000))
+    );
+}
