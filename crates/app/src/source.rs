@@ -46,11 +46,32 @@ impl SourceMonitor {
 
     /// Picks up changes to the item shown, such as a proxy being attached.
     pub fn refresh(&mut self, item: &MediaItem, pool: &Sequence) {
-        let player = &mut self.viewer.player;
-        if player.sequence().media_item(item.id) != Some(item) {
-            player.set_sequence(Arc::new(source_sequence(item, pool)));
-            self.conform = item.conform();
+        if self.viewer.player.sequence().media_item(item.id) == Some(item) {
+            return;
         }
+        let left = self.left_at();
+        let offset = item.default_range(pool.timebase).start;
+        let conform = item.conform();
+        let reframed = offset != self.offset || conform != self.conform;
+        self.viewer
+            .player
+            .set_sequence(Arc::new(source_sequence(item, pool)));
+        self.offset = offset;
+        self.conform = conform;
+        self.name.clone_from(&item.name);
+        // An edited subclip starts elsewhere in the media; the marks stay on the same media.
+        if reframed {
+            self.resume(left);
+        }
+    }
+
+    fn to_media(&self, time: Ticks) -> Ticks {
+        self.offset + self.conform.source_span(time)
+    }
+
+    fn to_monitor(&self, media: Ticks) -> Ticks {
+        let into = (media - self.offset).max(Ticks::ZERO);
+        self.conform.sequence_span(into).min(self.duration())
     }
 
     pub fn mark_in(&mut self) {
@@ -90,29 +111,28 @@ impl SourceMonitor {
 
     pub fn left_at(&self) -> LeftAt {
         LeftAt {
-            marks: self.marks,
-            position: self.viewer.player.position(),
+            mark_in: self.marks.mark_in.map(|time| self.to_media(time)),
+            mark_out: self.marks.mark_out.map(|time| self.to_media(time)),
+            position: self.to_media(self.viewer.player.position()),
             marked: self.marks.is_set().then(|| self.range()),
         }
     }
 
     fn resume(&mut self, left: LeftAt) {
-        self.marks = left.marks;
-        self.viewer.player.seek(left.position);
+        self.marks = Marks {
+            mark_in: left.mark_in.map(|media| self.to_monitor(media)),
+            mark_out: left.mark_out.map(|media| self.to_monitor(media)),
+        };
+        self.viewer.player.seek(self.to_monitor(left.position));
     }
 
     /// Marks the media range `marked` and parks on media time `at`.
     pub fn show_media(&mut self, marked: Range<Ticks>, at: Ticks) {
-        let end = self.viewer.player.duration();
-        let to_monitor = |time: Ticks| {
-            let into = (time - self.offset).max(Ticks::ZERO);
-            self.conform.sequence_span(into).min(end)
-        };
         self.marks = Marks {
-            mark_in: Some(to_monitor(marked.start)),
-            mark_out: Some(to_monitor(marked.end)),
+            mark_in: Some(self.to_monitor(marked.start)),
+            mark_out: Some(self.to_monitor(marked.end)),
         };
-        self.viewer.player.seek(to_monitor(at));
+        self.viewer.player.seek(self.to_monitor(at));
     }
 }
 
@@ -120,7 +140,9 @@ impl SourceMonitor {
 /// brings back its marks and position, as in Premiere.
 #[derive(Debug, Clone, Copy)]
 pub struct LeftAt {
-    marks: Marks,
+    /// In the media's time, so they hold when a subclip's bounds change meanwhile.
+    mark_in: Option<Ticks>,
+    mark_out: Option<Ticks>,
     position: Ticks,
     /// The marked media as `(source_in, duration)`, which dragging the item from the
     /// project places.
