@@ -93,7 +93,7 @@ impl Command {
             Self::DecreaseVideoHeights => vec![ctrl(Key::Minus)],
             Self::IncreaseAudioHeights => vec![alt(Key::Equals)],
             Self::DecreaseAudioHeights => vec![alt(Key::Minus)],
-            Self::ExpandAllTracks => vec![shift(Key::Plus)],
+            Self::ExpandAllTracks => vec![shift(Key::Equals), shift(Key::Plus)],
             Self::MinimizeAllTracks => vec![shift(Key::Minus)],
             Self::MulticamView => vec![shift(Key::Num0)],
             Self::RenderInToOut => vec![plain(Key::Enter)],
