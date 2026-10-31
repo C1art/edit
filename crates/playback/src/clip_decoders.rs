@@ -18,8 +18,18 @@ impl<T> ClipDecoders<T> {
 
     /// The decoder following `clip`, or else one that no clip in `keep` is using.
     pub(crate) fn for_clip(&mut self, clip: ClipId, keep: &[ClipId]) -> &mut T {
+        self.for_clip_noting_change(clip, keep).0
+    }
+
+    /// Like `for_clip`, and whether the decoder followed another clip before.
+    pub(crate) fn for_clip_noting_change(
+        &mut self,
+        clip: ClipId,
+        keep: &[ClipId],
+    ) -> (&mut T, bool) {
         let index = self.free(clip, keep).unwrap_or(0);
-        self.claim(index, clip)
+        let changed = self.decoders[index].0 != Some(clip);
+        (self.claim(index, clip), changed)
     }
 
     /// Like `for_clip`, but `None` when every decoder follows a clip in `keep`.

@@ -178,7 +178,11 @@ impl TracksMix {
                 let length = usize::try_from(to - from).unwrap_or(0) * 2;
                 let clip_mix = &mut self.clip_mix[..length];
                 clip_mix.fill(0.0);
-                let voice = decoders.for_clip(clip.id, &keep);
+                let (voice, changed) = decoders.for_clip_noting_change(clip.id, &keep);
+                if changed {
+                    voice.audio.forget_window();
+                    voice.effects.reset();
+                }
                 self.curve.clear();
                 if let Some(remap) = &clip.remap {
                     let clip_start = to_frames(clip.start);

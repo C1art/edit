@@ -128,6 +128,12 @@ impl<S: FrameSource> ClipAudio<S> {
 
     pub(crate) fn reset(&mut self) {
         self.source.reset();
+        self.forget_window();
+    }
+
+    /// Forgets the audio read for another clip, which reading by frame numbers alone
+    /// would otherwise take for this one's, while the source reads on where it can.
+    pub(crate) fn forget_window(&mut self) {
         self.window.clear();
         self.stretch.reset();
     }
