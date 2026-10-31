@@ -86,6 +86,8 @@ pub fn audio_fade(track: &Track, index: usize, position: Ticks) -> f32 {
             gain *= match transition.kind {
                 kind if !kind.is_dip() => rise(1.0 - fraction(position - start, before + after)),
                 _ if position >= clip.end() => 0.0,
+                // Also the whole clip when the dip starts at the cut.
+                _ if position < start => 1.0,
                 _ => rise(1.0 - fraction(position - start, before)),
             };
         }
@@ -163,6 +165,17 @@ mod tests {
         let (out, incoming) = curve(TransitionKind::ExponentialFade);
         assert!((20.0 * incoming.log10() + 30.0).abs() < 0.01);
         assert!((out - incoming).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_dip_starting_at_the_cut_leaves_the_outgoing_clip_alone() {
+        let mut track = track_with_crossfade(40);
+        let mut dip = Transition::new(TransitionKind::DipToBlack, Ticks(40));
+        dip.alignment = crate::Alignment::StartAtCut;
+        Arc::make_mut(&mut track.clips[1]).transition_in = Some(dip);
+        assert_eq!(audio_fade(&track, 0, Ticks(99)), 1.0);
+        assert_eq!(audio_fade(&track, 1, Ticks(100)), 0.0);
+        assert!(audio_fade(&track, 1, Ticks(120)) > 0.0);
     }
 
     #[test]
