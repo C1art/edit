@@ -119,3 +119,34 @@ fn tracks_added_between_others_keep_effects_reading_the_tracks_they_read() {
     timeline.undo();
     assert_eq!(matte(&timeline), Some(1));
 }
+
+#[test]
+fn removing_a_track_below_locked_ones_is_allowed() {
+    let (mut timeline, source) = timeline();
+    for _ in 0..2 {
+        timeline
+            .apply(AddTrack {
+                kind: TrackKind::Video,
+            })
+            .unwrap();
+    }
+    for (track, start) in [(1, 0), (2, 100)] {
+        timeline
+            .apply(PlaceClip {
+                video_track: Some(track),
+                audio_track: None,
+                ..place(source, start, 0, 50, PlaceMode::Overwrite)
+            })
+            .unwrap();
+        timeline
+            .apply(SetTrackSwitch {
+                track: TrackRef::video(track),
+                switch: TrackSwitch::Lock,
+                on: true,
+            })
+            .unwrap();
+    }
+    let tracks = timeline.sequence().video.len();
+    timeline.apply(RemoveTrack { track: V1 }).unwrap();
+    assert_eq!(timeline.sequence().video.len(), tracks - 1);
+}

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     Captions, Marker, Marks, MediaItem, Nest, Sequence, SourceId, Ticks, TimelineError, Track,
-    TrackRef,
+    TrackKind, TrackRef,
 };
 
 /// The media pool by id, as looking every clip's media up in turn would take as long as
@@ -47,13 +47,9 @@ fn check_tracks<'a>(
     after: impl Iterator<Item = (TrackRef, &'a Track)>,
 ) -> Result<(), TimelineError> {
     let before: Vec<(TrackRef, &Track)> = before.collect();
-    for (track_ref, track) in after {
-        let was_locked = before
-            .iter()
-            .find(|(old_ref, old)| *old_ref == track_ref && old.locked && track.locked);
-        if was_locked.is_some_and(|(_, old)| old.clips != track.clips) {
-            return Err(TimelineError::TrackLocked(track_ref));
-        }
+    let after: Vec<(TrackRef, &Track)> = after.collect();
+    check_locked(&before, &after)?;
+    for &(track_ref, track) in &after {
         let mut previous_end = Ticks::ZERO;
         for clip in &track.clips {
             if clip.start < Ticks::ZERO {
@@ -98,6 +94,43 @@ fn check_tracks<'a>(
         }
     }
     Ok(())
+}
+
+/// Tracks have no identity of their own, and adding or removing a track renumbers those
+/// above it, so locked tracks are matched in order. Only locking or unlocking changes how
+/// many there are, and that renumbers nothing.
+fn check_locked(
+    before: &[(TrackRef, &Track)],
+    after: &[(TrackRef, &Track)],
+) -> Result<(), TimelineError> {
+    for kind in [TrackKind::Video, TrackKind::Audio] {
+        let (old, new) = (locked(before, kind), locked(after, kind));
+        let pairs: Vec<_> = if old.len() == new.len() {
+            old.iter().zip(&new).collect()
+        } else {
+            old.iter()
+                .flat_map(|old| {
+                    new.iter()
+                        .filter(|new| new.0 == old.0)
+                        .map(move |new| (old, new))
+                })
+                .collect()
+        };
+        if let Some((_, (track_ref, _))) =
+            pairs.iter().find(|(old, new)| old.1.clips != new.1.clips)
+        {
+            return Err(TimelineError::TrackLocked(*track_ref));
+        }
+    }
+    Ok(())
+}
+
+fn locked<'a>(tracks: &[(TrackRef, &'a Track)], kind: TrackKind) -> Vec<(TrackRef, &'a Track)> {
+    tracks
+        .iter()
+        .filter(|(track_ref, track)| track_ref.kind == kind && track.locked)
+        .copied()
+        .collect()
 }
 
 fn check_markers(markers: &[Marker]) -> Result<(), TimelineError> {
