@@ -1,8 +1,11 @@
 use std::f64::consts::SQRT_2;
+use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Rgb, ShadowStyle, Ticks, Timebase, TitleMotion};
+use crate::{
+    CountingLeader, FillGradient, Graphic, Rgb, ShadowStyle, Ticks, Timebase, TitleMotion,
+};
 
 /// Generated pictures have no length of their own; they hold for as long as they're
 /// trimmed to, up to this many seconds.
@@ -20,6 +23,14 @@ pub enum Generator {
     /// Draws nothing itself; its clips' looks apply to the picture of the tracks below.
     AdjustmentLayer,
     Shape(Shape),
+    /// SMPTE color bars, with a 1 kHz reference tone at -20 dBFS.
+    BarsAndTone,
+    BlackVideo,
+    /// Draws nothing itself, for effects that draw, such as Timecode, to draw on.
+    TransparentVideo,
+    /// Lasts its own eight seconds, not as long as it's trimmed to.
+    CountingLeader(CountingLeader),
+    Graphic(Graphic),
 }
 
 impl Generator {
@@ -29,6 +40,11 @@ impl Generator {
             Self::Title(_) => "Title",
             Self::AdjustmentLayer => "Adjustment Layer",
             Self::Shape(shape) => shape.kind.name(),
+            Self::BarsAndTone => "Bars and Tone",
+            Self::BlackVideo => "Black Video",
+            Self::TransparentVideo => "Transparent Video",
+            Self::CountingLeader(_) => "Universal Counting Leader",
+            Self::Graphic(_) => "Graphic",
         }
     }
 }
@@ -40,6 +56,9 @@ pub struct Title {
     /// Line height in sequence pixels.
     pub size: u32,
     pub color: Rgb,
+    /// Blends the fill from `color` to another across the text.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gradient: Option<FillGradient>,
     pub align: TextAlign,
     pub font: TitleFont,
     pub shadow: bool,
@@ -49,6 +68,8 @@ pub struct Title {
     /// A box behind the text, as lower thirds use.
     #[serde(default)]
     pub background: Option<Rgb>,
+    #[serde(default)]
+    pub background_style: BoxStyle,
     #[serde(default)]
     pub bold: bool,
     #[serde(default)]
@@ -64,6 +85,42 @@ pub struct Title {
     pub stroke: Option<TextStroke>,
     #[serde(default)]
     pub motion: TitleMotion,
+}
+
+/// How a title's background box sits around its text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(default)]
+pub struct BoxStyle {
+    /// In percent.
+    pub opacity: u32,
+    /// Space around the text in sequence pixels; scaled to the text when unset.
+    pub padding: Option<u32>,
+    /// Rounds the corners, in sequence pixels.
+    pub radius: u32,
+}
+
+impl Default for BoxStyle {
+    fn default() -> Self {
+        Self {
+            opacity: 100,
+            padding: None,
+            radius: 0,
+        }
+    }
+}
+
+impl BoxStyle {
+    /// The space left and right of the text, and above and below it, for text `size`
+    /// pixels high.
+    pub fn margins(&self, size: u32) -> (u32, u32) {
+        match self.padding {
+            Some(padding) => (padding, padding),
+            None => {
+                let side = (size as f32 * 0.3).round() as u32;
+                (side, side / 2)
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -100,11 +157,13 @@ impl Default for Title {
             text: "Title".to_owned(),
             size: 96,
             color: Rgb::WHITE,
+            gradient: None,
             align: TextAlign::Center,
             font: TitleFont::Sans,
             shadow: true,
             shadow_style: None,
             background: None,
+            background_style: BoxStyle::default(),
             bold: false,
             italic: false,
             tracking: 0,
@@ -128,6 +187,9 @@ pub struct Shape {
     pub corner_radius: u32,
     /// None leaves only the stroke.
     pub fill: Option<Rgb>,
+    /// Blends the fill from its color to another across the shape.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gradient: Option<FillGradient>,
     /// Drawn outside the shape, as on titles.
     #[serde(default)]
     pub stroke: Option<TextStroke>,
@@ -146,6 +208,7 @@ impl Shape {
             height: 300,
             corner_radius: 0,
             fill: Some(Rgb::new(200, 60, 60)),
+            gradient: None,
             stroke: None,
             shadow: false,
             shadow_style: None,
@@ -190,10 +253,25 @@ pub enum TextAlign {
     Right,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TitleFont {
     Sans,
     Mono,
+    /// A TrueType or OpenType file, as installed fonts are.
+    File(PathBuf),
+}
+
+impl TitleFont {
+    pub fn name(&self) -> String {
+        match self {
+            Self::Sans => "Sans".into(),
+            Self::Mono => "Mono".into(),
+            Self::File(path) => path.file_stem().map_or_else(
+                || path.display().to_string(),
+                |stem| stem.to_string_lossy().into_owned(),
+            ),
+        }
+    }
 }
 
 pub(crate) fn seconds(seconds: i64, timebase: Timebase) -> Ticks {

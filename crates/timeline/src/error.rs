@@ -13,6 +13,8 @@ pub enum TimelineError {
     BinNotFound(BinId),
     /// The bin would go inside itself.
     BinCycle(BinId),
+    /// Search bins show what matches their search and hold nothing of their own.
+    SearchBin(BinId),
     ClipOverlap {
         track: TrackRef,
         at: Ticks,
@@ -21,6 +23,8 @@ pub enum TimelineError {
     MarkersOutOfOrder,
     SpeedOutOfRange(ClipId),
     BeforeSequenceStart,
+    /// A time too far from the start to add to or scale without overflowing.
+    TooLate,
     /// The clip would need source material before the start or after the end of its media.
     OutsideMedia(ClipId),
     /// The marks ask for more of the source than it has.
@@ -48,23 +52,24 @@ impl fmt::Display for TimelineError {
         match self {
             Self::TrackNotFound(track) => write!(f, "track {track} does not exist"),
             Self::TrackLocked(track) => write!(f, "track {track} is locked"),
-            Self::ClipNotFound(clip) => write!(f, "clip {} does not exist", clip.0),
-            Self::MarkerNotFound(marker) => write!(f, "marker {} does not exist", marker.0),
-            Self::MediaNotFound(source) => write!(f, "media {} is not in the project", source.0),
-            Self::MediaInUse(source) => write!(f, "media {} is used in the sequence", source.0),
-            Self::BinNotFound(bin) => write!(f, "bin {} does not exist", bin.0),
+            Self::ClipNotFound(_) => f.write_str("the clip no longer exists"),
+            Self::MarkerNotFound(_) => f.write_str("the marker no longer exists"),
+            Self::MediaNotFound(_) => f.write_str("the media is no longer in the project"),
+            Self::MediaInUse(_) => write!(
+                f,
+                "clips rendered and replaced from it need it to restore their original"
+            ),
+            Self::BinNotFound(_) => f.write_str("the bin no longer exists"),
             Self::BinCycle(_) => f.write_str("a bin can't go inside itself"),
-            Self::ClipOverlap { track, at } => {
-                write!(
-                    f,
-                    "clip overlaps another clip on track {track} at tick {}",
-                    at.0
-                )
+            Self::SearchBin(_) => f.write_str("a search bin can't hold items or bins"),
+            Self::ClipOverlap { track, .. } => {
+                write!(f, "clips would overlap on track {track}")
             }
             Self::MarkersOutOfOrder => f.write_str("markers are out of time order"),
             Self::SpeedOutOfRange(_) => f.write_str("clip speed must be between 1% and 10,000%"),
             Self::NonPositiveDuration => f.write_str("clip duration must be positive"),
             Self::BeforeSequenceStart => f.write_str("nothing can start before the sequence"),
+            Self::TooLate => f.write_str("a time is too far past the start of the sequence"),
             Self::OutsideMedia(_) => f.write_str("not enough source media for this edit"),
             Self::NotEnoughSource => {
                 f.write_str("the source has too little media for the sequence marks")

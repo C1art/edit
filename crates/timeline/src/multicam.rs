@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{Clip, ClipId, MediaItem, Nest, Param, Sequence, SourceId, Ticks, Track};
 
 /// Where the multi-camera view puts each angle and the program, as `[left, top, width,
@@ -72,7 +74,7 @@ impl Sequence {
         let mut view = self.clone();
         let program = SourceId(view.ids.next());
         let duration = self.duration().max(Ticks(1));
-        view.media.push(MediaItem {
+        Arc::make_mut(&mut view.media).push(MediaItem {
             id: program,
             name: String::new(),
             path: Default::default(),
@@ -89,11 +91,18 @@ impl Sequence {
             subclip: None,
             interpreted_rate: None,
             interpreted_aspect: None,
+            interpreted_color: None,
+            interpreted_fields: None,
             alpha: Default::default(),
             log: Default::default(),
             offline: false,
             still: false,
             channel_map: None,
+            placed: None,
+            frame_fit: None,
+            timecode: None,
+            poster: None,
+            transcript: None,
         });
         let mut whole = Clip::new(
             ClipId(view.ids.next()),
@@ -104,7 +113,7 @@ impl Sequence {
         );
         self.place(&mut whole, MulticamLayout::PROGRAM);
         view.video = vec![Track {
-            clips: vec![whole],
+            clips: vec![whole.into()],
             ..Track::default()
         }];
         for angle in 0..angles {
@@ -123,10 +132,10 @@ impl Sequence {
                         transition_out: None,
                         look: Default::default(),
                         angle,
-                        ..clip.clone()
+                        ..Clip::clone(clip)
                     };
                     self.place(&mut shown, layout.angle_rect(angle));
-                    shown
+                    Arc::new(shown)
                 })
                 .collect();
             view.video.push(Track {

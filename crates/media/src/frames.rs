@@ -10,6 +10,12 @@ pub struct VideoFrame {
     pub pixels: Vec<u8>,
 }
 
+impl Drop for VideoFrame {
+    fn drop(&mut self) {
+        crate::spare_pixels::give(std::mem::take(&mut self.pixels));
+    }
+}
+
 /// Interleaved `f32` samples at the source sample rate.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AudioBuffer {
@@ -39,6 +45,18 @@ impl AudioBuffer {
             .map_or(Ticks::ZERO, |rate| frames.rescale(rate, timebase))
     }
 
+    /// Silence in this buffer's format from `from` up to where this buffer starts.
+    pub(crate) fn silence_before(&self, from: Ticks, timebase: Timebase) -> Option<Self> {
+        let rate = self.sample_timebase()?;
+        let frames = usize::try_from((self.pts - from).rescale(timebase, rate).0).ok()?;
+        (frames > 0).then(|| Self {
+            pts: from,
+            sample_rate: self.sample_rate,
+            channels: self.channels,
+            samples: vec![0.0; frames * usize::from(self.channels)],
+        })
+    }
+
     /// Drops the samples that play before `position`.
     pub(crate) fn trim_start_to(&mut self, position: Ticks, timebase: Timebase) {
         let Some(rate) = self.sample_timebase() else {
@@ -51,8 +69,10 @@ impl AudioBuffer {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug)]
 pub enum DecodedFrame {
     Video(VideoFrame),
+    /// Only from a reader asked to keep pictures planar.
+    Planar(crate::PlanarFrame),
     Audio(AudioBuffer),
 }

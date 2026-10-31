@@ -64,6 +64,7 @@ fn correction(ui: &mut egui::Ui, rows: &mut Rows, secondary: &mut HslSecondary) 
         ui,
         rows,
         [&mut secondary.wheel.blue, &mut secondary.wheel.red],
+        super::color::WHEEL_SIZE,
     );
     rows.param(ui, "Level", &mut secondary.wheel.level, -100.0..=100.0, "");
     rows.param(

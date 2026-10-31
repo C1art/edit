@@ -26,8 +26,12 @@ fn color_key_alpha(rgb: vec3<f32>) -> f32 {
     if key.w < 0.0 {
         return 1.0;
     }
+    // #if recolor_key.w
     let softness = max(placement.recolor_amounts.w, 1e-4);
     return smoothstep(key.w, key.w + softness, color_distance(rgb, key.rgb));
+    // #else
+    return 1.0;
+    // #endif
 }
 
 fn leave_color(rgb: vec3<f32>) -> vec3<f32> {
@@ -35,13 +39,19 @@ fn leave_color(rgb: vec3<f32>) -> vec3<f32> {
     if leave.w < 0.0 {
         return rgb;
     }
+    // #if recolor_leave.w
     let amounts = placement.recolor_amounts;
     var distance = color_distance(rgb, leave.rgb);
     if amounts.z > 0.5 {
         distance = hue_distance(rgb, leave.rgb);
     }
     let kept = 1.0 - smoothstep(leave.w, leave.w + max(amounts.y, 1e-4), distance);
-    return mix(rgb, vec3<f32>(dot(rgb, LUMA)), amounts.x * (1.0 - kept));
+    // A negative amount greys the matching color instead of the others.
+    let greyed = select(1.0 - kept, kept, amounts.x < 0.0);
+    return mix(rgb, vec3<f32>(dot(rgb, LUMA)), abs(amounts.x) * greyed);
+    // #else
+    return rgb;
+    // #endif
 }
 
 // Covers the picture at `uv` with the ramp, which fills it even where it was clear.
@@ -51,6 +61,7 @@ fn ramped(color: vec4<f32>, uv: vec2<f32>) -> vec4<f32> {
     if end.w <= 0.0 || !inside {
         return color;
     }
+    // #if recolor_ramp_end.w
     let points = placement.recolor_ramp_points;
     let start = placement.recolor_ramp_start;
     let picture = picture_size();
@@ -63,12 +74,16 @@ fn ramped(color: vec4<f32>, uv: vec2<f32>) -> vec4<f32> {
     }
     let fill = srgb_decode(mix(start.rgb, end.rgb, clamp(t, 0.0, 1.0)));
     return vec4<f32>(mix(color.rgb, fill, end.w), mix(color.a, 1.0, end.w));
+    // #else
+    return color;
+    // #endif
 }
 
 fn mix_channels(rgb: vec3<f32>) -> vec3<f32> {
     if placement.recolor_change_detail.w < 0.5 {
         return rgb;
     }
+    // #if recolor_change_detail.w
     let encoded = vec4<f32>(to_gamma(max(rgb, vec3<f32>(0.0))), 1.0);
     let mixed = vec3<f32>(
         dot(placement.recolor_mix_red, encoded),
@@ -76,6 +91,9 @@ fn mix_channels(rgb: vec3<f32>) -> vec3<f32> {
         dot(placement.recolor_mix_blue, encoded),
     );
     return to_linear(max(mixed, vec3<f32>(0.0)));
+    // #else
+    return rgb;
+    // #endif
 }
 
 // Encoded color from hue in turns, saturation and lightness, as `hsl` reads them.
@@ -97,6 +115,7 @@ fn change_to_color(rgb: vec3<f32>) -> vec3<f32> {
     if changing.w < 0.0 {
         return rgb;
     }
+    // #if recolor_change_from.w
     let into = placement.recolor_change_to;
     let detail = placement.recolor_change_detail;
     let color = hsl(rgb);
@@ -122,4 +141,7 @@ fn change_to_color(rgb: vec3<f32>) -> vec3<f32> {
     }
     let encoded = to_gamma(max(rgb, vec3<f32>(0.0)));
     return to_linear(mix(encoded, from_hsl(changed), weight));
+    // #else
+    return rgb;
+    // #endif
 }

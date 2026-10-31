@@ -52,7 +52,7 @@ impl DeEsser {
         for (frame, highs) in frames.zip(self.highs.as_chunks::<2>().0) {
             let peak = highs[0].abs().max(highs[1].abs());
             let coefficient = if peak > self.level { attack } else { release };
-            self.level = peak + coefficient * (self.level - peak);
+            self.level = super::flush(peak + coefficient * (self.level - peak));
             let gain = if self.level > threshold {
                 (threshold / self.level).max(deepest)
             } else {

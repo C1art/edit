@@ -27,12 +27,15 @@ fn a_faster_segment_shortens_the_clip_and_a_cut_keeps_the_frame_on_either_side()
         .unwrap();
     // The keyframe stays on source 300, now reached in half the time.
     assert_eq!(spans(&timeline, V1), [(0, 300, 100)]);
-    assert_eq!(spans(&timeline, A1), [(0, 400, 100)]);
-    let clip = |timeline: &Timeline, index| {
-        let id = clip_on(timeline, V1, index);
+    // The linked sound speeds up with it, so it stays in sync.
+    assert_eq!(spans(&timeline, A1), [(0, 300, 100)]);
+    let on = |timeline: &Timeline, track, index| {
+        let id = clip_on(timeline, track, index);
         timeline.sequence().clip(id).unwrap().1.clone()
     };
+    let clip = |timeline: &Timeline, index| on(timeline, V1, index);
     assert_eq!(clip(&timeline, 0).source_time(Ticks(150)), Ticks(350));
+    assert_eq!(on(&timeline, A1, 0).source_time(Ticks(150)), Ticks(350));
     assert_eq!(clip(&timeline, 0).source_out(), Ticks(500));
 
     timeline
@@ -50,6 +53,8 @@ fn a_faster_segment_shortens_the_clip_and_a_cut_keeps_the_frame_on_either_side()
     let right = clip(&timeline, 1);
     assert_eq!((right.remap.clone(), right.speed), (None, speed(120)));
     assert_eq!(right.source_out(), Ticks(500));
+    // Cut on its own, the picture no longer plays in step with the sound under it.
+    assert!(on(&timeline, A1, 0).remap.is_some());
 }
 
 #[test]
@@ -76,6 +81,7 @@ fn a_slower_segment_grows_the_clip_only_up_to_the_next_one() {
         })
         .unwrap();
     assert_eq!(spans(&timeline, V1), [(0, 300, 0), (300, 400, 0)]);
+    assert_eq!(spans(&timeline, A1), [(0, 300, 0), (300, 400, 0)]);
 
     timeline
         .apply(RemoveSpeedKeyframe {

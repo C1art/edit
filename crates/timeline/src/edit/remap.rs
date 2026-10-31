@@ -1,8 +1,10 @@
 use crate::edit::ops;
-use crate::{ClipId, Edit, Sequence, Speed, Ticks, TimeRemap, TimelineError, TrackKind};
+use crate::{
+    Clip, ClipId, Edit, Sequence, Speed, SpeedRamp, Ticks, TimeRemap, TimelineError, TrackKind,
+};
 
 /// Keyframes the speed of a video clip at sequence position `at`, starting time
-/// remapping on it if needed. Linked sound is left at its own speed.
+/// remapping on it if needed. Linked sound playing in step with it follows its speed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AddSpeedKeyframe {
     pub clip: ClipId,
@@ -26,21 +28,65 @@ impl Edit for AddSpeedKeyframe {
         {
             return Err(TimelineError::NothingToEdit);
         }
-        let clip = ops::clip_mut(sequence, self.clip)?;
         let offset = self.at - clip.start;
-        if clip.remap.is_none() {
-            clip.remap = Some(TimeRemap::constant(
-                clip.source_in,
-                clip.duration,
-                clip.speed,
-            ));
-            clip.speed = Speed::NORMAL;
+        for id in in_step(sequence, self.clip) {
+            let clip = ops::clip_mut(sequence, id)?;
+            if clip.remap.is_none() {
+                clip.remap = Some(TimeRemap::constant(
+                    clip.source_in,
+                    clip.duration,
+                    clip.rate(),
+                ));
+                clip.speed = Speed::NORMAL;
+            }
+            if !clip
+                .remap
+                .as_mut()
+                .is_some_and(|remap| remap.insert(offset))
+            {
+                return Err(TimelineError::NothingToEdit);
+            }
         }
-        if !clip
-            .remap
-            .as_mut()
-            .is_some_and(|remap| remap.insert(offset))
-        {
+        Ok(())
+    }
+}
+
+/// Gives video clips, and the sound in step with each, a ready-made speed ramp in place
+/// of the speed they had, keeping their lengths and the source they play. Held,
+/// reversed and too short clips keep theirs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApplySpeedRamp {
+    pub clips: Vec<ClipId>,
+    pub ramp: SpeedRamp,
+}
+
+impl Edit for ApplySpeedRamp {
+    fn name(&self) -> &'static str {
+        "Speed Ramp"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let frames = (sequence.format.frame_rate, sequence.timebase);
+        let mut ramped = Vec::new();
+        for &id in &self.clips {
+            let Some((track, clip)) = sequence.clip(id) else {
+                continue;
+            };
+            if track.kind != TrackKind::Video || clip.hold || clip.reverse || ramped.contains(&id) {
+                continue;
+            }
+            let source = clip.source_in..clip.source_out();
+            let Some(remap) = self.ramp.remap(source, clip.duration, frames) else {
+                continue;
+            };
+            for id in in_step(sequence, id) {
+                let clip = ops::clip_mut(sequence, id)?;
+                clip.remap = Some(remap.clone());
+                clip.speed = Speed::NORMAL;
+                ramped.push(id);
+            }
+        }
+        if ramped.is_empty() {
             return Err(TimelineError::NothingToEdit);
         }
         Ok(())
@@ -101,43 +147,112 @@ impl Edit for RemoveTimeRemap {
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
-        let clip = ops::clip_mut(sequence, self.clip)?;
-        if clip.remap.is_none() {
-            return Err(TimelineError::NothingToEdit);
+        for id in in_step(sequence, self.clip) {
+            let clip = ops::clip_mut(sequence, id)?;
+            if clip.remap.is_none() {
+                return Err(TimelineError::NothingToEdit);
+            }
+            let source = clip.source_out() - clip.source_in;
+            clip.speed = Speed::stretch(source, clip.duration)
+                .ok_or(TimelineError::SpeedOutOfRange(self.clip))?
+                .over(clip.conform);
+            clip.remap = None;
         }
-        let source = clip.source_out() - clip.source_in;
-        clip.speed = Speed::stretch(source, clip.duration)
-            .ok_or(TimelineError::SpeedOutOfRange(self.clip))?;
-        clip.remap = None;
         Ok(())
     }
 }
 
-/// Changes a clip's speed curve with `change`, then fits the clip to it so it still
-/// starts and ends on the same frames, without running into the clip after it.
+/// Keeps the pitch of a remapped clip's sound, and of the sound playing in step with
+/// it, as its speed changes, or lets the pitch follow the speed as on tape.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetMaintainPitch {
+    pub clip: ClipId,
+    pub maintain: bool,
+}
+
+impl Edit for SetMaintainPitch {
+    fn name(&self) -> &'static str {
+        "Maintain Audio Pitch"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let ids = in_step(sequence, self.clip);
+        let mut changed = false;
+        for id in ids {
+            let clip = ops::clip_mut(sequence, id)?;
+            changed |= clip.maintain_pitch != self.maintain;
+            clip.maintain_pitch = self.maintain;
+        }
+        if !changed {
+            return Err(TimelineError::NothingToEdit);
+        }
+        Ok(())
+    }
+}
+
+/// `id` and the clips linked to it that play the same source over the same span at the
+/// same speed, so a speed curve given to it keeps their sound with its picture.
+fn in_step(sequence: &Sequence, id: ClipId) -> Vec<ClipId> {
+    let Some((_, clip)) = sequence.clip(id) else {
+        return vec![id];
+    };
+    let same = |other: &Clip| {
+        other.source == clip.source
+            && other.start == clip.start
+            && other.duration == clip.duration
+            && other.source_in == clip.source_in
+            && other.speed == clip.speed
+            && other.remap == clip.remap
+            && other.reverse == clip.reverse
+            && !other.hold
+    };
+    let mut ids = vec![id];
+    ids.extend(
+        sequence
+            .clips_with_links(&[id])
+            .into_iter()
+            .filter(|(_, other)| other.id != id && same(other))
+            .map(|(_, other)| other.id),
+    );
+    ids
+}
+
+/// Changes a clip's speed curve, and those of the clips in step with it, with `change`,
+/// then fits them to it so they still start and end on the same frames, without
+/// running into the clip after any of them.
 fn reshape(
     sequence: &mut Sequence,
     id: ClipId,
-    change: impl FnOnce(&mut TimeRemap) -> bool,
+    change: impl Fn(&mut TimeRemap) -> bool,
 ) -> Result<(), TimelineError> {
-    let (track, clip) = sequence.clip(id).ok_or(TimelineError::ClipNotFound(id))?;
-    let room = sequence
-        .track(track)
-        .and_then(|track| track.clips.iter().find(|next| next.start >= clip.end()))
-        .map(|next| next.start - clip.start);
-    let clip = ops::clip_mut(sequence, id)?;
-    let Some(remap) = &mut clip.remap else {
-        return Err(TimelineError::NothingToEdit);
-    };
-    let (first, last) = (remap.source_at(Ticks::ZERO), remap.source_at(clip.duration));
-    if !change(remap) {
-        return Err(TimelineError::NothingToEdit);
+    let ids = in_step(sequence, id);
+    let room = ids
+        .iter()
+        .filter_map(|&id| {
+            let (track, clip) = sequence.clip(id)?;
+            sequence
+                .track(track)?
+                .clips
+                .iter()
+                .find(|next| next.start >= clip.end())
+                .map(|next| next.start - clip.start)
+        })
+        .min();
+    for id in ids {
+        let clip = ops::clip_mut(sequence, id)?;
+        let Some(remap) = &mut clip.remap else {
+            return Err(TimelineError::NothingToEdit);
+        };
+        let (first, last) = (remap.source_at(Ticks::ZERO), remap.source_at(clip.duration));
+        if !change(remap) {
+            return Err(TimelineError::NothingToEdit);
+        }
+        let head = remap.offset_of(first);
+        remap.shift(Ticks::ZERO - head, Ticks::ZERO);
+        let duration = remap.offset_of(last).max(Ticks(1));
+        let source_in = remap.source_at(Ticks::ZERO);
+        clip.duration = room.map_or(duration, |room| duration.min(room));
+        clip.source_in = source_in;
     }
-    let head = remap.offset_of(first);
-    remap.shift(Ticks::ZERO - head, Ticks::ZERO);
-    let duration = remap.offset_of(last).max(Ticks(1));
-    let source_in = remap.source_at(Ticks::ZERO);
-    clip.duration = room.map_or(duration, |room| duration.min(room));
-    clip.source_in = source_in;
     Ok(())
 }

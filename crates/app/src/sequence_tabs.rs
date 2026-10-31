@@ -1,5 +1,5 @@
 use egui::RichText;
-use timeline::{SourceId, Ticks};
+use timeline::{Sequence, SourceId, Ticks};
 
 use crate::editor::Editor;
 
@@ -11,7 +11,17 @@ pub(crate) struct SequenceTab {
     pub(crate) playhead: Ticks,
 }
 
+/// A sequence's name in the project, or "Sequence" for the project's own.
+pub(crate) fn sequence_name(project: &Sequence, nest: Option<SourceId>) -> &str {
+    nest.and_then(|id| project.media_item(id))
+        .map_or("Sequence", |item| item.name.as_str())
+}
+
 impl Editor {
+    pub(crate) fn shown_sequence_name(&self) -> &str {
+        sequence_name(self.timeline.project(), self.timeline.open_nest())
+    }
+
     /// Gives the sequence now shown a tab, if it hasn't one yet.
     pub(crate) fn tab_shown_sequence(&mut self) {
         let nest = self.timeline.open_nest();
@@ -87,10 +97,7 @@ pub(crate) fn tabs(editor: &mut Editor, ui: &mut egui::Ui) {
     let mut closed = None;
     ui.horizontal(|ui| {
         for tab in &editor.sequence_tabs {
-            let name = tab
-                .nest
-                .and_then(|id| project.media_item(id))
-                .map_or("Sequence", |item| item.name.as_str());
+            let name = sequence_name(project, tab.nest);
             if ui.selectable_label(tab.nest == shown, name).clicked() {
                 picked = Some(tab.nest);
             }

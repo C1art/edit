@@ -1,11 +1,12 @@
 use std::ops::RangeInclusive;
 
 use egui::{DragValue, RichText};
-use timeline::{BlendMode, Interpolation, Look, Param, Ticks};
+use timeline::{BlendMode, Interpolation, Look, MaskOwner, MaskRef, Param, Ticks};
 
 use media::TrackDirection;
 
 use super::color::ToneState;
+use super::key_icons::{icon_button, Icon};
 use super::key_selection::KeySelection;
 use super::lane::Lane;
 use super::LutSlot;
@@ -21,14 +22,25 @@ pub(super) struct Output {
     pub(super) seek: Option<Ticks>,
     /// A LUT to ask for the file of.
     pub(super) choose_lut: Option<LutSlot>,
+    /// The effect, by index, whose Image Matte Key to ask for the picture of.
+    pub(super) choose_matte: Option<usize>,
+    /// The plugin effect, by index, whose own editor window to open.
+    pub(super) open_editor: Option<usize>,
     /// Whether to analyze the clip's motion for Warp Stabilizer.
     pub(super) analyze_motion: bool,
+    /// Whether to find the clip's subject for Auto Reframe.
+    pub(super) analyze_reframe: bool,
     /// A mask to track through the footage from the playhead.
-    pub(super) track_mask: Option<(usize, TrackDirection, TrackSpan)>,
+    pub(super) track_mask: Option<(MaskRef, TrackDirection, TrackSpan)>,
     pub(super) stop_tracking: bool,
     /// What to set the Basic Correction for from the picture.
     pub(super) analyze_tone: Option<ToneGoal>,
     pub(super) keys: KeySelection,
+    /// Ken Burns boxes turned on or off.
+    pub(super) ken_burns: Option<bool>,
+    pub(super) swap_ken_burns: bool,
+    /// Whether the Crop section is open.
+    pub(super) cropping: bool,
 }
 
 /// Edits `look` in `rows`, of a clip among `video_tracks` video tracks.
@@ -52,15 +64,12 @@ pub(super) fn controls(
                 let width = &mut motion.scale_width;
                 rows.param(ui, "Scale Width", width, 0.0..=1_000.0, "%");
             }
-            if ui
-                .checkbox(&mut motion.uniform_scale, "Uniform Scale")
-                .changed()
+            // Unlinking starts the width where the shared scale left it.
+            if (!rows.simple || !motion.uniform_scale)
+                && rows.checkbox(ui, &mut motion.uniform_scale, "Uniform Scale")
+                && !motion.uniform_scale
             {
-                // Unlinking starts the width where the shared scale left it.
-                if !motion.uniform_scale {
-                    motion.scale_width = motion.scale.clone();
-                }
-                rows.commit();
+                motion.scale_width = motion.scale.clone();
             }
             rows.param(
                 ui,
@@ -69,34 +78,58 @@ pub(super) fn controls(
                 -3_600.0..=3_600.0,
                 "°",
             );
-            let [x, y] = &mut motion.anchor;
-            rows.param(ui, "Anchor X", x, -10_000.0..=10_000.0, "");
-            rows.param(ui, "Anchor Y", y, -10_000.0..=10_000.0, "");
+            let anchored = motion.anchor.iter().any(Param::is_animated)
+                || motion
+                    .anchor
+                    .iter()
+                    .any(|param| param.value_at(Ticks::ZERO) != 0.0);
+            if !rows.simple || anchored {
+                let [x, y] = &mut motion.anchor;
+                rows.param(ui, "Anchor X", x, -10_000.0..=10_000.0, "");
+                rows.param(ui, "Anchor Y", y, -10_000.0..=10_000.0, "");
+            }
+            ui.horizontal(|ui| {
+                let on = rows.ken_burns;
+                let toggle = ui.selectable_label(on, "Ken Burns").on_hover_text(
+                    "Drag where the picture starts and ends over it in the source monitor",
+                );
+                if toggle.clicked() {
+                    rows.output.ken_burns = Some(!on);
+                }
+                if on && ui.button("Swap Start and End").clicked() {
+                    rows.output.swap_ken_burns = true;
+                }
+            });
         });
     egui::CollapsingHeader::new("Opacity")
         .default_open(true)
         .show(ui, |ui| {
             rows.param(ui, "Opacity", &mut look.opacity, 0.0..=100.0, "%");
-            ui.horizontal(|ui| {
-                ui.label("Blend Mode");
-                egui::ComboBox::from_id_salt("blend_mode")
-                    .selected_text(look.blend.name())
-                    .height(f32::INFINITY)
-                    .show_ui(ui, |ui| {
-                        for mode in BlendMode::ALL {
-                            if mode.starts_group() {
-                                ui.separator();
+            let blend = &mut look.blend;
+            let plain = rows.simple && *blend == BlendMode::Normal;
+            if !plain {
+                rows.choice(ui, "Blend Mode", |ui| {
+                    let mut chosen = false;
+                    egui::ComboBox::from_id_salt("blend_mode")
+                        .width(ui.available_width().min(ui.spacing().combo_width))
+                        .selected_text(blend.name())
+                        .height(f32::INFINITY)
+                        .show_ui(ui, |ui| {
+                            for mode in BlendMode::ALL {
+                                if mode.starts_group() {
+                                    ui.separator();
+                                }
+                                chosen |= ui.selectable_value(blend, mode, mode.name()).clicked();
                             }
-                            let choice = ui.selectable_value(&mut look.blend, mode, mode.name());
-                            if choice.clicked() {
-                                rows.commit();
-                            }
-                        }
-                    });
-            });
-            super::masks::controls(ui, &mut rows, &mut look.masks);
+                        });
+                    chosen
+                });
+            }
+            if !rows.simple || !look.masks.is_empty() {
+                super::masks::controls(ui, &mut rows, MaskOwner::Opacity, &mut look.masks);
+            }
         });
-    egui::CollapsingHeader::new("Crop").show(ui, |ui| {
+    let crop = egui::CollapsingHeader::new("Crop").show(ui, |ui| {
         let crop = &mut look.crop;
         for (label, side) in [
             ("Left", &mut crop.left),
@@ -107,32 +140,24 @@ pub(super) fn controls(
             rows.param(ui, label, side, 0.0..=100.0, "%");
         }
     });
+    rows.output.cropping = crop.fully_open();
     egui::CollapsingHeader::new("Effects")
         .default_open(true)
         .show(ui, |ui| {
-            let mut removed = None;
-            for (index, effect) in look.effects.iter_mut().enumerate() {
-                ui.push_id(index, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new(effect.name()).strong());
-                        if ui.small_button("Remove").clicked() {
-                            removed = Some(index);
-                        }
-                    });
-                    rows.effect(ui, effect, video_tracks);
-                });
-            }
-            if let Some(index) = removed {
-                look.effects.remove(index);
-                rows.commit();
-            }
-            super::video_effects::add_menu(ui, &mut rows, &mut look.effects);
+            super::effect_stack::controls(ui, &mut rows, look, video_tracks);
         });
-    egui::CollapsingHeader::new("Color").show(ui, |ui| {
-        super::color::controls(ui, &mut rows, &mut look.color);
-    });
+    // Simple mode keeps color to the Lumetri Color tab.
+    if !rows.simple {
+        egui::CollapsingHeader::new("Color").show(ui, |ui| {
+            super::color::controls(ui, &mut rows, &mut look.color);
+        });
+    }
     ui.add_space(4.0);
-    if ui.button("Reset Effects").clicked() && *look != Look::default() {
+    let changed = *look != Look::default();
+    if ui
+        .add_enabled(changed, egui::Button::new("Reset Effects"))
+        .clicked()
+    {
         *look = Look::default();
         rows.commit();
     }
@@ -146,9 +171,16 @@ pub(super) struct Rows {
     lane: Option<Lane>,
     /// How much of the clip's motion has been analyzed, while it is being.
     pub(super) analyzing: Option<f32>,
+    /// How much of the clip has been analyzed for Auto Reframe, while it is being.
+    pub(super) reframing: Option<f32>,
     /// Which mask is being tracked and how far along, while one is.
-    pub(super) tracking: Option<(usize, f32)>,
+    pub(super) tracking: Option<(MaskRef, f32)>,
     pub(super) tone: ToneState,
+    /// Whether the effect being shown asked for its matte picture.
+    pub(super) browse_matte: bool,
+    pub(super) ken_burns: bool,
+    /// Simple mode: controls a first edit doesn't need stay hidden until they're used.
+    pub(super) simple: bool,
     pub(super) output: Output,
 }
 
@@ -158,17 +190,27 @@ impl Rows {
             time,
             lane,
             analyzing: None,
+            reframing: None,
             tracking: None,
             tone: ToneState::default(),
+            browse_matte: false,
+            ken_burns: false,
+            simple: false,
             output: Output {
                 change: None,
                 seek: None,
                 choose_lut: None,
+                choose_matte: None,
+                open_editor: None,
                 analyze_motion: false,
+                analyze_reframe: false,
                 track_mask: None,
                 stop_tracking: false,
                 analyze_tone: None,
                 keys,
+                ken_burns: None,
+                swap_ken_burns: false,
+                cropping: false,
             },
         }
     }
@@ -191,21 +233,51 @@ impl Rows {
         range: RangeInclusive<f32>,
         suffix: &str,
     ) {
+        self.param_text(ui, label, param, range, suffix, None);
+    }
+
+    /// A value shown as `shown` says, as a plugin writes its own, with `range` steps.
+    pub(super) fn param_shown(
+        &mut self,
+        ui: &mut egui::Ui,
+        label: &str,
+        param: &mut Param,
+        range: RangeInclusive<f32>,
+        shown: Option<&str>,
+    ) {
+        self.param_text(ui, label, param, range, "", shown);
+    }
+
+    fn param_text(
+        &mut self,
+        ui: &mut egui::Ui,
+        label: &str,
+        param: &mut Param,
+        range: RangeInclusive<f32>,
+        suffix: &str,
+        shown: Option<&str>,
+    ) {
         let time = self.time;
         let graph = ui.make_persistent_id(("value graph", label));
         let mut open = ui.data(|data| data.get_temp(graph)).unwrap_or(false);
+        if self.output.keys.toggles(graph) {
+            if param.is_animated() {
+                param.toggle_key(time);
+            } else {
+                param.toggle_animation(time);
+            }
+            self.commit();
+        }
         ui.horizontal(|ui| {
             let animated = param.is_animated();
-            let twirl = icon_button(
-                ui,
-                Icon::Twirl(open),
-                false,
-                self.lane.is_some() && animated,
-            )
-            .on_hover_text("Show the value graph");
-            if twirl.clicked() {
-                open = !open;
-                ui.data_mut(|data| data.insert_temp(graph, open));
+            // The graph only shows with the lane, which a narrow panel has no room for.
+            if self.lane.is_some() {
+                let twirl = icon_button(ui, Icon::Twirl(open), false, animated)
+                    .on_hover_text("Show the value graph");
+                if twirl.clicked() {
+                    open = !open;
+                    ui.data_mut(|data| data.insert_temp(graph, open));
+                }
             }
             let stopwatch =
                 icon_button(ui, Icon::Stopwatch, animated, true).on_hover_text("Toggle animation");
@@ -214,22 +286,30 @@ impl Rows {
                 self.commit();
             }
             let text = RichText::new(label);
+            let touched = stopwatch.clicked();
             let text = if animated { text.color(ANIMATED) } else { text };
             ui.add_sized([72.0, 18.0], egui::Label::new(text));
             let mut value = param.value_at(time);
-            let response = ui.add(
-                DragValue::new(&mut value)
-                    .speed(drag_speed(&range))
-                    .range(range.clone())
-                    .max_decimals(2)
-                    .suffix(suffix),
-            );
+            let mut drag = DragValue::new(&mut value)
+                .update_while_editing(false)
+                .speed(drag_speed(&range))
+                .range(range.clone())
+                .max_decimals(2)
+                .suffix(suffix);
+            if let Some(shown) = shown {
+                drag = drag
+                    .max_decimals(3)
+                    .custom_formatter(|_, _| shown.to_owned())
+                    .custom_parser(|text| text.trim().parse().ok());
+            }
+            let response = ui.add(drag);
             if response.changed() {
                 param.set_at(time, value);
             }
             self.output.change = response_state(&response, self.output.change);
-            if animated {
-                self.key_buttons(ui, param);
+            let keyed = animated && self.key_buttons(ui, param);
+            if touched || keyed || response.changed() || response.clicked() {
+                self.output.keys.touch(graph);
             }
             if let Some(lane) = &self.lane {
                 lane.show(ui, graph, param, time, &mut self.output);
@@ -237,11 +317,13 @@ impl Rows {
         });
         if let Some(lane) = self.lane.as_ref().filter(|_| open && param.is_animated()) {
             lane.show_graph(ui, param, &range, time, &mut self.output);
+            lane.show_velocity(ui, param, time, &mut self.output);
         }
     }
 
-    /// Steps between keyframes and adds or removes the one at the playhead.
-    fn key_buttons(&mut self, ui: &mut egui::Ui, param: &mut Param) {
+    /// Steps between keyframes and adds or removes the one at the playhead; whether
+    /// one of them was clicked.
+    fn key_buttons(&mut self, ui: &mut egui::Ui, param: &mut Param) -> bool {
         let time = self.time;
         ui.scope(|ui| {
             ui.spacing_mut().item_spacing.x = 2.0;
@@ -276,152 +358,13 @@ impl Rows {
             if forward.clicked() {
                 self.output.seek = next;
             }
-        });
+            back.clicked() || key.clicked() || forward.clicked()
+        })
+        .inner
     }
 }
 
 /// Units per dragged pixel: about a pixel each for wide ranges, finer for narrow ones.
 fn drag_speed(range: &RangeInclusive<f32>) -> f32 {
     ((range.end() - range.start()) / 400.0).clamp(0.01, 1.0)
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Icon {
-    /// Points down when what it discloses is open.
-    Twirl(bool),
-    Stopwatch,
-    Previous,
-    Key(Interpolation),
-    Next,
-    /// A triangle the way it tracks, with a bar after it for a single frame.
-    Track(TrackDirection, TrackSpan),
-}
-
-/// A small painted button; the default fonts have no glyphs for these symbols.
-pub(super) fn icon_button(
-    ui: &mut egui::Ui,
-    icon: Icon,
-    filled: bool,
-    enabled: bool,
-) -> egui::Response {
-    let sense = if enabled {
-        egui::Sense::click()
-    } else {
-        egui::Sense::hover()
-    };
-    let (rect, response) = ui.allocate_exact_size(egui::vec2(16.0, 18.0), sense);
-    let visuals = ui.style().interact(&response);
-    let mut color = if filled {
-        ANIMATED
-    } else {
-        visuals.fg_stroke.color
-    };
-    if !enabled {
-        color = color.gamma_multiply(0.35);
-    }
-    let fill = if filled {
-        color
-    } else {
-        egui::Color32::TRANSPARENT
-    };
-    let stroke = egui::Stroke::new(1.2, color);
-    let c = rect.center();
-    let at = |points: &[(f32, f32)]| points.iter().map(|&(x, y)| c + egui::vec2(x, y)).collect();
-    let painter = ui.painter();
-    match icon {
-        Icon::Twirl(open) => {
-            let points: &[(f32, f32)] = if open {
-                &[(-4.0, -2.0), (4.0, -2.0), (0.0, 3.0)]
-            } else {
-                &[(-2.0, -4.0), (-2.0, 4.0), (3.0, 0.0)]
-            };
-            painter.add(egui::Shape::convex_polygon(at(points), color, stroke));
-        }
-        Icon::Stopwatch => {
-            painter.circle(c + egui::vec2(0.0, 1.0), 5.0, fill, stroke);
-            painter.line_segment(
-                [c + egui::vec2(0.0, -7.0), c + egui::vec2(0.0, -4.0)],
-                stroke,
-            );
-        }
-        Icon::Previous => {
-            painter.add(egui::Shape::convex_polygon(
-                at(&[(3.0, -4.0), (3.0, 4.0), (-3.0, 0.0)]),
-                color,
-                stroke,
-            ));
-        }
-        Icon::Next => {
-            painter.add(egui::Shape::convex_polygon(
-                at(&[(-3.0, -4.0), (-3.0, 4.0), (3.0, 0.0)]),
-                color,
-                stroke,
-            ));
-        }
-        Icon::Key(interpolation) => paint_key(painter, c, interpolation, fill, stroke),
-        Icon::Track(direction, span) => {
-            let way = match direction {
-                TrackDirection::Forward => 1.0,
-                TrackDirection::Backward => -1.0,
-            };
-            let back = if span == TrackSpan::OneFrame {
-                -1.5
-            } else {
-                0.0
-            };
-            let triangle =
-                [(-3.0, -4.0), (-3.0, 4.0), (3.0, 0.0)].map(|(x, y)| (way * (x + back), y));
-            painter.add(egui::Shape::convex_polygon(at(&triangle), color, stroke));
-            if span == TrackSpan::OneFrame {
-                let x = way * 4.5;
-                painter.line_segment([c + egui::vec2(x, -4.0), c + egui::vec2(x, 4.0)], stroke);
-            }
-        }
-    }
-    response
-}
-
-/// A diamond for linear keyframes, a square for holds, an hourglass for Bezier keyframes
-/// and a circle for eases.
-pub(super) fn paint_key(
-    painter: &egui::Painter,
-    center: egui::Pos2,
-    interpolation: Interpolation,
-    fill: egui::Color32,
-    stroke: egui::Stroke,
-) {
-    let at = |points: &[(f32, f32)]| {
-        points
-            .iter()
-            .map(|&(x, y)| center + egui::vec2(x, y))
-            .collect()
-    };
-    match interpolation {
-        Interpolation::Linear => {
-            painter.add(egui::Shape::convex_polygon(
-                at(&[(0.0, -5.0), (5.0, 0.0), (0.0, 5.0), (-5.0, 0.0)]),
-                fill,
-                stroke,
-            ));
-        }
-        Interpolation::Hold => {
-            painter.add(egui::Shape::convex_polygon(
-                at(&[(-4.0, -4.0), (4.0, -4.0), (4.0, 4.0), (-4.0, 4.0)]),
-                fill,
-                stroke,
-            ));
-        }
-        Interpolation::Bezier | Interpolation::ContinuousBezier => {
-            for tip in [-5.0, 5.0] {
-                painter.add(egui::Shape::convex_polygon(
-                    at(&[(-4.0, tip), (4.0, tip), (0.0, 0.0)]),
-                    fill,
-                    stroke,
-                ));
-            }
-        }
-        _ => {
-            painter.circle(center, 4.5, fill, stroke);
-        }
-    }
 }

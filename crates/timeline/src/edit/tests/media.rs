@@ -1,4 +1,5 @@
 use super::*;
+use crate::ChannelMap;
 
 fn relink(source: SourceId, path: &str, duration: i64) -> RelinkMedia {
     RelinkMedia {
@@ -11,6 +12,9 @@ fn relink(source: SourceId, path: &str, duration: i64) -> RelinkMedia {
             has_audio: true,
             still: false,
             interpreted_rate: None,
+            placed: None,
+            frame_fit: None,
+            timecode: None,
         },
     }
 }
@@ -69,6 +73,33 @@ fn a_subclip_places_its_part_of_the_file_and_cannot_reach_past_it() {
 }
 
 #[test]
+fn editing_a_subclip_moves_its_range_or_makes_it_a_master_clip() {
+    let (mut timeline, source) = timeline();
+    timeline
+        .apply(MakeSubclip {
+            source,
+            range: Ticks(200)..Ticks(400),
+            name: "take 2".into(),
+        })
+        .unwrap();
+    let subclip = timeline.sequence().media.last().unwrap().id;
+    let edit = |range: Option<(i64, i64)>| EditSubclip {
+        source: subclip,
+        range: range.map(|(start, end)| Ticks(start)..Ticks(end)),
+    };
+    timeline.apply(edit(Some((100, 5_000)))).unwrap();
+    let item = timeline.sequence().media_item(subclip).unwrap();
+    assert_eq!(item.subclip, Some(Ticks(100)..Ticks(1000)));
+    timeline.apply(edit(None)).unwrap();
+    let item = timeline.sequence().media_item(subclip).unwrap();
+    assert_eq!(item.default_range(Timebase::HZ_90K), Ticks(0)..Ticks(1000));
+    assert_eq!(
+        timeline.apply(edit(None)),
+        Err(TimelineError::NothingToEdit)
+    );
+}
+
+#[test]
 fn a_duplicate_follows_its_original_under_a_new_id_and_undoes() {
     let (mut timeline, source) = timeline();
     timeline.apply(DuplicateMedia { source }).unwrap();
@@ -78,6 +109,39 @@ fn a_duplicate_follows_its_original_under_a_new_id_and_undoes() {
     assert_ne!(media[1].id, source);
     timeline.undo();
     assert_eq!(timeline.sequence().media.len(), 1);
+}
+
+#[test]
+fn breakout_to_mono_adds_an_item_playing_each_channel_alone() {
+    let (mut timeline, source) = timeline();
+    assert_eq!(
+        timeline.apply(BreakoutToMono {
+            source,
+            channels: 1
+        }),
+        Err(TimelineError::NothingToEdit)
+    );
+    timeline
+        .apply(BreakoutToMono {
+            source,
+            channels: 2,
+        })
+        .unwrap();
+    let media = &timeline.sequence().media;
+    let mono: Vec<_> = media[1..]
+        .iter()
+        .map(|item| (item.name.as_str(), item.channel_map, item.video.is_some()))
+        .collect();
+    let map = |channel| {
+        Some(ChannelMap {
+            left: channel,
+            right: channel,
+        })
+    };
+    assert_eq!(
+        mono,
+        [("a Left", map(0), false), ("a Right", map(1), false)]
+    );
 }
 
 #[test]
@@ -110,6 +174,9 @@ fn a_still_places_its_usual_length_but_holds_for_as_long_as_a_clip_runs() {
             has_audio: false,
             still: true,
             interpreted_rate: None,
+            placed: None,
+            frame_fit: None,
+            timecode: None,
         })
         .unwrap();
     let still = timeline.sequence().media.last().unwrap().clone();
@@ -118,4 +185,26 @@ fn a_still_places_its_usual_length_but_holds_for_as_long_as_a_clip_runs() {
         .apply(place(still.id, 0, 0, 900_000, PlaceMode::Overwrite))
         .unwrap();
     assert_eq!(spans(&timeline, V1), [(0, 900_000, 0)]);
+}
+
+#[test]
+fn a_still_imported_with_its_own_length_places_that_long() {
+    let (mut timeline, _) = timeline();
+    let timebase = Timebase::HZ_90K;
+    timeline
+        .apply(ImportMedia {
+            name: "logo.png".into(),
+            path: "logo.png".into(),
+            duration: crate::held_length(timebase),
+            video: Some(VideoFormat::default()),
+            has_audio: false,
+            still: true,
+            interpreted_rate: None,
+            placed: Some(Ticks(180_000)),
+            frame_fit: None,
+            timecode: None,
+        })
+        .unwrap();
+    let still = timeline.sequence().media.last().unwrap();
+    assert_eq!(still.default_range(timebase), Ticks::ZERO..Ticks(180_000));
 }

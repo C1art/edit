@@ -2,13 +2,14 @@ use std::path::PathBuf;
 
 use egui::epaint::{Mesh, Vertex, WHITE_UV};
 use egui::{Color32, Pos2, RichText, Sense, Stroke, Vec2};
-use timeline::{ColorCorrection, ColorVignette, Param};
+use timeline::{ColorCorrection, ColorVignette, CreativeLook, Param};
 
 use super::look::Rows;
 use crate::color_match::ToneGoal;
 use crate::mixer::response_state;
 
-const WHEEL_SIZE: f32 = 78.0;
+pub(super) const WHEEL_SIZE: f32 = 78.0;
+const MIN_WHEEL_SIZE: f32 = 44.0;
 /// How far a wheel's rim pushes toward its hue, as a percentage.
 const RIM: f32 = 100.0;
 /// Segments around a wheel's rim.
@@ -32,7 +33,9 @@ pub enum LutSlot {
 }
 
 pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorrection) {
-    lut_row(ui, rows, "Input LUT", &mut color.input_lut, LutSlot::Input);
+    if !rows.simple || color.input_lut.is_some() {
+        lut_row(ui, rows, "Input LUT", &mut color.input_lut, LutSlot::Input);
+    }
     ui.label(RichText::new("White Balance").weak());
     rows.param(
         ui,
@@ -51,7 +54,10 @@ pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorr
     rows.param(ui, "Whites", &mut color.whites, -100.0..=100.0, "");
     rows.param(ui, "Blacks", &mut color.blacks, -100.0..=100.0, "");
     ui.label(RichText::new("Creative").weak());
-    lut_row(ui, rows, "Look", &mut color.look, LutSlot::Look);
+    look_presets(ui, rows, color);
+    if !rows.simple {
+        lut_row(ui, rows, "Look", &mut color.look, LutSlot::Look);
+    }
     if color.look.is_some() {
         rows.param(ui, "Intensity", &mut color.look_intensity, 0.0..=100.0, "%");
     }
@@ -59,6 +65,14 @@ pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorr
     rows.param(ui, "Sharpen", &mut color.sharpen, 0.0..=100.0, "");
     rows.param(ui, "Vibrance", &mut color.vibrance, -100.0..=100.0, "");
     rows.param(ui, "Saturation", &mut color.saturation, 0.0..=200.0, "%");
+    if !rows.simple {
+        grading(ui, rows, color);
+    }
+    egui::CollapsingHeader::new("Vignette").show(ui, |ui| vignette(ui, rows, &mut color.vignette));
+}
+
+/// Curves, wheels and secondaries, for finer grading than a first edit needs.
+fn grading(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorrection) {
     split_tone(ui, rows, color);
     egui::CollapsingHeader::new("RGB Curves").show(ui, |ui| {
         super::curves::controls(ui, rows, &mut color.curves);
@@ -72,14 +86,10 @@ pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorr
         ("Midtones", &mut color.midtone_wheel),
         ("Highlights", &mut color.highlight_wheel),
     ];
-    ui.horizontal(|ui| {
-        for (name, wheel) in &mut wheels {
-            ui.vertical(|ui| {
-                ui.label(*name);
-                wheel_pad(ui, rows, [&mut wheel.blue, &mut wheel.red]);
-            });
-        }
-    });
+    let pads = wheels
+        .each_mut()
+        .map(|(name, wheel)| (*name, [&mut wheel.blue, &mut wheel.red]));
+    wheel_row(ui, rows, pads);
     for (name, wheel) in wheels {
         ui.push_id(name, |ui| {
             rows.param(ui, name, &mut wheel.level, -100.0..=100.0, "");
@@ -90,22 +100,45 @@ pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorr
         });
     }
     super::secondary::controls(ui, rows, &mut color.secondary);
-    egui::CollapsingHeader::new("Vignette").show(ui, |ui| vignette(ui, rows, &mut color.vignette));
+}
+
+fn look_presets(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorrection) {
+    let current = CreativeLook::of(color);
+    let shown = match current {
+        Some(Some(look)) => look.name(),
+        Some(None) => "None",
+        None => "Custom",
+    };
+    let mut picked = None;
+    ui.horizontal(|ui| {
+        ui.add_sized([72.0, 18.0], egui::Label::new("Preset"));
+        egui::ComboBox::from_id_salt("creative look")
+            .selected_text(shown)
+            .height(320.0)
+            .show_ui(ui, |ui| {
+                let looks = [None].into_iter().chain(CreativeLook::ALL.map(Some));
+                for look in looks {
+                    let name = look.map_or("None", CreativeLook::name);
+                    if ui.selectable_label(current == Some(look), name).clicked() {
+                        picked = Some(look);
+                    }
+                }
+            })
+            .response
+            .on_hover_text("Sets Faded Film, Vibrance, Saturation and the tints");
+    });
+    if let Some(look) = picked {
+        CreativeLook::apply(look, color);
+        rows.commit();
+    }
 }
 
 fn split_tone(ui: &mut egui::Ui, rows: &mut Rows, color: &mut ColorCorrection) {
-    ui.horizontal(|ui| {
-        let tints = [
-            ("Shadow Tint", &mut color.shadow_tint),
-            ("Highlight Tint", &mut color.highlight_tint),
-        ];
-        for (name, [blue, red]) in tints {
-            ui.vertical(|ui| {
-                ui.label(name);
-                wheel_pad(ui, rows, [blue, red]);
-            });
-        }
-    });
+    let tints = [
+        ("Shadow Tint", color.shadow_tint.each_mut()),
+        ("Highlight Tint", color.highlight_tint.each_mut()),
+    ];
+    wheel_row(ui, rows, tints);
     rows.param(
         ui,
         "Tint Balance",
@@ -175,14 +208,37 @@ fn lut_row(
     });
 }
 
+/// Named wheels side by side, shrunk to share the width of a narrow panel.
+fn wheel_row<const N: usize>(
+    ui: &mut egui::Ui,
+    rows: &mut Rows,
+    wheels: [(&str, [&mut Param; 2]); N],
+) {
+    let gaps = ui.spacing().item_spacing.x * (N as f32 - 1.0);
+    let size = ((ui.available_width() - gaps) / N as f32).clamp(MIN_WHEEL_SIZE, WHEEL_SIZE);
+    ui.horizontal(|ui| {
+        for (name, pad) in wheels {
+            ui.vertical(|ui| {
+                ui.set_width(size);
+                ui.add(egui::Label::new(name).truncate());
+                wheel_pad(ui, rows, pad, size);
+            });
+        }
+    });
+}
+
 /// A disc of hues with a puck at a push toward blue (right) and red (up), as on a
 /// vectorscope. Dragging moves the puck; double-clicking centres it.
-pub(super) fn wheel_pad(ui: &mut egui::Ui, rows: &mut Rows, [blue, red]: [&mut Param; 2]) {
+pub(super) fn wheel_pad(
+    ui: &mut egui::Ui,
+    rows: &mut Rows,
+    [blue, red]: [&mut Param; 2],
+    size: f32,
+) {
     let time = rows.time();
-    let (rect, mut response) =
-        ui.allocate_exact_size(Vec2::splat(WHEEL_SIZE), Sense::click_and_drag());
+    let (rect, mut response) = ui.allocate_exact_size(Vec2::splat(size), Sense::click_and_drag());
     let center = rect.center();
-    let radius = WHEEL_SIZE / 2.0 - 2.0;
+    let radius = size / 2.0 - 2.0;
     if response.double_clicked() {
         blue.set_at(time, 0.0);
         red.set_at(time, 0.0);

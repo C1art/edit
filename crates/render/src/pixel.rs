@@ -1,12 +1,23 @@
-use timeline::{AlphaInterpretation, KeyOutput};
+use timeline::{AlphaInterpretation, ColorSpace, KeyOutput, Primaries, Transfer};
 
 use crate::adjust::Adjust;
+use crate::cineon::Cineon;
 use crate::clip_wipes::ClipWipes;
+use crate::combine::Combine;
+use crate::detail::Detail;
+use crate::edges::Edges;
 use crate::generate::Generate;
+use crate::lighting::Lighting;
+use crate::noise_alpha::NoisyAlpha;
 use crate::optics::Optics;
+use crate::paint::Paint;
+use crate::pattern::Pattern;
+use crate::point_shadow::PointShadow;
 use crate::recolor::Recolor;
 use crate::reshape::Reshape;
+use crate::shift::ColorShift;
 use crate::style::PictureStyle;
+use crate::tone::Tone;
 
 /// Per-pixel effects on a layer, all off by default. Colors are linear RGB.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -30,8 +41,22 @@ pub struct PixelEffects {
     pub generate: Generate,
     pub optics: Optics,
     pub clip_wipes: ClipWipes,
+    pub detail: Detail,
+    pub edges: Edges,
+    pub tone: Tone,
+    pub shift: ColorShift,
+    pub pattern: Pattern,
+    pub lighting: Option<Lighting>,
+    pub point_shadow: Option<PointShadow>,
+    pub noise_alpha: Option<NoisyAlpha>,
+    pub cineon: Option<Cineon>,
+    pub paint: Paint,
+    /// Read only by the pass that draws a combined picture; see `Picture::Combined`.
+    pub combine: Option<Combine>,
     /// How the source's alpha channel is read.
     pub alpha: AlphaInterpretation,
+    /// The color space the source's pictures are in.
+    pub color_space: ColorSpace,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -100,7 +125,19 @@ impl PixelEffects {
         generate: Generate::NONE,
         optics: Optics::NONE,
         clip_wipes: ClipWipes::NONE,
+        detail: Detail::NONE,
+        edges: Edges::NONE,
+        tone: Tone::NONE,
+        shift: ColorShift::NONE,
+        pattern: Pattern::NONE,
+        lighting: Lighting::NONE,
+        point_shadow: PointShadow::NONE,
+        noise_alpha: NoisyAlpha::NONE,
+        cineon: Cineon::NONE,
+        paint: Paint::NONE,
+        combine: None,
         alpha: AlphaInterpretation::Straight,
+        color_space: ColorSpace::Rec709,
     };
 
     /// The shader's view, as five vec4s.
@@ -150,7 +187,23 @@ impl PixelEffects {
                 AlphaInterpretation::Ignore => 1.0,
                 AlphaInterpretation::Invert => 2.0,
             },
-            0.0,
+            color_code(self.color_space),
         ]
     }
+}
+
+/// The source's transfer in the low two bits and its primaries above, as color.wgsl
+/// reads them; Rec. 709 is zero, which leaves the picture as it is.
+fn color_code(space: ColorSpace) -> f32 {
+    let transfer = match space.transfer() {
+        Transfer::Sdr => 0,
+        Transfer::Pq => 1,
+        Transfer::Hlg => 2,
+    };
+    let primaries = match space.primaries() {
+        Primaries::Rec709 => 0,
+        Primaries::Rec2020 => 1,
+        Primaries::P3D65 => 2,
+    };
+    (transfer | primaries << 2) as f32
 }

@@ -3,7 +3,8 @@ use std::ptr::{self, NonNull};
 use ffmpeg_sys_next as sys;
 
 use super::error::check;
-use super::{hardware, Frame, InputContext, Packet};
+use super::picture::download;
+use super::{hardware, Frame, InputContext, Packet, Picture};
 use crate::MediaError;
 
 pub(crate) enum Received {
@@ -17,6 +18,18 @@ pub(crate) struct Decoder {
     hardware: Option<Hardware>,
     /// The format of the last frame received, when it differs from the context's.
     picture_format: Option<sys::AVPixelFormat>,
+    #[cfg(windows)]
+    gpu: KeptOnGpu,
+}
+
+/// Pictures left where D3D12 decoded them, for the GPU to draw from directly.
+#[cfg(windows)]
+#[derive(Default)]
+struct KeptOnGpu {
+    wanted: bool,
+    holds: super::d3d12::Holds,
+    /// The hold of the last picture received, when it was kept.
+    last: Option<super::Hold>,
 }
 
 /// Decoding on a GPU: frames arrive in `staging` and are copied to system memory.
@@ -45,6 +58,8 @@ impl Decoder {
             context,
             hardware: None,
             picture_format: None,
+            #[cfg(windows)]
+            gpu: KeptOnGpu::default(),
         };
         // SAFETY: `codecpar` is valid while `input` is borrowed.
         let is_video = unsafe { (*codecpar).codec_type } == sys::AVMediaType::AVMEDIA_TYPE_VIDEO;
@@ -91,7 +106,17 @@ impl Decoder {
         check(code).map(drop)
     }
 
+    /// Leaves pictures decoded with D3D12 on the GPU, while not too many are held there.
+    #[cfg(windows)]
+    pub(crate) fn set_keep_on_gpu(&mut self, wanted: bool) {
+        self.gpu.wanted = wanted;
+    }
+
     pub(crate) fn receive_frame(&mut self, frame: &mut Frame) -> Result<Received, MediaError> {
+        #[cfg(windows)]
+        {
+            self.gpu.last = None;
+        }
         let Some(hardware) = &mut self.hardware else {
             return receive(self.context, frame);
         };
@@ -108,39 +133,33 @@ impl Decoder {
             self.picture_format = None;
             return Ok(Received::Frame);
         }
-        // SAFETY: a frame in the hardware format carries the decoder's frames context,
-        // whose data is an AVHWFramesContext.
-        let software = unsafe {
-            let frames = staging.raw().hw_frames_ctx;
-            if frames.is_null() {
-                return Err(MediaError::InvalidFrame);
+        #[cfg(windows)]
+        if self.gpu.wanted && hardware.format == sys::AVPixelFormat::AV_PIX_FMT_D3D12 {
+            if let Some(hold) = self.gpu.holds.take() {
+                let software = super::picture::format_on_gpu(staging)?;
+                // SAFETY: both frames are valid; `frame` was just unreferenced.
+                unsafe { sys::av_frame_move_ref(frame.as_mut_ptr(), staging.as_mut_ptr()) };
+                self.gpu.last = Some(hold);
+                self.picture_format = Some(software);
+                return Ok(Received::Frame);
             }
-            (*(*frames).data.cast::<sys::AVHWFramesContext>()).sw_format
-        };
-        frame.raw_mut().format = software as i32;
-        // SAFETY: `frame` is empty with its format set, so FFmpeg allocates it to match
-        // the hardware frame it copies from; both are exclusively borrowed.
-        let copied = unsafe {
-            check(sys::av_hwframe_transfer_data(
-                frame.as_mut_ptr(),
-                ptr::from_ref(staging.raw()),
-                0,
-            ))
-            .and_then(|_| {
-                check(sys::av_frame_copy_props(
-                    frame.as_mut_ptr(),
-                    ptr::from_ref(staging.raw()),
-                ))
-            })
-        };
+        }
+        let copied = download(frame, staging);
         staging.unref();
-        copied?;
-        self.picture_format = Some(software);
+        self.picture_format = Some(copied?);
         Ok(Received::Frame)
     }
 
     /// The pixel format of the last frame received.
-    pub(crate) fn picture_format(&self) -> sys::AVPixelFormat {
+    /// Moves the picture just received into `frame` out, as this decoder's format.
+    pub(crate) fn take_picture(&mut self, frame: &mut Frame) -> Result<Picture, MediaError> {
+        let picture = Picture::take(frame, self.picture_format())?;
+        #[cfg(windows)]
+        let picture = picture.with_hold(self.gpu.last.take());
+        Ok(picture)
+    }
+
+    fn picture_format(&self) -> sys::AVPixelFormat {
         self.picture_format.unwrap_or(self.raw().pix_fmt)
     }
 
@@ -171,11 +190,21 @@ fn receive(
     context: NonNull<sys::AVCodecContext>,
     frame: &mut Frame,
 ) -> Result<Received, MediaError> {
-    // SAFETY: the context is open and `frame` is a valid, exclusively borrowed frame.
-    let code = unsafe { sys::avcodec_receive_frame(context.as_ptr(), frame.as_mut_ptr()) };
-    match code {
-        sys::AVERROR_EOF => Ok(Received::Drained),
-        code if code == sys::AVERROR(sys::EAGAIN) => Ok(Received::NeedsInput),
-        code => check(code).map(|_| Received::Frame),
+    // Frame-threaded and hardware decoders report a corrupt packet here rather than when
+    // it is sent. It is skipped the same way, and the frames queued behind it are still
+    // asked for, which matters most while draining, when no more packets will follow.
+    for _ in 0..MAX_CORRUPT_IN_A_ROW {
+        // SAFETY: the context is open and `frame` is a valid, exclusively borrowed frame.
+        let code = unsafe { sys::avcodec_receive_frame(context.as_ptr(), frame.as_mut_ptr()) };
+        return match code {
+            sys::AVERROR_EOF => Ok(Received::Drained),
+            code if code == sys::AVERROR(sys::EAGAIN) => Ok(Received::NeedsInput),
+            sys::AVERROR_INVALIDDATA => continue,
+            code => check(code).map(|_| Received::Frame),
+        };
     }
+    Ok(Received::NeedsInput)
 }
+
+/// More corrupt packets than a frame-threaded decoder can hold at once.
+const MAX_CORRUPT_IN_A_ROW: usize = 256;

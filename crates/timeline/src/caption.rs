@@ -1,6 +1,12 @@
+use std::ops::Range;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{Rgb, Ticks, TimelineError};
+
+/// How far above the frame's bottom captions sit, as a fraction of its height, inside
+/// title safe.
+pub const CAPTION_MARGIN: f32 = 0.08;
 
 /// Subtitles of a sequence, burned into its program picture unless hidden.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -54,6 +60,20 @@ impl Captions {
         self.items.partition_point(|caption| caption.end <= time)
     }
 
+    /// The captions over `range`, cut to it and timed from its start, as a file of just
+    /// that part has them.
+    pub fn within(&self, range: Range<Ticks>) -> Vec<Caption> {
+        self.items
+            .iter()
+            .filter(|caption| caption.start < range.end && range.start < caption.end)
+            .map(|caption| Caption {
+                start: caption.start.max(range.start) - range.start,
+                end: caption.end.min(range.end) - range.start,
+                text: caption.text.clone(),
+            })
+            .collect()
+    }
+
     /// Checks the order and lengths edits must keep.
     pub(crate) fn validate(&self) -> Result<(), TimelineError> {
         if let Some(caption) = self
@@ -75,13 +95,75 @@ impl Captions {
 }
 
 /// Cues as subtitle files have them, in any order and possibly overlapping, made into
-/// captions: sorted, each cut short where the next starts, and empty ones dropped.
+/// captions that follow one another: where cues overlap, such as two speakers shown at
+/// once, the overlap is a caption of their lines together, earliest first.
 pub fn captions_from_cues(mut cues: Vec<Caption>) -> Vec<Caption> {
-    cues.sort_by_key(|cue| cue.start);
-    let starts: Vec<Ticks> = cues.iter().skip(1).map(|cue| cue.start).collect();
-    for (cue, next) in cues.iter_mut().zip(starts) {
-        cue.end = cue.end.min(next);
-    }
     cues.retain(|cue| cue.start < cue.end && !cue.text.trim().is_empty());
-    cues
+    cues.sort_by_key(|cue| cue.start);
+    let mut bounds: Vec<Ticks> = cues.iter().flat_map(|cue| [cue.start, cue.end]).collect();
+    bounds.sort_unstable();
+    bounds.dedup();
+    let mut captions: Vec<Caption> = Vec::new();
+    let (mut next, mut showing, mut shown) = (0, Vec::new(), Vec::new());
+    for pair in bounds.windows(2) {
+        let (start, end) = (pair[0], pair[1]);
+        showing.retain(|&index: &usize| cues[index].end > start);
+        while cues.get(next).is_some_and(|cue| cue.start <= start) {
+            showing.push(next);
+            next += 1;
+        }
+        let continues = showing == shown && captions.last().is_some_and(|last| last.end == start);
+        match captions.last_mut() {
+            Some(last) if continues => last.end = end,
+            _ if showing.is_empty() => {}
+            _ => {
+                let lines: Vec<&str> = showing
+                    .iter()
+                    .map(|&index| cues[index].text.as_str())
+                    .collect();
+                captions.push(Caption {
+                    start,
+                    end,
+                    text: lines.join("\n"),
+                });
+            }
+        }
+        shown.clone_from(&showing);
+    }
+    captions
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn caption(start: i64, end: i64, text: &str) -> Caption {
+        Caption {
+            start: Ticks(start),
+            end: Ticks(end),
+            text: text.to_owned(),
+        }
+    }
+
+    #[test]
+    fn within_cuts_to_the_range_and_times_from_its_start() {
+        let captions = Captions {
+            items: vec![
+                caption(0, 100, "before"),
+                caption(150, 300, "straddles in"),
+                caption(400, 500, "inside"),
+                caption(550, 700, "straddles out"),
+                caption(800, 900, "after"),
+            ],
+            ..Captions::default()
+        };
+        assert_eq!(
+            captions.within(Ticks(200)..Ticks(600)),
+            vec![
+                caption(0, 100, "straddles in"),
+                caption(200, 300, "inside"),
+                caption(350, 400, "straddles out"),
+            ]
+        );
+    }
 }

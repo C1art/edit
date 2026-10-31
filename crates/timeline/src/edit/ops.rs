@@ -1,10 +1,11 @@
 //! Building blocks shared by the edits. They don't check invariants themselves; the
 //! edited sequence is validated as a whole afterwards.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ops::Range;
+use std::sync::Arc;
 
-use crate::{Clip, ClipId, LinkId, Sequence, Ticks, TimelineError, TrackRef};
+use crate::{Caption, Clip, ClipId, LinkId, Sequence, Ticks, TimelineError, TrackRef};
 
 /// Splitting linked clips gives every right-hand piece of the same link a shared new
 /// link, so the pieces on either side of a cut stay linked to each other.
@@ -40,10 +41,24 @@ pub(crate) fn track_mut(
         .ok_or(TimelineError::TrackNotFound(track))
 }
 
+/// The clips with `ids` and their tracks, found in one pass rather than a search per id.
+pub(crate) fn clips_mut<'a>(
+    sequence: &'a mut Sequence,
+    ids: &[ClipId],
+) -> impl Iterator<Item = (TrackRef, &'a mut Clip)> {
+    let ids: HashSet<ClipId> = ids.iter().copied().collect();
+    sequence
+        .tracks_mut()
+        .flat_map(|(track_ref, track)| track.clips.iter_mut().map(move |clip| (track_ref, clip)))
+        .filter(move |(_, clip)| ids.contains(&clip.id))
+        .map(|(track_ref, clip)| (track_ref, Arc::make_mut(clip)))
+}
+
 pub(crate) fn clip_mut(sequence: &mut Sequence, id: ClipId) -> Result<&mut Clip, TimelineError> {
     sequence
         .tracks_mut()
         .find_map(|(_, track)| track.clips.iter_mut().find(|clip| clip.id == id))
+        .map(Arc::make_mut)
         .ok_or(TimelineError::ClipNotFound(id))
 }
 
@@ -66,7 +81,7 @@ pub(crate) fn split(
         else {
             continue;
         };
-        let left = track.clips[index].clone();
+        let left = Clip::clone(&track.clips[index]);
         let (left_start, left_end) = (left.start, left.end());
         let link = left.link.map(|link| {
             *relinks
@@ -81,14 +96,18 @@ pub(crate) fn split(
             transition_in: None,
             ..left
         };
+        // A cut moves no keyframes; each piece keeps the pinned end it still has.
+        right.pinned.intro = Ticks::ZERO;
         right.start = at;
         right.trim_head(at - left_start);
         let Some(track) = sequence.track_mut(track_ref) else {
             continue;
         };
-        track.clips[index].trim_tail(at - left_end);
-        track.clips[index].transition_out = None;
-        track.clips.insert(index + 1, right);
+        let cut = Arc::make_mut(&mut track.clips[index]);
+        cut.pinned.outro = Ticks::ZERO;
+        cut.trim_tail(at - left_end);
+        cut.transition_out = None;
+        track.clips.insert(index + 1, right.into());
         cuts += 1;
     }
     cuts
@@ -117,6 +136,7 @@ pub(crate) fn shift(
     delta: Ticks,
     skip: &[ClipId],
 ) {
+    let skip: HashSet<ClipId> = skip.iter().copied().collect();
     for &track_ref in tracks {
         let Some(track) = sequence.track_mut(track_ref) else {
             continue;
@@ -125,8 +145,66 @@ pub(crate) fn shift(
             .clips
             .iter_mut()
             .filter(|clip| clip.start >= from && !skip.contains(&clip.id))
-            .for_each(|clip| clip.start = clip.start + delta);
+            .for_each(|clip| {
+                let clip = Arc::make_mut(clip);
+                clip.start = clip.start + delta;
+            });
     }
+}
+
+/// Moves what is timed against the sequence at or after `from` by `delta`: markers when
+/// they ripple, and always the captions, which say what the rippled pictures show. A
+/// negative `delta` closes up the span before `from`, dropping what lies inside it.
+pub(crate) fn ripple_markers_and_captions(sequence: &mut Sequence, from: Ticks, delta: Ticks) {
+    if delta == Ticks::ZERO {
+        return;
+    }
+    ripple_captions(&mut sequence.captions.items, from, delta);
+    if !sequence.ripple_markers {
+        return;
+    }
+    let closed = from + delta.min(Ticks::ZERO)..from;
+    let markers = &mut sequence.markers;
+    markers.retain(|marker| !closed.contains(&marker.at));
+    markers
+        .iter_mut()
+        .filter(|marker| marker.at >= from)
+        .for_each(|marker| marker.at = marker.at + delta);
+}
+
+/// A caption spanning an insert is cut there, as clips on the rippled tracks are, so
+/// both halves keep its text either side of the new material.
+fn ripple_captions(captions: &mut Vec<Caption>, from: Ticks, delta: Ticks) {
+    let closed_start = from + delta.min(Ticks::ZERO);
+    // A caption ending where material is inserted stays put; one starting there moves.
+    let moved = |time: Ticks, after: bool| match time {
+        time if time > from || (after && time == from) => time + delta,
+        time => time.min(closed_start),
+    };
+    let mut rippled = Vec::with_capacity(captions.len());
+    for caption in captions.drain(..) {
+        if delta > Ticks::ZERO && caption.start < from && from < caption.end {
+            rippled.push(Caption {
+                end: from,
+                ..caption.clone()
+            });
+            rippled.push(Caption {
+                start: from + delta,
+                end: caption.end + delta,
+                ..caption
+            });
+            continue;
+        }
+        let (start, end) = (moved(caption.start, true), moved(caption.end, false));
+        if start < end {
+            rippled.push(Caption {
+                start,
+                end,
+                ..caption
+            });
+        }
+    }
+    *captions = rippled;
 }
 
 /// Inserts `clip` in start order without checking for overlaps.
@@ -137,19 +215,24 @@ pub(crate) fn insert(
 ) -> Result<(), TimelineError> {
     let clips = &mut track_mut(sequence, track)?.clips;
     let index = clips.partition_point(|existing| existing.start <= clip.start);
-    clips.insert(index, clip);
+    clips.insert(index, clip.into());
     Ok(())
 }
 
 /// Takes the clips out of the sequence, returning each with the track it was on.
 pub(crate) fn remove(sequence: &mut Sequence, ids: &[ClipId]) -> Vec<(TrackRef, Clip)> {
+    let ids: HashSet<ClipId> = ids.iter().copied().collect();
     let mut removed = Vec::new();
     for (track_ref, track) in sequence.tracks_mut() {
         let (taken, kept) = std::mem::take(&mut track.clips)
             .into_iter()
             .partition(|clip| ids.contains(&clip.id));
         track.clips = kept;
-        removed.extend(taken.into_iter().map(|clip: Clip| (track_ref, clip)));
+        removed.extend(
+            taken
+                .into_iter()
+                .map(|clip: Arc<Clip>| (track_ref, Arc::unwrap_or_clone(clip))),
+        );
     }
     removed
 }

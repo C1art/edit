@@ -1,11 +1,12 @@
 use super::*;
-use crate::BinId;
+use crate::{BinId, BinSearch, SearchField};
 
 fn add_bin(timeline: &mut Timeline, parent: Option<BinId>) -> BinId {
     timeline
         .apply(AddBin {
             name: "Bin".into(),
             parent,
+            search: None,
         })
         .unwrap();
     timeline.sequence().bins.last().unwrap().id
@@ -58,4 +59,45 @@ fn deleting_a_bin_hands_its_contents_to_the_bin_around_it() {
     assert_eq!(sequence.media_item(source).unwrap().bin, Some(outer));
     assert_eq!(sequence.bin(inner).unwrap().parent, Some(outer));
     assert!(sequence.bin(middle).is_none());
+}
+
+#[test]
+fn a_search_bin_shows_what_matches_and_takes_nothing_in() {
+    let (mut timeline, source) = timeline();
+    let search = |text: &str, field| BinSearch {
+        text: text.into(),
+        field,
+    };
+    timeline
+        .apply(AddBin {
+            name: "Found".into(),
+            parent: None,
+            search: Some(search("A.MP", SearchField::FilePath)),
+        })
+        .unwrap();
+    let found = timeline.sequence().bins.last().unwrap().id;
+    let shown = |timeline: &Timeline| -> Vec<SourceId> {
+        let sequence = timeline.sequence();
+        sequence
+            .bin_items(Some(found))
+            .map(|item| item.id)
+            .collect()
+    };
+    assert_eq!(shown(&timeline), vec![source]);
+    timeline
+        .apply(SetBinSearch {
+            bin: found,
+            search: search("A.MP", SearchField::Name),
+        })
+        .unwrap();
+    assert!(shown(&timeline).is_empty());
+    let move_in = MoveToBin {
+        media: vec![source],
+        bins: Vec::new(),
+        to: Some(found),
+    };
+    assert_eq!(
+        timeline.apply(move_in),
+        Err(TimelineError::SearchBin(found))
+    );
 }

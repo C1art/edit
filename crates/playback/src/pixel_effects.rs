@@ -1,15 +1,22 @@
 use render::{
-    ChangeToColor, ChannelMixer, Checkerboard, ChromaKey, Circle, ColorKey, FlareLens,
-    FourColorGradient, Grid, LeaveColor, LensFlare, LumaKey, Magnify, Mirror, PixelEffects,
+    ChangeToColor, ChannelMixer, ChromaKey, ColorKey, LeaveColor, LumaKey, Mirror, PixelEffects,
     PlaneTransform, Ramp, Warp,
 };
 use timeline::{
-    ColorChange, ColorMatch, LensType, MagnifyShape, RampShape, Rgb, Ticks, Timebase, VideoEffect,
-    ULTRA_KEY_REACH,
+    ColorChange, ColorMatch, RampShape, Rgb, Ticks, Timebase, VideoEffect, ULTRA_KEY_REACH,
 };
 
 use crate::adjust_effects::set_adjust_effect;
 use crate::clip_wipes::set_clip_wipe;
+use crate::detail_effects::set_detail_effect;
+use crate::edge_effects::set_edge_effect;
+use crate::generate_effects::set_generate_effect;
+use crate::image_effects::set_image_effect;
+use crate::lighting_effects::{lighting, set_radial_shadow};
+use crate::noise_effects::set_noise_effect;
+use crate::optics_effects::set_optics_effect;
+use crate::shift_effects::set_shift_effect;
+use crate::tone_effects::set_tone_effect;
 
 /// The per-pixel part of an effect stack at source time `time`. The shader runs each
 /// kind of effect once, so repeats of a kind combine, the last one's colors winning.
@@ -22,7 +29,19 @@ pub(crate) fn pixel_effects(
     let mut pixel = PixelEffects::NONE;
     for effect in effects {
         match effect {
-            VideoEffect::GaussianBlur { .. } | VideoEffect::TrackMatteKey { .. } => {}
+            // Blurs fold into the layer's blur, and Echo into the frame decoded.
+            VideoEffect::GaussianBlur { .. }
+            | VideoEffect::ChannelBlur(_)
+            | VideoEffect::CameraBlur { .. }
+            | VideoEffect::Echo(_)
+            | VideoEffect::GarbageMatte(_)
+            | VideoEffect::AutoReframe(_)
+            | VideoEffect::TrackMatteKey { .. }
+            | VideoEffect::SetMatte { .. }
+            | VideoEffect::DifferenceMatte(_)
+            | VideoEffect::ImageMatteKey(_)
+            | VideoEffect::CompoundBlur(_)
+            | VideoEffect::Texturize(_) => {}
             VideoEffect::BrightnessContrast {
                 brightness,
                 contrast,
@@ -102,6 +121,12 @@ pub(crate) fn pixel_effects(
                         [x, y, correction.angle, correction.scale].map(|value| value as f32);
                 }
             }
+            VideoEffect::RollingShutterRepair(repair) => {
+                if let Some(travel) = repair.travel_at(time) {
+                    pixel.style.shutter_travel = travel.map(|value| value as f32);
+                    pixel.style.shutter_scan = repair.scan.axis().map(|value| value as f32);
+                }
+            }
             VideoEffect::ColorKey {
                 color,
                 tolerance,
@@ -126,6 +151,7 @@ pub(crate) fn pixel_effects(
                     tolerance: unit(tolerance).clamp(0.0, 1.0),
                     softness: unit(softness).clamp(0.0, 1.0),
                     by_hue: *matching == ColorMatch::Hue,
+                    reverse: false,
                 });
             }
             VideoEffect::GradientRamp {
@@ -270,7 +296,11 @@ pub(crate) fn pixel_effects(
             }
             VideoEffect::PosterizeTime { .. }
             | VideoEffect::Timecode { .. }
-            | VideoEffect::ClipName { .. } => {}
+            | VideoEffect::ClipName { .. }
+            | VideoEffect::SimpleText(_)
+            | VideoEffect::Lightning(_)
+            | VideoEffect::PaintBucket(_)
+            | VideoEffect::WriteOn(_) => {}
             VideoEffect::HorizontalFlip => pixel.flip[0] = !pixel.flip[0],
             VideoEffect::VerticalFlip => pixel.flip[1] = !pixel.flip[1],
             VideoEffect::BlackAndWhite => {
@@ -356,99 +386,25 @@ pub(crate) fn pixel_effects(
                     *balance *= unit(gain).max(0.0);
                 }
             }
-            VideoEffect::Checkerboard {
-                anchor,
-                size,
-                color,
-                opacity,
-            } => {
-                pixel.generate.checkerboard = Some(Checkerboard {
-                    anchor: anchor.each_ref().map(unit),
-                    size: size.each_ref().map(|side| side.value_at(time)),
-                    color: encoded(*color),
-                    opacity: unit(opacity).clamp(0.0, 1.0),
-                });
+            VideoEffect::Checkerboard(_)
+            | VideoEffect::Grid(_)
+            | VideoEffect::Circle(_)
+            | VideoEffect::FourColorGradient(_)
+            | VideoEffect::Ellipse(_)
+            | VideoEffect::CellPattern(_) => set_generate_effect(&mut pixel, effect, time),
+            VideoEffect::LightingEffects(effect) => pixel.lighting = Some(lighting(effect, time)),
+            VideoEffect::RadialShadow(shadow) => set_radial_shadow(&mut pixel, shadow, time),
+            VideoEffect::ColorPass(_)
+            | VideoEffect::ReduceInterlaceFlicker(_)
+            | VideoEffect::CineonConverter(_)
+            | VideoEffect::BrushStrokes(_)
+            | VideoEffect::EyedropperFill(_)
+            | VideoEffect::SdrConform(_) => set_image_effect(&mut pixel, effect, time),
+            VideoEffect::NoiseHlsAuto(_) | VideoEffect::NoiseAlpha(_) => {
+                set_noise_effect(&mut pixel, effect, time, timebase);
             }
-            VideoEffect::Grid {
-                anchor,
-                size,
-                border,
-                color,
-                opacity,
-                invert,
-            } => {
-                pixel.generate.grid = Some(Grid {
-                    anchor: anchor.each_ref().map(unit),
-                    size: size.each_ref().map(|side| side.value_at(time)),
-                    border: border.value_at(time),
-                    color: encoded(*color),
-                    opacity: unit(opacity).clamp(0.0, 1.0),
-                    invert: *invert,
-                });
-            }
-            VideoEffect::Circle {
-                center,
-                radius,
-                feather,
-                color,
-                opacity,
-                invert,
-            } => {
-                pixel.generate.circle = Some(Circle {
-                    center: center.each_ref().map(unit),
-                    radius: radius.value_at(time),
-                    feather: feather.value_at(time),
-                    color: encoded(*color),
-                    opacity: unit(opacity).clamp(0.0, 1.0),
-                    invert: *invert,
-                });
-            }
-            VideoEffect::FourColorGradient {
-                points,
-                colors,
-                blend,
-                opacity,
-            } => {
-                pixel.generate.four_color = Some(FourColorGradient {
-                    points: points.each_ref().map(|point| point.each_ref().map(unit)),
-                    colors: colors.map(encoded),
-                    blend: unit(blend),
-                    opacity: unit(opacity).clamp(0.0, 1.0),
-                });
-            }
-            VideoEffect::LensFlare {
-                center,
-                brightness,
-                lens,
-                blend,
-            } => {
-                pixel.optics.lens_flare = Some(LensFlare {
-                    center: center.each_ref().map(unit),
-                    brightness: unit(brightness),
-                    lens: match lens {
-                        LensType::Zoom50To300 => FlareLens::Zoom,
-                        LensType::Prime35 => FlareLens::Prime35,
-                        LensType::Prime105 => FlareLens::Prime105,
-                    },
-                    blend: unit(blend),
-                });
-            }
-            VideoEffect::Magnify {
-                shape,
-                center,
-                magnification,
-                size,
-                feather,
-                opacity,
-            } => {
-                pixel.optics.magnify = Some(Magnify {
-                    center: center.each_ref().map(unit),
-                    magnification: unit(magnification),
-                    size: size.value_at(time),
-                    feather: feather.value_at(time),
-                    opacity: unit(opacity),
-                    square: *shape == MagnifyShape::Square,
-                });
+            VideoEffect::LensFlare { .. } | VideoEffect::Magnify { .. } => {
+                set_optics_effect(&mut pixel.optics, effect, time);
             }
             VideoEffect::LinearWipe { .. }
             | VideoEffect::RadialWipe { .. }
@@ -459,12 +415,31 @@ pub(crate) fn pixel_effects(
             VideoEffect::Levels { .. } | VideoEffect::ProcAmp { .. } => {
                 set_adjust_effect(&mut pixel.adjust, effect, time);
             }
+            VideoEffect::UnsharpMask(_)
+            | VideoEffect::Median(_)
+            | VideoEffect::DustAndScratches(_)
+            | VideoEffect::EdgeFeather(_)
+            | VideoEffect::NoiseHls(_) => set_detail_effect(&mut pixel.detail, effect, time),
+            VideoEffect::RoughenEdges(_)
+            | VideoEffect::BevelEdges(_)
+            | VideoEffect::BevelAlpha(_)
+            | VideoEffect::AlphaGlow(_)
+            | VideoEffect::ColorEmboss(_) => set_edge_effect(&mut pixel.edges, effect, time),
+            VideoEffect::ConvolutionKernel(_)
+            | VideoEffect::Extract(_)
+            | VideoEffect::ShadowHighlight(_)
+            | VideoEffect::VideoLimiter(_)
+            | VideoEffect::AscCdl(_)
+            | VideoEffect::ColorReplace(_) => set_tone_effect(&mut pixel.tone, effect, time),
+            VideoEffect::ChangeColor(_) | VideoEffect::ColorBalance(_) => {
+                set_shift_effect(&mut pixel.shift, effect, time)
+            }
         }
     }
     pixel
 }
 
-fn encoded(color: Rgb) -> [f32; 3] {
+pub(crate) fn encoded(color: Rgb) -> [f32; 3] {
     [color.r, color.g, color.b].map(|channel| f32::from(channel) / 255.0)
 }
 

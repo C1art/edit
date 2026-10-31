@@ -100,7 +100,7 @@ impl Edit for RemoveAttributes {
                         clip.look.masks.clear();
                     }
                     Attribute::Crop => clip.look.crop = look.crop.clone(),
-                    Attribute::Effects => clip.look.effects.clear(),
+                    Attribute::Effects => clip.look.clear_effects(),
                     Attribute::Color => clip.look.color = look.color.clone(),
                     Attribute::Volume => {
                         clip.volume = Param::default();
@@ -143,6 +143,8 @@ fn paste(attribute: Attribute, from: &Clip, to: &mut Clip) {
             key.time = timing.source_time(timing.start + offset);
         }
         param.keys.sort_by_key(|key| key.time);
+        // A held target maps every key to one source frame.
+        param.keys.dedup_by_key(|key| key.time);
     };
     let look = &mut to.look;
     match attribute {
@@ -165,12 +167,9 @@ fn paste(attribute: Attribute, from: &Clip, to: &mut Clip) {
             look.crop.params_mut().into_iter().for_each(retime);
         }
         Attribute::Effects => {
-            let mut effects = from.look.effects.clone();
-            effects
-                .iter_mut()
-                .flat_map(|effect| effect.params_mut())
-                .for_each(retime);
-            look.effects.extend(effects);
+            let mut pasted = from.look.effects_only();
+            pasted.params_of_effects_mut().for_each(retime);
+            look.append_effects(&pasted);
         }
         Attribute::Color => {
             look.color = from.look.color.clone();

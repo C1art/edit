@@ -46,6 +46,21 @@ impl Motion {
         .into_iter()
     }
 
+    pub fn params(&self) -> impl Iterator<Item = &Param> {
+        let [x, y] = &self.position;
+        let [anchor_x, anchor_y] = &self.anchor;
+        [
+            x,
+            y,
+            &self.scale,
+            &self.scale_width,
+            &self.rotation,
+            anchor_x,
+            anchor_y,
+        ]
+        .into_iter()
+    }
+
     /// Percent of the width and of the height at source time `time`.
     pub fn scale_at(&self, time: Ticks) -> [f32; 2] {
         let height = self.scale.value_at(time);
@@ -94,7 +109,7 @@ pub struct Crop {
 /// Everything that changes how a video clip's picture looks; ignored for audio.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Look {
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_default")]
     pub motion: Motion,
     /// Percent.
     #[serde(default = "full_opacity")]
@@ -104,17 +119,27 @@ pub struct Look {
     /// What of the picture the opacity applies to; none keeps all of it.
     #[serde(default)]
     pub masks: Vec<Mask>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_default")]
     pub crop: Crop,
     /// Applied in order, before motion.
     #[serde(default)]
     pub effects: Vec<VideoEffect>,
-    #[serde(default)]
+    /// Each effect's masks, beside it in `effects`; an effect without any, or past the
+    /// end, reaches the whole picture.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub effect_masks: Vec<Vec<Mask>>,
+    #[serde(default, skip_serializing_if = "is_default")]
     pub color: ColorCorrection,
 }
 
 fn full_opacity() -> Param {
     Param::new(10_000)
+}
+
+/// Untouched settings are left out of project files: a clip's color settings alone
+/// would otherwise take kilobytes, and long projects have thousands of clips.
+fn is_default<T: Default + PartialEq>(value: &T) -> bool {
+    *value == T::default()
 }
 
 impl Default for Look {
@@ -126,6 +151,7 @@ impl Default for Look {
             masks: Vec::new(),
             crop: Crop::default(),
             effects: Vec::new(),
+            effect_masks: Vec::new(),
             color: ColorCorrection::default(),
         }
     }
@@ -140,34 +166,51 @@ impl Look {
             .chain(self.crop.params_mut())
             .chain(self.effects.iter_mut().flat_map(VideoEffect::params_mut))
             .chain(self.color.params_mut())
+            .chain(
+                self.effect_masks
+                    .iter_mut()
+                    .flatten()
+                    .flat_map(Mask::params_mut),
+            )
     }
 
-    /// The blurriness of all Gaussian blurs together: blurring twice adds the squares.
-    pub fn blurriness_at(&self, time: Ticks) -> f32 {
-        self.effects
-            .iter()
-            .map(|effect| match effect {
-                VideoEffect::GaussianBlur { blurriness } => blurriness.value_at(time).powi(2),
-                _ => 0.0,
-            })
-            .sum::<f32>()
-            .sqrt()
+    /// The blurriness of all the blurs together for each of the red, green, blue and
+    /// alpha channels: blurring twice adds the squares.
+    pub fn blurriness_at(&self, time: Ticks) -> [f32; 4] {
+        let mut squares = [0.0f32; 4];
+        for effect in &self.effects {
+            let each = match effect {
+                VideoEffect::GaussianBlur { blurriness } => [blurriness.value_at(time); 4],
+                VideoEffect::CameraBlur { percent } => [percent.value_at(time).max(0.0) / 2.0; 4],
+                VideoEffect::ChannelBlur(channels) => [
+                    &channels.red,
+                    &channels.green,
+                    &channels.blue,
+                    &channels.alpha,
+                ]
+                .map(|blurriness| blurriness.value_at(time)),
+                _ => continue,
+            };
+            for (square, blurriness) in squares.iter_mut().zip(each) {
+                *square += blurriness.powi(2);
+            }
+        }
+        squares.map(f32::sqrt)
     }
 }
 
 impl Look {
     pub fn params(&self) -> impl Iterator<Item = &Param> {
-        let motion = &self.motion;
         let crop = &self.crop;
         let effects = self.effects.iter().flat_map(VideoEffect::params);
-        motion
-            .position
-            .iter()
-            .chain([&motion.scale, &motion.rotation, &self.opacity])
+        self.motion
+            .params()
+            .chain([&self.opacity])
             .chain([&crop.left, &crop.top, &crop.right, &crop.bottom])
             .chain(self.masks.iter().flat_map(Mask::params))
             .chain(effects)
             .chain(self.color.params())
+            .chain(self.effect_masks.iter().flatten().flat_map(Mask::params))
     }
 
     /// Source times of every keyframe, sorted and deduplicated.
@@ -179,5 +222,20 @@ impl Look {
         times.sort_unstable();
         times.dedup();
         times
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reading_and_changing_visit_the_same_params() {
+        let mut look = Look::default();
+        for (index, param) in look.params_mut().enumerate() {
+            param.toggle_key(Ticks(i64::try_from(index).unwrap()));
+        }
+        let keyed = look.params().filter(|param| param.is_animated()).count();
+        assert_eq!(keyed, look.params_mut().count());
     }
 }

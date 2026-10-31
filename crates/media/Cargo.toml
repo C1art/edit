@@ -9,5 +9,8 @@ publish.workspace = true
 timeline.workspace = true
 ffmpeg-sys-next.workspace = true
 
+[target.'cfg(windows)'.dependencies]
+windows.workspace = true
+
 [lints]
 workspace = true

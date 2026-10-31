@@ -1,24 +1,33 @@
+mod animate;
+mod bars;
 mod coverage;
+mod image_layer;
+mod layers;
+mod leader;
 mod scroll;
 mod shape;
+mod title_fonts;
 
 use std::cell::RefCell;
 use std::sync::Arc;
 
 use media::VideoFrame;
 use timeline::{
-    CaptionStyle, Generator, Rgb, ShadowStyle, Shape, TextAlign, Ticks, Title, TitleFont,
-    TitleMotion,
+    CaptionStyle, CountingLeader, FillGradient, FrameRate, Generator, Rgb, ShadowStyle, Shape,
+    TextAlign, Ticks, Title, TitleFont, TitleMotion,
 };
 
+pub(crate) use animate::animated;
+use bars::draw_bars;
 use coverage::Coverage;
+use layers::draw_graphic;
+use leader::draw_leader;
 pub(crate) use scroll::scrolled;
 use shape::shape_coverage;
 
 /// Faux bold thickens the strokes of the built-in light face by this fraction of the size
 /// each way.
 const BOLD_GROWTH: f32 = 1.0 / 40.0;
-/// Premiere's red, so a missing file can't pass for a dark shot.
 /// The width of a monospace character in the built-in face, in sizes, with room to
 /// spare so the line never wraps.
 const TIMECODE_ADVANCE: f32 = 0.7;
@@ -41,8 +50,14 @@ enum Anchor {
 }
 
 /// The picture `generator` draws on a `width` by `height` canvas, with straight alpha;
-/// for a rolling or crawling title, the whole strip that travels across it.
-pub fn generated_frame(generator: &Generator, width: u32, height: u32) -> Arc<VideoFrame> {
+/// for a rolling or crawling title, the whole strip that travels across it. `frame`
+/// counts at `rate` from the media's start, for what draws differently over time.
+pub fn generated_frame(
+    generator: &Generator,
+    (frame, rate): (i64, FrameRate),
+    width: u32,
+    height: u32,
+) -> Arc<VideoFrame> {
     let mut canvas = Canvas::new(width, height);
     match generator {
         Generator::ColorMatte { color } => canvas.fill(*color),
@@ -50,8 +65,18 @@ pub fn generated_frame(generator: &Generator, width: u32, height: u32) -> Arc<Vi
             canvas = scroll::title_strip(title, width, height);
         }
         Generator::Title(title) => draw_title(&mut canvas, title, Anchor::Center),
-        Generator::AdjustmentLayer => {}
+        Generator::AdjustmentLayer | Generator::TransparentVideo => {}
+        Generator::BarsAndTone => draw_bars(&mut canvas),
+        Generator::BlackVideo => canvas.fill(Rgb::new(0, 0, 0)),
         Generator::Shape(shape) => draw_shape(&mut canvas, shape),
+        Generator::Graphic(graphic) => draw_graphic(&mut canvas, graphic),
+        Generator::CountingLeader(leader) => {
+            draw_leader(
+                &mut canvas,
+                leader,
+                CountingLeader::picture_on_frame(frame, rate),
+            );
+        }
     }
     Arc::new(VideoFrame {
         pts: Ticks::ZERO,
@@ -98,20 +123,48 @@ pub(crate) fn offline_frame(width: u32, height: u32) -> Arc<VideoFrame> {
 /// Timecode effect draws it.
 pub(crate) fn timecode_box(text: &str, size: u32, opacity: f32) -> VideoFrame {
     let characters = text.chars().count() as f32;
+    // Measured by character count rather than ink, so the box holds still as digits change.
     let width = (size as f32 * (TIMECODE_ADVANCE * characters + 1.0)).ceil() as u32;
     let height = (size as f32 * 1.5).ceil() as u32;
-    let title = Title {
+    boxed_text(
+        &box_title(text, size, TitleFont::Mono, TextAlign::Center),
+        (width, height),
+        opacity,
+    )
+}
+
+/// `text` in white sans on a black box of `opacity` that fits it, lines aligned by
+/// `align`.
+pub(crate) fn text_box(text: &str, size: u32, opacity: f32, align: TextAlign) -> VideoFrame {
+    let title = box_title(text, size, TitleFont::Sans, align);
+    let characters = text
+        .lines()
+        .map(|line| line.chars().count())
+        .max()
+        .unwrap_or(0) as f32;
+    let room = (size as f32 * (TIMECODE_ADVANCE * characters + 1.0)).ceil() as u32;
+    let extent = Coverage::title_extent(&title, room).unwrap_or_default();
+    let width = (extent.x + size as f32).ceil() as u32;
+    let height = (extent.y + size as f32 * 0.5).ceil() as u32;
+    boxed_text(&title, (width, height), opacity)
+}
+
+fn box_title(text: &str, size: u32, font: TitleFont, align: TextAlign) -> Title {
+    Title {
         text: text.to_owned(),
         size,
         color: Rgb::WHITE,
-        align: TextAlign::Center,
-        font: TitleFont::Mono,
+        align,
+        font,
         shadow: false,
         ..Title::default()
-    };
+    }
+}
+
+fn boxed_text(title: &Title, (width, height): (u32, u32), opacity: f32) -> VideoFrame {
     let mut canvas = Canvas::new(width, height);
     canvas.pixels.fill([0.0, 0.0, 0.0, opacity]);
-    draw_title(&mut canvas, &title, Anchor::Center);
+    draw_title(&mut canvas, title, Anchor::Center);
     VideoFrame {
         pts: Ticks::ZERO,
         width,
@@ -169,18 +222,20 @@ fn draw_title(canvas: &mut Canvas, title: &Title, anchor: Anchor) {
         .filter(|stroke| stroke.width > 0)
         .map(|stroke| (text.dilated(stroke.width as f32), stroke.color));
     if let Some(background) = title.background {
-        let pad = (size * 0.3).round() as i64;
+        let style = title.background_style;
+        let (side, above) = style.margins(title.size);
         let grown = title.stroke.map_or(0, |stroke| i64::from(stroke.width));
+        let (side, above) = (i64::from(side) + grown, i64::from(above) + grown);
         let (left, top, right, bottom) = text.bounds;
-        canvas.fill_box(
-            (
-                left - pad - grown,
-                top - pad / 2 - grown,
-                right + pad + grown,
-                bottom + pad / 2 + grown,
-            ),
+        canvas.fill_rounded_box(
+            (left - side, top - above, right + side, bottom + above),
             background,
+            style.opacity.min(100) as f32 / 100.0,
+            style.radius as f32,
         );
+        if !title.shadow {
+            canvas.bleed(background);
+        }
     }
     let silhouette = outline.as_ref().map_or(&text, |(outline, _)| outline);
     if title.shadow {
@@ -194,7 +249,7 @@ fn draw_title(canvas: &mut Canvas, title: &Title, anchor: Anchor) {
     if let Some((outline, color)) = &outline {
         canvas.paint(outline, *color, 1.0);
     }
-    canvas.paint(&text, title.color, 1.0);
+    canvas.paint_fill(&text, title.color, title.gradient);
 }
 
 fn draw_shape(canvas: &mut Canvas, shape: &Shape) {
@@ -223,7 +278,7 @@ fn draw_shape(canvas: &mut Canvas, shape: &Shape) {
         canvas.bleed(color);
     }
     if let Some(fill) = shape.fill {
-        canvas.paint(&body, fill, 1.0);
+        canvas.paint_fill(&body, fill, shape.gradient);
     }
     if let Some((ring, color)) = &outline {
         canvas.paint(ring, *color, 1.0);
@@ -276,18 +331,69 @@ impl Canvas {
         }
     }
 
+    /// A box with corners rounded to `radius`, smoothed along their curve.
+    fn fill_rounded_box(
+        &mut self,
+        bounds: (i64, i64, i64, i64),
+        color: Rgb,
+        opacity: f32,
+        radius: f32,
+    ) {
+        let (left, top, right, bottom) = bounds;
+        let clamp_x = |x: i64| x.clamp(0, i64::from(self.width)) as usize;
+        let clamp_y = |y: i64| y.clamp(0, i64::from(self.height)) as usize;
+        let width = self.width as usize;
+        let color = opaque(color);
+        let (left_f, top_f, right_f, bottom_f) =
+            (left as f32, top as f32, right as f32, bottom as f32);
+        let radius = radius
+            .min((right_f - left_f) / 2.0)
+            .min((bottom_f - top_f) / 2.0)
+            .max(0.0);
+        for y in clamp_y(top)..clamp_y(bottom) {
+            let center_y = y as f32 + 0.5;
+            let into_corner_y = (top_f + radius - center_y).max(center_y - (bottom_f - radius));
+            for x in clamp_x(left)..clamp_x(right) {
+                let center_x = x as f32 + 0.5;
+                let into_corner_x = (left_f + radius - center_x).max(center_x - (right_f - radius));
+                let cover = if radius > 0.0 && into_corner_x > 0.0 && into_corner_y > 0.0 {
+                    let from_center = into_corner_x.hypot(into_corner_y);
+                    (radius - from_center + 0.5).clamp(0.0, 1.0)
+                } else {
+                    1.0
+                };
+                composite(&mut self.pixels[y * width + x], color, cover * opacity);
+            }
+        }
+    }
+
     /// Composites `color` over the canvas where `coverage` covers it.
     fn paint(&mut self, coverage: &Coverage, color: Rgb, opacity: f32) {
-        let [r, g, b, _] = opaque(color);
+        let color = opaque(color);
         for (pixel, &cover) in self.pixels.iter_mut().zip(&coverage.alpha) {
-            let alpha = cover * opacity;
-            if alpha <= 0.0 {
-                continue;
-            }
-            let below = pixel[3] * (1.0 - alpha);
-            let out = alpha + below;
-            let mix = |top: f32, bottom: f32| (top * alpha + bottom * below) / out;
-            *pixel = [mix(r, pixel[0]), mix(g, pixel[1]), mix(b, pixel[2]), out];
+            composite(pixel, color, cover * opacity);
+        }
+    }
+
+    /// Paints `color`, or with a gradient a blend from it across the coverage's bounds.
+    fn paint_fill(&mut self, coverage: &Coverage, color: Rgb, gradient: Option<FillGradient>) {
+        let Some(gradient) = gradient else {
+            return self.paint(coverage, color, 1.0);
+        };
+        let (left, top, right, bottom) = coverage.bounds;
+        let center = ((left + right) as f32 / 2.0, (top + bottom) as f32 / 2.0);
+        let half = ((right - left) as f32 / 2.0, (bottom - top) as f32 / 2.0);
+        let (from, to) = (opaque(color), opaque(gradient.to));
+        let width = self.width as usize;
+        let covered = self.pixels.iter_mut().zip(&coverage.alpha).enumerate();
+        for (index, (pixel, &cover)) in covered.filter(|(_, (_, &cover))| cover > 0.0) {
+            let x = (index % width) as f32 + 0.5 - center.0;
+            let y = (index / width) as f32 + 0.5 - center.1;
+            let amount = gradient.amount((x, y), half);
+            let shade = std::array::from_fn(|channel| {
+                from[channel] + (to[channel] - from[channel]) * amount
+            });
+            composite(pixel, shade, cover);
         }
     }
 
@@ -299,6 +405,33 @@ impl Canvas {
     }
 }
 
+/// Lays `color` over `pixel` at `alpha`, both straight.
+fn composite(pixel: &mut [f32; 4], [r, g, b, _]: [f32; 4], alpha: f32) {
+    if alpha <= 0.0 {
+        return;
+    }
+    let below = pixel[3] * (1.0 - alpha);
+    let out = alpha + below;
+    let mix = |top: f32, bottom: f32| (top * alpha + bottom * below) / out;
+    *pixel = [mix(r, pixel[0]), mix(g, pixel[1]), mix(b, pixel[2]), out];
+}
+
 fn opaque(color: Rgb) -> [f32; 4] {
     [color.r, color.g, color.b, 255].map(|channel| f32::from(channel) / 255.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_rounded_box_leaves_its_corners_clear_and_fills_its_middle() {
+        let mut canvas = Canvas::new(40, 20);
+        canvas.fill_rounded_box((0, 0, 40, 20), Rgb::WHITE, 0.5, 8.0);
+        let alpha = |x: usize, y: usize| canvas.pixels[y * 40 + x][3];
+        assert_eq!(alpha(0, 0), 0.0);
+        assert_eq!(alpha(39, 19), 0.0);
+        assert_eq!(alpha(20, 10), 0.5);
+        assert_eq!(alpha(20, 0), 0.5);
+    }
 }

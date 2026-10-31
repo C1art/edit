@@ -1,5 +1,6 @@
 use egui::{RichText, Slider};
-use timeline::{Clip, ClipId, Gain, Param, SetClipPan, SetClipVolume, TrackRef};
+use playback::PlayRate;
+use timeline::{Clip, ClipId, Gain, Param, SetClipPan, SetClipVolume, Ticks, TrackRef};
 
 use super::{meter_bar, response_state, Change, FADER_RANGE, METER_FLOOR, RECORDING, STRIP_HEIGHT};
 use crate::editor::Editor;
@@ -32,10 +33,10 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
 
 fn strip(editor: &mut Editor, ui: &mut egui::Ui, track_ref: TrackRef) {
     let playhead = editor.playhead();
-    let playing = editor
-        .program
-        .as_ref()
-        .is_some_and(|program| program.player.is_playing() && program.player.rate() > 0);
+    commit_left_clip(editor, track_ref, playhead);
+    let playing = editor.program.as_ref().is_some_and(|program| {
+        program.player.is_playing() && program.player.rate() > PlayRate::STOPPED
+    });
     let sequence = editor.timeline.sequence();
     let Some(track) = sequence.track(track_ref) else {
         return;
@@ -77,6 +78,7 @@ fn strip(editor: &mut Editor, ui: &mut egui::Ui, track_ref: TrackRef) {
                 meter_bar(ui, meter.unwrap_or([METER_FLOOR; 2]));
                 let fader = ui.add(
                     Slider::new(&mut db, FADER_RANGE)
+                        .update_while_editing(false)
                         .vertical()
                         .show_value(false)
                         .step_by(0.1),
@@ -111,7 +113,11 @@ fn strip(editor: &mut Editor, ui: &mut egui::Ui, track_ref: TrackRef) {
             let mut balance = pan.value_at(at);
             ui.spacing_mut().slider_width = 56.0;
             let knob = ui
-                .add(Slider::new(&mut balance, -100.0..=100.0).show_value(false))
+                .add(
+                    Slider::new(&mut balance, -100.0..=100.0)
+                        .update_while_editing(false)
+                        .show_value(false),
+                )
                 .on_hover_text(format!("Balance {balance:.0} (double-click to centre)"));
             if knob.double_clicked() {
                 balance = 0.0;
@@ -141,9 +147,38 @@ fn strip(editor: &mut Editor, ui: &mut egui::Ui, track_ref: TrackRef) {
     }
 }
 
+/// Commits what a drag wrote into a clip once the playhead has moved on from it into the
+/// next, as the drag goes on adjusting that one instead.
+fn commit_left_clip(editor: &mut Editor, track_ref: TrackRef, playhead: Ticks) {
+    let sequence = editor.timeline.sequence();
+    let Some((id, ..)) = &editor.mixer.clips.adjusting else {
+        return;
+    };
+    let Some((track, left)) = sequence.clip(*id) else {
+        return;
+    };
+    let under_playhead = sequence
+        .track(track)
+        .and_then(|track| track.clip_at(playhead))
+        .is_some_and(|clip| clip.id == *id);
+    if track != track_ref || under_playhead {
+        return;
+    }
+    let (committed_volume, committed_pan) = (left.volume.clone(), left.pan.clone());
+    let Some((clip, volume, pan)) = editor.mixer.clips.adjusting.take() else {
+        return;
+    };
+    if volume != committed_volume {
+        adjust_levels(editor, SetClipVolume { clip, volume }, Change::Commit);
+    }
+    if pan != committed_pan {
+        adjust_levels(editor, SetClipPan { clip, pan }, Change::Commit);
+    }
+}
+
 /// Sets `param` at `at`: as a keyframe there while writing, and otherwise as the
 /// value of an unanimated one or its keyframe at that time.
-fn set(param: &mut Param, at: timeline::Ticks, value: f32, writing: bool) {
+fn set(param: &mut Param, at: Ticks, value: f32, writing: bool) {
     if writing && !param.is_animated() {
         param.toggle_animation(at);
     }

@@ -10,6 +10,8 @@ pub enum MediaError {
         message: String,
     },
     NoPlayableStream,
+    /// Not a format FFmpeg reads, or damaged or incomplete.
+    UnreadableFile,
     /// The container doesn't say how long the media is, so it can't be edited yet.
     UnknownDuration,
     NoDecoder,
@@ -23,6 +25,8 @@ pub enum MediaError {
     },
     /// The caller stopped the work before it finished.
     Cancelled,
+    /// A worker thread couldn't be started, or stopped without saying why.
+    Thread(String),
 }
 
 impl fmt::Display for MediaError {
@@ -31,8 +35,18 @@ impl fmt::Display for MediaError {
             Self::UnsupportedPath(path) => {
                 write!(f, "path cannot be passed to FFmpeg: {}", path.display())
             }
-            Self::Ffmpeg { code, message } => write!(f, "FFmpeg error {code}: {message}"),
+            // FFmpeg's own code means nothing to whoever reads this; its text says it all.
+            Self::Ffmpeg { message, .. } => {
+                let mut rest = message.chars();
+                match rest.next() {
+                    Some(first) => write!(f, "{}{}", first.to_lowercase(), rest.as_str()),
+                    None => f.write_str("FFmpeg failed"),
+                }
+            }
             Self::NoPlayableStream => f.write_str("file has no video or audio stream"),
+            Self::UnreadableFile => {
+                f.write_str("not a media file that can be read, or the file is damaged")
+            }
             Self::UnknownDuration => f.write_str("file does not declare its duration"),
             Self::NoDecoder => f.write_str("no decoder available for the stream's codec"),
             Self::NoEncoder => f.write_str("FFmpeg has no encoder for the export format"),
@@ -43,6 +57,7 @@ impl fmt::Display for MediaError {
                 write!(f, "cannot write {}: {reason}", path.display())
             }
             Self::Cancelled => f.write_str("cancelled"),
+            Self::Thread(reason) => write!(f, "worker thread failed: {reason}"),
         }
     }
 }

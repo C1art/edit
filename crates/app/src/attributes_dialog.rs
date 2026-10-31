@@ -82,35 +82,32 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     };
     let mut confirmed = false;
     let mut cancelled = false;
-    egui::Window::new(title)
-        .collapsible(false)
-        .resizable(false)
-        .show(ctx, |ui| {
-            for (kind, heading) in [
-                (TrackKind::Video, "Video Attributes"),
-                (TrackKind::Audio, "Audio Attributes"),
-            ] {
-                ui.label(RichText::new(heading).strong());
-                for attribute in Attribute::ALL.into_iter().filter(|a| a.kind() == kind) {
-                    let mut on = dialog.chosen.contains(&attribute);
-                    let offered = dialog.action.offers(attribute);
-                    let checkbox = egui::Checkbox::new(&mut on, attribute.name());
-                    if ui.add_enabled(offered, checkbox).changed() {
-                        if on {
-                            dialog.chosen.push(attribute);
-                        } else {
-                            dialog.chosen.retain(|&chosen| chosen != attribute);
-                        }
+    crate::dialog::window(ctx, title).show(ctx, |ui| {
+        for (kind, heading) in [
+            (TrackKind::Video, "Video Attributes"),
+            (TrackKind::Audio, "Audio Attributes"),
+        ] {
+            ui.label(RichText::new(heading).strong());
+            for attribute in Attribute::ALL.into_iter().filter(|a| a.kind() == kind) {
+                let mut on = dialog.chosen.contains(&attribute);
+                let offered = dialog.action.offers(attribute);
+                let checkbox = egui::Checkbox::new(&mut on, attribute.name());
+                if ui.add_enabled(offered, checkbox).changed() {
+                    if on {
+                        dialog.chosen.push(attribute);
+                    } else {
+                        dialog.chosen.retain(|&chosen| chosen != attribute);
                     }
                 }
             }
-            ui.horizontal(|ui| {
-                confirmed =
-                    ui.button("OK").clicked() || ui.input(|input| input.key_pressed(Key::Enter));
-                cancelled = ui.button("Cancel").clicked()
-                    || ui.input(|input| input.key_pressed(Key::Escape));
-            });
+        }
+        crate::dialog::footer(ui, |ui| {
+            cancelled =
+                ui.button("Cancel").clicked() || ui.input(|input| input.key_pressed(Key::Escape));
+            confirmed = ui.add(crate::dialog::primary("OK")).clicked()
+                || ui.input(|input| input.key_pressed(Key::Enter));
         });
+    });
     if cancelled {
         editor.attributes_dialog = None;
     }

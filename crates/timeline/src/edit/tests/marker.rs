@@ -93,3 +93,61 @@ fn clip_markers_show_only_within_the_played_source_at_their_sequence_position() 
         .unwrap();
     assert_eq!(shown(&timeline), vec![(200, 250)]);
 }
+
+#[test]
+fn rippling_markers_follow_an_insert_and_go_with_a_ripple_deleted_span() {
+    let (mut timeline, source) = timeline();
+    timeline
+        .apply(place(source, 0, 0, 400, PlaceMode::Overwrite))
+        .unwrap();
+    timeline.apply(SetRippleMarkers { ripple: true }).unwrap();
+    for at in [100, 300] {
+        timeline
+            .apply(AddMarker {
+                owner: MarkerOwner::Sequence,
+                at: Ticks(at),
+            })
+            .unwrap();
+    }
+    timeline
+        .apply(place(source, 200, 0, 50, PlaceMode::Insert))
+        .unwrap();
+    assert_eq!(marker_times(timeline.sequence()), vec![100, 350]);
+    let inserted = clip_on(&timeline, V1, 1);
+    timeline
+        .apply(RippleDelete {
+            clips: vec![clip_on(&timeline, V1, 0)],
+        })
+        .unwrap();
+    // The first clip ran 0 to 200 once the insert split it, taking the marker at 100.
+    assert_eq!(marker_times(timeline.sequence()), vec![150]);
+    assert_eq!(
+        timeline
+            .sequence()
+            .clip(inserted)
+            .map(|(_, clip)| clip.start),
+        Some(Ticks(0))
+    );
+}
+
+#[test]
+fn many_markers_go_in_as_one_step_around_existing_ones() {
+    let (mut timeline, _) = timeline();
+    timeline
+        .apply(AddMarker {
+            owner: MarkerOwner::Sequence,
+            at: Ticks(300),
+        })
+        .unwrap();
+    let beats = AddMarkers {
+        owner: MarkerOwner::Sequence,
+        at: vec![Ticks(500), Ticks(100), Ticks(300)],
+        color: MarkerColor::Blue,
+    };
+    timeline.apply(beats.clone()).unwrap();
+    assert_eq!(marker_times(timeline.sequence()), vec![100, 300, 500]);
+    assert_eq!(timeline.sequence().markers[1].color, MarkerColor::Green);
+    assert_eq!(timeline.apply(beats), Err(TimelineError::NothingToEdit));
+    timeline.undo();
+    assert_eq!(marker_times(timeline.sequence()), vec![300]);
+}

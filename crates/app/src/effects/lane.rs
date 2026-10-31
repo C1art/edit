@@ -1,10 +1,13 @@
 use egui::{Color32, Id, Rect, Sense, Stroke};
 use timeline::{Clip, FrameRate, Interpolation, Param, Sequence, Ticks, Timebase};
 
-use super::look::{paint_key, Output, ANIMATED};
+use super::key_icons::paint_key;
+use super::key_time::frame_within;
+use super::look::{Output, ANIMATED};
 use crate::mixer::Change;
 
 mod graph;
+mod velocity;
 
 /// Room left of the lanes for a parameter's name, value and keyframe buttons.
 const CONTROLS_WIDTH: f32 = 290.0;
@@ -65,6 +68,7 @@ impl Lane {
         let keys = &mut output.keys;
         if response.is_pointer_button_down_on() || response.clicked() {
             keys.press();
+            keys.touch(id);
         }
         let adding = ui.input(|input| input.modifiers.command || input.modifiers.shift);
         if response.drag_started() {
@@ -147,6 +151,12 @@ impl Lane {
         let painter = ui.painter_at(rect.expand2(egui::vec2(REACH, 0.0)));
         let visuals = ui.visuals();
         painter.rect_filled(rect, 2.0, visuals.extreme_bg_color);
+        let pinned = visuals.selection.bg_fill.gamma_multiply(0.3);
+        for span in self.pinned_spans() {
+            let [from, to] = span.map(|source| self.x_of(rect, source));
+            let shaded = Rect::from_x_y_ranges(from.min(to)..=from.max(to), rect.y_range());
+            painter.rect_filled(shaded.intersect(rect), 0.0, pinned);
+        }
         let middle = rect.center().y;
         let line = Stroke::new(1.0, visuals.widgets.noninteractive.bg_stroke.color);
         if param.is_animated() {
@@ -181,6 +191,21 @@ impl Lane {
         }
     }
 
+    /// The source the intro and outro hold, whose keyframes move with the clip's ends.
+    fn pinned_spans(&self) -> Vec<[Ticks; 2]> {
+        let clip = &self.clip;
+        let (start, end) = (clip.source_in, clip.source_out());
+        let pinned = clip.pinned;
+        [
+            (pinned.intro, [start, start + pinned.intro]),
+            (pinned.outro, [end - pinned.outro, end]),
+        ]
+        .into_iter()
+        .filter(|(length, _)| *length > Ticks::ZERO)
+        .map(|(_, span)| span)
+        .collect()
+    }
+
     /// The keyframe drawn nearest `x`, if it is within reach.
     fn near_key(&self, rect: Rect, param: &Param, x: f32) -> Option<Ticks> {
         let distance = |key: Ticks| (self.x_of(rect, key) - x).abs();
@@ -201,9 +226,8 @@ impl Lane {
     fn source_at(&self, rect: Rect, x: f32) -> Ticks {
         let fraction = f64::from(((x - rect.left()) / rect.width()).clamp(0.0, 1.0));
         let offset = Ticks((self.clip.duration.0 as f64 * fraction).round() as i64);
-        let frame = self.rate.frame_at(self.clip.start + offset, self.timebase);
-        let position = self.rate.frame_start(frame, self.timebase);
-        let clip = &self.clip;
-        clip.source_time(position.clamp(clip.start, clip.end() - Ticks(1)))
+        let frames = (self.rate, self.timebase);
+        let position = frame_within(&self.clip, self.clip.start + offset, frames);
+        self.clip.source_time(position)
     }
 }

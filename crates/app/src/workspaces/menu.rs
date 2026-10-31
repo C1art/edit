@@ -5,6 +5,7 @@ use crate::editor::Editor;
 use crate::effects::SideTab;
 use crate::keymap::{Command, WORKSPACE_SLOTS};
 use crate::panels::MediaTab;
+use crate::theme;
 
 /// The Save as New Workspace dialog.
 pub(crate) struct NamingWorkspace {
@@ -13,7 +14,7 @@ pub(crate) struct NamingWorkspace {
 }
 
 pub(crate) fn window_menu(editor: &mut Editor, ui: &mut egui::Ui) {
-    ui.menu_button("Window", |ui| {
+    crate::theme::menu(ui, "Window", |ui| {
         ui.menu_button("Workspaces", |ui| workspaces_menu(editor, ui));
         ui.separator();
         for tab in MediaTab::ALL {
@@ -28,6 +29,16 @@ pub(crate) fn window_menu(editor: &mut Editor, ui: &mut egui::Ui) {
             if ui.selectable_label(shown, tab.words().1).clicked() {
                 editor.side_tab = tab;
             }
+        }
+        ui.separator();
+        let full_screen =
+            Button::new("Full Screen").shortcut_text(editor.keymap.label(Command::FullScreen));
+        if ui.add(full_screen).clicked() {
+            editor.toggle_full_screen();
+        }
+        let messages = &mut editor.notifications.history_open;
+        if ui.selectable_label(*messages, "Messages").clicked() {
+            *messages = !*messages;
         }
     });
 }
@@ -87,12 +98,10 @@ pub(crate) fn workspace_bar(editor: &mut Editor, ui: &mut egui::Ui) {
     let active = editor.workspaces.active();
     let mut chosen = None;
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        ui.spacing_mut().item_spacing.x = 16.0;
         let list = editor.workspaces.list().iter().enumerate().rev();
         for (index, workspace) in list {
-            if ui
-                .selectable_label(index == active, &workspace.name)
-                .clicked()
-            {
+            if theme::tab(ui, index == active, &workspace.name).clicked() {
                 chosen = Some(index);
             }
         }
@@ -107,36 +116,33 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
         return;
     };
     let mut done = None;
-    egui::Window::new("New Workspace")
-        .collapsible(false)
-        .resizable(false)
-        .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-        .show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.label("Name");
-                let field = ui.text_edit_singleline(&mut naming.name);
-                if std::mem::take(&mut naming.opened) {
-                    field.request_focus();
-                }
-            });
-            ui.horizontal(|ui| {
-                if ui.button("OK").clicked() || ui.input(|input| input.key_pressed(Key::Enter)) {
-                    done = Some(true);
-                }
-                if ui.button("Cancel").clicked() || ui.input(|input| input.key_pressed(Key::Escape))
-                {
-                    done = Some(false);
-                }
-            });
+    crate::dialog::window(ctx, "New Workspace").show(ctx, |ui| {
+        ui.horizontal(|ui| {
+            ui.label("Name");
+            let field = ui.text_edit_singleline(&mut naming.name);
+            if crate::dialog::opening(ui, &mut naming.opened) {
+                crate::dialog::focus_text(ui, &field, &naming.name);
+            }
         });
+        crate::dialog::footer(ui, |ui| {
+            if ui.button("Cancel").clicked() || ui.input(|input| input.key_pressed(Key::Escape)) {
+                done = Some(false);
+            }
+            if ui.add(crate::dialog::primary("OK")).clicked()
+                || ui.input(|input| input.key_pressed(Key::Enter))
+            {
+                done = Some(true);
+            }
+        });
+    });
     let Some(keep) = done else {
         return;
     };
     let name = naming.name.clone();
     editor.naming_workspace = None;
     if keep {
-        if let Err(message) = editor.save_new_workspace(&name) {
-            editor.notice(message);
+        if let Err(error) = editor.save_new_workspace(&name) {
+            editor.notice(error.to_string());
         }
     }
 }

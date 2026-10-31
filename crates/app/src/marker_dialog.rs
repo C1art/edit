@@ -1,7 +1,7 @@
 use egui::Key;
 use timeline::{
-    AddMarker, Marker, MarkerColor, MarkerId, MarkerKind, MarkerOwner, RemoveMarker, Ticks,
-    Timecode, UpdateMarker,
+    AddMarker, ClearMarkers, Marker, MarkerColor, MarkerId, MarkerKind, MarkerOwner, RemoveMarker,
+    SetRippleMarkers, Ticks, Timecode, UpdateMarker,
 };
 
 use crate::editor::Editor;
@@ -13,10 +13,9 @@ impl Editor {
     fn marker_target(&self) -> (MarkerOwner, Ticks) {
         let playhead = self.playhead();
         let sequence = self.timeline.sequence();
-        self.view
-            .selection
-            .iter()
-            .filter_map(|&id| sequence.clip(id))
+        sequence
+            .clips_of(&self.view.selection)
+            .into_iter()
             .find(|(_, clip)| clip.covers(playhead))
             .map_or((MarkerOwner::Sequence, playhead), |(_, clip)| {
                 (MarkerOwner::Clip(clip.id), clip.source_time(playhead))
@@ -54,6 +53,16 @@ impl Editor {
         self.apply(RemoveMarker { owner, id });
     }
 
+    /// Clears the markers of the selected clip under the playhead, or else the sequence's.
+    pub(crate) fn clear_all_markers(&mut self) {
+        let (owner, _) = self.marker_target();
+        self.apply(ClearMarkers { owner });
+    }
+
+    pub(crate) fn has_markers(&self) -> bool {
+        !self.markers_of(self.marker_target().0).is_empty()
+    }
+
     /// Moves the program playhead to the next sequence marker, or the previous one.
     pub(crate) fn jump_to_marker(&mut self, forward: bool) {
         let sequence = self.timeline.sequence();
@@ -80,71 +89,74 @@ impl Editor {
 
 pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     let sequence = editor.timeline.sequence();
-    let (timebase, rate) = (sequence.timebase, sequence.format.frame_rate);
+    let (timebase, rate, display) = (
+        sequence.timebase,
+        sequence.format.frame_rate,
+        sequence.time_display,
+    );
+    let start = sequence.start_time;
     let Some((owner, marker)) = &mut editor.marker_dialog else {
         return;
     };
     let mut choice = None;
-    egui::Window::new("Marker")
-        .collapsible(false)
-        .resizable(false)
-        .show(ctx, |ui| {
-            egui::Grid::new("marker_fields")
-                .num_columns(2)
-                .show(ui, |ui| {
-                    ui.label("Name");
-                    let name = ui.text_edit_singleline(&mut marker.name);
-                    if ui.memory(|memory| memory.focused().is_none()) {
-                        name.request_focus();
-                    }
+    let mut writing_comment = false;
+    crate::dialog::window(ctx, "Marker").show(ctx, |ui| {
+        egui::Grid::new("marker_fields")
+            .num_columns(2)
+            .show(ui, |ui| {
+                ui.label("Name");
+                let name = ui.text_edit_singleline(&mut marker.name);
+                if ui.memory(|memory| memory.focused().is_none()) {
+                    name.request_focus();
+                }
+                ui.end_row();
+                let (label, shown) = match owner {
+                    MarkerOwner::Sequence => ("Time", marker.at + start),
+                    MarkerOwner::Clip(_) => ("Source Time", marker.at),
+                };
+                ui.label(label);
+                ui.monospace(Timecode::shown(shown, timebase, rate, display).to_string());
+                ui.end_row();
+                ui.label("Duration");
+                let mut frames = rate.frame_at(marker.duration, timebase).max(0);
+                let duration =
+                    crate::timecode_field::frames(&mut frames, (timebase, rate, display))
+                        .range(0..=i64::MAX);
+                if ui.add(duration).changed() {
+                    marker.duration = rate.frame_start(frames, timebase);
+                }
+                ui.end_row();
+                ui.label("Type");
+                kind_picker(ui, &mut marker.kind);
+                ui.end_row();
+                if let MarkerKind::WebLink { url } = &mut marker.kind {
+                    ui.label("URL");
+                    ui.text_edit_singleline(url);
                     ui.end_row();
-                    ui.label(match owner {
-                        MarkerOwner::Sequence => "Time",
-                        MarkerOwner::Clip(_) => "Source Time",
-                    });
-                    ui.monospace(Timecode::new(marker.at, timebase, rate).to_string());
-                    ui.end_row();
-                    ui.label("Duration");
-                    let mut frames = rate.frame_at(marker.duration, timebase).max(0);
-                    let duration = egui::DragValue::new(&mut frames)
-                        .range(0..=i64::MAX)
-                        .speed(0.5)
-                        .custom_formatter(|frames, _| {
-                            let ticks = rate.frame_start(frames as i64, timebase);
-                            Timecode::new(ticks, timebase, rate).to_string()
-                        });
-                    if ui.add(duration).changed() {
-                        marker.duration = rate.frame_start(frames, timebase);
-                    }
-                    ui.end_row();
-                    ui.label("Type");
-                    kind_picker(ui, &mut marker.kind);
-                    ui.end_row();
-                    if let MarkerKind::WebLink { url } = &mut marker.kind {
-                        ui.label("URL");
-                        ui.text_edit_singleline(url);
-                        ui.end_row();
-                    }
-                    ui.label("Color");
-                    color_picker(ui, &mut marker.color);
-                    ui.end_row();
-                    ui.label("Comments");
+                }
+                ui.label("Color");
+                color_picker(ui, &mut marker.color);
+                ui.end_row();
+                ui.label("Comments");
+                let comment =
                     ui.add(egui::TextEdit::multiline(&mut marker.comment).desired_rows(3));
-                    ui.end_row();
-                });
-            ui.horizontal(|ui| {
-                if ui.button("OK").clicked() {
-                    choice = Some(Choice::Apply);
-                }
-                if ui.button("Delete").clicked() {
-                    choice = Some(Choice::Delete);
-                }
-                if ui.button("Cancel").clicked() || ui.input(|input| input.key_pressed(Key::Escape))
-                {
-                    choice = Some(Choice::Cancel);
-                }
+                writing_comment = comment.has_focus();
+                ui.end_row();
             });
+        crate::dialog::footer(ui, |ui| {
+            if ui.button("Cancel").clicked() || ui.input(|input| input.key_pressed(Key::Escape)) {
+                choice = Some(Choice::Cancel);
+            }
+            if ui.button("Delete").clicked() {
+                choice = Some(Choice::Delete);
+            }
+            // Enter starts a new line of comments rather than closing the dialog.
+            let enter = !writing_comment && ui.input(|input| input.key_pressed(Key::Enter));
+            if ui.add(crate::dialog::primary("OK")).clicked() || enter {
+                choice = Some(Choice::Apply);
+            }
         });
+    });
     let Some(choice) = choice else {
         return;
     };
@@ -216,14 +228,18 @@ pub fn menu(editor: &mut Editor, ui: &mut egui::Ui) {
     if ui.add(add).clicked() {
         editor.add_marker();
     }
+    let sequence = editor.timeline.sequence();
+    let playhead = editor.playhead();
+    let has_next = sequence.marker_after(playhead).is_some();
+    let has_previous = sequence.marker_before(playhead).is_some();
     let next = egui::Button::new("Go to Next Marker")
         .shortcut_text(editor.keymap.label(Command::NextMarker));
-    if ui.add(next).clicked() {
+    if ui.add_enabled(has_next, next).clicked() {
         editor.jump_to_marker(true);
     }
     let previous = egui::Button::new("Go to Previous Marker")
         .shortcut_text(editor.keymap.label(Command::PreviousMarker));
-    if ui.add(previous).clicked() {
+    if ui.add_enabled(has_previous, previous).clicked() {
         editor.jump_to_marker(false);
     }
     let here = editor.marker_at_playhead();
@@ -241,5 +257,26 @@ pub fn menu(editor: &mut Editor, ui: &mut egui::Ui) {
         if let Some(id) = here {
             editor.clear_marker(id);
         }
+    }
+    let clear_all = egui::Button::new("Clear All Markers")
+        .shortcut_text(editor.keymap.label(Command::ClearAllMarkers));
+    if ui.add_enabled(editor.has_markers(), clear_all).clicked() {
+        editor.clear_all_markers();
+    }
+    if ui
+        .button("Add Markers at Beats…")
+        .on_hover_text("Mark the beats of the selected music")
+        .clicked()
+    {
+        editor.open_beat_markers();
+    }
+    ui.separator();
+    let mut ripple = editor.timeline.sequence().ripple_markers;
+    if ui
+        .checkbox(&mut ripple, "Ripple Sequence Markers")
+        .on_hover_text("Markers move with what insert and ripple edits move")
+        .clicked()
+    {
+        editor.apply_levels(SetRippleMarkers { ripple });
     }
 }

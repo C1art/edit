@@ -3,7 +3,7 @@ use std::sync::Arc;
 use eframe::egui_wgpu::RenderState;
 use egui::{Align2, Color32, FontId, Rect, Vec2};
 use playback::FrameProbe;
-use timeline::{Ticks, Timecode};
+use timeline::Ticks;
 
 use crate::monitor::Monitor;
 use crate::timeline_view::TrimView;
@@ -51,6 +51,10 @@ impl TrimMonitor {
                 }
             }
         }
+        for monitor in &mut self.sides {
+            // A frame that can't be shown leaves the last one, as when presenting.
+            let _ = monitor.catch_up(ui.ctx());
+        }
         ui.ctx().request_repaint();
         let painter = ui.painter_at(area);
         painter.rect_filled(area, 0.0, Color32::BLACK);
@@ -65,12 +69,12 @@ impl TrimMonitor {
             painter.text(
                 cell.center_bottom() - Vec2::new(0.0, 6.0),
                 Align2::CENTER_BOTTOM,
-                Timecode::new(time, timebase, rate).to_string(),
+                view.sequence.timecode_at(time).to_string(),
                 FontId::monospace(12.0),
                 Color32::WHITE,
             );
         }
-        let frames = rate.frame_at(view.delta, timebase);
+        let frames = rate.frames_in(view.delta, timebase);
         painter.text(
             area.center_top() + Vec2::new(0.0, 6.0),
             Align2::CENTER_TOP,

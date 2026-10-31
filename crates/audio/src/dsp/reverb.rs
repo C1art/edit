@@ -22,8 +22,8 @@ struct Comb {
 impl Comb {
     fn process(&mut self, input: f32, feedback: f32, damping: f32) -> f32 {
         let output = self.line[self.index];
-        self.damped = output * (1.0 - damping) + self.damped * damping;
-        self.line[self.index] = input + self.damped * feedback;
+        self.damped = super::flush(output * (1.0 - damping) + self.damped * damping);
+        self.line[self.index] = super::flush(input + self.damped * feedback);
         self.index = (self.index + 1) % self.line.len();
         output
     }
@@ -38,7 +38,7 @@ struct Allpass {
 impl Allpass {
     fn process(&mut self, input: f32) -> f32 {
         let delayed = self.line[self.index];
-        self.line[self.index] = input + delayed * 0.5;
+        self.line[self.index] = super::flush(input + delayed * 0.5);
         self.index = (self.index + 1) % self.line.len();
         delayed - input
     }

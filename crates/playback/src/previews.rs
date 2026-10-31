@@ -31,7 +31,9 @@ impl PreviewPictures {
         let mut track = Track::default();
         for (index, preview) in (1..).zip(previews) {
             let duration = preview.range.end - preview.range.start;
-            sequence.media.push(MediaItem {
+            Arc::make_mut(&mut sequence.media).push(MediaItem {
+                poster: None,
+                transcript: None,
                 id: SourceId(index),
                 name: String::new(),
                 path: preview.path.clone(),
@@ -45,11 +47,16 @@ impl PreviewPictures {
                 subclip: None,
                 interpreted_rate: None,
                 interpreted_aspect: None,
+                interpreted_color: None,
+                interpreted_fields: None,
                 alpha: Default::default(),
                 log: Default::default(),
                 offline: false,
                 still: false,
                 channel_map: None,
+                placed: None,
+                frame_fit: None,
+                timecode: None,
             });
             let clip = Clip::new(
                 ClipId(index),
@@ -58,7 +65,7 @@ impl PreviewPictures {
                 duration,
                 Ticks::ZERO,
             );
-            track.clips.push(clip);
+            track.clips.push(clip.into());
         }
         track.clips.sort_by_key(|clip| clip.start);
         sequence.video.push(track);
@@ -90,6 +97,21 @@ impl PreviewPictures {
         );
         warnings.is_empty().then_some(layers)
     }
+}
+
+/// The preview's picture where one covers `pts`. A preview that can't be read is
+/// dropped, and the sequence composed from then on.
+pub(crate) fn previewed(
+    previews: &mut Option<PreviewPictures>,
+    pts: Ticks,
+    resolution: Resolution,
+) -> Option<Vec<Layer>> {
+    let pictures = previews.as_mut().filter(|previews| previews.covers(pts))?;
+    let layers = pictures.layers_at(pts, resolution);
+    if layers.is_none() {
+        *previews = None;
+    }
+    layers
 }
 
 /// The previews to play, shared between the player and its video worker.

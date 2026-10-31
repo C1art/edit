@@ -1,9 +1,10 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use crate::edit::ops;
 use crate::{
-    Edit, FrameRate, MediaItem, Sequence, SourceId, Ticks, TimelineError, Track, TrackKind,
-    TrackRef, VideoFormat,
+    Edit, FrameFit, FrameRate, MediaItem, Sequence, SourceId, Ticks, TimeDisplay, TimelineError,
+    Track, TrackKind, TrackRef, VideoFormat,
 };
 
 /// Adds a track above the existing ones of its kind.
@@ -39,12 +40,62 @@ impl Edit for RemoveTrack {
         match tracks.get(self.track.index) {
             Some(track) if track.locked => Err(TimelineError::TrackLocked(self.track)),
             Some(_) => {
-                tracks.remove(self.track.index);
+                remove_track(sequence, self.track);
                 Ok(())
             }
             None => Err(TimelineError::TrackNotFound(self.track)),
         }
     }
+}
+
+/// Deletes the tracks of `kinds` without clips, keeping the lowest of each kind when all
+/// are empty so there is still somewhere to edit into. Locked tracks stay.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeleteEmptyTracks {
+    pub kinds: Vec<TrackKind>,
+}
+
+impl Edit for DeleteEmptyTracks {
+    fn name(&self) -> &'static str {
+        "Delete Tracks"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let mut deleted = 0;
+        for &kind in &self.kinds {
+            let tracks = sequence.tracks_of(kind);
+            let all_empty = tracks.iter().all(|track| track.clips.is_empty());
+            let empty: Vec<usize> = tracks
+                .iter()
+                .enumerate()
+                .skip(usize::from(all_empty))
+                .filter(|(_, track)| track.clips.is_empty() && !track.locked)
+                .map(|(index, _)| index)
+                .collect();
+            for &index in empty.iter().rev() {
+                remove_track(sequence, TrackRef { kind, index });
+            }
+            deleted += empty.len();
+        }
+        if deleted == 0 {
+            return Err(TimelineError::NothingToEdit);
+        }
+        Ok(())
+    }
+}
+
+/// Removes a track, keeping effects that read other video tracks on the ones they read.
+fn remove_track(sequence: &mut Sequence, track: TrackRef) {
+    sequence.tracks_of_mut(track.kind).remove(track.index);
+    if track.kind != TrackKind::Video {
+        return;
+    }
+    let removed = track.index;
+    super::add_tracks::renumber_layers(sequence, |layer| match layer {
+        layer if layer == removed => None,
+        layer if layer > removed => Some(layer - 1),
+        layer => Some(layer),
+    });
 }
 
 /// Names a track, or clears its name when `name` is none or blank.
@@ -132,6 +183,12 @@ pub struct ImportMedia {
     pub still: bool,
     /// The frame rate to play the file at instead of its own, as Interpret Footage sets.
     pub interpreted_rate: Option<FrameRate>,
+    /// How long an edit places of a still when nothing is marked, instead of the standard.
+    pub placed: Option<Ticks>,
+    /// How clips of the pictures are scaled to the sequence frame when placed.
+    pub frame_fit: Option<FrameFit>,
+    /// The file's start timecode, in frames at its rate.
+    pub timecode: Option<i64>,
 }
 
 impl Edit for ImportMedia {
@@ -144,7 +201,7 @@ impl Edit for ImportMedia {
             return Err(TimelineError::NonPositiveDuration);
         }
         let id = SourceId(sequence.ids.next());
-        sequence.media.push(MediaItem {
+        Arc::make_mut(&mut sequence.media).push(MediaItem {
             id,
             name: self.name.clone(),
             path: self.path.clone(),
@@ -158,17 +215,25 @@ impl Edit for ImportMedia {
             subclip: None,
             interpreted_rate: self.interpreted_rate,
             interpreted_aspect: None,
+            interpreted_color: None,
+            interpreted_fields: None,
             alpha: Default::default(),
             log: Default::default(),
             offline: false,
             still: self.still,
             channel_map: None,
+            placed: self.placed,
+            frame_fit: self.frame_fit,
+            timecode: self.timecode,
+            poster: None,
+            transcript: None,
         });
         Ok(())
     }
 }
 
-/// Removes an item from the media pool; refused while clips use it.
+/// Removes an item from the media pool and every clip of it, in nested sequences too.
+/// Refused while clips rendered and replaced from it keep it to restore their original.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoveMedia {
     pub source: SourceId,
@@ -176,20 +241,39 @@ pub struct RemoveMedia {
 
 impl Edit for RemoveMedia {
     fn name(&self) -> &'static str {
-        "Clear Media"
+        "Remove from Project"
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
-        let in_use = sequence
-            .all_clips()
-            .any(|clip| clip.source == self.source || clip.unrendered == Some(self.source));
-        if in_use {
-            return Err(TimelineError::MediaInUse(self.source));
+        let source = self.source;
+        if sequence.media_item(source).is_none() {
+            return Err(TimelineError::MediaNotFound(source));
         }
-        let count = sequence.media.len();
-        sequence.media.retain(|item| item.id != self.source);
-        if sequence.media.len() == count {
-            return Err(TimelineError::MediaNotFound(self.source));
+        if sequence
+            .all_clips()
+            .any(|clip| clip.unrendered == Some(source))
+        {
+            return Err(TimelineError::MediaInUse(source));
+        }
+        for (_, track) in sequence.tracks_mut() {
+            track.clips.retain(|clip| clip.source != source);
+        }
+        let mut emptied = Vec::new();
+        for item in Arc::make_mut(&mut sequence.media) {
+            let Some(nest) = &mut item.nest else {
+                continue;
+            };
+            for track in nest.video.iter_mut().chain(&mut nest.audio) {
+                let count = track.clips.len();
+                track.clips.retain(|clip| clip.source != source);
+                if track.clips.len() != count && !emptied.contains(&item.id) {
+                    emptied.push(item.id);
+                }
+            }
+        }
+        Arc::make_mut(&mut sequence.media).retain(|item| item.id != source);
+        for nest in emptied {
+            sequence.fit_nest(nest);
         }
         Ok(())
     }
@@ -208,8 +292,7 @@ impl Edit for SetProxy {
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
-        let item = sequence
-            .media
+        let item = Arc::make_mut(&mut sequence.media)
             .iter_mut()
             .find(|item| item.id == self.source)
             .ok_or(TimelineError::MediaNotFound(self.source))?;
@@ -236,6 +319,69 @@ impl Edit for SetSequenceFormat {
             return Err(TimelineError::NothingToEdit);
         }
         sequence.format = self.format;
+        Ok(())
+    }
+}
+
+/// Changes how the sequence shows times.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetTimeDisplay {
+    pub display: TimeDisplay,
+}
+
+impl Edit for SetTimeDisplay {
+    fn name(&self) -> &'static str {
+        "Display Format"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        if sequence.time_display == self.display {
+            return Err(TimelineError::NothingToEdit);
+        }
+        sequence.time_display = self.display;
+        Ok(())
+    }
+}
+
+/// Sets the timecode the sequence's first frame shows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetStartTime {
+    pub start: Ticks,
+}
+
+impl Edit for SetStartTime {
+    fn name(&self) -> &'static str {
+        "Start Time"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let rate = sequence.format.frame_rate;
+        let frame = rate.frame_at(self.start.max(Ticks::ZERO), sequence.timebase);
+        let start = rate.frame_start(frame, sequence.timebase);
+        if sequence.start_time == start {
+            return Err(TimelineError::NothingToEdit);
+        }
+        sequence.start_time = start;
+        Ok(())
+    }
+}
+
+/// Sets whether the sequence's markers move with insert and ripple edits.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetRippleMarkers {
+    pub ripple: bool,
+}
+
+impl Edit for SetRippleMarkers {
+    fn name(&self) -> &'static str {
+        "Ripple Sequence Markers"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        if sequence.ripple_markers == self.ripple {
+            return Err(TimelineError::NothingToEdit);
+        }
+        sequence.ripple_markers = self.ripple;
         Ok(())
     }
 }

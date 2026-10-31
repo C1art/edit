@@ -1,12 +1,10 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use audio::AudioOutput;
 use eframe::egui_wgpu::RenderState;
-use timeline::{
-    Clipboard, Edit, Marker, Sequence, SetProxy, SetSequenceFormat, SourceId, Ticks, Timebase,
-    Timeline, TimelineError, VideoFormat,
-};
+use timeline::{Clipboard, Marker, Sequence, SourceId, Ticks, Timebase, Timeline, VideoFormat};
 
 use crate::autosave::Autosave;
 use crate::captions::CaptionPanel;
@@ -19,13 +17,16 @@ use crate::mixer::Mixer;
 use crate::monitors::Focus;
 use crate::nesting::Level;
 use crate::panels::MediaTab;
+use crate::path_dialog::FolderUse;
 use crate::project_files::{is_project, is_subrip, is_xml, AfterDiscard, PathPrompt};
 use crate::project_store::{ProjectStore, Setting};
 use crate::proxies::ProxyMaker;
+use crate::recent_projects::RecentProjects;
 use crate::source::SourceMonitor;
 use crate::timeline_view::TimelineView;
 use crate::trim_monitor::TrimMonitor;
 use crate::viewer::Viewer;
+use crate::window_state::WindowState;
 
 /// Notices kept for display; older ones are dropped.
 const MAX_NOTICES: usize = 8;
@@ -33,17 +34,42 @@ const MAX_NOTICES: usize = 8;
 pub struct Editor {
     pub(crate) timeline: Timeline,
     pub(crate) audio: Option<AudioOutput>,
+    pub(crate) audio_switch: crate::audio_switch::AudioSwitch,
     pub(crate) render_state: Option<RenderState>,
     pub(crate) importer: Option<Importer>,
     pub(crate) proxies: Option<ProxyMaker>,
+    pub(crate) proxy_offer: crate::proxy_offer::ProxyOffer,
+    pub(crate) voiceover: crate::voiceover::Voiceover,
     pub(crate) offline: Option<crate::offline::OfflineMedia>,
     pub(crate) render_previews: Option<crate::render_previews::RenderPreviews>,
     pub(crate) render_replace: Option<crate::render_replace::RenderReplace>,
+    /// Where the edits of the mouse press held in a side panel began, and the revision
+    /// they left.
+    pub(crate) press_mark: Option<(u64, u64)>,
+    /// The same for the files of an import still arriving.
+    pub(crate) import_mark: Option<(u64, u64)>,
     pub(crate) clip_art: ClipArt,
     /// Whether the monitors play proxies where media has them.
     pub(crate) use_proxies: bool,
+    /// Whether dragging the playhead and stepping frames sound the audio there.
+    pub(crate) scrub_audio: bool,
+    pub(crate) selection_follows_playhead: bool,
+    /// Where the playhead was when the selection last followed it.
+    pub(crate) selection_followed: Option<Ticks>,
     /// Outlines the action and title safe areas over the program picture.
     pub(crate) safe_margins: bool,
+    pub(crate) transparency_grid: bool,
+    pub(crate) guide_view: crate::guides::GuideView,
+    pub(crate) ganged: bool,
+    pub(crate) gang: Option<crate::gang::Gang>,
+    /// Items waiting on their files to say how many channels to break out.
+    pub(crate) breakouts: Vec<timeline::SourceId>,
+    pub(crate) clip_sync: Option<crate::clip_sync::ClipSyncJob>,
+    pub(crate) dropped_frame_indicator: bool,
+    pub(crate) full_screen: bool,
+    pub(crate) transition_defaults: crate::transition_defaults::TransitionDefaults,
+    pub(crate) still_length: crate::still_length::StillLength,
+    pub(crate) media_scaling: crate::media_scaling::MediaScaling,
     pub(crate) program_zoom: crate::program_zoom::ProgramZoom,
     /// Whether the program monitor shows every camera of the multi-camera clips beside
     /// the program, and where it puts them while it does.
@@ -53,10 +79,14 @@ pub struct Editor {
     pub(crate) scene_job: Option<crate::scene_edits::SceneJob>,
     pub(crate) still_job: Option<playback::StillJob>,
     pub(crate) motion_job: Option<crate::motion_analysis::MotionJob>,
+    /// Clips waiting for their motion to be analyzed after the running one.
+    pub(crate) motion_queue: std::collections::VecDeque<timeline::ClipId>,
+    pub(crate) reframe_jobs: crate::reframe_analysis::ReframeJobs,
     pub(crate) tone_analysis: Option<crate::color_match::ToneAnalysis>,
     pub(crate) mask_track_job: Option<crate::mask_tracking::MaskTrackJob>,
     pub(crate) hardware_decoding: bool,
     pub(crate) source: Option<SourceMonitor>,
+    pub(crate) left_sources: HashMap<SourceId, crate::source::LeftAt>,
     pub(crate) program: Option<Viewer>,
     /// Shown in place of the program picture while an edit is dragged; made on first use.
     pub(crate) trim_monitor: Option<TrimMonitor>,
@@ -64,14 +94,18 @@ pub struct Editor {
     pub(crate) comparison: Option<crate::comparison::Comparison>,
     /// The timeline revision the program viewer is playing.
     pub(crate) shown_revision: u64,
+    pub(crate) track_order: crate::track_follow::TrackOrder,
     pub(crate) focus: Focus,
     pub(crate) view: TimelineView,
     pub(crate) mixer: Mixer,
+    pub(crate) master_meter: crate::audio_meters::MasterMeter,
     pub(crate) effects: EffectControls,
     pub(crate) essential_sound: crate::essential_sound::EssentialSound,
     pub(crate) captions: CaptionPanel,
     pub(crate) side_tab: SideTab,
     pub(crate) media_tab: MediaTab,
+    pub(crate) ui_mode: crate::ui_mode::UiMode,
+    pub(crate) media_browser: crate::media_browser::MediaBrowser,
     pub(crate) effects_search: String,
     /// The history step last scrolled into view, so the list follows new edits only.
     pub(crate) history_scrolled: Option<usize>,
@@ -80,10 +114,28 @@ pub struct Editor {
     pub(crate) metadata: crate::metadata_panel::MetadataPanel,
     pub(crate) gain_dialog: Option<crate::gain_dialog::GainDialog>,
     pub(crate) duck_dialog: Option<crate::duck_dialog::DuckDialog>,
+    pub(crate) pauses_dialog: Option<crate::pauses_dialog::PausesDialog>,
+    pub(crate) transcribe_dialog: Option<crate::transcribe::TranscribeDialog>,
+    pub(crate) transcribing: Option<crate::transcribe::Transcribing>,
+    pub(crate) text_panel: crate::transcribe::TextPanel,
+    /// The Whisper model and language last transcribed with.
+    pub(crate) speech_choice: (speech::Model, Option<String>),
+    pub(crate) vst: crate::vst::PluginHost,
+    pub(crate) beats_dialog: Option<crate::beats_dialog::BeatsDialog>,
+    pub(crate) remix_dialog: Option<crate::remix_dialog::RemixDialog>,
+    pub(crate) transition_duration_dialog:
+        Option<crate::transition_duration_dialog::TransitionDurationDialog>,
     pub(crate) interpret_dialog: Option<crate::interpret_dialog::InterpretDialog>,
     pub(crate) channels_dialog: Option<crate::channels_dialog::ChannelsDialog>,
+    pub(crate) timecode_dialog: Option<crate::timecode_dialog::TimecodeDialog>,
+    pub(crate) subclip_dialog: Option<crate::subclip_dialog::SubclipDialog>,
+    pub(crate) find: crate::find_dialog::FindDialog,
     pub(crate) project_manager: Option<crate::project_manager::ProjectManager>,
     pub(crate) sequence_settings: Option<crate::sequence_settings::SequenceSettings>,
+    pub(crate) automate_dialog: Option<crate::automate_dialog::AutomateDialog>,
+    pub(crate) simplify_dialog: Option<timeline::SimplifySequence>,
+    pub(crate) add_tracks_dialog: Option<crate::add_tracks_dialog::AddTracksDialog>,
+    pub(crate) reframe_dialog: Option<crate::reframe_dialog::ReframeDialog>,
     /// An edit from the source waiting on how to fit its clip to the sequence marks.
     pub(crate) fit_clip: Option<timeline::PlaceMode>,
     pub(crate) attributes_dialog: Option<crate::attributes_dialog::AttributesDialog>,
@@ -94,44 +146,71 @@ pub struct Editor {
     /// A copy of the marker being edited, while the marker dialog is showing.
     pub(crate) marker_dialog: Option<(timeline::MarkerOwner, Marker)>,
     pub(crate) path_prompt: Option<PathPrompt>,
+    pub(crate) browse_folders: HashMap<FolderUse, PathBuf>,
+    pub(crate) recent_projects: RecentProjects,
+    pub(crate) window: WindowState,
     pub(crate) store: Option<ProjectStore>,
+    /// What was last read or written, or nothing before the first frame.
+    pub(crate) saved_preferences: Option<crate::preferences::Preferences>,
     /// Where the project was last saved or opened from.
     pub(crate) project_path: Option<PathBuf>,
+    pub(crate) recovery: crate::recovery::Recovery,
     /// The timeline revision on disk; any other means unsaved changes.
     pub(crate) saved_revision: u64,
+    /// Counts the projects opened, so work started for an earlier one is ignored.
+    pub(crate) project_generation: u64,
     pub(crate) confirm_discard: Option<AfterDiscard>,
+    pub(crate) opening: crate::project_open::Opening,
+    pub(crate) confirm_revert: bool,
     /// Runs once the save in progress succeeds.
     pub(crate) after_save: Option<AfterDiscard>,
+    /// Where the newest save still running is writing, so Save during a Save As goes to
+    /// the new file rather than the one the project is still named after.
+    pub(crate) saving_to: Option<PathBuf>,
     /// Set once the user chose to close, so the close request isn't questioned again.
     pub(crate) quitting: bool,
+    pub(crate) exports_on_quit: crate::quit_exports::ExportsOnQuit,
     pub(crate) autosave: Autosave,
     pub(crate) window_title: String,
     pub(crate) ctx: egui::Context,
     pub(crate) export: Option<ExportDialog>,
+    pub(crate) quick_export: Option<crate::quick_export::QuickExport>,
     pub(crate) export_queue: crate::export_queue::ExportQueue,
     /// The sequences left to reach the open nest, outermost first.
     pub(crate) nest_trail: Vec<Level>,
     pub(crate) sequence_tabs: Vec<crate::sequence_tabs::SequenceTab>,
+    /// Messages not yet handed to `notifications`.
     pub(crate) notices: Vec<String>,
+    pub(crate) notifications: crate::notifications::Notifications,
     pub(crate) keymap: crate::keymap::Keymap,
     pub(crate) keymap_window: Option<crate::keymap::KeymapWindow>,
     pub(crate) presets: Vec<timeline::EffectPreset>,
     pub(crate) preset_dialog: Option<crate::effect_presets::PresetDialog>,
+    pub(crate) title_templates: Vec<timeline::TitleTemplate>,
+    pub(crate) template_dialog: Option<crate::title_templates::TemplateDialog>,
+    pub(crate) graphics: crate::title_templates::GraphicsBrowser,
+    pub(crate) essential_keys: crate::essential_keys::EssentialKeys,
+    pub(crate) text_styles: std::sync::Arc<Vec<timeline::TextStyle>>,
+    pub(crate) text_style_dialog: Option<crate::text_styles::StyleDialog>,
     pub(crate) workspaces: crate::workspaces::Workspaces,
     pub(crate) naming_workspace: Option<crate::workspaces::NamingWorkspace>,
     pub(crate) typing: Option<crate::graphics_tools::Typing>,
 }
 
 impl Editor {
-    pub fn new(creation_context: &eframe::CreationContext<'_>, initial: Vec<PathBuf>) -> Self {
+    pub fn new(
+        creation_context: &eframe::CreationContext<'_>,
+        initial: Vec<PathBuf>,
+        window: WindowState,
+    ) -> Self {
+        crate::theme::apply(&creation_context.egui_ctx);
         let mut notices = Vec::new();
-        let audio = AudioOutput::open_default()
-            .map_err(|error| notices.push(format!("Audio disabled: {error}")))
-            .ok();
         let render_state = creation_context.wgpu_render_state.clone();
         if render_state.is_none() {
             notices.push("Video disabled: the window has no wgpu renderer".to_owned());
         }
+        // Before anything decodes, so decoders open on the adapter that draws.
+        crate::gpu_setup::decode_where_drawn(render_state.as_ref());
         let timeline = Timeline::new(Sequence::with_default_tracks(
             Timebase::HZ_90K,
             VideoFormat::default(),
@@ -160,31 +239,54 @@ impl Editor {
             .map_err(|error| notices.push(format!("Saving disabled: {error}")))
             .ok();
         if let Some(store) = &mut store {
-            store.read_setting(Setting::Keymap);
-            store.read_setting(Setting::Presets);
-            store.read_setting(Setting::Workspaces);
+            Setting::READ_AT_START
+                .into_iter()
+                .for_each(|setting| store.read_setting(setting));
+            store.find_recoverable();
         }
         let program = Viewer::new(
             Arc::new(timeline.sequence().clone()),
-            audio.as_ref(),
+            None,
             render_state.as_ref(),
         )
         .map_err(|error| notices.push(format!("Playback disabled: {error}")))
         .ok();
         let mut editor = Self {
             shown_revision: timeline.revision(),
+            track_order: Default::default(),
+            recovery: Default::default(),
             saved_revision: timeline.revision(),
+            project_generation: 0,
             timeline,
-            audio,
+            audio: None,
+            audio_switch: Default::default(),
             render_state,
             importer,
             proxies,
+            proxy_offer: Default::default(),
+            voiceover: Default::default(),
             offline,
             render_previews,
             render_replace: None,
+            press_mark: None,
+            import_mark: None,
             clip_art,
             use_proxies: false,
+            scrub_audio: true,
+            selection_follows_playhead: false,
+            selection_followed: None,
             safe_margins: false,
+            transparency_grid: false,
+            guide_view: crate::guides::GuideView::default(),
+            ganged: false,
+            gang: None,
+            breakouts: Vec::new(),
+            clip_sync: None,
+            dropped_frame_indicator: false,
+            full_screen: false,
+            transition_defaults: crate::transition_defaults::TransitionDefaults::STANDARD,
+            still_length: crate::still_length::StillLength::STANDARD,
+            media_scaling: crate::media_scaling::MediaScaling::None,
             program_zoom: Default::default(),
             multicam_view: false,
             multicam_layout: None,
@@ -192,21 +294,27 @@ impl Editor {
             scene_job: None,
             still_job: None,
             motion_job: None,
+            motion_queue: Default::default(),
+            reframe_jobs: Default::default(),
             tone_analysis: None,
             mask_track_job: None,
             hardware_decoding: true,
             source: None,
+            left_sources: HashMap::new(),
             program,
             trim_monitor: None,
             comparison: None,
             focus: Focus::Program,
             view: TimelineView::default(),
             mixer: Mixer::default(),
+            master_meter: Default::default(),
             effects: EffectControls::default(),
             essential_sound: Default::default(),
             captions: CaptionPanel::default(),
             side_tab: SideTab::default(),
             media_tab: MediaTab::Project,
+            ui_mode: crate::ui_mode::UiMode::default(),
+            media_browser: Default::default(),
             effects_search: String::new(),
             history_scrolled: None,
             marker_filter: Default::default(),
@@ -214,10 +322,26 @@ impl Editor {
             metadata: Default::default(),
             gain_dialog: None,
             duck_dialog: None,
+            pauses_dialog: None,
+            transcribe_dialog: None,
+            transcribing: None,
+            text_panel: crate::transcribe::TextPanel::default(),
+            speech_choice: (speech::Model::FastEnglish, None),
+            vst: crate::vst::PluginHost::start(),
+            beats_dialog: None,
+            remix_dialog: None,
+            transition_duration_dialog: None,
             interpret_dialog: None,
             channels_dialog: None,
+            timecode_dialog: None,
+            subclip_dialog: None,
+            find: Default::default(),
             project_manager: None,
             sequence_settings: None,
+            automate_dialog: None,
+            simplify_dialog: None,
+            add_tracks_dialog: None,
+            reframe_dialog: None,
             fit_clip: None,
             attributes_dialog: None,
             loudness: None,
@@ -226,19 +350,29 @@ impl Editor {
             clipboard: None,
             marker_dialog: None,
             path_prompt: None,
+            browse_folders: HashMap::new(),
+            recent_projects: RecentProjects::default(),
+            window,
             store,
+            saved_preferences: None,
             project_path: None,
             confirm_discard: None,
+            opening: Default::default(),
+            confirm_revert: false,
             after_save: None,
+            saving_to: None,
             autosave: Autosave::default(),
             quitting: false,
+            exports_on_quit: Default::default(),
             window_title: String::new(),
             ctx: creation_context.egui_ctx.clone(),
             export: None,
+            quick_export: None,
             export_queue: Default::default(),
             nest_trail: Vec::new(),
             sequence_tabs: Vec::new(),
             notices,
+            notifications: Default::default(),
             keymap: Default::default(),
             keymap_window: None,
             presets: Vec::new(),
@@ -246,6 +380,12 @@ impl Editor {
             naming_workspace: None,
             typing: None,
             preset_dialog: None,
+            title_templates: Vec::new(),
+            template_dialog: None,
+            graphics: Default::default(),
+            essential_keys: Default::default(),
+            text_styles: std::sync::Arc::default(),
+            text_style_dialog: None,
         };
         for path in initial {
             editor.open_path(path);
@@ -265,28 +405,6 @@ impl Editor {
         self.notices.drain(..excess);
     }
 
-    pub(crate) fn apply(&mut self, edit: impl Edit) -> bool {
-        match self.timeline.apply(edit) {
-            Ok(()) => true,
-            Err(TimelineError::NothingToEdit) => false,
-            Err(error) => {
-                self.notice(format!("Cannot edit: {error}"));
-                false
-            }
-        }
-    }
-
-    /// Applies an edit that changes only levels, or nothing that plays at all, handing it
-    /// to the program player without the seek a structural edit needs, so playback
-    /// carries on uninterrupted.
-    pub(crate) fn apply_levels(&mut self, edit: impl Edit) {
-        if !self.apply(edit) {
-            return;
-        }
-        self.shown_revision = self.timeline.revision();
-        self.mix_program(self.timeline.sequence().clone());
-    }
-
     /// Opens a project file or imports anything else.
     pub(crate) fn open_path(&mut self, path: PathBuf) {
         if is_project(&path) {
@@ -300,30 +418,17 @@ impl Editor {
         }
     }
 
-    pub(crate) fn open_source(&mut self, id: SourceId) {
-        let Some(item) = self.timeline.sequence().media_item(id).cloned() else {
-            return;
-        };
-        // Drop the old player first so its workers stop feeding the audio output.
-        self.source = None;
-        match SourceMonitor::open(
-            &item,
-            self.timeline.project(),
-            self.audio.as_ref(),
-            self.render_state.as_ref(),
-        ) {
-            Ok(source) => {
-                self.source = Some(source);
-                self.focus = Focus::Source;
-            }
-            Err(error) => self.notice(format!("Cannot open {}: {error}", item.name)),
-        }
-    }
-
     pub(crate) fn playhead(&self) -> Ticks {
         self.program
             .as_ref()
             .map_or(Ticks::ZERO, |program| program.player.position())
+    }
+
+    pub(crate) fn scrub_program(&mut self, position: Ticks) {
+        self.sync_program();
+        if let Some(program) = &mut self.program {
+            program.player.scrub(position);
+        }
     }
 
     pub(crate) fn seek_program(&mut self, position: Ticks) {
@@ -332,147 +437,5 @@ impl Editor {
         if let Some(program) = &mut self.program {
             program.player.seek(position);
         }
-    }
-
-    /// An empty sequence takes on the format of the first video placed in it.
-    pub(crate) fn match_format(&mut self, source: SourceId) {
-        let sequence = self.timeline.sequence();
-        // A nest shares the project's format, which its contents shouldn't decide.
-        if sequence.duration() > Ticks::ZERO || self.timeline.open_nest().is_some() {
-            return;
-        }
-        let Some(format) = sequence
-            .media_item(source)
-            .and_then(|item| item.played_format())
-        else {
-            return;
-        };
-        if format != sequence.format {
-            self.apply(SetSequenceFormat { format });
-        }
-    }
-
-    fn poll_proxies(&mut self, ctx: &egui::Context) {
-        let Some(maker) = &mut self.proxies else {
-            return;
-        };
-        let finished = maker.poll();
-        if maker.is_busy() {
-            ctx.request_repaint();
-        }
-        for (source, result) in finished {
-            match result {
-                Ok(path) => {
-                    self.apply(SetProxy {
-                        source,
-                        proxy: Some(path),
-                    });
-                }
-                Err(error) => self.notice(format!("Cannot create proxy: {error}")),
-            }
-        }
-    }
-
-    fn sync_program(&mut self) {
-        let revision = self.timeline.revision();
-        if revision == self.shown_revision {
-            return;
-        }
-        self.shown_revision = revision;
-        self.prune_nest_trail();
-        self.prune_sequence_tabs();
-        self.view.prune_selection(self.timeline.sequence());
-        if let Some(source) = &mut self.source {
-            let pool = self.timeline.project();
-            if let Some(item) = pool.media_item(source.source) {
-                source.refresh(item, pool);
-            }
-        }
-        self.show_program(self.timeline.sequence().clone());
-    }
-
-    fn update_viewers(&mut self, ctx: &egui::Context) {
-        let mut notices = Vec::new();
-        let viewers = [
-            self.program.as_mut(),
-            self.source.as_mut().map(|source| &mut source.viewer),
-        ];
-        for viewer in viewers.into_iter().flatten() {
-            viewer.player.set_proxies(self.use_proxies);
-        }
-        if let Some(program) = &mut self.program {
-            notices.extend(program.update(ctx));
-        }
-        if let Some(source) = &mut self.source {
-            notices.extend(source.viewer.update(ctx));
-        }
-        for notice in notices {
-            self.notice(notice);
-        }
-    }
-}
-
-impl eframe::App for Editor {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        let ctx = ui.ctx().clone();
-        let dropped: Vec<PathBuf> = ctx.input(|input| {
-            input
-                .raw
-                .dropped_files
-                .iter()
-                .map(|file| file.path().to_owned())
-                .filter(|path| !path.as_os_str().is_empty())
-                .collect()
-        });
-        for path in dropped {
-            self.open_path(path);
-        }
-        self.poll_store();
-        self.autosave_tick();
-        self.poll_imports();
-        self.poll_offline();
-        self.poll_render_previews(&ctx);
-        self.poll_render_replace(&ctx);
-        crate::essential_sound::poll(self, &ctx);
-        self.poll_proxies(&ctx);
-        self.poll_multicam_sync(&ctx);
-        self.poll_scene_edits(&ctx);
-        self.poll_motion_analysis(&ctx);
-        self.poll_tone_analysis(&ctx);
-        self.poll_mask_tracking(&ctx);
-        self.poll_export_frame(&ctx);
-        self.poll_export_queue(&ctx);
-        if self.importer.as_ref().is_some_and(Importer::is_busy) {
-            ctx.request_repaint();
-        }
-        crate::shortcuts::handle(self, &ctx);
-        self.update_window();
-        self.sync_program();
-        self.update_viewers(&ctx);
-
-        self.lay_out_panels(ui);
-
-        crate::path_dialog::path_dialog(self, &ctx);
-        crate::project_files::discard_dialog(self, &ctx);
-        crate::marker_dialog::dialog(self, &ctx);
-        crate::gain_dialog::dialog(self, &ctx);
-        crate::duck_dialog::dialog(self, &ctx);
-        crate::interpret_dialog::dialog(self, &ctx);
-        crate::channels_dialog::dialog(self, &ctx);
-        crate::sequence_settings::dialog(self, &ctx);
-        crate::fit_clip::dialog(self, &ctx);
-        crate::attributes_dialog::dialog(self, &ctx);
-        crate::loudness_window::window(self, &ctx);
-        crate::speed_dialog::dialog(self, &ctx);
-        crate::rename_clip::dialog(self, &ctx);
-        crate::export::dialog(self, &ctx);
-        crate::export_queue::window(self, &ctx);
-        crate::keymap::window(self, &ctx);
-        crate::effect_presets::dialog(self, &ctx);
-        crate::workspaces::dialog(self, &ctx);
-        crate::link_media::dialog(self, &ctx);
-        crate::render_previews::window(self, &ctx);
-        crate::render_replace::window(self, &ctx);
-        crate::project_manager::window(self, &ctx);
     }
 }

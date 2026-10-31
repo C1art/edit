@@ -24,7 +24,7 @@ enum RowAction {
 pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
     let playhead = editor.playhead();
     let filter = &mut editor.marker_filter;
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         for color in MarkerColor::ALL {
             let shown = !filter.hidden.contains(&color);
             let (rect, response) =
@@ -50,10 +50,18 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
             }
         }
     });
-    ui.add(egui::TextEdit::singleline(&mut filter.search).hint_text("Search"));
+    ui.add(
+        egui::TextEdit::singleline(&mut filter.search)
+            .hint_text("Search")
+            .desired_width(f32::INFINITY),
+    );
     let search = filter.search.to_lowercase();
     let sequence = editor.timeline.sequence();
-    let (timebase, rate) = (sequence.timebase, sequence.format.frame_rate);
+    let (timebase, rate, display) = (
+        sequence.timebase,
+        sequence.format.frame_rate,
+        sequence.time_display,
+    );
     let mut action = None;
     egui::ScrollArea::vertical()
         .auto_shrink([false, true])
@@ -76,9 +84,9 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
                         marker_color(marker.color),
                         Stroke::new(1.0, egui::Color32::from_black_alpha(160)),
                     );
-                    let mut timecode = Timecode::new(marker.at, timebase, rate).to_string();
+                    let mut timecode = sequence.timecode_at(marker.at).to_string();
                     if marker.duration > Ticks::ZERO {
-                        let length = Timecode::new(marker.duration, timebase, rate);
+                        let length = Timecode::shown(marker.duration, timebase, rate, display);
                         timecode.push_str(&format!(" · {length}"));
                     }
                     ui.vertical(|ui| {

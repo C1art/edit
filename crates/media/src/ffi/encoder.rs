@@ -4,27 +4,28 @@ use std::ptr::{self, NonNull};
 use ffmpeg_sys_next as sys;
 
 use super::error::check;
+use super::video_encoders::{self, Family};
 use super::{Frame, Packet, Received};
-use crate::{
-    AudioCodec, AudioSettings, DnxhrQuality, EncodeProfile, MediaError, RateControl, VideoCodec,
-    VideoSettings,
-};
+use crate::{AudioCodec, AudioSettings, MediaError, VideoCodec, VideoSettings};
 
 /// The smallest frame DNxHR encodes.
 const DNXHR_SMALLEST: (u32, u32) = (256, 120);
 
-pub(crate) struct Encoder(NonNull<sys::AVCodecContext>);
+pub(crate) struct Encoder {
+    context: NonNull<sys::AVCodecContext>,
+    family: Family,
+}
 
 // SAFETY: the codec context is exclusively owned and only used through `&mut self`.
 unsafe impl Send for Encoder {}
 
 /// An encoder option, owned so values can be formatted.
-type Opt = (&'static CStr, CString);
+pub(super) type Opt = (&'static CStr, CString);
 
 impl Encoder {
-    /// BT.709, through x264, x265 or prores_ks when FFmpeg has them.
+    /// BT.709, through the first encoder for the codec that opens: a GPU encoder when
+    /// `settings` allow one, otherwise software.
     pub(crate) fn video(settings: &VideoSettings, global_header: bool) -> Result<Self, MediaError> {
-        let invalid = || MediaError::InvalidSettings("frame size or rate out of range");
         let (smallest_width, smallest_height) = DNXHR_SMALLEST;
         let too_small = settings.width < smallest_width || settings.height < smallest_height;
         if matches!(settings.codec, VideoCodec::Dnxhr(_)) && too_small {
@@ -32,10 +33,27 @@ impl Encoder {
                 "DNxHR needs a frame at least 256 × 120",
             ));
         }
-        let codec = find_video(settings.codec);
-        let encoder = Self::alloc(codec)?;
+        let mut failure = MediaError::NoEncoder;
+        for candidate in video_encoders::candidates(settings.codec, settings.acceleration) {
+            let opened = Self::alloc(candidate.codec).and_then(|encoder| {
+                let options = encoder.set_video(settings, candidate.family)?;
+                encoder.open(candidate.codec, global_header, &options)
+            });
+            match opened {
+                Ok(mut encoder) => {
+                    encoder.family = candidate.family;
+                    return Ok(encoder);
+                }
+                Err(error) => failure = error,
+            }
+        }
+        Err(failure)
+    }
+
+    fn set_video(&self, settings: &VideoSettings, family: Family) -> Result<Vec<Opt>, MediaError> {
+        let invalid = || MediaError::InvalidSettings("frame size or rate out of range");
         // SAFETY: the context was just allocated and is exclusively owned.
-        let raw = unsafe { &mut *encoder.0.as_ptr() };
+        let raw = unsafe { &mut *self.context.as_ptr() };
         raw.width = i32::try_from(settings.width).map_err(|_| invalid())?;
         raw.height = i32::try_from(settings.height).map_err(|_| invalid())?;
         let rate = settings.frame_rate;
@@ -46,70 +64,21 @@ impl Encoder {
         raw.framerate = sys::AVRational { num, den };
         raw.time_base = sys::AVRational { num: den, den: num };
         raw.sample_aspect_ratio = sys::AVRational { num: 1, den: 1 };
-        raw.pix_fmt = match settings.codec {
-            VideoCodec::H264 | VideoCodec::Hevc => sys::AVPixelFormat::AV_PIX_FMT_YUV420P,
-            VideoCodec::ProRes422 | VideoCodec::ProRes422Hq => {
-                sys::AVPixelFormat::AV_PIX_FMT_YUV422P10LE
-            }
-            VideoCodec::ProRes4444 => sys::AVPixelFormat::AV_PIX_FMT_YUVA444P10LE,
-            VideoCodec::Dnxhr(DnxhrQuality::Lb | DnxhrQuality::Sq | DnxhrQuality::Hq) => {
-                sys::AVPixelFormat::AV_PIX_FMT_YUV422P
-            }
-            VideoCodec::Dnxhr(DnxhrQuality::Hqx) => sys::AVPixelFormat::AV_PIX_FMT_YUV422P10LE,
-            VideoCodec::Dnxhr(DnxhrQuality::Dnx444) => sys::AVPixelFormat::AV_PIX_FMT_YUV444P10LE,
-            VideoCodec::Gif => sys::AVPixelFormat::AV_PIX_FMT_PAL8,
-        };
+        raw.pix_fmt = video_encoders::pixel_format(settings.codec, family);
         raw.colorspace = sys::AVColorSpace::AVCOL_SPC_BT709;
         raw.color_primaries = sys::AVColorPrimaries::AVCOL_PRI_BT709;
         raw.color_trc = sys::AVColorTransferCharacteristic::AVCOL_TRC_BT709;
         raw.color_range = sys::AVColorRange::AVCOL_RANGE_MPEG;
         raw.thread_count = 0;
-        let mut options: Vec<Opt> = Vec::new();
-        if settings.codec.is_rate_controlled() {
-            match settings.rate_control {
-                RateControl::Quality(crf) => options.push((c"crf", number(crf)?)),
-                RateControl::Bitrate(bits) => {
-                    raw.bit_rate = i64::from(bits);
-                    // Peaks may run half again over the average, smoothed over two seconds.
-                    raw.rc_max_rate = raw.bit_rate * 3 / 2;
-                    raw.rc_buffer_size = i32::try_from(raw.bit_rate * 2).unwrap_or(i32::MAX);
-                }
-            }
-        }
-        match (settings.codec, settings.profile) {
-            (VideoCodec::H264, EncodeProfile::Delivery) => {
-                options.push((c"preset", c"medium".to_owned()));
-            }
-            (VideoCodec::H264, EncodeProfile::Editing) => {
-                raw.gop_size = (num / den / 2).max(1);
-                raw.max_b_frames = 0;
-                options.push((c"preset", c"veryfast".to_owned()));
-                options.push((c"tune", c"fastdecode".to_owned()));
-            }
-            (VideoCodec::Hevc, _) => {
-                options.push((c"preset", c"fast".to_owned()));
-                options.push((c"x265-params", c"log-level=error".to_owned()));
-            }
-            (VideoCodec::ProRes422, _) => options.push((c"profile", c"standard".to_owned())),
-            (VideoCodec::ProRes422Hq, _) => options.push((c"profile", c"hq".to_owned())),
-            (VideoCodec::ProRes4444, _) => options.push((c"profile", c"4444".to_owned())),
-            (VideoCodec::Dnxhr(quality), _) => {
-                let profile = match quality {
-                    DnxhrQuality::Lb => c"dnxhr_lb",
-                    DnxhrQuality::Sq => c"dnxhr_sq",
-                    DnxhrQuality::Hq => c"dnxhr_hq",
-                    DnxhrQuality::Hqx => c"dnxhr_hqx",
-                    DnxhrQuality::Dnx444 => c"dnxhr_444",
-                };
-                options.push((c"profile", profile.to_owned()));
-            }
-            (VideoCodec::Gif, _) => {}
-        }
-        if settings.codec.is_prores() {
-            // Apple's vendor code, which some players check before trusting the stream.
-            options.push((c"vendor", c"apl0".to_owned()));
-        }
-        encoder.open(codec, global_header, &options)
+        video_encoders::configure(raw, family, settings)
+    }
+
+    /// What encoded the video, to tell the user, such as "NVIDIA NVENC (hardware)".
+    pub(crate) fn describe(&self) -> String {
+        // SAFETY: an open context points at its static codec description, whose name
+        // is a NUL-terminated string.
+        let name = unsafe { CStr::from_ptr((*self.raw().codec).name) };
+        self.family.describe(name)
     }
 
     /// One RGBA picture through an image codec, such as PNG, whose single packet is the
@@ -122,7 +91,7 @@ impl Encoder {
         let codec = find(None, id);
         let encoder = Self::alloc(codec)?;
         // SAFETY: the context was just allocated and is exclusively owned.
-        let raw = unsafe { &mut *encoder.0.as_ptr() };
+        let raw = unsafe { &mut *encoder.context.as_ptr() };
         raw.width = i32::try_from(width).map_err(|_| invalid())?;
         raw.height = i32::try_from(height).map_err(|_| invalid())?;
         raw.time_base = sys::AVRational { num: 1, den: 1 };
@@ -136,6 +105,7 @@ impl Encoder {
         let (id, name) = match settings.codec {
             AudioCodec::Aac => (sys::AVCodecID::AV_CODEC_ID_AAC, None),
             AudioCodec::Mp3 => (sys::AVCodecID::AV_CODEC_ID_MP3, Some(c"libmp3lame")),
+            AudioCodec::Opus => (sys::AVCodecID::AV_CODEC_ID_OPUS, Some(c"libopus")),
             AudioCodec::Flac => (sys::AVCodecID::AV_CODEC_ID_FLAC, None),
             AudioCodec::Pcm16 => (sys::AVCodecID::AV_CODEC_ID_PCM_S16LE, None),
             AudioCodec::Pcm24 => (sys::AVCodecID::AV_CODEC_ID_PCM_S24LE, None),
@@ -143,19 +113,22 @@ impl Encoder {
         let codec = find(name, id);
         let encoder = Self::alloc(codec)?;
         // SAFETY: the context was just allocated and is exclusively owned; its default
-        // channel layout owns no memory, so overwriting it leaks nothing.
+        // channel layout owns no memory, so overwriting it leaks nothing. `codec` is
+        // valid, as allocating for it succeeded.
         unsafe {
-            let raw = &mut *encoder.0.as_ptr();
+            let raw = &mut *encoder.context.as_ptr();
             raw.sample_rate = i32::try_from(settings.sample_rate).map_err(|_| invalid())?;
             raw.time_base = sys::AVRational {
                 num: 1,
                 den: raw.sample_rate,
             };
-            raw.sample_fmt = match settings.codec {
+            let preferred = match settings.codec {
                 AudioCodec::Aac | AudioCodec::Mp3 => sys::AVSampleFormat::AV_SAMPLE_FMT_FLTP,
+                AudioCodec::Opus => sys::AVSampleFormat::AV_SAMPLE_FMT_FLT,
                 AudioCodec::Flac | AudioCodec::Pcm16 => sys::AVSampleFormat::AV_SAMPLE_FMT_S16,
                 AudioCodec::Pcm24 => sys::AVSampleFormat::AV_SAMPLE_FMT_S32,
             };
+            raw.sample_fmt = sample_format(codec, preferred);
             if settings.codec.is_lossy() {
                 raw.bit_rate = i64::from(settings.bits_per_second);
             }
@@ -169,9 +142,12 @@ impl Encoder {
             return Err(MediaError::NoEncoder);
         }
         // SAFETY: `codec` is a valid encoder; a null return means allocation failed.
-        NonNull::new(unsafe { sys::avcodec_alloc_context3(codec) })
-            .map(Self)
-            .ok_or(MediaError::OutOfMemory)
+        let context = NonNull::new(unsafe { sys::avcodec_alloc_context3(codec) })
+            .ok_or(MediaError::OutOfMemory)?;
+        Ok(Self {
+            context,
+            family: Family::Fixed,
+        })
     }
 
     /// Private options the codec doesn't know are ignored, so the same list can serve
@@ -185,7 +161,7 @@ impl Encoder {
         // SAFETY: the context is allocated for `codec` and exclusively owned; option
         // names and values are NUL-terminated strings that outlive the calls.
         unsafe {
-            let raw = &mut *self.0.as_ptr();
+            let raw = &mut *self.context.as_ptr();
             if global_header {
                 raw.flags |= sys::AV_CODEC_FLAG_GLOBAL_HEADER as i32;
             }
@@ -201,12 +177,13 @@ impl Encoder {
     pub(crate) fn send_frame(&mut self, frame: Option<&Frame>) -> Result<(), MediaError> {
         let raw = frame.map_or(ptr::null(), |frame| ptr::from_ref(frame.raw()));
         // SAFETY: the context is open, and `raw` is null or a valid frame the caller borrows.
-        check(unsafe { sys::avcodec_send_frame(self.0.as_ptr(), raw) }).map(drop)
+        check(unsafe { sys::avcodec_send_frame(self.context.as_ptr(), raw) }).map(drop)
     }
 
     pub(crate) fn receive_packet(&mut self, packet: &mut Packet) -> Result<Received, MediaError> {
         // SAFETY: the context is open and `packet` is a valid, exclusively borrowed packet.
-        let code = unsafe { sys::avcodec_receive_packet(self.0.as_ptr(), packet.as_mut_ptr()) };
+        let code =
+            unsafe { sys::avcodec_receive_packet(self.context.as_ptr(), packet.as_mut_ptr()) };
         match code {
             sys::AVERROR_EOF => Ok(Received::Drained),
             code if code == sys::AVERROR(sys::EAGAIN) => Ok(Received::NeedsInput),
@@ -216,19 +193,33 @@ impl Encoder {
 
     pub(super) fn raw(&self) -> &sys::AVCodecContext {
         // SAFETY: the context is valid for the lifetime of `self`.
-        unsafe { self.0.as_ref() }
+        unsafe { self.context.as_ref() }
     }
 
-    pub(crate) fn timebase(&self) -> sys::AVRational {
+    pub(super) fn timebase(&self) -> sys::AVRational {
         self.raw().time_base
     }
 
-    pub(crate) fn pixel_format(&self) -> sys::AVPixelFormat {
+    pub(crate) fn packet_timebase(&self) -> PacketTimebase {
+        PacketTimebase(self.timebase())
+    }
+
+    pub(super) fn pixel_format(&self) -> sys::AVPixelFormat {
         self.raw().pix_fmt
     }
 
-    pub(crate) fn sample_format(&self) -> sys::AVSampleFormat {
-        self.raw().sample_fmt
+    /// A blank picture of `size` in the format this encoder takes.
+    pub(crate) fn video_frame(&self, size: (u32, u32)) -> Result<Frame, MediaError> {
+        Frame::for_video(size, self.pixel_format())
+    }
+
+    /// A blank block of `samples` in the format this encoder takes.
+    pub(crate) fn audio_frame(
+        &self,
+        sample_rate: u32,
+        samples: usize,
+    ) -> Result<Frame, MediaError> {
+        Frame::for_audio(sample_rate, samples, self.raw().sample_fmt)
     }
 
     /// Samples per audio frame; `None` when the encoder takes any size.
@@ -241,25 +232,88 @@ impl Encoder {
 
 impl Drop for Encoder {
     fn drop(&mut self) {
-        let mut raw = self.0.as_ptr();
+        let mut raw = self.context.as_ptr();
         // SAFETY: the context came from avcodec_alloc_context3 and is freed exactly once here.
         unsafe { sys::avcodec_free_context(&mut raw) };
     }
 }
 
-fn find_video(codec: VideoCodec) -> *const sys::AVCodec {
-    match codec {
-        VideoCodec::H264 => find(Some(c"libx264"), sys::AVCodecID::AV_CODEC_ID_H264),
-        VideoCodec::Hevc => find(Some(c"libx265"), sys::AVCodecID::AV_CODEC_ID_HEVC),
-        VideoCodec::ProRes422 | VideoCodec::ProRes422Hq | VideoCodec::ProRes4444 => {
-            find(Some(c"prores_ks"), sys::AVCodecID::AV_CODEC_ID_PRORES)
-        }
-        VideoCodec::Dnxhr(_) => find(None, sys::AVCodecID::AV_CODEC_ID_DNXHD),
-        VideoCodec::Gif => find(None, sys::AVCodecID::AV_CODEC_ID_GIF),
+/// The encoder called `name`, or FFmpeg's default for `id` when it lacks that one.
+/// `preferred` when `codec` takes it, as the encoder named first does; otherwise one
+/// the frames can be filled in that a stand-in, such as Windows' own MP3 encoder when
+/// LAME is missing, takes.
+///
+/// # Safety
+/// `codec` must be a valid codec description.
+unsafe fn sample_format(
+    codec: *const sys::AVCodec,
+    preferred: sys::AVSampleFormat,
+) -> sys::AVSampleFormat {
+    use sys::AVSampleFormat::*;
+    // SAFETY: per the caller, `codec` is valid.
+    let supported = unsafe { supported_sample_formats(codec) };
+    if supported.is_empty() || supported.contains(&preferred) {
+        return preferred;
     }
+    [
+        AV_SAMPLE_FMT_FLTP,
+        AV_SAMPLE_FMT_FLT,
+        AV_SAMPLE_FMT_S32,
+        AV_SAMPLE_FMT_S16,
+    ]
+    .into_iter()
+    .find(|format| supported.contains(format))
+    .unwrap_or(preferred)
 }
 
-/// The encoder called `name`, or FFmpeg's default for `id` when it lacks that one.
+/// The sample formats `codec` takes; empty when it takes any.
+///
+/// # Safety
+/// `codec` must be a valid codec description.
+#[cfg(ffmpeg_supported_config)]
+unsafe fn supported_sample_formats(codec: *const sys::AVCodec) -> Vec<sys::AVSampleFormat> {
+    let mut list: *const std::ffi::c_void = ptr::null();
+    let mut count = 0;
+    // SAFETY: per the caller, `codec` is valid; a null context asks for the codec's
+    // defaults, and the out-pointers are live locals.
+    let status = unsafe {
+        sys::avcodec_get_supported_config(
+            ptr::null(),
+            codec,
+            sys::AVCodecConfig::AV_CODEC_CONFIG_SAMPLE_FORMAT,
+            0,
+            &mut list,
+            &mut count,
+        )
+    };
+    let count = usize::try_from(count).unwrap_or(0);
+    if status < 0 || list.is_null() || count == 0 {
+        return Vec::new();
+    }
+    // SAFETY: on success the list holds `count` sample formats and lives as long as the
+    // codec, which is static.
+    unsafe { std::slice::from_raw_parts(list.cast::<sys::AVSampleFormat>(), count) }.to_vec()
+}
+
+/// The sample formats `codec` takes; empty when it takes any.
+///
+/// # Safety
+/// `codec` must be a valid codec description.
+#[cfg(not(ffmpeg_supported_config))]
+unsafe fn supported_sample_formats(codec: *const sys::AVCodec) -> Vec<sys::AVSampleFormat> {
+    let mut supported = Vec::new();
+    // SAFETY: per the caller, `codec` is valid; its format list, when there is one, is
+    // static and ends at AV_SAMPLE_FMT_NONE.
+    unsafe {
+        let mut format = (*codec).sample_fmts;
+        while !format.is_null() && *format != sys::AVSampleFormat::AV_SAMPLE_FMT_NONE {
+            supported.push(*format);
+            format = format.add(1);
+        }
+    }
+    supported
+}
+
 fn find(name: Option<&CStr>, id: sys::AVCodecID) -> *const sys::AVCodec {
     // SAFETY: plain lookups returning static codec descriptions or null.
     unsafe {
@@ -269,6 +323,11 @@ fn find(name: Option<&CStr>, id: sys::AVCodecID) -> *const sys::AVCodec {
     }
 }
 
-fn number(value: impl ToString) -> Result<CString, MediaError> {
+pub(super) fn number(value: impl ToString) -> Result<CString, MediaError> {
     CString::new(value.to_string()).map_err(|_| MediaError::InvalidSettings("option out of range"))
 }
+
+/// The timebase an encoder stamps its packets in, so they can be muxed where the
+/// encoder isn't.
+#[derive(Clone, Copy)]
+pub(crate) struct PacketTimebase(pub(super) sys::AVRational);

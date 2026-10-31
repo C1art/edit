@@ -1,11 +1,11 @@
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 use timeline::{Chapter, FrameRate, Timebase};
 
+use crate::audio_encoding::AudioEncoding;
 use crate::ffi::{Converter, Encoder, Frame, OutputContext, Packet, Received};
-use crate::{AudioCodec, MediaError, RateControl, VideoCodec};
-
-const STEREO: usize = 2;
+use crate::{Acceleration, AudioCodec, MediaError, RateControl, VideoCodec};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct VideoSettings {
@@ -19,6 +19,7 @@ pub struct VideoSettings {
     pub codec: VideoCodec,
     pub rate_control: RateControl,
     pub profile: EncodeProfile,
+    pub acceleration: Acceleration,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -27,7 +28,7 @@ pub enum EncodeProfile {
     #[default]
     Delivery,
     /// Encodes quickly and seeks cheaply, with a keyframe every half second, for proxies.
-    /// Applies to H.264 only.
+    /// Applies to H.264 and HEVC only.
     Editing,
 }
 
@@ -45,16 +46,7 @@ struct VideoStream {
     frame: Frame,
     converter: Converter,
     next_pts: i64,
-}
-
-struct AudioStream {
-    encoder: Encoder,
-    index: usize,
-    frame: Frame,
-    frame_size: usize,
-    /// Interleaved stereo waiting to fill a whole encoder frame.
-    pending: Vec<f32>,
-    next_pts: i64,
+    converting: Duration,
 }
 
 /// Encodes pictures and sound into a file, in the container the file extension names. Call [`MediaWriter::finish`] to make the file playable.
@@ -62,7 +54,7 @@ pub struct MediaWriter {
     output: OutputContext,
     packet: Packet,
     video: Option<VideoStream>,
-    audio: Option<AudioStream>,
+    audio: Option<AudioEncoding>,
 }
 
 impl MediaWriter {
@@ -96,32 +88,19 @@ impl MediaWriter {
                 let encoder = Encoder::video(&settings, global_header)?;
                 Ok(VideoStream {
                     index: output.add_stream(&encoder)?,
-                    frame: Frame::for_video(size, encoder.pixel_format())?,
+                    frame: encoder.video_frame(size)?,
                     converter: Converter::new(&settings, &encoder)?,
                     encoder,
                     next_pts: 0,
+                    converting: Duration::ZERO,
                 })
             })
             .transpose()?;
         let audio = audio
             .map(|settings| {
                 let encoder = Encoder::audio(&settings, global_header)?;
-                // Encoders taking any size get about 20 ms per frame.
-                let frame_size = encoder
-                    .frame_size()
-                    .unwrap_or(settings.sample_rate as usize / 50);
-                Ok::<_, MediaError>(AudioStream {
-                    index: output.add_stream(&encoder)?,
-                    frame: Frame::for_audio(
-                        settings.sample_rate,
-                        frame_size,
-                        encoder.sample_format(),
-                    )?,
-                    encoder,
-                    frame_size,
-                    pending: Vec::with_capacity(frame_size * STEREO * 2),
-                    next_pts: 0,
-                })
+                let index = output.add_stream(&encoder)?;
+                AudioEncoding::start(encoder, index, settings.sample_rate)
             })
             .transpose()?;
         output.set_chapters(chapters, timebase)?;
@@ -134,117 +113,85 @@ impl MediaWriter {
         })
     }
 
+    /// What encodes the video, such as "NVIDIA NVENC (hardware)".
+    pub fn video_encoder(&self) -> Option<String> {
+        self.video.as_ref().map(|stream| stream.encoder.describe())
+    }
+
     /// Encodes the next picture: tightly packed, sRGB-encoded RGBA8 at the export size.
     pub fn write_video(&mut self, rgba: &[u8]) -> Result<(), MediaError> {
         let stream = self
             .video
             .as_mut()
             .ok_or(MediaError::InvalidSettings("export has no video"))?;
+        let converting = Instant::now();
         stream.converter.convert(rgba, &mut stream.frame)?;
+        stream.converting += converting.elapsed();
         stream.frame.set_timing(stream.next_pts, 1);
         stream.next_pts += 1;
         stream.encoder.send_frame(Some(&stream.frame))?;
-        drain(&mut self.output, &mut self.packet, stream.as_target())
+        drain(&mut self.output, &mut self.packet, stream)?;
+        self.mux_audio()
+    }
+
+    /// How long turning pictures into the encoder's pixel format has taken so far, the
+    /// rest of writing them being the encoding.
+    pub fn converting_time(&self) -> Duration {
+        self.video
+            .as_ref()
+            .map_or(Duration::ZERO, |stream| stream.converting)
     }
 
     /// Encodes the next stretch of interleaved stereo at the export sample rate.
     pub fn write_audio(&mut self, stereo: &[f32]) -> Result<(), MediaError> {
-        let stream = self
-            .audio
+        self.audio
             .as_mut()
-            .ok_or(MediaError::InvalidSettings("export has no audio"))?;
-        stream.pending.extend_from_slice(stereo);
-        let whole = stream.frame_size * STEREO;
-        let mut offset = 0;
-        while stream.pending.len() - offset >= whole {
-            encode_audio(
-                &mut self.output,
-                &mut self.packet,
-                stream,
-                offset..offset + whole,
-            )?;
-            offset += whole;
+            .ok_or(MediaError::InvalidSettings("export has no audio"))?
+            .send(stereo.to_vec())?;
+        self.mux_audio()
+    }
+
+    /// Muxes the sound encoded so far.
+    fn mux_audio(&mut self) -> Result<(), MediaError> {
+        let Some(audio) = &self.audio else {
+            return Ok(());
+        };
+        for packet in audio.ready() {
+            self.output
+                .write_packet(&mut packet?, audio.index, audio.timebase)?;
         }
-        stream.pending.drain(..offset);
         Ok(())
     }
 
     /// Flushes the encoders and writes the container's index.
     pub fn finish(mut self) -> Result<(), MediaError> {
-        if let Some(stream) = &mut self.audio {
-            if !stream.pending.is_empty() {
-                let all = 0..stream.pending.len();
-                encode_audio(&mut self.output, &mut self.packet, stream, all)?;
-                stream.pending.clear();
+        if let Some(audio) = &mut self.audio {
+            let (index, timebase) = (audio.index, audio.timebase);
+            for packet in audio.finish() {
+                self.output.write_packet(&mut packet?, index, timebase)?;
             }
-            stream.encoder.send_frame(None)?;
-            drain(&mut self.output, &mut self.packet, stream.as_target())?;
         }
         if let Some(stream) = &mut self.video {
             stream.encoder.send_frame(None)?;
-            drain(&mut self.output, &mut self.packet, stream.as_target())?;
+            drain(&mut self.output, &mut self.packet, stream)?;
         }
         self.output.write_trailer()
     }
 }
 
-fn encode_audio(
-    output: &mut OutputContext,
-    packet: &mut Packet,
-    stream: &mut AudioStream,
-    range: std::ops::Range<usize>,
-) -> Result<(), MediaError> {
-    let samples = &stream.pending[range];
-    stream.frame.fill_stereo(samples, stream.frame_size)?;
-    let frames = (samples.len() / STEREO) as i64;
-    stream.frame.set_timing(stream.next_pts, frames);
-    stream.next_pts += frames;
-    stream.encoder.send_frame(Some(&stream.frame))?;
-    drain(output, packet, stream.as_target())
-}
-
-/// An encoder and where its packets go.
-struct Target<'a> {
-    encoder: &'a mut Encoder,
-    index: usize,
-    /// Duration to give packets the encoder left without one, in its timebase.
-    packet_duration: Option<i64>,
-}
-
-impl VideoStream {
-    fn as_target(&mut self) -> Target<'_> {
-        Target {
-            encoder: &mut self.encoder,
-            index: self.index,
-            // Every video packet is one frame, one tick of the encoder timebase.
-            packet_duration: Some(1),
-        }
-    }
-}
-
-impl AudioStream {
-    fn as_target(&mut self) -> Target<'_> {
-        Target {
-            encoder: &mut self.encoder,
-            index: self.index,
-            packet_duration: None,
-        }
-    }
-}
-
-/// Moves every packet the encoder has ready into the muxer.
+/// Moves every picture packet the encoder has ready into the muxer.
 fn drain(
     output: &mut OutputContext,
     packet: &mut Packet,
-    target: Target<'_>,
+    stream: &mut VideoStream,
 ) -> Result<(), MediaError> {
+    let timebase = stream.encoder.packet_timebase();
     loop {
-        match target.encoder.receive_packet(packet)? {
+        match stream.encoder.receive_packet(packet)? {
             Received::Frame => {
-                if let Some(duration) = target.packet_duration {
-                    packet.fill_duration(duration);
-                }
-                output.write_packet(packet, target.index, target.encoder.timebase())?;
+                // Every video packet is one frame, one tick of the encoder timebase.
+                packet.fill_duration(1);
+                output.write_packet(packet, stream.index, timebase)?;
             }
             Received::NeedsInput | Received::Drained => return Ok(()),
         }
@@ -268,6 +215,7 @@ mod tests {
             codec,
             rate_control: RateControl::Bitrate(500_000),
             profile: EncodeProfile::Delivery,
+            acceleration: Acceleration::Software,
         };
         let audio = |codec| AudioSettings {
             codec,
@@ -281,6 +229,12 @@ mod tests {
                 Some(audio(AudioCodec::Aac)),
             ),
             ("hevc.mp4", Some(video(VideoCodec::Hevc, 32)), None),
+            (
+                "vp9.webm",
+                Some(video(VideoCodec::Vp9, 64)),
+                Some(audio(AudioCodec::Opus)),
+            ),
+            ("av1.mp4", Some(video(VideoCodec::Av1, 64)), None),
             (
                 "prores.mov",
                 Some(video(VideoCodec::ProRes422Hq, 128)),
@@ -307,7 +261,7 @@ mod tests {
                     writer.write_video(&picture).unwrap();
                 }
                 if audio.is_some() {
-                    writer.write_audio(&[0.25; 1920 * STEREO]).unwrap();
+                    writer.write_audio(&[0.25; 1920 * 2]).unwrap();
                 }
             }
             writer.finish().unwrap();
@@ -333,6 +287,7 @@ mod tests {
             codec: VideoCodec::Gif,
             rate_control: RateControl::Quality(0),
             profile: EncodeProfile::Delivery,
+            acceleration: Acceleration::Software,
         };
         let path = std::env::temp_dir().join(format!("media-gif-{}.gif", std::process::id()));
         let mut writer = MediaWriter::create(&path, Some(video), None).unwrap();
@@ -341,6 +296,8 @@ mod tests {
             [30, 30, 200],
             [30, 30, 200],
             [240, 240, 60],
+            // Back to the first picture's palette, with the same indices as the last.
+            [200, 30, 30],
         ];
         for [r, g, b] in colors {
             writer.write_video(&[r, g, b, 255].repeat(64 * 36)).unwrap();
@@ -356,6 +313,8 @@ mod tests {
             let off = got.iter().zip(wanted).map(|(&a, b)| a.abs_diff(b)).max();
             assert!(off < Some(4), "{got:?} for {wanted:?}");
         }
+        // Windows won't remove a file that is still open.
+        drop(reader);
         std::fs::remove_file(&path).unwrap();
     }
 
@@ -370,6 +329,7 @@ mod tests {
             codec: VideoCodec::ProRes4444,
             rate_control: RateControl::Quality(0),
             profile: EncodeProfile::Delivery,
+            acceleration: Acceleration::Software,
         };
         let path = std::env::temp_dir().join(format!("media-alpha-{}.mov", std::process::id()));
         let mut writer = MediaWriter::create(&path, Some(video), None).unwrap();
@@ -391,6 +351,8 @@ mod tests {
         let alpha = |x: usize| frame.pixels[(18 * 64 + x) * 4 + 3];
         assert!(alpha(8) < 4, "{}", alpha(8));
         assert!(alpha(56) > 251, "{}", alpha(56));
+        // Windows won't remove a file that is still open.
+        drop(reader);
         std::fs::remove_file(&path).unwrap();
     }
 }

@@ -35,8 +35,10 @@ fn secondary_key(rgb: vec3<f32>) -> f32 {
     let soft = max(key.z, 1e-3);
     let color = hsl(rgb);
     let hue_distance = abs(fract(color.x - key.x + 0.5) - 0.5);
-    // Grey has no hue, so the saturation range alone decides whether it is keyed.
-    let hue = 1.0 - smoothstep(key.y, key.y + soft * 0.5, hue_distance);
+    // Grey has no hue, so the saturation range alone decides whether it is keyed; the
+    // hue's say grows with saturation, so near-greys don't flip on a hue they barely have.
+    let hue_match = 1.0 - smoothstep(key.y, key.y + soft * 0.5, hue_distance);
+    let hue = mix(1.0, hue_match, smoothstep(0.0, soft, color.y));
     let matte = hue * within(color.y, ranges.x, ranges.y, soft) * within(color.z, ranges.z, ranges.w, soft);
     return mix(matte, 1.0 - matte, placement.secondary_wheel.w);
 }
@@ -48,6 +50,7 @@ fn secondary(rgb_in: vec3<f32>) -> vec3<f32> {
     if mode < 0.5 {
         return rgb_in;
     }
+    // #if secondary_key.w
     let keyed = secondary_key(rgb_in);
     if mode > 1.5 {
         return mix(vec3<f32>(MID_GREY), rgb_in, keyed);
@@ -58,7 +61,10 @@ fn secondary(rgb_in: vec3<f32>) -> vec3<f32> {
     let hue = vec3<f32>(1.5748 * w.y, -0.1873 * w.x - 0.4681 * w.y, 1.8556 * w.x);
     var rgb = rgb_in * white * exp2(hue * WHEEL_STOPS + vec3<f32>(w.z * LEVEL_STOPS));
     let pivot = vec3<f32>(MID_GREY);
-    rgb = pivot * pow(max(rgb, vec3<f32>(0.0)) / pivot, vec3<f32>(1.0 + balance.z));
+    rgb = pivot * pow(max(rgb, vec3<f32>(TINY)) / pivot, vec3<f32>(1.0 + balance.z));
     rgb = saturate_color(rgb, balance.w, 0.0);
     return mix(rgb_in, rgb, keyed);
+    // #else
+    return rgb_in;
+    // #endif
 }

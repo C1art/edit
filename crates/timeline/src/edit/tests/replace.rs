@@ -12,6 +12,9 @@ fn replacing_a_clip_moves_it_and_its_link_onto_the_new_media_in_sync() {
             has_audio: true,
             still: false,
             interpreted_rate: None,
+            placed: None,
+            frame_fit: None,
+            timecode: None,
         })
         .unwrap();
     let second = timeline.sequence().media[1].id;
@@ -53,4 +56,14 @@ fn replacing_a_clip_moves_it_and_its_link_onto_the_new_media_in_sync() {
     );
     timeline.undo();
     assert_eq!(sources(&timeline, V1), first);
+
+    timeline
+        .apply(AddSpeedKeyframe {
+            clip: video,
+            at: Ticks(200),
+        })
+        .unwrap();
+    timeline.apply(replace(50)).unwrap();
+    let (_, remapped) = timeline.sequence().clip(video).unwrap();
+    assert_eq!(remapped.source_time(Ticks(100)), Ticks(50));
 }

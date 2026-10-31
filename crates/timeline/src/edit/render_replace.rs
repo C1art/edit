@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{
     Captions, Clip, ClipId, Edit, Gain, Generator, Marks, Sequence, SourceId, Ticks, TimelineError,
     Track,
@@ -45,7 +47,7 @@ impl Sequence {
             Ticks::ZERO,
         );
         view.video.push(Track {
-            clips: vec![clip],
+            clips: vec![clip.into()],
             ..Track::default()
         });
         Some(view)
@@ -83,7 +85,7 @@ impl Edit for RenderAndReplace {
                 .clips
                 .iter_mut()
                 .filter(|clip| ids.contains(&clip.id) && clip.source == self.original);
-            for clip in chosen {
+            for clip in chosen.map(Arc::make_mut) {
                 if clip.source_out() > length {
                     return Err(TimelineError::NotEnoughSource);
                 }
@@ -116,7 +118,7 @@ impl Edit for RestoreUnrendered {
         let ids = sequence.links_of(&self.clips);
         let originals: Vec<_> = sequence
             .tracks()
-            .flat_map(|(_, track)| &track.clips)
+            .flat_map(|(_, track)| track.clips.iter().map(Arc::as_ref))
             .filter(|clip| ids.contains(&clip.id))
             .filter_map(|clip| clip.unrendered)
             .collect();
@@ -134,7 +136,7 @@ impl Edit for RestoreUnrendered {
         }
         for track in sequence.video.iter_mut().chain(&mut sequence.audio) {
             let chosen = track.clips.iter_mut().filter(|clip| ids.contains(&clip.id));
-            for clip in chosen {
+            for clip in chosen.map(Arc::make_mut) {
                 let Some(original) = clip.unrendered.take() else {
                     continue;
                 };

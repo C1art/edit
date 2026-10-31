@@ -1,7 +1,9 @@
+use std::time::Duration;
+
 use eframe::egui_wgpu::{self, wgpu};
 use egui::{Color32, Rect, Response, Sense, TextureId, Vec2};
 use playback::ComposedFrame;
-use render::{Compositor, LayerImage, Presented, RenderError, Scope};
+use render::{Background, Compositor, LayerImage, Presented, RenderError, Scope};
 
 /// A video monitor: composites frames on the GPU and shows the result in the UI.
 pub struct Monitor {
@@ -9,25 +11,43 @@ pub struct Monitor {
     compositor: Compositor,
     texture: Option<TextureId>,
     scope: Option<TextureId>,
+    /// The last frame asked for, while a shader it needs is still being built.
+    pending: Option<(ComposedFrame, (u32, u32))>,
+    /// Whether the picture's transparent parts show a checkerboard rather than black.
+    transparency_grid: bool,
 }
+
+/// How often a monitor looks again for a shader being built.
+const COMPILE_POLL: Duration = Duration::from_millis(15);
 
 impl Monitor {
     pub fn new(render_state: egui_wgpu::RenderState) -> Self {
+        let mut compositor = Compositor::new(&render_state.device, &render_state.queue);
+        compositor.compile_in_background();
         Self {
-            compositor: Compositor::new(&render_state.device, &render_state.queue),
+            compositor,
             render_state,
             texture: None,
             scope: None,
+            pending: None,
+            transparency_grid: false,
         }
     }
 
+    /// Shows `frame`, or keeps the last one shown until the shaders `frame` needs are
+    /// built; [`Monitor::catch_up`] then shows it.
     pub fn present(
         &mut self,
         frame: &ComposedFrame,
         canvas: (u32, u32),
     ) -> Result<(), RenderError> {
+        self.pending = None;
         let layers: Vec<LayerImage<'_>> = frame.layers.iter().map(playback::Layer::image).collect();
         let presented = self.compositor.composite(canvas, &layers)?;
+        if presented == Presented::Pending {
+            self.pending = Some((frame.clone(), canvas));
+            return Ok(());
+        }
         let (Presented::NewTarget, Some(view)) = (presented, self.compositor.output_view()) else {
             return Ok(());
         };
@@ -46,6 +66,30 @@ impl Monitor {
             }
         }
         Ok(())
+    }
+
+    /// Shows a frame left waiting for its shaders once they're built; call every UI
+    /// frame.
+    pub fn catch_up(&mut self, ctx: &egui::Context) -> Result<(), RenderError> {
+        if self.pending.is_none() {
+            return Ok(());
+        }
+        if self.compositor.compiling() {
+            ctx.request_repaint_after(COMPILE_POLL);
+            return Ok(());
+        }
+        let Some((frame, canvas)) = self.pending.take() else {
+            return Ok(());
+        };
+        self.present(&frame, canvas)?;
+        ctx.request_repaint();
+        Ok(())
+    }
+
+    /// Whether a frame waits on shaders, or shaders are building for frames to come.
+    #[cfg(test)]
+    pub(crate) fn building_shaders(&self) -> bool {
+        self.pending.is_some() || self.compositor.compiling()
     }
 
     pub fn set_scope(&mut self, scope: Option<Scope>) {
@@ -69,6 +113,20 @@ impl Monitor {
         self.scope
     }
 
+    /// Returns whether it changed, and so whether the frame needs presenting again.
+    pub fn set_transparency_grid(&mut self, shown: bool) -> bool {
+        if self.transparency_grid == shown {
+            return false;
+        }
+        self.transparency_grid = shown;
+        self.compositor.set_background(if shown {
+            Background::UnderUi
+        } else {
+            Background::Black
+        });
+        true
+    }
+
     /// Draws the picture letterboxed to `size` on a black background.
     pub fn ui(&self, ui: &mut egui::Ui, size: Vec2) -> Response {
         let (rect, response) = ui.allocate_exact_size(size, Sense::click());
@@ -85,6 +143,9 @@ impl Monitor {
             let frame = Vec2::new(width as f32, height as f32);
             let scale = (rect.width() / frame.x).min(rect.height() / frame.y);
             let shown = Rect::from_center_size(rect.center(), frame * scale);
+            if self.transparency_grid {
+                crate::transparency_grid::paint(painter, shown);
+            }
             let uv = Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
             painter.image(texture, shown, uv, Color32::WHITE);
         }

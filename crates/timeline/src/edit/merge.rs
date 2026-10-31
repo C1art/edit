@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{
     Clip, ClipId, Edit, LinkId, MediaItem, Nest, Sequence, SourceId, Ticks, TimelineError, Track,
 };
@@ -43,16 +45,20 @@ impl Edit for MergeClips {
         let link = LinkId(sequence.ids.next());
         let mut nest = Nest::default();
         for (index, (item, start)) in items.iter().enumerate() {
-            let mut clip = Clip::new(
-                ClipId(sequence.ids.next()),
-                item.id,
-                *start - earliest.unwrap_or(Ticks::ZERO),
-                item.duration,
-                Ticks::ZERO,
-            );
-            clip.link = Some(link);
-            let track = |clip| Track {
-                clips: vec![clip],
+            let conform = item.conform();
+            let mut clip = Clip {
+                conform,
+                link: Some(link),
+                ..Clip::new(
+                    ClipId(sequence.ids.next()),
+                    item.id,
+                    *start - earliest.unwrap_or(Ticks::ZERO),
+                    conform.sequence_span(item.duration),
+                    Ticks::ZERO,
+                )
+            };
+            let track = |clip: Clip| Track {
+                clips: vec![clip.into()],
                 ..Track::default()
             };
             let is_camera = index == camera;
@@ -70,7 +76,7 @@ impl Edit for MergeClips {
         }
         let id = SourceId(sequence.ids.next());
         let bin = items[camera].0.bin;
-        sequence.media.push(MediaItem {
+        Arc::make_mut(&mut sequence.media).push(MediaItem {
             id,
             name: self.name.clone(),
             path: Default::default(),
@@ -84,11 +90,18 @@ impl Edit for MergeClips {
             subclip: None,
             interpreted_rate: None,
             interpreted_aspect: None,
+            interpreted_color: None,
+            interpreted_fields: None,
             alpha: Default::default(),
             log: Default::default(),
             offline: false,
             still: false,
             channel_map: None,
+            placed: None,
+            frame_fit: None,
+            timecode: None,
+            poster: None,
+            transcript: None,
         });
         sequence.fit_nest(id);
         Ok(())

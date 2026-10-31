@@ -13,6 +13,10 @@ A non-linear video editor for Windows 11, built in Rust. The end goal is feature
 - Audio: `cpal` for output, `rubato` for resampling
 - Concurrency: `crossbeam` (channels, queues)
 - Persistence: `serde`
+- Windows APIs: `windows` (D3D12/DXGI texture sharing and other Win32 calls), as a `cfg(windows)` dependency
+- Speech: `whisper-rs` (whisper.cpp, CPU), as a `cfg(windows)` dependency
+- Plugins: `vst3` bindings and `libloading` for hosting VST3 effects, as `cfg(windows)` dependencies
+- Exe resources: `embed-resource` (build dependency of `app`) for the exe's icon and version info
 - Ask before adding any dependency not listed here.
 
 ## Structure
@@ -26,6 +30,9 @@ Cargo workspace. Dependencies flow downward only; `timeline` and `project` never
 - `crates/audio/` — cpal output stream, rubato resampling, mixer
 - `crates/playback/` — engine that schedules decode, render and audio against the master clock
 - `crates/project/` — project file format, serde, versioned migrations
+- `crates/speech/` — Whisper transcription and model downloads into `%APPDATA%\Cledit\models`
+- `crates/plugins/` — VST3 scanning, loading, processing and editor windows
+- `crates/plugin_fixture/` — a minimal VST3 `cdylib` that plugin tests load
 - `tests/fixtures/` — small media files used by integration tests
 
 ## Commands
@@ -35,7 +42,7 @@ Cargo workspace. Dependencies flow downward only; `timeline` and `project` never
 - Test: `cargo test --workspace`
 - Lint: `cargo clippy --workspace --all-targets -- -D warnings`
 - Format: `cargo fmt --all`
-- FFmpeg: set `FFMPEG_DIR` to a shared FFmpeg build before building
+- FFmpeg: set `FFMPEG_DIR` to a shared FFmpeg build (8.1 or newer; the Windows D3D12 decode path needs its headers) before building
 
 ## Verification
 
@@ -77,7 +84,17 @@ After every change, in this order:
 - Search before reading: use Grep/Glob to locate code, then read only the relevant line ranges.
 - Edit in place with targeted edits. Never rewrite a whole file for a small change.
 - Don't reread a file you just edited.
-- Build one milestone at a time, in order: single-clip playback → multi-track timeline with cut/trim → audio playback and mixing → export → effects and transitions → keyframes → color tools → proxies and hardware decode.
+- All milestones (playback through proxies and hardware decode) are built. Work now is fixes, polish and performance; keep changes small and on what was asked.
+
+## Benchmarks
+
+Ignored tests in `crates/app/src/smoke_tests/` that print a report and need no screen. Run with `cargo test --release -p app <name> -- --ignored --nocapture`.
+
+- `export_speed`, `playback_speed` — `EDIT_BENCH_CLIPS` (`;`-separated files), `EDIT_BENCH_SECONDS` (export), `EDIT_BENCH_DISSOLVES=1` (export), `EDIT_BENCH_EFFECTS=1` (Lumetri and blur on every clip), `EDIT_BENCH_SOFTWARE_DECODE=1`
+- `vst3_plugin` — `EDIT_BENCH_VST3` (a `.vst3` bundle)
+- `transcription` — `EDIT_BENCH_SPEECH_MODEL`, first file of `EDIT_BENCH_CLIPS`, optional `EDIT_BENCH_SPEECH_LANGUAGE`
+- `large_project` — `EDIT_BENCH_TRACKS` (default 20 per kind), `EDIT_BENCH_TRACK_CLIPS` (default 1000)
+- `frame_times_with_a_large_sequence`, `a_long_session_levels_off` (on Linux set `MALLOC_MMAP_THRESHOLD_=1048576`), `random_gestures_never_panic`; `_with_a_gpu` variants need a GPU
 
 ## Commits
 

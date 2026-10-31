@@ -1,10 +1,14 @@
+use std::collections::{HashMap, HashSet};
+use std::ops::Range;
+
 use egui::{Align2, Color32, FontId, Painter, Rect, Stroke, StrokeKind};
-use timeline::{
-    cut_window, is_through_edit, Clip, ClipId, Gain, Label, Sequence, Ticks, Timecode, Track,
-    TrackKind,
-};
+use timeline::{Clip, ClipId, ClipLine, Gain, Label, Sequence, Ticks, TrackKind};
 
 use super::clip_art::{self, ClipArea};
+use super::clip_marks::{
+    duplicate_marks, fx_badge, keyframe_marks, speed_marks, sync_badge, through_edit_marks,
+    transition_marks,
+};
 use super::layout::{clip_rect, Row};
 use super::rubber_band;
 use super::scale::{label_interval, TimeScale};
@@ -13,9 +17,42 @@ use crate::clip_art::ClipArt;
 pub const PLAYHEAD: Color32 = Color32::from_rgb(230, 70, 60);
 const VIDEO_CLIP: Color32 = Color32::from_rgb(64, 104, 160);
 const AUDIO_CLIP: Color32 = Color32::from_rgb(58, 128, 92);
+const CLIP_RADIUS: f32 = 4.0;
+const NAME_STRIP: f32 = 17.0;
+/// How far a clip's name starts from its left edge while its fade-in handle shows there.
+const FADE_HANDLE_ROOM: f32 = 12.0;
+const DETAIL_WIDTH: f32 = 8.0;
+/// Clips narrower than this, zoomed far out, are drawn as one band per run of them.
+const BAND_WIDTH: f32 = 2.0;
 const OFFLINE_CLIP: Color32 = Color32::from_rgb(170, 40, 40);
-const OUT_OF_SYNC: Color32 = Color32::from_rgb(200, 30, 30);
 const MIN_LABEL_SPACING: f32 = 90.0;
+
+/// What's looked up for every clip drawn, worked out once a frame rather than by a
+/// search per clip, which slows a long timeline to a crawl.
+pub struct ClipStates {
+    selected: HashSet<ClipId>,
+    sync_offsets: HashMap<ClipId, Ticks>,
+    duplicates: HashMap<ClipId, Vec<Range<Ticks>>>,
+    line: ClipLine,
+    /// The clip whose fade-in handle shows, which its name moves aside for.
+    pub fade_in_shown: Option<ClipId>,
+}
+
+impl ClipStates {
+    pub fn new(sequence: &Sequence, selection: &[ClipId], art: &ClipArt, line: ClipLine) -> Self {
+        Self {
+            selected: selection.iter().copied().collect(),
+            sync_offsets: sequence.sync_offsets(),
+            duplicates: if art.show_duplicates {
+                sequence.duplicate_frames()
+            } else {
+                HashMap::new()
+            },
+            line,
+            fade_in_shown: None,
+        }
+    }
+}
 
 /// A strip along the foot of the ruler over the segments that need rendering to play
 /// smoothly: red until rendered, green once a preview is ready, as Premiere's.
@@ -70,7 +107,7 @@ pub fn ruler(painter: &Painter, rect: Rect, scale: &TimeScale, sequence: &Sequen
             painter.text(
                 egui::pos2(x + 3.0, rect.top() + 2.0),
                 Align2::LEFT_TOP,
-                Timecode::new(time, timebase, rate).to_string(),
+                sequence.timecode_at(time).to_string(),
                 FontId::monospace(10.0),
                 color,
             );
@@ -127,7 +164,7 @@ pub fn clips(
     row: &Row,
     scale: &TimeScale,
     sequence: &Sequence,
-    selection: &[ClipId],
+    states: &ClipStates,
     art: &mut ClipArt,
     volume_lines: bool,
 ) {
@@ -143,13 +180,14 @@ pub fn clips(
         TrackKind::Audio => !sequence.is_heard(track),
     };
     let visible = painter.clip_rect().x_range();
+    let mut band: Option<(Rect, Color32)> = None;
     for clip in &track.clips {
         let dimmed = silenced || clip.disabled;
         let rect = clip_rect(row, scale, clip.start, clip.end());
         if rect.right() < visible.min || rect.left() > visible.max {
             continue;
         }
-        let selected = selection.contains(&clip.id);
+        let selected = states.selected.contains(&clip.id);
         let offline = art.offline.contains(&clip.source);
         let base = if offline {
             OFFLINE_CLIP
@@ -164,10 +202,49 @@ pub fn clips(
         if dimmed {
             fill = fill.gamma_multiply(0.4);
         }
-        painter.rect_filled(rect, 3.0, fill);
+        // The hair of space between neighbours below would leave nothing of a clip
+        // this thin, and thousands of them each drawn would slow every frame.
+        if rect.width() < BAND_WIDTH {
+            band = match band.take() {
+                Some((run, color)) if color == fill && rect.left() - run.right() < 1.0 => {
+                    Some((run.union(rect), color))
+                }
+                ended => {
+                    paint_band(painter, ended);
+                    Some((rect, fill))
+                }
+            };
+            continue;
+        }
+        paint_band(painter, band.take());
+        // A hair of space between neighbours keeps back-to-back clips apart.
+        let body = rect.shrink2(egui::vec2(0.5, 0.0));
+        painter.rect_filled(body, CLIP_RADIUS, fill);
+        let stroke = if selected {
+            Stroke::new(1.5, Color32::WHITE)
+        } else {
+            Stroke::new(1.0, fill.lerp_to_gamma(Color32::WHITE, 0.18))
+        };
+        // Nothing more could be made out on a clip this thin, and drawing it all for
+        // hundreds of clips zoomed out slows every frame.
+        if body.width() < DETAIL_WIDTH {
+            painter.rect_stroke(body, CLIP_RADIUS, stroke, StrokeKind::Inside);
+            continue;
+        }
+        let strip = Rect::from_min_max(
+            body.left_top(),
+            egui::pos2(body.right(), (body.top() + NAME_STRIP).min(body.bottom())),
+        );
         if let Some(item) = sequence.media_item(clip.source).filter(|_| !offline) {
+            // Thumbnails sit under the name strip when the row is tall enough for both.
+            let art_rect = match row.track.kind {
+                TrackKind::Video if body.height() > 2.0 * NAME_STRIP => {
+                    body.shrink(1.0).with_min_y(strip.bottom())
+                }
+                _ => body.shrink(1.0),
+            };
             let area = ClipArea {
-                rect: rect.shrink(1.0),
+                rect: art_rect,
                 clip,
                 item,
                 timebase: sequence.timebase,
@@ -181,13 +258,15 @@ pub fn clips(
                     };
                     clip_art::thumbnails(painter, &area, scale, art, tint);
                     if selected {
-                        painter.rect_filled(rect, 3.0, Color32::from_white_alpha(40));
+                        painter.rect_filled(art_rect, 0.0, Color32::from_white_alpha(40));
                     }
-                    let label = Rect::from_min_max(
-                        rect.left_top(),
-                        egui::pos2(rect.right(), rect.top() + 16.0),
-                    );
-                    painter.rect_filled(label, 3.0, fill.gamma_multiply(0.85));
+                    let corners = egui::CornerRadius {
+                        nw: CLIP_RADIUS as u8,
+                        ne: CLIP_RADIUS as u8,
+                        sw: 0,
+                        se: 0,
+                    };
+                    painter.rect_filled(strip, corners, fill);
                 }
                 TrackKind::Audio if art.show_waveforms => {
                     // Selection lightens the clip, so its bars go dark to stay visible.
@@ -201,18 +280,21 @@ pub fn clips(
                 _ => {}
             }
         }
-        let stroke = if selected {
-            Stroke::new(2.0, Color32::WHITE)
-        } else {
-            Stroke::new(1.0, Color32::from_black_alpha(120))
-        };
-        painter.rect_stroke(rect, 3.0, stroke, StrokeKind::Inside);
+        painter.rect_stroke(body, CLIP_RADIUS, stroke, StrokeKind::Inside);
         transition_marks(painter, row, scale, track, clip);
         super::markers::paint_on_clip(painter, rect, scale, clip);
         match row.track.kind {
             TrackKind::Video => {
                 keyframe_marks(painter, rect, scale, clip);
                 speed_marks(painter, rect, scale, clip);
+                if let Some(ranges) = states.duplicates.get(&clip.id) {
+                    duplicate_marks(painter, body, scale, clip, ranges);
+                }
+                if rubber_band::video_line_shown(rect) {
+                    let format = &sequence.format;
+                    let envelope = rubber_band::Envelope::look(clip, states.line, format);
+                    rubber_band::paint(painter, rect.shrink(1.0), scale, &envelope);
+                }
             }
             TrackKind::Audio if volume_lines => {
                 let envelope = rubber_band::Envelope::clip(clip);
@@ -221,11 +303,7 @@ pub fn clips(
             TrackKind::Audio => {}
         }
         let item = sequence.media_item(clip.source);
-        let name = clip
-            .name
-            .as_deref()
-            .or(item.map(|item| item.name.as_str()))
-            .unwrap_or("Missing media");
+        let name = clip_name(sequence, clip);
         let name = if offline {
             format!("{name} [offline]")
         } else {
@@ -258,144 +336,30 @@ pub fn clips(
             }
             _ => String::new(),
         };
-        let badge = sync_badge(painter, rect, sequence, clip);
-        painter.with_clip_rect(rect.shrink(2.0)).text(
-            rect.left_top() + egui::vec2(5.0 + badge, 4.0),
-            Align2::LEFT_TOP,
+        // Held at the view's edge while the clip's start is scrolled out of it.
+        let mut name_left = strip.left().max(visible.min);
+        if states.fade_in_shown == Some(clip.id) {
+            name_left = name_left.max(strip.left() + FADE_HANDLE_ROOM);
+        }
+        let shown = rect.with_min_x(rect.left().max(visible.min));
+        let badge = sync_badge(painter, shown, sequence, states.sync_offsets.get(&clip.id));
+        let badge = badge + fx_badge(painter, shown, badge, row.track.kind, clip);
+        painter.with_clip_rect(strip.shrink(1.0)).text(
+            egui::pos2(name_left + 5.0 + badge, strip.center().y),
+            Align2::LEFT_CENTER,
             format!("{camera}{name}{speed}{link}{gain}"),
             FontId::proportional(11.0),
             Color32::WHITE,
         );
     }
+    paint_band(painter, band);
     through_edit_marks(painter, row, scale, track);
 }
 
-/// Premiere's bow-tie at a cut the media plays straight through, which can be joined.
-fn through_edit_marks(painter: &Painter, row: &Row, scale: &TimeScale, track: &Track) {
-    let fill = Color32::from_white_alpha(200);
-    for pair in track.clips.windows(2) {
-        if !is_through_edit(&pair[0], &pair[1]) {
-            continue;
-        }
-        let rect = clip_rect(row, scale, pair[0].start, pair[1].end());
-        let x = scale.x(pair[1].start);
-        for (edge, inward) in [(rect.top() + 1.0, 5.0), (rect.bottom() - 1.0, -5.0)] {
-            for side in [-4.0, 4.0] {
-                let points = vec![
-                    egui::pos2(x, edge + inward),
-                    egui::pos2(x + side, edge),
-                    egui::pos2(x, edge),
-                ];
-                painter.add(egui::Shape::convex_polygon(points, fill, Stroke::NONE));
-            }
-        }
-    }
-}
-
-/// Premiere's red frame count on a clip slipped out of sync with its link; returns the
-/// width it takes so the name can follow it.
-fn sync_badge(painter: &Painter, rect: Rect, sequence: &Sequence, clip: &Clip) -> f32 {
-    let Some(offset) = sequence.sync_offset(clip) else {
-        return 0.0;
-    };
-    let frames = sequence
-        .format
-        .frame_rate
-        .frame_at(Ticks(offset.0.abs()), sequence.timebase);
-    let sign = if offset > Ticks::ZERO { '+' } else { '-' };
-    let painter = painter.with_clip_rect(rect.shrink(1.0));
-    let text = painter.layout_no_wrap(
-        format!("{sign}{frames}"),
-        FontId::proportional(11.0),
-        Color32::WHITE,
-    );
-    let badge = Rect::from_min_size(
-        rect.left_top() + egui::vec2(2.0, 2.0),
-        text.size() + egui::vec2(6.0, 2.0),
-    );
-    painter.rect_filled(badge, 2.0, OUT_OF_SYNC);
-    painter.galley(badge.min + egui::vec2(3.0, 1.0), text, Color32::WHITE);
-    badge.width() + 2.0
-}
-
-/// A diamond at the bottom of the clip for each keyframe it shows.
-fn keyframe_marks(painter: &Painter, rect: Rect, scale: &TimeScale, clip: &Clip) {
-    let y = rect.bottom() - 6.0;
-    for time in clip.look.key_times() {
-        let position = clip.position_of(time);
-        if !clip.covers(position) {
-            continue;
-        }
-        let x = scale.x(position);
-        let points = [(0.0, -4.0), (4.0, 0.0), (0.0, 4.0), (-4.0, 0.0)]
-            .map(|(dx, dy)| egui::pos2(x + dx, y + dy))
-            .to_vec();
-        painter.add(egui::Shape::convex_polygon(
-            points,
-            Color32::from_rgb(250, 210, 60),
-            Stroke::new(1.0, Color32::from_black_alpha(160)),
-        ));
-    }
-}
-
-/// A notch along the top of the clip at each speed keyframe.
-fn speed_marks(painter: &Painter, rect: Rect, scale: &TimeScale, clip: &Clip) {
-    let Some(remap) = &clip.remap else {
-        return;
-    };
-    let stroke = Stroke::new(2.0, Color32::WHITE);
-    for anchor in remap.anchors() {
-        let position = clip.start + anchor.offset;
-        if position <= clip.start || !clip.covers(position) {
-            continue;
-        }
-        let x = scale.x(position);
-        painter.line_segment(
-            [egui::pos2(x, rect.top()), egui::pos2(x, rect.top() + 8.0)],
-            stroke,
-        );
-    }
-}
-
-/// Shades where a clip's transitions play: across a shared cut or inside the clip.
-fn transition_marks(painter: &Painter, row: &Row, scale: &TimeScale, track: &Track, clip: &Clip) {
-    let previous = track.clips.iter().find(|other| other.end() == clip.start);
-    let mut spans = Vec::new();
-    if let Some(transition) = clip.transition_in {
-        let span = match previous {
-            Some(previous) => {
-                let (before, after) = cut_window(previous, clip, transition);
-                (clip.start - before, clip.start + after)
-            }
-            None => (
-                clip.start,
-                clip.start + transition.duration.min(clip.duration),
-            ),
-        };
-        spans.push((span, transition.kind));
-    }
-    if let Some(transition) = clip.transition_out {
-        if !track.clips.iter().any(|next| next.start == clip.end()) {
-            let duration = transition.duration.min(clip.duration);
-            spans.push(((clip.end() - duration, clip.end()), transition.kind));
-        }
-    }
-    for ((start, end), kind) in spans {
-        let rect = clip_rect(row, scale, start, end).shrink2(egui::vec2(0.0, 2.0));
-        painter.rect_filled(rect, 2.0, Color32::from_white_alpha(50));
-        painter.rect_stroke(
-            rect,
-            2.0,
-            Stroke::new(1.0, Color32::from_white_alpha(140)),
-            StrokeKind::Inside,
-        );
-        painter.with_clip_rect(rect).text(
-            rect.left_bottom() + egui::vec2(3.0, -2.0),
-            Align2::LEFT_BOTTOM,
-            kind.name(),
-            FontId::proportional(9.0),
-            Color32::WHITE,
-        );
+fn paint_band(painter: &Painter, band: Option<(Rect, Color32)>) {
+    if let Some((rect, color)) = band {
+        let right = rect.right().max(rect.left() + 1.0);
+        painter.rect_filled(rect.with_max_x(right), 0.0, color);
     }
 }
 
@@ -426,6 +390,14 @@ pub fn guide(painter: &Painter, x: f32, top: f32, bottom: f32) {
         [egui::pos2(x, top), egui::pos2(x, bottom)],
         Stroke::new(1.5, Color32::from_rgb(250, 210, 60)),
     );
+}
+
+pub fn clip_name<'a>(sequence: &'a Sequence, clip: &'a Clip) -> &'a str {
+    let item = sequence.media_item(clip.source);
+    clip.name
+        .as_deref()
+        .or(item.map(|item| item.name.as_str()))
+        .unwrap_or("Missing media")
 }
 
 /// Premiere's label colors, toned down so clip names stay readable on them.

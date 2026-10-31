@@ -17,6 +17,10 @@ const DEVICE_TYPES: &[sys::AVHWDeviceType] = &[sys::AVHWDeviceType::AV_HWDEVICE_
 const DEVICE_TYPES: &[sys::AVHWDeviceType] = &[sys::AVHWDeviceType::AV_HWDEVICE_TYPE_VAAPI];
 
 static ENABLED: AtomicBool = AtomicBool::new(true);
+/// The adapter drawing the pictures, whose device D3D12 decoding uses so its textures
+/// can be shared.
+#[cfg(windows)]
+static ADAPTER: OnceLock<[u8; 8]> = OnceLock::new();
 /// Opened on first use; `None` once every device type failed, so it isn't retried.
 static DEVICE: OnceLock<Option<SharedDevice>> = OnceLock::new();
 
@@ -35,6 +39,12 @@ unsafe impl Sync for SharedDevice {}
 pub(super) struct DeviceRef(NonNull<sys::AVBufferRef>);
 
 impl DeviceRef {
+    /// Takes over a reference to a device.
+    #[cfg(windows)]
+    pub(super) fn new(buffer: NonNull<sys::AVBufferRef>) -> Self {
+        Self(buffer)
+    }
+
     /// Gives the reference to FFmpeg, which releases it with the codec context.
     pub(super) fn into_raw(self) -> *mut sys::AVBufferRef {
         let raw = self.0.as_ptr();
@@ -53,6 +63,14 @@ impl Drop for DeviceRef {
 
 pub(crate) fn set_enabled(enabled: bool) {
     ENABLED.store(enabled, Ordering::Relaxed);
+}
+
+/// Decodes with D3D12 on the adapter with this LUID, into textures it can draw from.
+/// Only the first call counts, and only before the first video opens.
+#[cfg(windows)]
+pub(crate) fn set_adapter(luid: [u8; 8]) {
+    // A later adapter can't be honoured once decoding has begun on another.
+    let _ = ADAPTER.set(luid);
 }
 
 /// The name of the device decoding video, once one has been opened.
@@ -112,6 +130,16 @@ pub(super) unsafe extern "C" fn choose_format(
 }
 
 fn open_device() -> Option<SharedDevice> {
+    #[cfg(windows)]
+    if let Some(device) = ADAPTER
+        .get()
+        .and_then(|&luid| super::d3d12::open_device(luid))
+    {
+        return Some(SharedDevice {
+            buffer: NonNull::new(device.into_raw())?,
+            kind: sys::AVHWDeviceType::AV_HWDEVICE_TYPE_D3D12VA,
+        });
+    }
     DEVICE_TYPES.iter().find_map(|&kind| {
         let mut buffer = ptr::null_mut();
         // SAFETY: on success FFmpeg stores a new device reference in `buffer`; the null

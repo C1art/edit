@@ -6,12 +6,17 @@ use crossbeam::channel::{self, Receiver, Sender};
 use egui::{Grid, RichText};
 use media::{MediaInfo, StreamInfo, StreamKind};
 use timeline::{
-    ClipId, FrameRate, MediaItem, MediaLog, SetMediaLog, SourceId, Ticks, Timebase, Timecode,
+    ClipId, FrameRate, MediaItem, MediaLog, SetMediaLog, SourceId, Ticks, TimeDisplay, Timebase,
+    Timecode,
 };
 
 use crate::editor::Editor;
+use crate::error::AppError;
 
-type Probed = Result<(MediaInfo, u64), String>;
+type Probed = Result<(MediaInfo, u64), AppError>;
+
+/// Narrower than this, a property's name goes above its value.
+const SIDE_BY_SIDE_WIDTH: f32 = 240.0;
 
 /// What a file's headers say, read once per file off the UI thread.
 enum Probe {
@@ -54,12 +59,19 @@ impl Default for MetadataPanel {
     }
 }
 
+/// How many channels a file's sound has, as far as reading its headers has got.
+pub(crate) enum Channels {
+    Reading,
+    Read(u16),
+    Failed(String),
+}
+
 impl MetadataPanel {
-    fn poll(&mut self) {
+    pub(crate) fn poll(&mut self) {
         for (path, probed) in self.receiver.try_iter() {
             let probe = match probed {
                 Ok((info, bytes)) => Probe::Read { info, bytes },
-                Err(message) => Probe::Failed(message),
+                Err(error) => Probe::Failed(error.to_string()),
             };
             self.probes.insert(path, probe);
         }
@@ -71,12 +83,10 @@ impl MetadataPanel {
             let spawned = thread::Builder::new()
                 .name("metadata-probe".to_owned())
                 .spawn(move || {
-                    let probed = media::probe(&path)
-                        .map_err(|error| error.to_string())
-                        .and_then(|info| {
-                            let bytes = std::fs::metadata(&path).map_err(|e| e.to_string())?;
-                            Ok((info, bytes.len()))
-                        });
+                    let probed = (|| {
+                        let info = media::probe(&path)?;
+                        Ok((info, std::fs::metadata(&path)?.len()))
+                    })();
                     let _ = sender.send((path, probed));
                 });
             match spawned {
@@ -84,6 +94,22 @@ impl MetadataPanel {
                 Err(error) => Probe::Failed(error.to_string()),
             }
         })
+    }
+
+    /// The channels of the file's first sound stream, reading its headers if not yet read.
+    pub(crate) fn audio_channels(&mut self, path: &Path) -> Channels {
+        match self.probe(path) {
+            Probe::Reading => Channels::Reading,
+            Probe::Read { info, .. } => info
+                .streams
+                .iter()
+                .filter(|stream| stream.kind == StreamKind::Audio)
+                .find_map(|stream| stream.channels)
+                .map_or(Channels::Read(0), |channels| {
+                    Channels::Read(u16::try_from(channels).unwrap_or(u16::MAX))
+                }),
+            Probe::Failed(error) => Channels::Failed(error.clone()),
+        }
     }
 
     /// Follows whichever of the project and timeline selections changed last.
@@ -138,7 +164,7 @@ pub(crate) fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
             file_section(editor, ui, &media);
             committed = log_section(editor, ui, &media);
         });
-    if let Some(log) = committed {
+    if let Some((source, log)) = committed {
         editor.apply_to_pool(SetMediaLog { source, log });
     }
 }
@@ -148,8 +174,12 @@ fn clip_section(editor: &Editor, ui: &mut egui::Ui, id: ClipId) {
     let Some((track, clip)) = sequence.clip(id) else {
         return;
     };
-    let (timebase, rate) = (sequence.timebase, sequence.format.frame_rate);
-    let timecode = |ticks: Ticks| Timecode::new(ticks, timebase, rate).to_string();
+    let (timebase, rate, display) = (
+        sequence.timebase,
+        sequence.format.frame_rate,
+        sequence.time_display,
+    );
+    let timecode = |ticks: Ticks| Timecode::shown(ticks, timebase, rate, display).to_string();
     let track_name = match sequence
         .track(track)
         .and_then(|named| named.name.as_deref())
@@ -160,18 +190,16 @@ fn clip_section(editor: &Editor, ui: &mut egui::Ui, id: ClipId) {
     egui::CollapsingHeader::new("Clip")
         .default_open(true)
         .show(ui, |ui| {
-            Grid::new("metadata_clip").num_columns(2).show(ui, |ui| {
-                let mut row = |name: &str, value: String| {
-                    ui.label(RichText::new(name).weak());
-                    ui.label(value);
-                    ui.end_row();
-                };
+            properties(ui, "metadata_clip", |row| {
                 row("Track", track_name);
-                row("Sequence In", timecode(clip.start));
-                row("Sequence Out", timecode(clip.end()));
+                row("Sequence In", timecode(clip.start + sequence.start_time));
+                row("Sequence Out", timecode(clip.end() + sequence.start_time));
                 row("Duration", timecode(clip.duration));
-                row("Media In", timecode(clip.source_in));
-                row("Media Out", timecode(clip.source_out()));
+                let media_start = sequence
+                    .media_item(clip.source)
+                    .map_or(Ticks::ZERO, |item| item.start_timecode(timebase));
+                row("Media In", timecode(media_start + clip.source_in));
+                row("Media Out", timecode(media_start + clip.source_out()));
                 let mut speed = format!("{:.2}%", clip.speed.percent());
                 if clip.reverse {
                     speed.push_str(", reversed");
@@ -184,18 +212,17 @@ fn clip_section(editor: &Editor, ui: &mut egui::Ui, id: ClipId) {
 
 fn file_section(editor: &mut Editor, ui: &mut egui::Ui, media: &MediaItem) {
     let project = editor.timeline.project();
-    let (timebase, rate) = (project.timebase, project.format.frame_rate);
-    ui.heading(&media.name);
+    let (timebase, rate, display) = (
+        project.timebase,
+        project.format.frame_rate,
+        project.time_display,
+    );
+    ui.add(egui::Label::new(RichText::new(&media.name).heading()).truncate());
     let probe = media.is_file().then(|| editor.metadata.probe(&media.path));
     egui::CollapsingHeader::new("File")
         .default_open(true)
         .show(ui, |ui| {
-            Grid::new("metadata_file").num_columns(2).show(ui, |ui| {
-                let mut row = |name: &str, value: String| {
-                    ui.label(RichText::new(name).weak());
-                    ui.add(egui::Label::new(value).wrap());
-                    ui.end_row();
-                };
+            properties(ui, "metadata_file", |row| {
                 row("Type", kind(media).to_owned());
                 if media.is_file() {
                     row("File Path", media.path.display().to_string());
@@ -207,6 +234,8 @@ fn file_section(editor: &mut Editor, ui: &mut egui::Ui, media: &MediaItem) {
                         "Pixel Aspect",
                         format!("{:.4}", media.pixel_aspect().ratio()),
                     );
+                    row("Color Space", media.color_space().name().to_owned());
+                    row("Field Order", media.field_order().name().to_owned());
                 }
                 if let Some(assumed) = media.interpreted_rate {
                     row("Interpreted As", fps(assumed));
@@ -214,9 +243,18 @@ fn file_section(editor: &mut Editor, ui: &mut egui::Ui, media: &MediaItem) {
                 if !media.alpha.is_straight() {
                     row("Alpha", media.alpha.name().to_owned());
                 }
-                row("Duration", duration(media.duration, timebase, rate));
+                row(
+                    "Duration",
+                    duration(media.duration, timebase, rate, display),
+                );
+                if let (Some(_), Some(format)) = (media.timecode, media.played_format()) {
+                    let start = media.start_timecode(timebase);
+                    let shown = Timecode::shown(start, timebase, format.frame_rate, display);
+                    row("Media Start", shown.to_string());
+                }
                 if let Some(range) = &media.subclip {
-                    let timecode = |ticks| Timecode::new(ticks, timebase, rate).to_string();
+                    let timecode =
+                        |ticks| Timecode::shown(ticks, timebase, rate, display).to_string();
                     row(
                         "Subclip",
                         format!("{} – {}", timecode(range.start), timecode(range.end)),
@@ -247,13 +285,44 @@ fn file_section(editor: &mut Editor, ui: &mut egui::Ui, media: &MediaItem) {
         });
 }
 
-/// Returns the log to keep once a field is left changed.
-fn log_section(editor: &mut Editor, ui: &mut egui::Ui, media: &MediaItem) -> Option<MediaLog> {
+/// Names beside their values, or above them when the panel is too narrow for both.
+fn properties(ui: &mut egui::Ui, id: &str, rows: impl FnOnce(&mut dyn FnMut(&str, String))) {
+    if ui.available_width() < SIDE_BY_SIDE_WIDTH {
+        rows(&mut |name, value| {
+            ui.label(RichText::new(name).weak().small());
+            ui.add(egui::Label::new(value).wrap());
+            ui.add_space(2.0);
+        });
+    } else {
+        Grid::new(id).num_columns(2).show(ui, |ui| {
+            rows(&mut |name, value| {
+                ui.label(RichText::new(name).weak());
+                ui.add(egui::Label::new(value).wrap());
+                ui.end_row();
+            });
+        });
+    }
+}
+
+/// Returns the log to keep, and whose it is, once a field is left changed or the item
+/// shown changes under a field being typed in.
+fn log_section(
+    editor: &mut Editor,
+    ui: &mut egui::Ui,
+    media: &MediaItem,
+) -> Option<(SourceId, MediaLog)> {
+    let project = editor.timeline.project();
     let editing = &mut editor.metadata.editing;
+    let mut switched = None;
     if editing
         .as_ref()
         .is_none_or(|(source, _)| *source != media.id)
     {
+        switched = editing.take().filter(|(source, log)| {
+            project
+                .media_item(*source)
+                .is_some_and(|item| item.log != *log)
+        });
         *editing = Some((media.id, media.log.clone()));
     }
     let (_, log) = editing.as_mut()?;
@@ -284,8 +353,11 @@ fn log_section(editor: &mut Editor, ui: &mut egui::Ui, media: &MediaItem) -> Opt
                 ui.end_row();
             });
         });
+    if switched.is_some() {
+        return switched;
+    }
     if left && *log != media.log {
-        return Some(log.clone());
+        return Some((media.id, log.clone()));
     }
     // Undo and redo change the log underneath; show theirs unless a field is in use.
     if !typing {
@@ -313,11 +385,11 @@ fn fps(rate: FrameRate) -> String {
 }
 
 /// Generated media is endless until placed.
-fn duration(ticks: Ticks, timebase: Timebase, rate: FrameRate) -> String {
+fn duration(ticks: Ticks, timebase: Timebase, rate: FrameRate, display: TimeDisplay) -> String {
     if ticks.0 == i64::MAX {
         "Unlimited".to_owned()
     } else {
-        Timecode::new(ticks, timebase, rate).to_string()
+        Timecode::shown(ticks, timebase, rate, display).to_string()
     }
 }
 
@@ -325,7 +397,7 @@ fn yes_no(yes: bool) -> String {
     if yes { "Yes" } else { "No" }.to_owned()
 }
 
-fn size(bytes: u64) -> String {
+pub(crate) fn size(bytes: u64) -> String {
     const UNITS: [&str; 4] = ["KB", "MB", "GB", "TB"];
     let mut value = bytes as f64;
     let mut unit = "bytes";

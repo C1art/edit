@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use egui::ProgressBar;
 use playback::{Loudness, LoudnessEvent, LoudnessJob};
@@ -8,7 +9,7 @@ use crate::editor::Editor;
 use crate::gain_dialog::db;
 
 /// Common delivery targets in LUFS.
-const TARGETS: [(&str, f32); 3] = [
+pub(crate) const TARGETS: [(&str, f32); 3] = [
     ("EBU R128", -23.0),
     ("ATSC A/85", -24.0),
     ("Streaming", -14.0),
@@ -24,6 +25,8 @@ pub(crate) struct LoudnessWindow {
     /// The master volume the program was measured at.
     master: Gain,
     target: f32,
+    /// Where Normalize Master Track brings the highest peak, in dBFS.
+    peak_target: f32,
 }
 
 /// Starts measuring the sequence, keeping the target of a window already open.
@@ -43,7 +46,9 @@ pub(crate) fn measure(editor: &mut Editor) {
     let job = LoudnessJob::start(vec![(Arc::new(sequence.clone()), range)]);
     match job {
         Ok(job) => {
-            let target = editor.loudness.as_ref().map_or(-23.0, |open| open.target);
+            let open = editor.loudness.as_ref();
+            let target = open.map_or(-23.0, |open| open.target);
+            let peak_target = open.map_or(-1.0, |open| open.peak_target);
             editor.loudness = Some(LoudnessWindow {
                 job: Some(job),
                 progress: 0.0,
@@ -51,6 +56,7 @@ pub(crate) fn measure(editor: &mut Editor) {
                 measured: None,
                 master,
                 target,
+                peak_target,
             });
         }
         Err(error) => editor.notice(format!("Cannot measure: {error}")),
@@ -73,15 +79,13 @@ pub(crate) fn window(editor: &mut Editor, ctx: &egui::Context) {
         if shown.measured.is_some() {
             shown.job = None;
         }
-        ctx.request_repaint();
+        ctx.request_repaint_after(Duration::from_millis(100));
     }
     let mut open = true;
     let mut again = false;
     let mut master = None;
-    egui::Window::new("Loudness")
+    crate::dialog::window(ctx, "Loudness")
         .open(&mut open)
-        .collapsible(false)
-        .resizable(false)
         .show(ctx, |ui| {
             ui.label(if shown.marked {
                 "Sequence In to Out"
@@ -137,6 +141,25 @@ pub(crate) fn window(editor: &mut Editor, ctx: &egui::Context) {
                 if ui.button("Set Master Volume").clicked() {
                     master = Some(gain);
                 }
+            }
+            if measured.peak > 0.0 {
+                ui.separator();
+                ui.horizontal(|ui| {
+                    ui.label("Normalize peak to");
+                    ui.add(
+                        egui::DragValue::new(&mut shown.peak_target)
+                            .range(-60.0..=0.0)
+                            .speed(0.1)
+                            .suffix(" dBFS"),
+                    );
+                    let change = shown.peak_target - db(measured.peak);
+                    let gain = Gain::from_db(shown.master.db() + change);
+                    let button = ui.button("Normalize Master Track");
+                    let hint = format!("Master volume to {}", level(gain.db(), "dB"));
+                    if button.on_hover_text(hint).clicked() {
+                        master = Some(gain);
+                    }
+                });
             }
             if ui.button("Measure Again").clicked() {
                 again = true;

@@ -37,15 +37,18 @@ pub enum TimecodeSource {
     Media,
     /// The time since the clip's first frame, at the sequence's frame rate.
     Clip,
+    /// The sequence's own timecode where the clip plays, from its start time.
+    Sequence,
 }
 
 impl TimecodeSource {
-    pub const ALL: [Self; 2] = [Self::Media, Self::Clip];
+    pub const ALL: [Self; 3] = [Self::Media, Self::Clip, Self::Sequence];
 
     pub fn name(self) -> &'static str {
         match self {
             Self::Media => "Media",
             Self::Clip => "Clip",
+            Self::Sequence => "Sequence",
         }
     }
 }
@@ -188,16 +191,18 @@ pub enum EffectCategory {
     Generate,
     ImageControl,
     Keying,
+    NoiseAndGrain,
     Perspective,
     Stylize,
     Time,
     Transform,
     Transition,
+    Utility,
     Video,
 }
 
 impl EffectCategory {
-    pub const ALL: [Self; 13] = [
+    pub const ALL: [Self; 15] = [
         Self::Adjust,
         Self::BlurAndSharpen,
         Self::ColorCorrection,
@@ -205,11 +210,13 @@ impl EffectCategory {
         Self::Generate,
         Self::ImageControl,
         Self::Keying,
+        Self::NoiseAndGrain,
         Self::Perspective,
         Self::Stylize,
         Self::Time,
         Self::Transform,
         Self::Transition,
+        Self::Utility,
         Self::Video,
     ];
 
@@ -222,12 +229,32 @@ impl EffectCategory {
             Self::Generate => "Generate",
             Self::ImageControl => "Image Control",
             Self::Keying => "Keying",
+            Self::NoiseAndGrain => "Noise & Grain",
             Self::Perspective => "Perspective",
             Self::Stylize => "Stylize",
             Self::Time => "Time",
             Self::Transform => "Transform",
             Self::Transition => "Transition",
+            Self::Utility => "Utility",
             Self::Video => "Video",
         }
+    }
+}
+
+/// An sRGB color as stored in a project.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Rgb {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+}
+
+impl Rgb {
+    pub const BLACK: Self = Self::new(0, 0, 0);
+    pub const WHITE: Self = Self::new(255, 255, 255);
+    pub const GREEN: Self = Self::new(0, 255, 0);
+
+    pub const fn new(r: u8, g: u8, b: u8) -> Self {
+        Self { r, g, b }
     }
 }

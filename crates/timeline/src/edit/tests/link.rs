@@ -59,6 +59,10 @@ fn with_linked_selection_off_a_clip_moves_alone_and_slips_out_of_sync() {
         (offset(video), offset(audio)),
         (Some(Ticks(10)), Some(Ticks(-10)))
     );
+    assert_eq!(
+        timeline.sequence().sync_offsets(),
+        [(video, Ticks(10)), (audio, Ticks(-10))].into()
+    );
 }
 
 #[test]
@@ -81,6 +85,25 @@ fn an_unlinked_trim_leaves_the_partner_and_linked_selection_as_they_were() {
         timeline.sequence().linked_selection,
         LinkedSelection::Together
     );
+}
+
+#[test]
+fn a_reversed_linked_pair_stays_in_sync() {
+    let (mut timeline, source) = timeline();
+    timeline
+        .apply(place(source, 0, 0, 200, PlaceMode::Overwrite))
+        .unwrap();
+    let video = clip_on(&timeline, V1, 0);
+    timeline
+        .apply(SetClipSpeed {
+            clips: vec![video],
+            speed: crate::Speed::NORMAL,
+            ripple: false,
+            reverse: true,
+            maintain_pitch: false,
+        })
+        .unwrap();
+    assert!(timeline.sequence().sync_offsets().is_empty());
 }
 
 #[test]

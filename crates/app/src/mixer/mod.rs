@@ -1,18 +1,24 @@
 mod automation;
 pub mod clip_mixer;
 mod inserts;
+mod recording;
+mod sends;
 mod submixes;
 
 use std::collections::HashMap;
 
 use egui::{Color32, Rect, RichText, Sense, Slider};
 use timeline::{
-    preview, Edit, Gain, Pan, Param, SetMasterGain, SetTrackAutomation, SetTrackMix,
-    SetTrackSwitch, SubmixId, TrackRef, TrackSwitch,
+    preview, Edit, Gain, Pan, SetMasterGain, SetTrackMix, SetTrackSwitch, SubmixId, TrackRef,
+    TrackSwitch,
 };
 
 use crate::editor::Editor;
+use crate::track_follow::TrackMoves;
 use automation::{AutomationMode, Pass};
+pub(crate) use inserts::{effects as channel_effects, set_effects as set_channel_effects};
+use recording::{automate, mode_picker};
+pub(crate) use recording::{finish_passes, finish_stopped_passes};
 
 /// Fader travel shown, in dB; the bottom stop means silence.
 const FADER_RANGE: std::ops::RangeInclusive<f32> = -60.0..=15.0;
@@ -24,7 +30,7 @@ const STRIP_HEIGHT: f32 = 180.0;
 const RECORDING: Color32 = Color32::from_rgb(235, 80, 70);
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum Channel {
+pub(crate) enum Channel {
     Track(TrackRef),
     Submix(SubmixId),
     Master,
@@ -48,6 +54,7 @@ pub struct Mixer {
     modes: HashMap<TrackRef, AutomationMode>,
     passes: HashMap<TrackRef, Pass>,
     inserts: inserts::Inserts,
+    sends: sends::Sends,
     clips: clip_mixer::ClipMixer,
     /// The submix being renamed, with the name typed so far and whether the field has
     /// been given the keyboard yet.
@@ -55,6 +62,18 @@ pub struct Mixer {
 }
 
 impl Mixer {
+    pub(crate) fn follow_tracks(&mut self, moves: &TrackMoves) {
+        let modes = std::mem::take(&mut self.modes).into_iter();
+        self.modes = modes
+            .filter_map(|(track, mode)| Some((moves.of(track)?, mode)))
+            .collect();
+        let passes = std::mem::take(&mut self.passes).into_iter();
+        self.passes = passes
+            .filter_map(|(track, pass)| Some((moves.of(track)?, pass)))
+            .collect();
+        self.sends.follow_tracks(moves);
+    }
+
     fn mode(&self, track: TrackRef) -> AutomationMode {
         self.modes.get(&track).copied().unwrap_or_default()
     }
@@ -134,7 +153,10 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
     submixes::add_button(editor, ui);
     egui::ScrollArea::vertical()
         .id_salt("track inserts")
-        .show(ui, |ui| inserts::panel(editor, ui));
+        .show(ui, |ui| {
+            inserts::panel(editor, ui);
+            sends::panel(editor, ui);
+        });
 }
 
 fn strip(editor: &mut Editor, ui: &mut egui::Ui, channel: Channel) {
@@ -230,12 +252,12 @@ fn strip(editor: &mut Editor, ui: &mut egui::Ui, channel: Channel) {
         if let Channel::Track(track) = channel {
             mode_picker(ui, &mut editor.mixer, track);
             submixes::output_picker(editor, ui, track);
+            sends::toggle(editor, ui, track);
         }
         // Rows a track strip has above its fader that this one lacks, so faders line up.
         let missing_rows = match channel {
             Channel::Track(_) => 0.0,
-            Channel::Submix(_) => 2.0,
-            Channel::Master => 2.0,
+            Channel::Submix(_) | Channel::Master => 3.0,
         };
         let spacing = ui.spacing();
         ui.add_space(missing_rows * (spacing.interact_size.y + spacing.item_spacing.y));
@@ -246,6 +268,7 @@ fn strip(editor: &mut Editor, ui: &mut egui::Ui, channel: Channel) {
             db = db.max(*FADER_RANGE.start());
             let fader = ui.add(
                 Slider::new(&mut db, FADER_RANGE)
+                    .update_while_editing(false)
                     .vertical()
                     .show_value(false)
                     .step_by(0.1),
@@ -275,7 +298,11 @@ fn strip(editor: &mut Editor, ui: &mut egui::Ui, channel: Channel) {
             let mut value = pan.value();
             ui.spacing_mut().slider_width = 56.0;
             let knob = ui
-                .add(Slider::new(&mut value, -100..=100).show_value(false))
+                .add(
+                    Slider::new(&mut value, -100..=100)
+                        .update_while_editing(false)
+                        .show_value(false),
+                )
                 .on_hover_text(format!("Balance {value} (double-click to centre)"));
             if knob.double_clicked() {
                 value = 0;
@@ -362,71 +389,6 @@ fn strip(editor: &mut Editor, ui: &mut egui::Ui, channel: Channel) {
         }
         None => {}
     }
-}
-
-fn mode_picker(ui: &mut egui::Ui, mixer: &mut Mixer, track: TrackRef) {
-    let mut mode = mixer.mode(track);
-    egui::ComboBox::from_id_salt(("automation mode", track))
-        .width(60.0)
-        .wrap_mode(egui::TextWrapMode::Extend)
-        .selected_text(mode.name())
-        .show_ui(ui, |ui| {
-            for option in AutomationMode::ALL {
-                ui.selectable_value(&mut mode, option, option.name())
-                    .on_hover_text(option.tip());
-            }
-        })
-        .response
-        .on_hover_text(mode.tip());
-    mixer.modes.insert(track, mode);
-}
-
-/// Records the fader into the track's volume keyframes while its mode says to, and
-/// commits a pass once it ends. True while the fader is being recorded.
-fn automate(editor: &mut Editor, track: TrackRef, volume: Gain, db: f32, touched: bool) -> bool {
-    let playing = editor
-        .program
-        .as_ref()
-        .is_some_and(|program| program.player.is_playing() && program.player.rate() > 0);
-    let playhead = editor.playhead();
-    let last = editor.mixer.passes.get(&track).map(Pass::last);
-    // Looping or seeking back starts a new pass rather than writing over this one.
-    let rewound = last.flatten().is_some_and(|(time, _)| playhead < time);
-    let mode = editor.mixer.mode(track);
-    let records =
-        playing && volume > Gain::SILENT && mode.records(last.is_some() && !rewound, touched);
-    if last.is_some() && (rewound || !records) {
-        finish_pass(editor, track);
-    }
-    if !records {
-        return false;
-    }
-    let level = db - volume.db();
-    let pass = editor.mixer.passes.entry(track).or_default();
-    let heard = pass.last().map(|(_, previous)| previous);
-    pass.record(playhead, level);
-    if heard != Some(level) {
-        let automation = Param::from_value(level);
-        live(editor, &SetTrackAutomation { track, automation });
-    }
-    true
-}
-
-fn finish_pass(editor: &mut Editor, track: TrackRef) {
-    let Some(pass) = editor.mixer.passes.remove(&track) else {
-        return;
-    };
-    let sequence = editor.timeline.sequence();
-    let Some(current) = sequence.track(track) else {
-        return;
-    };
-    let automation = pass.spliced(&current.automation, sequence.timebase);
-    if automation == current.automation {
-        // Nothing to commit, but the mix still holds the pass's level.
-        editor.mix_program(sequence.clone());
-        return;
-    }
-    editor.apply_levels(SetTrackAutomation { track, automation });
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

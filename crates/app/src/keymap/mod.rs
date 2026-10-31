@@ -1,5 +1,6 @@
 mod actions;
 mod command;
+mod command_words;
 mod defaults;
 mod window;
 
@@ -53,17 +54,24 @@ impl Chord {
         match event {
             Event::Key {
                 key,
+                physical_key,
                 pressed: true,
                 modifiers,
                 ..
-            } if !is_modifier(*key) => Some(Self::held(*modifiers, *key)),
+            } if !is_modifier(*key) => {
+                let key = unshifted(*key, *physical_key, modifiers.shift);
+                Some(Self::held(*modifiers, key))
+            }
             Event::Copy => Some(Self::new(true, false, false, Key::C)),
             // Shift+Delete is also a cut to the windowing layer.
             Event::Cut if modifiers.shift && !ctrl => {
                 Some(Self::new(false, true, false, Key::Delete))
             }
             Event::Cut => Some(Self::new(true, modifiers.shift, false, Key::X)),
-            Event::Paste(_) => Some(Self::new(true, modifiers.shift && ctrl, false, Key::V)),
+            // An image on the system clipboard, as from Snipping Tool, still pastes clips.
+            Event::Paste(_) | Event::PasteImage(_) => {
+                Some(Self::new(true, modifiers.shift && ctrl, false, Key::V))
+            }
             _ => None,
         }
     }
@@ -93,8 +101,13 @@ impl Chord {
 
     /// As shown in menus, with symbols for punctuation, where the file spells it out.
     pub fn label(self) -> String {
+        // egui's arrow symbols are missing from the bundled fonts; these are there.
         let key = match self.key {
             Key::Quote => "'",
+            Key::ArrowLeft => "←",
+            Key::ArrowRight => "→",
+            Key::ArrowUp => "↑",
+            Key::ArrowDown => "↓",
             key => key.symbol_or_name(),
         };
         format!("{}{key}", self.modifier_prefix())
@@ -119,6 +132,20 @@ impl fmt::Display for Chord {
 }
 
 /// Modifier keys arrive as presses of their own, but only ever hold others down.
+/// The key a shifted symbol was typed on, so Shift+; reads as Shift+Semicolon rather
+/// than as a colon no shortcut names, whatever the keyboard layout.
+fn unshifted(key: Key, physical_key: Option<Key>, shift: bool) -> Key {
+    use Key::*;
+    let shifted_symbol = matches!(
+        key,
+        Colon | Pipe | Questionmark | Exclamationmark | OpenCurlyBracket | CloseCurlyBracket | Plus
+    );
+    match physical_key {
+        Some(physical) if shift && shifted_symbol => physical,
+        _ => key,
+    }
+}
+
 fn is_modifier(key: Key) -> bool {
     use Key::*;
     matches!(
@@ -149,6 +176,9 @@ pub fn take_press<T>(ctx: &egui::Context, mut pick: impl FnMut(Chord) -> Option<
 }
 
 /// Which keys run which commands.
+/// Marks a file that lists only changed commands.
+const FORMAT_LINE: &str = "# format: 2";
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Keymap {
     bindings: Vec<(Command, Vec<Chord>)>,
@@ -178,6 +208,14 @@ impl Keymap {
         self.chords(command)
             .first()
             .map_or_else(String::new, |chord| chord.label())
+    }
+
+    /// `text` for a tooltip, with the key for `command` after it when it has one.
+    pub fn tip(&self, text: &str, command: Command) -> String {
+        match self.label(command) {
+            key if key.is_empty() => text.to_owned(),
+            key => format!("{text} ({key})"),
+        }
     }
 
     /// The command `chord` runs. Punctuation typed with Shift, such as `+`, also reaches
@@ -231,11 +269,17 @@ impl Keymap {
         }
     }
 
-    /// The shortcuts file: a line per command, its id, a colon, then its keys separated
-    /// by commas.
+    /// The shortcuts file: a line per changed command, its id, a colon, then its keys
+    /// separated by commas. Commands left at their defaults aren't written, so keys given
+    /// to them later still arrive.
     pub fn to_text(&self) -> String {
         let mut text = String::from("# Keyboard shortcuts: command: keys, separated by commas\n");
+        text += FORMAT_LINE;
+        text.push('\n');
         for (command, chords) in &self.bindings {
+            if *chords == command.defaults() {
+                continue;
+            }
             let keys: Vec<String> = chords.iter().map(Chord::to_string).collect();
             text += &format!("{}: {}\n", command.id(), keys.join(", "));
         }
@@ -246,9 +290,13 @@ impl Keymap {
     /// since it was written still have keys; lines it can't read are skipped.
     pub fn from_text(text: &str) -> Self {
         let mut keymap = Self::default();
-        let lines = text
-            .lines()
-            .map(str::trim)
+        let lines: Vec<&str> = text.lines().map(str::trim).collect();
+        // Older files listed every command, so a line holding only some of today's
+        // defaults is an old default rather than a choice.
+        let lists_changes = lines.contains(&FORMAT_LINE);
+        let mut chosen = Vec::new();
+        let lines = lines
+            .into_iter()
             .filter(|line| !line.is_empty() && !line.starts_with('#'));
         for line in lines {
             let Some((id, keys)) = line.split_once(':') else {
@@ -262,13 +310,30 @@ impl Keymap {
                 .map(str::trim)
                 .filter(|key| !key.is_empty())
                 .filter_map(Chord::parse)
-                .collect();
+                .collect::<Vec<_>>();
+            let defaults = command.defaults();
+            let old_default =
+                !chords.is_empty() && chords.iter().all(|chord| defaults.contains(chord));
+            if !lists_changes && old_default {
+                continue;
+            }
             if let Some((_, bound)) = keymap
                 .bindings
                 .iter_mut()
                 .find(|(bound, _)| *bound == command)
             {
                 *bound = chords;
+                chosen.push(command);
+            }
+        }
+        // A key the file gives one command is taken from another's newer default.
+        let taken: Vec<Chord> = (keymap.bindings.iter())
+            .filter(|(command, _)| chosen.contains(command))
+            .flat_map(|(_, chords)| chords.iter().copied())
+            .collect();
+        for (command, chords) in &mut keymap.bindings {
+            if !chosen.contains(command) {
+                chords.retain(|chord| !taken.contains(chord));
             }
         }
         keymap
@@ -320,12 +385,38 @@ mod tests {
     }
 
     #[test]
+    fn keys_added_to_defaults_since_an_old_file_reach_their_commands() {
+        let old = "add_edit: Ctrl+K\nsave: Ctrl+B\nmark_in:\n";
+        let keymap = Keymap::from_text(old);
+        assert_eq!(keymap.chords(Command::AddEdit), [chord("Ctrl+K")]);
+        assert_eq!(keymap.command(chord("Ctrl+B")), Some(Command::Save));
+        assert!(keymap.chords(Command::MarkIn).is_empty());
+        let old = "add_edit: Ctrl+K\n";
+        assert_eq!(
+            Keymap::from_text(old).chords(Command::AddEdit),
+            Command::AddEdit.defaults()
+        );
+    }
+
+    #[test]
+    fn a_file_keeps_only_changes_so_later_defaults_still_arrive() {
+        let mut keymap = Keymap::default();
+        keymap.unbind(Command::AddEdit, chord("Ctrl+B"));
+        let text = keymap.to_text();
+        assert!(!text.contains("undo:"));
+        assert_eq!(
+            Keymap::from_text(&text).chords(Command::AddEdit),
+            [chord("Ctrl+K")]
+        );
+    }
+
+    #[test]
     fn binding_a_taken_key_moves_it() {
         let mut keymap = Keymap::default();
         let previous = keymap.bind(Command::MatchFrame, chord("Ctrl+K"));
         assert_eq!(previous, Some(Command::AddEdit));
         assert_eq!(keymap.command(chord("Ctrl+K")), Some(Command::MatchFrame));
-        assert!(keymap.chords(Command::AddEdit).is_empty());
+        assert_eq!(keymap.chords(Command::AddEdit), [chord("Ctrl+B")]);
     }
 
     #[test]
@@ -339,7 +430,11 @@ mod tests {
             keymap.command(chord("Shift+A")),
             Some(Command::TrackSelectBackwardTool)
         );
-        assert_eq!(keymap.command(chord("Shift+Equals")), Some(Command::ZoomIn));
+        assert_eq!(keymap.command(chord("Shift+Comma")), Some(Command::Insert));
+        assert_eq!(
+            keymap.command(chord("Shift+Equals")),
+            Some(Command::ExpandAllTracks)
+        );
         assert_eq!(keymap.command(chord("Alt+A")), None);
         assert_eq!(keymap.command(chord("Ctrl+Shift+J")), None);
     }

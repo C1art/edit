@@ -1,19 +1,18 @@
 mod files;
+mod segments;
 
 use std::collections::{HashSet, VecDeque};
 use std::ops::Range;
 use std::sync::Arc;
 
-use egui::{ProgressBar, RichText};
-use media::{RateControl, VideoCodec};
-use playback::{ExportEvent, ExportJob, ExportSettings, Preview, VideoExport};
-use timeline::{render_segments, segment_content, Sequence, Ticks};
+use egui::{Key, ProgressBar, RichText};
+use media::{Acceleration, RateControl, VideoCodec};
+use playback::{ExportEvent, ExportJob, ExportSettings, Preview, VideoEncoding, VideoExport};
+use timeline::Ticks;
 
 use crate::editor::Editor;
 use files::{PreviewFiles, Reply};
-
-/// A segment to render, named by the fingerprint of what it shows.
-type Segment = (Range<Ticks>, u64);
+use segments::{fingerprint, Segment, SegmentWorker};
 
 /// Render previews of the costly parts of the sequence, as Premiere keeps: files that
 /// play in their place, found again by what they show for as long as it's unchanged.
@@ -24,6 +23,9 @@ pub(crate) struct RenderPreviews {
     /// The costly segments as of `revision`.
     segments: Vec<Segment>,
     revision: Option<u64>,
+    worker: SegmentWorker,
+    /// The newest revision the worker was asked about.
+    asked: Option<u64>,
     /// What the program player was last told to play.
     sent: Option<Vec<Preview>>,
     job: Option<RenderJob>,
@@ -50,6 +52,8 @@ impl RenderPreviews {
             rendered: HashSet::new(),
             segments: Vec::new(),
             revision: None,
+            worker: SegmentWorker::start()?,
+            asked: None,
             sent: None,
             job: None,
         })
@@ -57,7 +61,10 @@ impl RenderPreviews {
 
     /// For a timeline replaced by another, whose revisions start again.
     pub(crate) fn forget(&mut self) {
+        self.worker.forget();
+        self.segments.clear();
         self.revision = None;
+        self.asked = None;
         self.sent = None;
         self.job = None;
     }
@@ -69,7 +76,12 @@ impl RenderPreviews {
             .map(|(range, fingerprint)| (range.clone(), self.rendered.contains(fingerprint)))
     }
 
-    fn previews(&self) -> Vec<Preview> {
+    /// The rendered segments, when they are worked out for `revision`; an edit since
+    /// may have changed what they show.
+    pub(crate) fn previews(&self, revision: u64) -> Vec<Preview> {
+        if self.revision != Some(revision) {
+            return Vec::new();
+        }
         self.segments
             .iter()
             .filter(|(_, fingerprint)| self.rendered.contains(fingerprint))
@@ -79,12 +91,6 @@ impl RenderPreviews {
             })
             .collect()
     }
-}
-
-/// What a segment shows, as a number; `None` when it can't be written out.
-fn fingerprint(sequence: &Sequence, range: &Range<Ticks>) -> Option<u64> {
-    let content = segment_content(sequence, range);
-    project::fingerprint(&(content, range.start, range.end)).ok()
 }
 
 impl Editor {
@@ -104,26 +110,28 @@ impl Editor {
             }
         }
         let revision = self.timeline.revision();
-        if previews.revision != Some(revision) {
-            let sequence = self.timeline.sequence();
-            previews.revision = Some(revision);
-            previews.segments = render_segments(sequence)
-                .into_iter()
-                .filter_map(|range| Some((range.clone(), fingerprint(sequence, &range)?)))
-                .collect();
+        if previews.asked != Some(revision) {
+            previews.asked = Some(revision);
+            let sequence = self.timeline.sequence().clone();
+            previews.worker.ask(revision, sequence, ctx);
+        }
+        if let Some((worked_out, segments)) = previews.worker.poll() {
+            previews.revision = Some(worked_out);
+            previews.segments = segments;
         }
         if previews.job.is_some() {
-            ctx.request_repaint();
+            ctx.request_repaint_after(crate::export_progress::REFRESH);
             notices.extend(self.advance_render());
         }
         let Some(previews) = &mut self.render_previews else {
             return;
         };
-        // The multi-camera view shows each camera, not the program alone.
+        // The multi-camera view shows each camera, not the program alone; until the
+        // segments catch up with an edit, a preview could show what was there before.
         let wanted = if self.multicam_layout.is_some() {
             Vec::new()
         } else {
-            previews.previews()
+            previews.previews(revision)
         };
         if previews.sent.as_ref() != Some(&wanted) {
             if let Some(program) = &mut self.program {
@@ -142,22 +150,50 @@ impl Editor {
     pub(crate) fn render_in_to_out(&mut self) {
         let sequence = self.timeline.sequence();
         let range = sequence.marks.range(sequence.duration());
+        self.render_spans(&[range]);
+    }
+
+    /// Renders the costly segments under the selected clips that have no preview yet.
+    pub(crate) fn render_selection(&mut self) {
+        let sequence = self.timeline.sequence();
+        let spans: Vec<_> = sequence
+            .clips_of(&self.view.selection)
+            .into_iter()
+            .map(|(_, clip)| clip.start..clip.end())
+            .collect();
+        if spans.is_empty() {
+            self.notice("Select the clips to render");
+            return;
+        }
+        self.render_spans(&spans);
+    }
+
+    fn render_spans(&mut self, spans: &[Range<Ticks>]) {
         let Some(previews) = &mut self.render_previews else {
             self.notice("Render previews are unavailable");
             return;
         };
-        let queue: VecDeque<Range<Ticks>> = previews
+        let in_range: Vec<_> = previews
             .segments
             .iter()
-            .filter(|(segment, fingerprint)| {
-                segment.start < range.end
-                    && range.start < segment.end
-                    && !previews.rendered.contains(fingerprint)
+            .filter(|(segment, _)| {
+                spans
+                    .iter()
+                    .any(|span| segment.start < span.end && span.start < segment.end)
             })
+            .collect();
+        let queue: VecDeque<Range<Ticks>> = in_range
+            .iter()
+            .filter(|(_, fingerprint)| !previews.rendered.contains(fingerprint))
             .map(|(segment, _)| segment.clone())
             .collect();
+        let any_costly = !in_range.is_empty();
         if queue.is_empty() {
-            self.notice("Nothing to render: every costly segment in range has a preview");
+            self.notice(if !any_costly {
+                "Nothing to render: this part of the sequence already plays in real time"
+            } else {
+                "Nothing to render: its previews are up to date"
+            });
             return;
         }
         previews.job = Some(RenderJob {
@@ -167,9 +203,23 @@ impl Editor {
         });
     }
 
+    /// Whether Delete Render Files has anything to delete or stop.
+    pub(crate) fn has_render_files(&self) -> bool {
+        self.render_previews
+            .as_ref()
+            .is_some_and(|previews| !previews.rendered.is_empty() || previews.job.is_some())
+    }
+
     pub(crate) fn delete_render_files(&mut self) {
         if let Some(previews) = &mut self.render_previews {
             previews.job = None;
+            // Windows can't remove the files while the player has them open.
+            if let Some(program) = &mut self.program {
+                program.player.set_previews(Vec::new());
+            }
+            previews.sent = Some(Vec::new());
+            // Gone already, so they aren't handed back to the player before the reply.
+            previews.rendered.clear();
             previews.files.delete_all();
         }
     }
@@ -200,12 +250,14 @@ impl Editor {
             let settings = ExportSettings {
                 path: previews.files.partial_path(fingerprint),
                 video: Some(VideoExport {
-                    codec: VideoCodec::ProRes422,
-                    rate_control: RateControl::Quality(18),
+                    encoding: VideoEncoding::Movie(VideoCodec::ProRes422, RateControl::Quality(18)),
                     size: (format.width, format.height),
+                    acceleration: Acceleration::Hardware,
                 }),
                 audio: None,
                 range: Some(range),
+                previews: Vec::new(),
+                loudness: None,
             };
             let started = ExportJob::start(
                 Arc::new(sequence.clone()),
@@ -239,6 +291,7 @@ impl Editor {
                     running.frames_done = frames_done;
                     running.frames_total = frames_total;
                 }
+                ExportEvent::Measuring(_) | ExportEvent::Encoder(_) | ExportEvent::Timings(_) => {}
                 ExportEvent::Warning(warning) => notices.push(format!("Render: {warning}")),
                 ExportEvent::Finished => {
                     let fingerprint = running.fingerprint;
@@ -278,21 +331,20 @@ pub(crate) fn window(editor: &mut Editor, ctx: &egui::Context) {
     });
     let fraction = (done as f32 + segment) / job.total.max(1) as f32;
     let mut cancel = false;
-    egui::Window::new("Rendering")
-        .collapsible(false)
-        .resizable(false)
-        .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-        .show(ctx, |ui| {
-            let current = (done + 1).min(job.total);
-            ui.label(format!("Rendering segment {current} of {}", job.total));
-            ui.add(
-                ProgressBar::new(fraction)
-                    .show_percentage()
-                    .desired_width(260.0),
-            );
-            ui.label(RichText::new("Previews play in place of the segments they cover.").weak());
-            cancel = ui.button("Cancel").clicked();
+    crate::dialog::window(ctx, "Rendering").show(ctx, |ui| {
+        let current = (done + 1).min(job.total);
+        ui.label(format!("Rendering segment {current} of {}", job.total));
+        ui.add(
+            ProgressBar::new(fraction)
+                .show_percentage()
+                .desired_width(260.0),
+        );
+        ui.label(RichText::new("Previews play in place of the segments they cover.").weak());
+        crate::dialog::footer(ui, |ui| {
+            cancel =
+                ui.button("Cancel").clicked() || ui.input(|input| input.key_pressed(Key::Escape));
         });
+    });
     if cancel {
         // Dropping the export cancels it and removes its partial file.
         job.running = None;

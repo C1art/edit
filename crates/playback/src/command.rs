@@ -3,6 +3,7 @@ use std::sync::Arc;
 use timeline::{Sequence, Ticks};
 
 use crate::previews::PreviewList;
+use crate::shuttle::PlayRate;
 use crate::{Levels, PlaybackError, Resolution};
 
 #[derive(Debug, Clone)]
@@ -10,15 +11,23 @@ pub(crate) enum Command {
     /// Takes effect from the next frame or chunk produced. The player follows it with a
     /// seek unless only levels changed.
     Sequence(Arc<Sequence>),
-    Seek {
-        position: Ticks,
-        generation: u64,
-    },
+    Seek(Seek),
     /// Only the video worker acts on it; the player follows it with a seek.
     Resolution(Resolution),
     /// Only the video worker acts on it.
     Previews(PreviewList),
     Shutdown,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Seek {
+    pub(crate) position: Ticks,
+    pub(crate) generation: u64,
+    /// Sounds a short stretch from `position` while paused, rather than readying the
+    /// audio to play on from there.
+    pub(crate) scrub: bool,
+    /// How fast playing on from `position` goes, always forwards.
+    pub(crate) speed: PlayRate,
 }
 
 #[derive(Debug)]
@@ -31,13 +40,13 @@ pub(crate) enum Event {
     /// A problem with one piece of media; playback carries on without it.
     Warning(PlaybackError),
     /// Peak levels of one mixed chunk, for meters.
-    Levels(Levels),
+    Levels { generation: u64, levels: Levels },
 }
 
 /// The net effect of a burst of commands.
 pub(crate) struct Coalesced {
     pub(crate) sequence: Option<Arc<Sequence>>,
-    pub(crate) seek: Option<(Ticks, u64)>,
+    pub(crate) seek: Option<Seek>,
     pub(crate) resolution: Option<Resolution>,
     pub(crate) previews: Option<PreviewList>,
 }
@@ -56,10 +65,7 @@ pub(crate) fn coalesce(
     while let Some(command) = next {
         match command {
             Command::Sequence(new) => sequence = Some(new),
-            Command::Seek {
-                position,
-                generation,
-            } => seek = Some((position, generation)),
+            Command::Seek(new) => seek = Some(new),
             Command::Resolution(new) => resolution = Some(new),
             Command::Previews(new) => previews = Some(new),
             Command::Shutdown => return None,

@@ -1,8 +1,9 @@
 use egui::{Key, Modifiers};
-use timeline::{Edge, Generator, Marks, PlaceMode, Title, TrackKind};
+use timeline::{Edge, Generator, Marks, PasteMode, PlaceMode, Title, TrackKind};
 
 use crate::editor::Editor;
 use crate::effects::KeyAction;
+use crate::gap_navigation::GapScope;
 use crate::keymap::{take_press, Command, KeymapWindow, DIGIT_KEYS};
 use crate::monitors::Focus;
 use crate::placing;
@@ -12,14 +13,19 @@ use crate::transport;
 /// Switch to cameras one to nine in the multi-camera view.
 const ANGLE_KEYS: [Key; crate::multicam::KEYED_ANGLES] = DIGIT_KEYS;
 
-/// Editor-wide keys. Skipped while a text field has focus so typing isn't hijacked, and
-/// while a key is being recorded for a shortcut.
+/// Editor-wide keys. Skipped while a text field has focus so typing isn't hijacked,
+/// while a key is being recorded for a shortcut, and while a menu, dialog or the file
+/// browser waits on an answer, so arrows, Enter and Escape answer it and nothing else
+/// happens behind it.
 pub fn handle(editor: &mut Editor, ctx: &egui::Context) {
     let recording = editor
         .keymap_window
         .as_ref()
         .is_some_and(|window| window.recording.is_some());
-    if ctx.egui_wants_keyboard_input() || recording {
+    let waiting = editor.path_prompt.is_some()
+        || crate::dialog::waiting(ctx)
+        || egui::Popup::is_any_open(ctx);
+    if ctx.egui_wants_keyboard_input() || recording || waiting {
         return;
     }
     if editor.multicam_layout.is_some() {
@@ -32,6 +38,9 @@ pub fn handle(editor: &mut Editor, ctx: &egui::Context) {
             editor.switch_angle(angle);
         }
     }
+    if editor.full_screen {
+        crate::full_screen::keys(editor, ctx);
+    }
     while let Some(command) = take_press(ctx, |chord| editor.keymap.command(chord)) {
         run(editor, command);
     }
@@ -39,6 +48,9 @@ pub fn handle(editor: &mut Editor, ctx: &egui::Context) {
 
 pub(crate) fn run(editor: &mut Editor, command: Command) {
     if let Some(key) = command.transport() {
+        if editor.focus == Focus::Program && editor.dynamic_trim(key) {
+            return;
+        }
         let player = match editor.focus {
             Focus::Source => editor
                 .source
@@ -66,6 +78,8 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         Command::OpenProject => editor.prompt_path(PathPurpose::OpenProject),
         Command::Save => editor.save_project(),
         Command::SaveAs => editor.prompt_path(PathPurpose::SaveProject),
+        // Closing asks about unsaved changes, as the window's close button does.
+        Command::Quit => editor.ctx.send_viewport_cmd(egui::ViewportCommand::Close),
         Command::Import => editor.prompt_path(PathPurpose::Import),
         Command::ExportMedia => crate::export::open(editor),
         Command::ExportFrame => editor.prompt_path(PathPurpose::ExportFrame),
@@ -78,8 +92,8 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         Command::Copy if editor.act_on_keyframes(KeyAction::Copy) => {}
         Command::Copy => editor.copy(),
         Command::Paste if editor.act_on_keyframes(KeyAction::Paste) => {}
-        Command::Paste => editor.paste(PlaceMode::Overwrite),
-        Command::PasteInsert => editor.paste(PlaceMode::Insert),
+        Command::Paste => editor.paste(PasteMode::OntoFreeTracks),
+        Command::PasteInsert => editor.paste(PasteMode::Insert),
         Command::PasteAttributes => editor.paste_attributes(),
         Command::Clear | Command::RippleDelete if editor.act_on_keyframes(KeyAction::Delete) => {}
         Command::Clear => editor.lift(),
@@ -90,15 +104,17 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         }
         Command::SelectAll if editor.act_on_keyframes(KeyAction::SelectAll) => {}
         Command::SelectAll => editor.select_all(),
-        Command::DeselectAll => {
-            editor.view.selection.clear();
-            editor.view.edit_point = None;
-        }
+        Command::DeselectAll => editor.deselect_all(),
+        Command::Find => editor.open_find(),
         Command::KeyboardShortcuts => {
             editor.keymap_window = Some(KeymapWindow::default());
         }
         Command::SpeedDuration => editor.speed_duration(),
         Command::AudioGain => editor.prompt_clip_gain(),
+        Command::IncreaseClipVolume => editor.nudge_clip_gain(1.0),
+        Command::DecreaseClipVolume => editor.nudge_clip_gain(-1.0),
+        Command::IncreaseClipVolumeMany => editor.nudge_clip_gain(6.0),
+        Command::DecreaseClipVolumeMany => editor.nudge_clip_gain(-6.0),
         Command::ToggleEnabled => editor.toggle_enabled(),
         Command::ToggleLink => editor.toggle_link(),
         Command::Group => editor.set_grouped(true),
@@ -111,6 +127,14 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         Command::NudgeRightFive => editor.nudge(5),
         Command::NudgeUp => editor.nudge_track(true),
         Command::NudgeDown => editor.nudge_track(false),
+        Command::SlipLeft => editor.slip_selection(1),
+        Command::SlipRight => editor.slip_selection(-1),
+        Command::SlipLeftFive => editor.slip_selection(5),
+        Command::SlipRightFive => editor.slip_selection(-5),
+        Command::SlideLeft => editor.slide_selection(-1),
+        Command::SlideRight => editor.slide_selection(1),
+        Command::SlideLeftFive => editor.slide_selection(-5),
+        Command::SlideRightFive => editor.slide_selection(5),
         Command::Insert => placing::edit_from_source(editor, PlaceMode::Insert),
         Command::Overwrite => placing::edit_from_source(editor, PlaceMode::Overwrite),
         Command::AddEdit => editor.add_edit(),
@@ -122,6 +146,9 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         }
         Command::AudioTransition => {
             crate::effects::apply_default_transition(editor, TrackKind::Audio);
+        }
+        Command::TransitionsToSelection => {
+            crate::effects::apply_default_transitions_to_selection(editor);
         }
         Command::LiftMarked => editor.lift_marked(),
         Command::ExtractMarked => editor.extract_marked(),
@@ -138,6 +165,7 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         Command::MatchFrame => editor.match_frame(),
         Command::ReverseMatchFrame => editor.reverse_match_frame(),
         Command::ToggleSnapping => editor.view.snapping = !editor.view.snapping,
+        Command::ToggleAudioScrubbing => editor.scrub_audio = !editor.scrub_audio,
         Command::ToggleLinkedSelection => editor.toggle_linked_selection(),
         Command::ZoomIn => editor.view.zoom(2.0, None),
         Command::ZoomOut => editor.view.zoom(0.5, None),
@@ -163,7 +191,10 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         Command::ComparisonView => editor.toggle_comparison_view(),
         Command::Workspace(slot) => editor.switch_workspace(usize::from(slot)),
         Command::ResetWorkspace => editor.reset_workspace(),
+        Command::MaximizePanel => editor.toggle_maximized_panel(),
+        Command::FullScreen => editor.toggle_full_screen(),
         Command::RenderInToOut => editor.render_in_to_out(),
+        Command::RenderSelection => editor.render_selection(),
         Command::DeleteRenderFiles => editor.delete_render_files(),
         Command::MarkIn
         | Command::MarkOut
@@ -174,9 +205,19 @@ pub(crate) fn run(editor: &mut Editor, command: Command) {
         Command::MarkSelection => editor.mark_selection(),
         Command::GoToIn => editor.go_to_mark(Edge::Head),
         Command::GoToOut => editor.go_to_mark(Edge::Tail),
+        Command::GoToSelectedClipStart => editor.go_to_selection_edge(Edge::Head),
+        Command::GoToSelectedClipEnd => editor.go_to_selection_edge(Edge::Tail),
+        Command::NextGapInSequence => editor.go_to_gap(GapScope::Sequence, true),
+        Command::PreviousGapInSequence => editor.go_to_gap(GapScope::Sequence, false),
+        Command::NextGapInTrack => editor.go_to_gap(GapScope::Track, true),
+        Command::PreviousGapInTrack => editor.go_to_gap(GapScope::Track, false),
         Command::AddMarker => editor.add_marker(),
         Command::NextMarker => editor.jump_to_marker(true),
+        Command::PreviousKeyframe => editor.jump_to_keyframe(false),
+        Command::NextKeyframe => editor.jump_to_keyframe(true),
+        Command::AddRemoveKeyframe => editor.toggle_focused_keyframe(),
         Command::PreviousMarker => editor.jump_to_marker(false),
+        Command::ClearAllMarkers => editor.clear_all_markers(),
         Command::ClearMarker => {
             if let Some(id) = editor.marker_at_playhead() {
                 editor.clear_marker(id);

@@ -1,5 +1,5 @@
 use egui::{Key, Label, RichText, Sense, TextEdit};
-use timeline::{FrameRate, MediaItem, Timebase, Timecode};
+use timeline::{FrameRate, MediaItem, TimeDisplay, Timebase, Timecode};
 
 use super::PoolAction;
 
@@ -128,5 +128,5 @@ pub(super) fn played_length(item: &MediaItem, timebase: Timebase) -> Timecode {
         .map_or(FrameRate::FPS_25, |video| video.frame_rate);
     let range = item.default_range(timebase);
     let played = item.conform().sequence_span(range.end - range.start);
-    Timecode::new(played, timebase, rate)
+    Timecode::shown(played, timebase, rate, TimeDisplay::Timecode)
 }

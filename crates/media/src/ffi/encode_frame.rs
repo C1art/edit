@@ -61,8 +61,8 @@ impl Frame {
         raw.duration = duration;
     }
 
-    /// Fills an audio frame in planar float or packed 16- or 32-bit from interleaved
-    /// stereo, which must fit its capacity.
+    /// Fills an audio frame in planar or packed float or packed 16- or 32-bit from
+    /// interleaved stereo, which must fit its capacity.
     pub(crate) fn fill_stereo(
         &mut self,
         interleaved: &[f32],
@@ -90,6 +90,13 @@ impl Frame {
                 *left = l;
                 *right = r;
             }
+        } else if format == sys::AVSampleFormat::AV_SAMPLE_FMT_FLT as i32 {
+            // SAFETY: the frame is writable and packed float with room for `capacity`
+            // stereo samples, and `samples <= capacity`.
+            let out = unsafe {
+                std::slice::from_raw_parts_mut(raw.data[0].cast::<f32>(), samples * STEREO)
+            };
+            out.copy_from_slice(&interleaved[..samples * STEREO]);
         } else if format == sys::AVSampleFormat::AV_SAMPLE_FMT_S16 as i32 {
             // SAFETY: the frame is writable and packed 16-bit with room for `capacity`
             // stereo samples, and `samples <= capacity`.

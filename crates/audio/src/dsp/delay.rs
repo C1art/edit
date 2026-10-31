@@ -37,7 +37,7 @@ impl Delay {
         for frame in samples.as_chunks_mut::<2>().0 {
             let delayed = self.line[(self.write + length - delay) % length];
             for side in 0..2 {
-                self.line[self.write][side] = frame[side] + delayed[side] * feedback;
+                self.line[self.write][side] = super::flush(frame[side] + delayed[side] * feedback);
                 frame[side] += delayed[side] * mix;
             }
             self.write = (self.write + 1) % length;

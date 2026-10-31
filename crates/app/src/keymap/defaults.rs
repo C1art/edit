@@ -8,6 +8,7 @@ impl Command {
         let ctrl = |key| Chord::new(true, false, false, key);
         let ctrl_shift = |key| Chord::new(true, true, false, key);
         let ctrl_alt = |key| Chord::new(true, false, true, key);
+        let ctrl_alt_shift = |key| Chord::new(true, true, true, key);
         let shift = |key| Chord::new(false, true, false, key);
         let plain = |key| Chord::new(false, false, false, key);
         let alt = |key| Chord::new(false, false, true, key);
@@ -21,6 +22,7 @@ impl Command {
             Self::ExportMedia => vec![ctrl(Key::M)],
             Self::ExportFrame => vec![ctrl_shift(Key::E)],
             Self::NewTitle => vec![ctrl(Key::T)],
+            Self::Quit => vec![ctrl(Key::Q)],
             Self::Undo => vec![ctrl(Key::Z)],
             Self::Redo => vec![ctrl_shift(Key::Z), ctrl(Key::Y)],
             Self::Cut => vec![ctrl(Key::X)],
@@ -33,9 +35,14 @@ impl Command {
             Self::CancelDrag => vec![plain(Key::Escape)],
             Self::SelectAll => vec![ctrl(Key::A)],
             Self::DeselectAll => vec![ctrl_shift(Key::A)],
+            Self::Find => vec![ctrl(Key::F)],
             Self::KeyboardShortcuts => vec![ctrl_alt(Key::K)],
             Self::SpeedDuration => vec![ctrl(Key::R)],
             Self::AudioGain => vec![plain(Key::G)],
+            Self::IncreaseClipVolume => vec![alt(Key::CloseBracket)],
+            Self::DecreaseClipVolume => vec![alt(Key::OpenBracket)],
+            Self::IncreaseClipVolumeMany => vec![alt_shift(Key::CloseBracket)],
+            Self::DecreaseClipVolumeMany => vec![alt_shift(Key::OpenBracket)],
             Self::ToggleEnabled => vec![shift(Key::E)],
             Self::ToggleLink => vec![ctrl(Key::L)],
             Self::Group => vec![ctrl(Key::G)],
@@ -47,14 +54,23 @@ impl Command {
             Self::NudgeRightFive => vec![alt_shift(Key::ArrowRight)],
             Self::NudgeUp => vec![alt(Key::ArrowUp)],
             Self::NudgeDown => vec![alt(Key::ArrowDown)],
+            Self::SlipLeft => vec![ctrl_alt(Key::ArrowLeft)],
+            Self::SlipRight => vec![ctrl_alt(Key::ArrowRight)],
+            Self::SlipLeftFive => vec![ctrl_alt_shift(Key::ArrowLeft)],
+            Self::SlipRightFive => vec![ctrl_alt_shift(Key::ArrowRight)],
+            Self::SlideLeft => vec![alt(Key::Comma)],
+            Self::SlideRight => vec![alt(Key::Period)],
+            Self::SlideLeftFive => vec![alt_shift(Key::Comma)],
+            Self::SlideRightFive => vec![alt_shift(Key::Period)],
             Self::Insert => vec![plain(Key::Comma)],
             Self::Overwrite => vec![plain(Key::Period)],
-            Self::AddEdit => vec![ctrl(Key::K)],
+            Self::AddEdit => vec![ctrl(Key::B), ctrl(Key::K)],
             Self::AddEditToAllTracks => vec![ctrl_shift(Key::K)],
             Self::ExtendEdit => vec![plain(Key::E)],
             Self::SelectAtPlayhead => vec![plain(Key::D)],
             Self::VideoTransition => vec![ctrl(Key::D)],
             Self::AudioTransition => vec![ctrl_shift(Key::D)],
+            Self::TransitionsToSelection => vec![shift(Key::D)],
             Self::LiftMarked => vec![plain(Key::Semicolon)],
             Self::ExtractMarked => vec![plain(Key::Quote)],
             Self::RippleTrimPrevious => vec![plain(Key::Q)],
@@ -77,11 +93,15 @@ impl Command {
             Self::DecreaseVideoHeights => vec![ctrl(Key::Minus)],
             Self::IncreaseAudioHeights => vec![alt(Key::Equals)],
             Self::DecreaseAudioHeights => vec![alt(Key::Minus)],
-            Self::ExpandAllTracks => vec![shift(Key::Plus)],
+            Self::ExpandAllTracks => vec![shift(Key::Equals), shift(Key::Plus)],
             Self::MinimizeAllTracks => vec![shift(Key::Minus)],
             Self::MulticamView => vec![shift(Key::Num0)],
             Self::RenderInToOut => vec![plain(Key::Enter)],
-            Self::DeleteRenderFiles
+            Self::NextGapInSequence => vec![shift(Key::Semicolon)],
+            Self::PreviousGapInSequence => vec![ctrl_shift(Key::Semicolon)],
+            Self::NextGapInTrack | Self::PreviousGapInTrack => Vec::new(),
+            Self::RenderSelection
+            | Self::DeleteRenderFiles
             | Self::ToggleLinkedSelection
             | Self::JoinThroughEdits
             | Self::ComparisonView => Vec::new(),
@@ -98,13 +118,13 @@ impl Command {
             Self::NextMarker => vec![shift(Key::M)],
             Self::PreviousMarker => vec![ctrl_shift(Key::M)],
             Self::ClearMarker => vec![ctrl_alt(Key::M)],
+            Self::ClearAllMarkers => vec![ctrl_alt_shift(Key::M)],
             Self::SelectionTool => vec![plain(Key::V)],
             Self::TrackSelectForwardTool => vec![plain(Key::A)],
             Self::TrackSelectBackwardTool => vec![shift(Key::A)],
             Self::RippleTool => vec![plain(Key::B)],
             Self::RollTool => vec![plain(Key::N)],
             Self::RateStretchTool => vec![plain(Key::R)],
-            Self::RazorTool => vec![plain(Key::C)],
             Self::SlipTool => vec![plain(Key::Y)],
             Self::SlideTool => vec![plain(Key::U)],
             Self::HandTool => vec![plain(Key::H)],
@@ -115,22 +135,32 @@ impl Command {
             Self::ShuttleLeft => vec![plain(Key::J)],
             Self::ShuttleStop => vec![plain(Key::K)],
             Self::ShuttleRight => vec![plain(Key::L)],
+            Self::ShuttleSlowLeft => vec![shift(Key::J)],
+            Self::ShuttleSlowRight => vec![shift(Key::L)],
             Self::StepBack => vec![plain(Key::ArrowLeft)],
             Self::StepForward => vec![plain(Key::ArrowRight)],
             Self::StepBackFive => vec![shift(Key::ArrowLeft)],
             Self::StepForwardFive => vec![shift(Key::ArrowRight)],
             Self::GoToStart => vec![plain(Key::Home)],
             Self::GoToEnd => vec![plain(Key::End)],
+            Self::GoToSelectedClipStart => vec![shift(Key::Home)],
+            Self::GoToSelectedClipEnd => vec![shift(Key::End)],
             Self::PreviousEdit => vec![plain(Key::ArrowUp)],
             Self::NextEdit => vec![plain(Key::ArrowDown)],
+            Self::PreviousKeyframe => vec![plain(Key::OpenBracket)],
+            Self::NextKeyframe => vec![plain(Key::CloseBracket)],
+            Self::AddRemoveKeyframe => vec![ctrl(Key::OpenBracket)],
             Self::PlayInToOut => vec![ctrl_shift(Key::Space)],
             Self::PlayAround => vec![shift(Key::K)],
             Self::ToggleLoop => vec![ctrl_shift(Key::L)],
+            Self::ToggleAudioScrubbing => vec![shift(Key::S)],
             Self::Workspace(slot) => DIGIT_KEYS
                 .get(usize::from(slot))
                 .map(|&key| vec![alt_shift(key)])
                 .unwrap_or_default(),
             Self::ResetWorkspace => vec![alt_shift(Key::Num0)],
+            Self::MaximizePanel => vec![plain(Key::Backtick)],
+            Self::FullScreen => vec![ctrl(Key::Backtick)],
         }
     }
 }

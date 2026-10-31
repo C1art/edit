@@ -2,17 +2,24 @@ use std::sync::Arc;
 
 use render::{Grade, LayerLook};
 use timeline::{
-    track_layers_at, BlendMode, ClipId, Generator, MatteChannel, MediaItem, PlannedLayer, Reveal,
-    Sequence, SourceId, Ticks, TimeInterpolation, Track, TrackRef, VideoEffect,
+    track_layers_at, Clip, ClipId, Generator, Look, MediaItem, PlannedLayer, Reveal, Sequence,
+    SourceId, Ticks, TimeInterpolation, Track, TrackRef, VideoEffect,
 };
 
 use crate::clip_decoders::ClipDecoders;
-use crate::generated::{caption_frame, scrolled};
+use crate::clip_frame::ClipFrame;
+use crate::echo::{echo_of, echoed_frame_at};
+use crate::effect_masks::{adjustment_looks, effect_masked, Adjustment};
+use crate::generated::{animated, caption_frame, scrolled};
 use crate::grades::grade_for;
+use crate::image_matte::image_matted;
 use crate::layer_look::{interpreted, layer_look};
+use crate::layered::{combination, combined, matted, track_matte};
 use crate::morph_cut::morphed;
+use crate::paint_bucket::bucket_filled;
 use crate::time_effects::{posterized, with_burn_ins};
 use crate::track_video::TrackVideo;
+use crate::write_on::written_on;
 use crate::{Layer, LayerPicture, PlaybackError, Resolution};
 
 /// The decoders of one video track.
@@ -86,8 +93,8 @@ fn video_layers(
                 continue;
             };
             let time = plan.clip.source_time(pts);
-            let look_of = |reveal| {
-                let look = layer_look(&plan.clip.look, time, reveal, canvas, sequence.timebase);
+            let look_of = |look: &Look, reveal| {
+                let look = layer_look(look, time, reveal, canvas, sequence.timebase);
                 interpreted(look, media)
             };
             let grade = grade_for(&plan.clip.look.color, decoding.warnings);
@@ -96,7 +103,11 @@ fn video_layers(
                     split: None,
                     ..plan.reveal
                 };
-                adjust(&mut layers, TrackRef::video(index), look_of(whole), grade);
+                let looks = adjustment_looks(&plan.clip.look, time, |look| look_of(look, whole));
+                let grades = std::iter::once(grade).chain(std::iter::repeat(None));
+                for (adjustment, grade) in looks.into_iter().zip(grades) {
+                    adjust(&mut layers, TrackRef::video(index), adjustment, grade);
+                }
                 continue;
             }
             // Decoded first, as the clip's own track decoders are borrowed below.
@@ -106,6 +117,12 @@ fn video_layers(
                     let pictures =
                         matte_layers(sequence, video, matte.track, pts, tracks, decoding);
                     (matte, pictures)
+                });
+            let combination = combination(&plan.clip.look.effects, time)
+                .filter(|(track, _)| *track != index && *track < video.len())
+                .map(|(track, combine)| {
+                    let pictures = matte_layers(sequence, video, track, pts, tracks, decoding);
+                    (combine, pictures)
                 });
             let decoders = &mut tracks[index];
             let Some(picture) = clip_picture(sequence, &plan, media, decoders, &showing, decoding)
@@ -128,11 +145,21 @@ fn video_layers(
             let start = layers.len();
             // A split picture is drawn once for each piece, every piece in its place.
             for piece in reveal.pieces() {
-                let layer = Layer {
+                let layer_of = |look: &Look| Layer {
                     track: TrackRef::video(index),
                     picture: picture.clone(),
-                    look: look_of(piece),
+                    look: look_of(look, piece),
                     grade: grade.clone(),
+                };
+                let look = &plan.clip.look;
+                let layer = if look.has_effect_masks() {
+                    effect_masked(look, time, layer_of)
+                } else {
+                    layer_of(look)
+                };
+                let layer = match &combination {
+                    Some((combine, pictures)) => combined(layer, *combine, pictures.clone()),
+                    None => layer,
                 };
                 layers.push(match &matte {
                     Some((matte, pictures)) => matted(layer, *matte, pictures.clone()),
@@ -172,15 +199,40 @@ fn clip_picture(
             let effects = &plan.clip.look.effects;
             let time = posterized(effects, plan.source_time, sequence.timebase);
             let resolution = decoding.resolution;
-            let frame = match plan.clip.interpolation {
-                TimeInterpolation::FrameSampling => decoder.frame_at(media, time, size, resolution),
-                interpolation => {
+            let echo = echo_of(effects);
+            decoder.keep_history(0);
+            let planar = decodes_planes(plan.clip);
+            decoder.keep_planes(planar);
+            let frame = match (echo, plan.clip.interpolation) {
+                (Some(echo), _) => {
+                    echoed_frame_at(decoder, sequence, media, (time, echo), size, resolution)
+                        .map(|frame| frame.map(ClipFrame::Rgba))
+                }
+                (None, TimeInterpolation::FrameSampling) => {
+                    decoder.frame_at(media, time, size, resolution)
+                }
+                (None, interpolation) => {
                     decoder.interpolated_frame_at(media, time, size, resolution, interpolation)
                 }
             };
-            match frame {
+            // Pictures decoded before the clip took an effect drawing on them, or
+            // before it lost its last one, can come either way.
+            let rgba = match frame {
+                Ok(Some(ClipFrame::Planar(planes))) if planar => {
+                    let (width, height) = (planes.width, planes.height);
+                    let output = resolution.shrink(width, height).unwrap_or((width, height));
+                    return Some(LayerPicture::Planes(planes, output));
+                }
+                Ok(frame) => frame.map(|frame| frame.rgba()).transpose(),
+                Err(error) => Err(error),
+            };
+            match rgba {
                 Ok(frame) => frame
                     .map(|frame| scrolled(frame, sequence, plan.clip, media, time))
+                    .map(|frame| animated(frame, sequence, plan.clip, media, time))
+                    .map(|frame| bucket_filled(frame, effects, time))
+                    .map(|frame| written_on(frame, plan.clip, sequence.timebase, time))
+                    .map(|frame| image_matted(frame, effects, sequence.timebase, decoding.warnings))
                     .map(|frame| with_burn_ins(frame, sequence, plan.clip, media, time))
                     .map(LayerPicture::Frame),
                 Err(error) => {
@@ -196,27 +248,26 @@ fn clip_picture(
     }
 }
 
-/// The track matte a clip's effects ask for; the last Track Matte Key with one wins.
-#[derive(Debug, Clone, Copy)]
-struct TrackMatte {
-    track: usize,
-    channel: MatteChannel,
-    reverse: bool,
+/// Whether the pictures of `clip` can be left in their planes for the GPU.
+pub(crate) fn decodes_planes(clip: &Clip) -> bool {
+    let effects = &clip.look.effects;
+    echo_of(effects).is_none()
+        && clip.interpolation == TimeInterpolation::FrameSampling
+        && !effects.iter().any(draws_on_pixels)
 }
 
-fn track_matte(effects: &[VideoEffect]) -> Option<TrackMatte> {
-    effects.iter().rev().find_map(|effect| match *effect {
-        VideoEffect::TrackMatteKey {
-            matte: Some(track),
-            channel,
-            reverse,
-        } => Some(TrackMatte {
-            track,
-            channel,
-            reverse,
-        }),
-        _ => None,
-    })
+/// Whether `effect` is drawn into the decoded picture on the CPU, needing its RGBA.
+fn draws_on_pixels(effect: &VideoEffect) -> bool {
+    matches!(
+        effect,
+        VideoEffect::PaintBucket(_)
+            | VideoEffect::WriteOn(_)
+            | VideoEffect::ImageMatteKey(_)
+            | VideoEffect::Timecode { .. }
+            | VideoEffect::ClipName { .. }
+            | VideoEffect::SimpleText(_)
+            | VideoEffect::Lightning(_)
+    )
 }
 
 /// What video track `index` shows at `pts` for use as a matte, hidden or not. Its
@@ -258,50 +309,43 @@ fn matte_layers(
     layers
 }
 
-/// `fill` shown through `pictures`, its blend mode applied once matted.
-fn matted(fill: Layer, matte: TrackMatte, pictures: Vec<Layer>) -> Layer {
-    let look = LayerLook {
-        blend: fill.look.blend,
-        ..LayerLook::IDENTITY
-    };
-    let track = fill.track;
-    let fill = Layer {
-        look: LayerLook {
-            blend: BlendMode::Normal,
-            ..fill.look
-        },
-        ..fill
-    };
-    Layer {
-        track,
-        picture: LayerPicture::Matted {
-            fill: Box::new(fill),
-            matte: pictures,
-            channel: matte.channel,
-            reverse: matte.reverse,
-        },
-        look,
-        grade: None,
-    }
-}
-
 /// Applies an adjustment layer's look to the picture of `layers` as one. Below full
 /// opacity, or outside its masks, the adjusted picture blends over the untouched one,
 /// as its opacity is meant to.
-fn adjust(layers: &mut Vec<Layer>, track: TrackRef, look: LayerLook, grade: Option<Arc<Grade>>) {
+fn adjust(
+    layers: &mut Vec<Layer>,
+    track: TrackRef,
+    Adjustment { look, within }: Adjustment,
+    grade: Option<Arc<Grade>>,
+) {
     if layers.is_empty() {
         return;
     }
-    let below = if look.opacity < 1.0 || look.opacity_masks.iter().any(Option::is_some) {
+    let partial = look.opacity < 1.0 || look.opacity_masks.iter().any(Option::is_some);
+    let below = if partial || within.is_some() {
         layers.clone()
     } else {
         std::mem::take(layers)
     };
-    layers.push(Layer {
+    let adjusted = Layer {
         track,
         picture: LayerPicture::Nest(below),
         look,
         grade,
+    };
+    // Nested so the effect's masks cut what the layer's own masks, which add together,
+    // keep, rather than joining them.
+    layers.push(match within {
+        Some(opacity_masks) => Layer {
+            track,
+            picture: LayerPicture::Nest(vec![adjusted]),
+            look: LayerLook {
+                opacity_masks,
+                ..LayerLook::IDENTITY
+            },
+            grade: None,
+        },
+        None => adjusted,
     });
 }
 
@@ -344,7 +388,8 @@ mod tests {
             [1.0, 1.0],
             Timebase::HZ_90K,
         );
-        adjust(&mut layers, TrackRef::video(2), full, None);
+        let everywhere = |look| Adjustment { look, within: None };
+        adjust(&mut layers, TrackRef::video(2), everywhere(full), None);
         assert!(
             matches!(&layers[..], [Layer { picture: LayerPicture::Nest(below), .. }] if below.len() == 2)
         );
@@ -358,7 +403,7 @@ mod tests {
             Timebase::HZ_90K,
         );
         let mut layers = vec![layer(0)];
-        adjust(&mut layers, TrackRef::video(1), faded, None);
+        adjust(&mut layers, TrackRef::video(1), everywhere(faded), None);
         assert!(matches!(
             &layers[..],
             [

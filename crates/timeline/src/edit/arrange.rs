@@ -37,6 +37,9 @@ impl Edit for MoveClips {
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        if (self.delta, self.video_tracks, self.audio_tracks) == (Ticks::ZERO, 0, 0) {
+            return Err(TimelineError::NothingToEdit);
+        }
         let ids = sequence.with_links(&self.clips);
         let moved = ops::remove(sequence, &ids);
         let Some(earliest) = moved.iter().map(|(_, clip)| clip.start).min() else {
@@ -92,6 +95,7 @@ impl Edit for MoveClips {
                 let tracks = ops::rippled_tracks(sequence, &targets);
                 ops::split(sequence, &tracks, start, &mut relinks);
                 ops::shift(sequence, &tracks, start, end - start, &[]);
+                ops::ripple_markers_and_captions(sequence, start, end - start);
             }
         }
         for (to, clip) in placed {
@@ -177,9 +181,10 @@ impl Edit for CloseGap {
 
 /// `gaps` must be sorted and disjoint; they are closed from the last so earlier ones
 /// keep their positions.
-fn close_gaps(sequence: &mut Sequence, gaps: &[Range<Ticks>], edited: &[TrackRef]) {
+pub(super) fn close_gaps(sequence: &mut Sequence, gaps: &[Range<Ticks>], edited: &[TrackRef]) {
     let tracks = ops::rippled_tracks(sequence, edited);
     for gap in gaps.iter().rev() {
         ops::shift(sequence, &tracks, gap.end, gap.start - gap.end, &[]);
+        ops::ripple_markers_and_captions(sequence, gap.end, gap.start - gap.end);
     }
 }

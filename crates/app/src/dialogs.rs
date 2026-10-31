@@ -1,0 +1,50 @@
+use crate::editor::Editor;
+
+/// Draws whichever dialogs and floating windows are open, over the panels.
+pub(crate) fn show(editor: &mut Editor, ctx: &egui::Context) {
+    crate::path_dialog::path_dialog(editor, ctx);
+    crate::quit_exports::dialog(editor, ctx);
+    crate::window_close::discard_dialog(editor, ctx);
+    crate::project_copy::revert_dialog(editor, ctx);
+    crate::recovery::dialog(editor, ctx);
+    crate::media_pool::remove::dialog(editor, ctx);
+    crate::marker_dialog::dialog(editor, ctx);
+    crate::gain_dialog::dialog(editor, ctx);
+    crate::duck_dialog::dialog(editor, ctx);
+    crate::pauses_dialog::dialog(editor, ctx);
+    crate::transcribe::dialog(editor, ctx);
+    crate::beats_dialog::dialog(editor, ctx);
+    crate::remix_dialog::dialog(editor, ctx);
+    crate::transition_duration_dialog::dialog(editor, ctx);
+    crate::interpret_dialog::dialog(editor, ctx);
+    crate::channels_dialog::dialog(editor, ctx);
+    crate::timecode_dialog::dialog(editor, ctx);
+    crate::subclip_dialog::dialog(editor, ctx);
+    crate::sequence_settings::dialog(editor, ctx);
+    crate::automate_dialog::dialog(editor, ctx);
+    crate::simplify_dialog::dialog(editor, ctx);
+    crate::add_tracks_dialog::dialog(editor, ctx);
+    crate::reframe_dialog::dialog(editor, ctx);
+    crate::fit_clip::dialog(editor, ctx);
+    crate::find_dialog::dialog(editor, ctx);
+    crate::attributes_dialog::dialog(editor, ctx);
+    crate::loudness_window::window(editor, ctx);
+    crate::speed_dialog::dialog(editor, ctx);
+    crate::rename_clip::dialog(editor, ctx);
+    crate::export::dialog(editor, ctx);
+    crate::export_queue::window(editor, ctx);
+    crate::keymap::window(editor, ctx);
+    crate::essential_keys::window(editor, ctx);
+    crate::effect_presets::dialog(editor, ctx);
+    crate::title_templates::dialog(editor, ctx);
+    crate::text_styles::dialog(editor, ctx);
+    crate::workspaces::dialog(editor, ctx);
+    crate::link_media::dialog(editor, ctx);
+    crate::proxy_offer::dialog(editor, ctx);
+    crate::voiceover::dialog(editor, ctx);
+    crate::render_previews::window(editor, ctx);
+    crate::render_replace::window(editor, ctx);
+    crate::project_manager::window(editor, ctx);
+    crate::notifications::ui(editor, ctx);
+    crate::file_drop::ui(editor, ctx);
+}

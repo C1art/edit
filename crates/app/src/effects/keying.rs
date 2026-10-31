@@ -1,4 +1,5 @@
-use timeline::{KeyOutput, MatteChannel, VideoEffect};
+use egui::RichText;
+use timeline::{ImageMatteSource, KeyOutput, MatteChannel, VideoEffect};
 
 use super::look::Rows;
 
@@ -10,6 +11,7 @@ impl Rows {
         effect: &mut VideoEffect,
         video_tracks: usize,
     ) {
+        let set_matte = matches!(effect, VideoEffect::SetMatte { .. });
         match effect {
             VideoEffect::UltraKey {
                 color,
@@ -43,31 +45,26 @@ impl Rows {
                 matte,
                 channel,
                 reverse,
+            }
+            | VideoEffect::SetMatte {
+                matte,
+                channel,
+                reverse,
             } => {
-                self.choice(ui, "Matte", |ui| {
-                    let name = |track: Option<usize>| {
-                        track.map_or("None".to_owned(), |index| format!("Video {}", index + 1))
-                    };
-                    let mut chosen = false;
-                    egui::ComboBox::from_id_salt("matte")
-                        .selected_text(name(*matte))
-                        .show_ui(ui, |ui| {
-                            let tracks = std::iter::once(None).chain((0..video_tracks).map(Some));
-                            for track in tracks {
-                                chosen |= ui.selectable_value(matte, track, name(track)).clicked();
-                            }
-                        });
-                    chosen
-                });
+                let (channels, reverse_label) = match set_matte {
+                    true => (MatteChannel::ALL.as_slice(), "Invert Matte"),
+                    false => (MatteChannel::TRACK_MATTE.as_slice(), "Reverse"),
+                };
+                self.track_choice(ui, "Matte", matte, video_tracks);
                 self.options(
                     ui,
                     "Composite Using",
                     "matte_channel",
                     channel,
-                    MatteChannel::ALL,
+                    channels.iter().copied(),
                     MatteChannel::name,
                 );
-                self.choice(ui, "Reverse", |ui| ui.checkbox(reverse, "").changed());
+                self.choice(ui, reverse_label, |ui| ui.checkbox(reverse, "").changed());
             }
             VideoEffect::ColorKey {
                 color,
@@ -96,6 +93,44 @@ impl Rows {
                     ui.checkbox(invert_alpha, "").changed()
                 });
                 self.choice(ui, "Mask Only", |ui| ui.checkbox(mask_only, "").changed());
+            }
+            VideoEffect::GarbageMatte(matte) => {
+                for (number, [x, y]) in (1..).zip(&mut matte.points) {
+                    self.param(ui, &format!("Point {number} X"), x, -100.0..=200.0, "%");
+                    self.param(ui, &format!("Point {number} Y"), y, -100.0..=200.0, "%");
+                }
+            }
+            VideoEffect::ImageMatteKey(key) => {
+                ui.horizontal(|ui| {
+                    ui.label("Matte");
+                    match key.matte.as_ref().and_then(|path| path.file_name()) {
+                        Some(name) => {
+                            let path = key.matte.as_ref().map(|path| path.display().to_string());
+                            ui.label(name.to_string_lossy())
+                                .on_hover_text(path.unwrap_or_default());
+                        }
+                        None => {
+                            ui.label(RichText::new("None").weak());
+                        }
+                    }
+                    if ui.small_button("Browse…").clicked() {
+                        self.browse_matte = true;
+                    }
+                    if key.matte.is_some() && ui.small_button("Remove").clicked() {
+                        key.matte = None;
+                        self.commit();
+                    }
+                });
+                self.options(
+                    ui,
+                    "Composite Using",
+                    "composite_using",
+                    &mut key.composite_using,
+                    ImageMatteSource::ALL,
+                    ImageMatteSource::name,
+                );
+                let reverse = &mut key.reverse;
+                self.choice(ui, "Reverse", |ui| ui.checkbox(reverse, "").changed());
             }
             _ => {}
         }

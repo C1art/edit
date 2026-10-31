@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use egui::{Key, ProgressBar};
 use playback::{clip_alone, Loudness, LoudnessEvent, LoudnessJob};
 use timeline::{ClipId, Gain, NormalizeClipGains, SetClipGain, TrackKind};
@@ -31,6 +33,7 @@ pub(crate) struct GainDialog {
     peak_db: f32,
     loudness_lufs: f32,
     measuring: Option<Measuring>,
+    opened: bool,
 }
 
 struct Measuring {
@@ -47,6 +50,7 @@ impl GainDialog {
             peak_db: -1.0,
             loudness_lufs: -23.0,
             measuring: None,
+            opened: true,
         }
     }
 }
@@ -65,60 +69,60 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                 LoudnessEvent::Measured(results) => measured = Some(results),
             }
         }
-        ctx.request_repaint();
+        ctx.request_repaint_after(Duration::from_millis(100));
     }
     let mut apply = false;
     let mut cancelled = false;
-    egui::Window::new("Audio Gain")
-        .collapsible(false)
-        .resizable(false)
-        .show(ctx, |ui| {
-            let measuring = dialog.measuring.as_ref();
-            ui.add_enabled_ui(measuring.is_none(), |ui| {
-                egui::Grid::new("gain_modes").num_columns(2).show(ui, |ui| {
-                    for (mode, label) in GainMode::ALL {
-                        ui.radio_value(&mut dialog.mode, mode, label);
-                        // Both peak modes share one target.
-                        let (value, range, suffix) = match mode {
-                            GainMode::Set => (
-                                &mut dialog.gain_db,
-                                Gain::SILENT.db()..=Gain::MAX.db(),
-                                " dB",
-                            ),
-                            GainMode::MaxPeak | GainMode::AllPeaks => {
-                                (&mut dialog.peak_db, -60.0..=0.0, " dBFS")
-                            }
-                            GainMode::Loudness => (&mut dialog.loudness_lufs, -60.0..=0.0, " LUFS"),
-                        };
-                        let field = ui.add_enabled(
-                            dialog.mode == mode,
-                            egui::DragValue::new(value)
-                                .range(range)
-                                .speed(0.1)
-                                .suffix(suffix),
-                        );
-                        if field.gained_focus() {
-                            dialog.mode = mode;
+    crate::dialog::window(ctx, "Audio Gain").show(ctx, |ui| {
+        let measuring = dialog.measuring.as_ref();
+        ui.add_enabled_ui(measuring.is_none(), |ui| {
+            egui::Grid::new("gain_modes").num_columns(2).show(ui, |ui| {
+                for (mode, label) in GainMode::ALL {
+                    ui.radio_value(&mut dialog.mode, mode, label);
+                    // Both peak modes share one target.
+                    let (value, range, suffix) = match mode {
+                        GainMode::Set => (
+                            &mut dialog.gain_db,
+                            Gain::SILENT.db()..=Gain::MAX.db(),
+                            " dB",
+                        ),
+                        GainMode::MaxPeak | GainMode::AllPeaks => {
+                            (&mut dialog.peak_db, -60.0..=0.0, " dBFS")
                         }
-                        ui.end_row();
+                        GainMode::Loudness => (&mut dialog.loudness_lufs, -60.0..=0.0, " LUFS"),
+                    };
+                    if dialog.mode == mode && crate::dialog::opening(ui, &mut dialog.opened) {
+                        crate::dialog::focus_next_value(ui);
                     }
-                });
-            });
-            if let Some(measuring) = measuring {
-                ui.add(
-                    ProgressBar::new(measuring.progress)
-                        .show_percentage()
-                        .text("Measuring…"),
-                );
-            }
-            ui.horizontal(|ui| {
-                apply = measuring.is_none()
-                    && (ui.button("OK").clicked()
-                        || ui.input(|input| input.key_pressed(Key::Enter)));
-                cancelled = ui.button("Cancel").clicked()
-                    || ui.input(|input| input.key_pressed(Key::Escape));
+                    let field = ui.add_enabled(
+                        dialog.mode == mode,
+                        egui::DragValue::new(value)
+                            .range(range)
+                            .speed(0.1)
+                            .suffix(suffix),
+                    );
+                    if field.gained_focus() {
+                        dialog.mode = mode;
+                    }
+                    ui.end_row();
+                }
             });
         });
+        if let Some(measuring) = measuring {
+            ui.add(
+                ProgressBar::new(measuring.progress)
+                    .show_percentage()
+                    .text("Measuring…"),
+            );
+        }
+        crate::dialog::footer(ui, |ui| {
+            cancelled =
+                ui.button("Cancel").clicked() || ui.input(|input| input.key_pressed(Key::Escape));
+            apply = measuring.is_none()
+                && (ui.add(crate::dialog::primary("OK")).clicked()
+                    || ui.input(|input| input.key_pressed(Key::Enter)));
+        });
+    });
     for warning in warnings {
         editor.notice(format!("Measured as silence: {warning}"));
     }

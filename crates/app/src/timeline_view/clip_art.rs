@@ -38,7 +38,19 @@ pub fn thumbnails(
             painter.rect_filled(rect, 2.0, color * tint);
             return;
         }
-        Some(Generator::Title(_) | Generator::AdjustmentLayer | Generator::Shape(_)) => return,
+        Some(Generator::BlackVideo) => {
+            painter.rect_filled(rect, 2.0, Color32::BLACK * tint);
+            return;
+        }
+        Some(
+            Generator::Title(_)
+            | Generator::AdjustmentLayer
+            | Generator::Shape(_)
+            | Generator::BarsAndTone
+            | Generator::TransparentVideo
+            | Generator::CountingLeader(_)
+            | Generator::Graphic(_),
+        ) => return,
         None if item.nest.is_some() => return,
         None => {}
     }
@@ -83,7 +95,8 @@ pub fn thumbnails(
     }
 }
 
-/// Draws an audio clip's loudness as bars mirrored about its middle, one per point.
+/// Draws an audio clip's loudness as bars, one per point, mirrored about its middle
+/// unless rectified.
 pub fn waveform(
     painter: &Painter,
     area: &ClipArea<'_>,
@@ -100,6 +113,7 @@ pub fn waveform(
     if !item.is_file() {
         return;
     }
+    let rectified = art.rectified_waveforms;
     let Some(peaks) = art.peaks(&item.path) else {
         return;
     };
@@ -110,24 +124,30 @@ pub fn waveform(
     }
     let (middle, half) = (bars.center().y, bars.height() / 2.0);
     let gain = clip.gain.amplitude();
-    let column = clip.rate().source_span(scale.span(1.0));
+    // Read from the source time at each edge, so a column follows speed keyframes and
+    // reversal.
+    let heard_at = |x: f32| clip.source_time(clip.start + scale.span(x - rect.left()));
     let mut mesh = Mesh::default();
     let mut x = visible.left().floor();
     while x < visible.right() {
-        let start = clip.source_time(clip.start + scale.span(x - rect.left()));
-        let level = peaks.max_in(start, start + column, timebase) * gain;
+        let (left, right) = (heard_at(x), heard_at(x + 1.0));
+        let start = left.min(right);
+        let end = left.max(right).max(start + Ticks(1));
+        let level = peaks.max_in(start, end, timebase) * gain;
         let height = (decibel_scale(level) * half).max(0.5);
-        mesh.add_colored_rect(
-            Rect::from_x_y_ranges(x..=x + 1.0, (middle - height)..=(middle + height)),
-            color,
-        );
+        let rows = if rectified {
+            (bars.bottom() - 2.0 * height)..=bars.bottom()
+        } else {
+            (middle - height)..=(middle + height)
+        };
+        mesh.add_colored_rect(Rect::from_x_y_ranges(x..=x + 1.0, rows), color);
         x += 1.0;
     }
     painter.with_clip_rect(visible).add(mesh);
 }
 
 /// Maps an amplitude to 0 at `FLOOR_DB` and below, rising to 1 at full scale.
-fn decibel_scale(amplitude: f32) -> f32 {
+pub(crate) fn decibel_scale(amplitude: f32) -> f32 {
     if amplitude <= 0.0 {
         return 0.0;
     }

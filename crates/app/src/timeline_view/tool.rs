@@ -15,7 +15,6 @@ pub enum Tool {
     Ripple,
     Roll,
     RateStretch,
-    Razor,
     Slip,
     Slide,
     /// Drag to pan the view.
@@ -29,21 +28,21 @@ pub enum Tool {
 }
 
 impl Tool {
-    pub const ALL: [Self; 14] = [
-        Self::Selection,
-        Self::TrackSelect(Direction::Forward),
-        Self::TrackSelect(Direction::Backward),
-        Self::Ripple,
-        Self::Roll,
-        Self::RateStretch,
-        Self::Razor,
-        Self::Slip,
-        Self::Slide,
-        Self::Hand,
-        Self::Zoom,
-        Self::Type,
-        Self::Shape(ShapeKind::Rectangle),
-        Self::Shape(ShapeKind::Ellipse),
+    /// Every tool, grouped as the toolbar shows them: one button per group.
+    pub const GROUPS: [&'static [Self]; 6] = [
+        &[Self::Selection],
+        &[
+            Self::TrackSelect(Direction::Forward),
+            Self::TrackSelect(Direction::Backward),
+        ],
+        &[Self::Ripple, Self::Roll, Self::RateStretch],
+        &[Self::Slip, Self::Slide],
+        &[Self::Hand, Self::Zoom],
+        &[
+            Self::Type,
+            Self::Shape(ShapeKind::Rectangle),
+            Self::Shape(ShapeKind::Ellipse),
+        ],
     ];
 
     pub fn label(self) -> &'static str {
@@ -54,7 +53,6 @@ impl Tool {
             Self::Ripple => "Ripple",
             Self::Roll => "Roll",
             Self::RateStretch => "Stretch",
-            Self::Razor => "Razor",
             Self::Slip => "Slip",
             Self::Slide => "Slide",
             Self::Hand => "Hand",
@@ -66,22 +64,21 @@ impl Tool {
 
     pub fn hint(self) -> &'static str {
         match self {
-            Self::Selection => "Move clips; drag an edge to trim (V)",
+            Self::Selection => "Move clips; drag an edge to trim",
             Self::TrackSelect(Direction::Forward) => {
-                "Select every clip from here on, or with Shift on one track (A)"
+                "Select every clip from here on, or with Shift on one track"
             }
             Self::TrackSelect(Direction::Backward) => {
-                "Select every clip up to here, or with Shift on one track (Shift+A)"
+                "Select every clip up to here, or with Shift on one track"
             }
-            Self::Ripple => "Drag an edge to trim and shift what follows (B)",
-            Self::Roll => "Drag a cut to move it between two clips (N)",
-            Self::RateStretch => "Drag an edge to change a clip's speed to fit (R)",
-            Self::Razor => "Click a clip to cut it (C)",
-            Self::Slip => "Drag a clip to change its source range (Y)",
-            Self::Slide => "Drag a clip between its neighbours (U)",
-            Self::Hand => "Drag to scroll the timeline (H)",
-            Self::Zoom => "Click to zoom in, Alt+click to zoom out (Z)",
-            Self::Type => "Click the program picture to type a title there (T)",
+            Self::Ripple => "Drag an edge to trim and shift what follows",
+            Self::Roll => "Drag a cut to move it between two clips",
+            Self::RateStretch => "Drag an edge to change a clip's speed to fit",
+            Self::Slip => "Drag a clip to change its source range",
+            Self::Slide => "Drag a clip between its neighbours",
+            Self::Hand => "Drag to scroll the timeline",
+            Self::Zoom => "Click to zoom in, Alt+click to zoom out",
+            Self::Type => "Click the program picture to type a title there",
             Self::Shape(ShapeKind::Rectangle) => {
                 "Drag on the program picture to draw a rectangle; Shift for a square"
             }

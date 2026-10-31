@@ -4,15 +4,16 @@ use std::sync::Arc;
 use std::thread;
 
 use crossbeam::channel::{self, Receiver};
-use egui::{ProgressBar, RichText};
-use media::{AudioCodec, AudioSettings, MediaError, RateControl, VideoCodec};
-use playback::{ExportEvent, ExportJob, ExportSettings, VideoExport};
+use egui::{Key, ProgressBar, RichText};
+use media::{Acceleration, AudioCodec, AudioSettings, MediaError, RateControl, VideoCodec};
+use playback::{ExportEvent, ExportJob, ExportSettings, VideoEncoding, VideoExport};
 use timeline::{
     ClipId, FrameRate, ImportMedia, RenderAndReplace, RestoreUnrendered, SourceId, Ticks, Timebase,
     TrackKind,
 };
 
 use crate::editor::Editor;
+use crate::error::AppError;
 
 /// Extra source rendered past the last frame the clips use, so they can still be
 /// trimmed out a little.
@@ -101,9 +102,8 @@ impl Editor {
     pub(crate) fn can_restore_unrendered(&self) -> bool {
         let sequence = self.timeline.sequence();
         sequence
-            .links_of(&self.view.selection)
-            .iter()
-            .filter_map(|&id| sequence.clip(id))
+            .clips_of(&sequence.links_of(&self.view.selection))
+            .into_iter()
             .any(|(_, clip)| clip.unrendered.is_some())
     }
 
@@ -131,7 +131,7 @@ impl Editor {
         let Some(work) = &mut self.render_replace else {
             return;
         };
-        ctx.request_repaint();
+        ctx.request_repaint_after(crate::export_progress::REFRESH);
         let running = match work.running.take() {
             Some(running) => running,
             None => {
@@ -165,21 +165,21 @@ impl Editor {
                 }
             }
             Ok(None) => {}
-            Err(message) => {
+            Err(error) => {
                 self.render_replace = None;
-                self.notice(message);
+                self.notice(format!("Cannot render and replace: {error}"));
             }
         }
     }
 
     /// Moves `running` on as far as its work allows; `None` once its source is done.
-    fn advance(&mut self, mut running: Running) -> Result<Option<Running>, String> {
+    fn advance(&mut self, mut running: Running) -> Result<Option<Running>, AppError> {
         match &mut running.stage {
             Stage::Naming(receiver) => {
                 let Ok(named) = receiver.try_recv() else {
                     return Ok(Some(running));
                 };
-                let path = named.map_err(|error| format!("Cannot render: {error}"))?;
+                let path = named?;
                 let job = self.start_render(&running.pending, path.clone())?;
                 running.stage = Stage::Rendering {
                     job,
@@ -200,6 +200,9 @@ impl Editor {
                             frames_done: done,
                             frames_total: total,
                         } => (*frames_done, *frames_total) = (done, total),
+                        ExportEvent::Measuring(_)
+                        | ExportEvent::Encoder(_)
+                        | ExportEvent::Timings(_) => {}
                         ExportEvent::Warning(warning) => self.notice(format!("Render: {warning}")),
                         ExportEvent::Finished => {
                             let sequence = self.timeline.sequence();
@@ -208,9 +211,7 @@ impl Editor {
                             break;
                         }
                         ExportEvent::Cancelled => return Ok(None),
-                        ExportEvent::Failed(error) => {
-                            return Err(format!("Render failed: {error}"))
-                        }
+                        ExportEvent::Failed(error) => return Err(error.into()),
                     }
                 }
             }
@@ -218,7 +219,7 @@ impl Editor {
                 let Ok(probed) = receiver.try_recv() else {
                     return Ok(Some(running));
                 };
-                let import = probed.map_err(|error| format!("Cannot use the render: {error}"))?;
+                let import = probed?;
                 self.replace_with_render(running.pending, import);
                 return Ok(None);
             }
@@ -226,15 +227,12 @@ impl Editor {
         Ok(Some(running))
     }
 
-    fn start_render(&self, pending: &Pending, path: PathBuf) -> Result<ExportJob, String> {
+    fn start_render(&self, pending: &Pending, path: PathBuf) -> Result<ExportJob, AppError> {
         let sequence = self.timeline.sequence();
         let view = sequence
             .render_view(pending.original)
-            .ok_or_else(|| format!("{} can no longer be rendered", pending.name))?;
-        let render_state = self
-            .render_state
-            .as_ref()
-            .ok_or("Cannot render: there is no GPU renderer")?;
+            .ok_or_else(|| AppError::NotRenderable(pending.name.clone()))?;
+        let render_state = self.render_state.as_ref().ok_or(AppError::NoRenderer)?;
         let has_audio = sequence
             .media_item(pending.original)
             .is_some_and(|item| item.has_audio);
@@ -242,9 +240,9 @@ impl Editor {
         let settings = ExportSettings {
             path,
             video: Some(VideoExport {
-                codec: VideoCodec::ProRes4444,
-                rate_control: RateControl::Quality(18),
+                encoding: VideoEncoding::Movie(VideoCodec::ProRes4444, RateControl::Quality(18)),
                 size: (format.width, format.height),
+                acceleration: Acceleration::Hardware,
             }),
             audio: has_audio.then_some(AudioSettings {
                 codec: AudioCodec::Pcm24,
@@ -252,6 +250,8 @@ impl Editor {
                 bits_per_second: 0,
             }),
             range: Some(Ticks::ZERO..pending.end),
+            previews: Vec::new(),
+            loudness: None,
         };
         ExportJob::start(
             Arc::new(view),
@@ -259,10 +259,14 @@ impl Editor {
             render_state.queue.clone(),
             settings,
         )
-        .map_err(|error| format!("Cannot render: {error}"))
+        .map_err(AppError::from)
     }
 
     fn replace_with_render(&mut self, pending: Pending, import: ImportMedia) {
+        self.as_one_edit(|editor| editor.import_and_replace(pending, import));
+    }
+
+    fn import_and_replace(&mut self, pending: Pending, import: ImportMedia) {
         if !self.apply(import) {
             return;
         }
@@ -356,20 +360,19 @@ pub(crate) fn window(editor: &mut Editor, ctx: &egui::Context) {
     };
     let fraction = (done as f32 + part) / work.total.max(1) as f32;
     let mut cancel = false;
-    egui::Window::new("Render and Replace")
-        .collapsible(false)
-        .resizable(false)
-        .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-        .show(ctx, |ui| {
-            ui.label(format!("Rendering {name}"));
-            ui.add(
-                ProgressBar::new(fraction)
-                    .show_percentage()
-                    .desired_width(260.0),
-            );
-            ui.label(RichText::new("Clips show the rendered file once it is done.").weak());
-            cancel = ui.button("Cancel").clicked();
+    crate::dialog::window(ctx, "Render and Replace").show(ctx, |ui| {
+        ui.label(format!("Rendering {name}"));
+        ui.add(
+            ProgressBar::new(fraction)
+                .show_percentage()
+                .desired_width(260.0),
+        );
+        ui.label(RichText::new("Clips show the rendered file once it is done.").weak());
+        crate::dialog::footer(ui, |ui| {
+            cancel =
+                ui.button("Cancel").clicked() || ui.input(|input| input.key_pressed(Key::Escape));
         });
+    });
     if cancel {
         // Dropping the export cancels it and removes its partial file.
         editor.render_replace = None;

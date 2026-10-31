@@ -1,3 +1,5 @@
+mod picture;
+mod prepare;
 mod slots;
 
 use std::sync::Arc;
@@ -7,10 +9,14 @@ use timeline::MatteChannel;
 use crate::backdrop::{Backdrop, Drawn};
 use crate::blit::{self, Blit, DISPLAY_FORMAT};
 use crate::grade::Grade;
-use crate::placement::{LayerLook, Placement};
+use crate::layer_pipelines::LayerPass;
+use crate::layer_shader::Features;
+use crate::placement::{LayerLook, Placement, Premultiplied};
 use crate::scope::{Scope, ScopeTrace};
+use crate::yuv::YuvConverter;
 use crate::{RenderError, WORKING_FORMAT};
-use slots::{Slot, SlotKind};
+pub use picture::Picture;
+use slots::Slot;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Presented {
@@ -18,6 +24,10 @@ pub enum Presented {
     SameTarget,
     /// The canvas size changed, so the output texture was recreated and must be rebound.
     NewTarget,
+    /// Nothing was drawn, as a shader the frame needs is still being built in the
+    /// background; the last frame stays. Present again once [`Compositor::compiling`]
+    /// is false.
+    Pending,
 }
 
 /// A picture to composite and how to draw it.
@@ -29,28 +39,10 @@ pub struct LayerImage<'a> {
     pub grade: Option<Arc<Grade>>,
 }
 
-#[derive(Debug, Clone)]
-pub enum Picture<'a> {
-    /// Tightly packed RGBA8 in the source transfer function.
-    Pixels {
-        width: u32,
-        height: u32,
-        rgba: &'a [u8],
-    },
-    /// Layers composited bottom first onto a transparent canvas of their own, so the
-    /// look applies to them as one picture, as to a nested sequence.
-    Group(Vec<LayerImage<'a>>),
-    /// `fill` composited as a group, shown only where the group `matte` lets it.
-    Matted {
-        fill: Vec<LayerImage<'a>>,
-        matte: Vec<LayerImage<'a>>,
-        channel: MatteChannel,
-        reverse: bool,
-    },
-}
-
 /// GPU work that must run before the layers that use it are drawn.
 enum Step {
+    /// Turns the planes uploaded for the slot into its texture.
+    Convert(usize),
     Blur(usize),
     /// Draws the slots in `members` into the group slot `index`.
     Group {
@@ -66,6 +58,13 @@ enum Step {
         channel: MatteChannel,
         reverse: bool,
     },
+    /// Draws the group slot `layer`, combined with the group slot `other`, into the
+    /// group slot `index`.
+    Combine {
+        index: usize,
+        layer: usize,
+        other: usize,
+    },
 }
 
 struct Targets {
@@ -74,6 +73,8 @@ struct Targets {
     working_texture: wgpu::Texture,
     working: wgpu::TextureView,
     working_binding: wgpu::BindGroup,
+    /// The effects the working frame's placement uses: none.
+    working_features: Features,
     backdrop: Backdrop,
     output_texture: wgpu::Texture,
     output: wgpu::TextureView,
@@ -87,6 +88,9 @@ pub enum Background {
     Black,
     /// Kept clear, so the presented frame carries the layers' coverage as its alpha.
     Transparent,
+    /// Kept clear, with the presented colors multiplied by their alpha, as a UI blends a
+    /// picture over what it draws beneath.
+    UnderUi,
 }
 
 /// Uploads source frames, composites them in linear light and presents the result to a
@@ -96,9 +100,22 @@ pub struct Compositor {
     pub(crate) queue: wgpu::Queue,
     blit: Blit,
     slots: Vec<Slot>,
+    yuv: YuvConverter,
     targets: Option<Targets>,
     scope: Option<ScopeTrace>,
     background: Background,
+    /// Whether the output texture was recreated for a frame left pending, so the next
+    /// frame shown must report it.
+    unshown_target: bool,
+    pub(crate) readback_buffers: crate::readback::ReadbackBuffers,
+    #[cfg(windows)]
+    shared: crate::shared::SharedTextures,
+    /// Decoded pictures replaced since the last submit, kept until the GPU is done
+    /// reading them so their decoder can't write over them first.
+    #[cfg(windows)]
+    retired: Vec<Arc<dyn std::any::Any + Send + Sync>>,
+    /// Composites so far, for letting idle slots go.
+    composites: u64,
 }
 
 impl Compositor {
@@ -114,10 +131,39 @@ impl Compositor {
             device: device.clone(),
             queue: queue.clone(),
             slots: Vec::new(),
+            yuv: YuvConverter::new(device),
             targets: None,
             scope: None,
             background: Background::Black,
+            unshown_target: false,
+            readback_buffers: Default::default(),
+            #[cfg(windows)]
+            shared: crate::shared::SharedTextures::default(),
+            #[cfg(windows)]
+            retired: Vec::new(),
+            composites: 0,
         }
+    }
+
+    /// Builds the shaders of effects not used before on a worker from now on, so
+    /// compositing never waits for the driver's compiler; frames that need one still
+    /// being built come back [`Presented::Pending`]. For compositors on the UI thread.
+    pub fn compile_in_background(&mut self) {
+        self.blit.layers.build_in_background();
+        self.yuv.build_in_background();
+        // What a plain frame needs, so the first one is ready as soon as possible.
+        let working = Placement {
+            premultiplied: Premultiplied::InLight,
+            ..Placement::FULL
+        };
+        let working = self.blit.features(&working.to_bytes());
+        self.blit.pipeline(working, LayerPass::Display);
+        self.blit.pipeline(Features::NONE, LayerPass::Over);
+    }
+
+    /// Whether shaders asked for are still being built in the background.
+    pub fn compiling(&self) -> bool {
+        self.blit.layers.building() || self.yuv.building()
     }
 
     /// The presented frame, valid until the next [`Presented::NewTarget`].
@@ -168,6 +214,10 @@ impl Compositor {
     }
 
     pub fn set_background(&mut self, background: Background) {
+        if (background == Background::UnderUi) != (self.background == Background::UnderUi) {
+            // The frame is presented premultiplied or not by how its targets are made.
+            self.targets = None;
+        }
         self.background = background;
     }
 
@@ -188,8 +238,12 @@ impl Compositor {
                 Presented::NewTarget
             }
         };
+        self.blit.layers.take_missed();
         let mut steps = Vec::new();
-        let top = self.prepare(layers, canvas, &mut 0, &mut steps);
+        self.composites += 1;
+        let mut used = 0;
+        let top = self.prepare(layers, canvas, &mut used, &mut steps);
+        self.release_idle(used);
         let Some(targets) = &self.targets else {
             unreachable!("targets were created above");
         };
@@ -197,13 +251,27 @@ impl Compositor {
             trace.bind(&self.device, &self.queue, &targets.output, canvas);
         }
 
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("compositor"),
-            });
+        let encoder_named = |label| {
+            self.device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) })
+        };
+        // Submitted even when the frame is left pending, as the planes it converts
+        // aren't uploaded again.
+        let mut conversions = encoder_named("yuv");
+        let mut encoder = encoder_named("compositor");
+        let mut unconverted = false;
         for step in &steps {
             match step {
+                Step::Convert(index) => {
+                    let slot = &mut self.slots[*index];
+                    if let Some(planes) = &slot.planes {
+                        if !planes.draw(&mut conversions, &self.yuv, &slot.view) {
+                            // Uploaded again next time, when the converter is built.
+                            slot.uploaded = None;
+                            unconverted = true;
+                        }
+                    }
+                }
                 Step::Blur(index) => {
                     if let Some(blur) = &self.slots[*index].blur {
                         blur.draw(&mut encoder, &self.blit);
@@ -234,13 +302,38 @@ impl Compositor {
                         &self.placed(fill),
                         wgpu::Color::TRANSPARENT,
                     );
-                    blit::draw(
-                        &mut encoder,
-                        &group.view,
-                        self.blit.matte(*channel, *reverse),
-                        &[[self.slots[*matte].placed(), &self.blit.grade.none]],
-                        wgpu::LoadOp::Load,
-                    );
+                    let matte_slot = &self.slots[*matte];
+                    let pass = LayerPass::Matte(*channel, *reverse);
+                    if let Some(pipeline) = self.blit.pipeline(matte_slot.features, pass) {
+                        blit::draw(
+                            &mut encoder,
+                            &group.view,
+                            &pipeline,
+                            &[[matte_slot.placed(), &self.blit.grade.none]],
+                            wgpu::LoadOp::Load,
+                        );
+                    }
+                }
+                Step::Combine {
+                    index,
+                    layer,
+                    other,
+                } => {
+                    let other = self
+                        .blit
+                        .bind_backdrop(&self.device, &self.slots[*other].view);
+                    let layer = &self.slots[*layer];
+                    let groups = [layer.placed(), &self.blit.grade.none, &other];
+                    if let Some(pipeline) = self.blit.pipeline(layer.features, LayerPass::Combined)
+                    {
+                        blit::draw(
+                            &mut encoder,
+                            &self.slots[*index].view,
+                            &pipeline,
+                            &[groups],
+                            wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        );
+                    }
                 }
             }
         }
@@ -251,21 +344,47 @@ impl Compositor {
             &self.placed(&top),
             match self.background {
                 Background::Black => wgpu::Color::BLACK,
-                Background::Transparent => wgpu::Color::TRANSPARENT,
+                Background::Transparent | Background::UnderUi => wgpu::Color::TRANSPARENT,
             },
         );
-        blit::draw(
-            &mut encoder,
-            &targets.output,
-            &self.blit.to_display,
-            &[[&targets.working_binding, &self.blit.grade.none]],
-            wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-        );
+        let display = self
+            .blit
+            .pipeline(targets.working_features, LayerPass::Display);
+        if let Some(display) = &display {
+            blit::draw(
+                &mut encoder,
+                &targets.output,
+                display,
+                &[[&targets.working_binding, &self.blit.grade.none]],
+                wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+            );
+        }
+        // The encoder is dropped unsubmitted: a frame with layers left out isn't shown.
+        if self.blit.layers.take_missed() | unconverted {
+            self.submit([conversions.finish()]);
+            self.unshown_target |= presented == Presented::NewTarget;
+            return Ok(Presented::Pending);
+        }
         if let Some(trace) = &self.scope {
             trace.record(&mut encoder);
         }
-        self.queue.submit([encoder.finish()]);
+        self.submit([conversions.finish(), encoder.finish()]);
+        if std::mem::take(&mut self.unshown_target) {
+            return Ok(Presented::NewTarget);
+        }
         Ok(presented)
+    }
+
+    fn submit<const N: usize>(&mut self, buffers: [wgpu::CommandBuffer; N]) {
+        self.queue.submit(buffers);
+        #[cfg(windows)]
+        {
+            self.shared.finish_composite();
+            let retired = std::mem::take(&mut self.retired);
+            if !retired.is_empty() {
+                self.queue.on_submitted_work_done(move || drop(retired));
+            }
+        }
     }
 
     fn placed(&self, slots: &[usize]) -> Vec<Drawn<'_>> {
@@ -280,114 +399,11 @@ impl Compositor {
                 Drawn {
                     groups: [slot.placed(), grade],
                     blend: slot.blend,
+                    reach: slot.reach,
+                    features: slot.features,
                 }
             })
             .collect()
-    }
-
-    fn check_layers(&self, layers: &[LayerImage<'_>]) -> Result<(), RenderError> {
-        for layer in layers {
-            match &layer.picture {
-                Picture::Pixels {
-                    width,
-                    height,
-                    rgba,
-                } => {
-                    self.check_size(*width, *height)?;
-                    if rgba.len() != *width as usize * *height as usize * 4 {
-                        return Err(RenderError::FrameSize {
-                            width: *width,
-                            height: *height,
-                            bytes: rgba.len(),
-                        });
-                    }
-                }
-                Picture::Group(members) => self.check_layers(members)?,
-                Picture::Matted { fill, matte, .. } => {
-                    self.check_layers(fill)?;
-                    self.check_layers(matte)?;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// Uploads and places `layers` in the slots from `next` on, adding the work they
-    /// need before drawing to `steps`. Returns their slots, bottom first.
-    fn prepare(
-        &mut self,
-        layers: &[LayerImage<'_>],
-        canvas: (u32, u32),
-        next: &mut usize,
-        steps: &mut Vec<Step>,
-    ) -> Vec<usize> {
-        let mut placed = Vec::with_capacity(layers.len());
-        for layer in layers {
-            let index = match &layer.picture {
-                Picture::Pixels {
-                    width,
-                    height,
-                    rgba,
-                } => {
-                    let index = self.claim(next, (*width, *height), SlotKind::Picture);
-                    self.upload(index, rgba);
-                    index
-                }
-                Picture::Group(members) => self.group(members, canvas, next, steps),
-                Picture::Matted {
-                    fill,
-                    matte,
-                    channel,
-                    reverse,
-                } => {
-                    let fill = self.prepare(fill, canvas, next, steps);
-                    let matte = self.group(matte, canvas, next, steps);
-                    let unchanged = LayerImage {
-                        picture: Picture::Group(Vec::new()),
-                        look: LayerLook::IDENTITY,
-                        grade: None,
-                    };
-                    self.place(matte, &unchanged, canvas);
-                    let index = self.claim(next, canvas, SlotKind::Group);
-                    steps.push(Step::Matte {
-                        index,
-                        fill,
-                        matte,
-                        channel: *channel,
-                        reverse: *reverse,
-                    });
-                    index
-                }
-            };
-            self.place(index, layer, canvas);
-            if self.slots[index].blurred {
-                steps.push(Step::Blur(index));
-            }
-            placed.push(index);
-        }
-        placed
-    }
-
-    /// Prepares `members` to be drawn into a canvas-sized group slot, returned.
-    fn group(
-        &mut self,
-        members: &[LayerImage<'_>],
-        canvas: (u32, u32),
-        next: &mut usize,
-        steps: &mut Vec<Step>,
-    ) -> usize {
-        let members = self.prepare(members, canvas, next, steps);
-        let index = self.claim(next, canvas, SlotKind::Group);
-        steps.push(Step::Group { index, members });
-        index
-    }
-
-    fn check_size(&self, width: u32, height: u32) -> Result<(), RenderError> {
-        let max = self.device.limits().max_texture_dimension_2d;
-        if width == 0 || height == 0 || width > max || height > max {
-            return Err(RenderError::FrameTooLarge { width, height, max });
-        }
-        Ok(())
     }
 
     fn create_targets(&self, width: u32, height: u32) -> Targets {
@@ -410,14 +426,19 @@ impl Compositor {
         // Layers blend into the working frame with their colors multiplied by their
         // alpha. Over black that alpha stays whole and dividing it out changes nothing.
         let working = Placement {
-            premultiplied: true,
+            premultiplied: if self.background == Background::UnderUi {
+                Premultiplied::InLightForUi
+            } else {
+                Premultiplied::InLight
+            },
             ..Placement::FULL
         };
-        Blit::write_placement(&self.queue, &placement, working);
+        let working_features = self.blit.write_placement(&self.queue, &placement, working);
         Targets {
             width,
             height,
             working_binding: self.blit.bind(&self.device, &working_view, &placement),
+            working_features,
             working: working_view,
             working_texture,
             backdrop: Backdrop::new(&self.device, &self.blit, (width, height)),

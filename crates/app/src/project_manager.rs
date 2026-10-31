@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -7,9 +8,10 @@ use std::time::Duration;
 use crossbeam::channel::{self, Receiver, Sender, TryRecvError};
 use egui::{Key, ProgressBar};
 use project::ProjectFile;
-use timeline::{collect_files, Collect, FileCopy, Sequence};
+use timeline::{collect_files, uncollect_failed, Collect, Sequence};
 
 use crate::editor::Editor;
+use crate::error::AppError;
 
 /// Premiere's Project Manager: copies the files a project uses into one folder and saves
 /// a copy of the project that reads them from there, to archive or hand it on.
@@ -27,9 +29,11 @@ struct CollectJob {
 }
 
 enum CollectEvent {
+    /// How many files there are to copy.
+    Planned(usize),
     Copied,
     /// The saved project and the files that could not be copied.
-    Finished(Result<(PathBuf, Vec<String>), String>),
+    Finished(Result<(PathBuf, Vec<String>), AppError>),
 }
 
 impl Editor {
@@ -39,7 +43,9 @@ impl Editor {
             .project_path
             .as_ref()
             .and_then(|path| path.parent())
-            .map_or_else(PathBuf::new, Path::to_path_buf)
+            .map(Path::to_path_buf)
+            .or_else(crate::file_browser::home)
+            .unwrap_or_default()
             .join(format!("{name} Copied"));
         self.project_manager = Some(ProjectManager {
             folder: folder.display().to_string(),
@@ -67,33 +73,32 @@ pub(crate) fn window(editor: &mut Editor, ctx: &egui::Context) {
     };
     let mut start = false;
     let mut close = false;
-    egui::Window::new("Project Manager")
-        .collapsible(false)
-        .resizable(false)
-        .show(ctx, |ui| match &manager.job {
-            Some(job) => {
-                ui.label(format!("Copying {} of {} files…", job.copied, job.total));
-                let fraction = job.copied as f32 / job.total.max(1) as f32;
-                ui.add(ProgressBar::new(fraction).show_percentage());
-                close = ui.button("Cancel").clicked();
-            }
-            None => {
-                ui.label("Copy the project's media, proxies and LUTs to:");
-                ui.text_edit_singleline(&mut manager.folder);
-                ui.radio_value(&mut manager.keep, Collect::UsedOnly, "Exclude unused clips");
-                ui.radio_value(&mut manager.keep, Collect::All, "Keep every item");
-                ui.weak(format!(
-                    "Saves {name}.{} there, reading the copies.",
-                    project::EXTENSION
-                ));
-                ui.horizontal(|ui| {
-                    start = ui.button("Collect Files and Copy").clicked()
-                        || ui.input(|input| input.key_pressed(Key::Enter));
-                    close = ui.button("Cancel").clicked()
-                        || ui.input(|input| input.key_pressed(Key::Escape));
-                });
-            }
-        });
+    crate::dialog::window(ctx, "Project Manager").show(ctx, |ui| match &manager.job {
+        Some(job) => {
+            ui.label(format!("Copying {} of {} files…", job.copied, job.total));
+            let fraction = job.copied as f32 / job.total.max(1) as f32;
+            ui.add(ProgressBar::new(fraction).show_percentage());
+            close = ui.button("Cancel").clicked();
+        }
+        None => {
+            ui.label("Copy the project's media, proxies and LUTs to:");
+            ui.text_edit_singleline(&mut manager.folder);
+            ui.radio_value(&mut manager.keep, Collect::UsedOnly, "Exclude unused clips");
+            ui.radio_value(&mut manager.keep, Collect::All, "Keep every item");
+            ui.weak(format!(
+                "Saves {name}.{} there, reading the copies.",
+                project::EXTENSION
+            ));
+            crate::dialog::footer(ui, |ui| {
+                close = ui.button("Cancel").clicked()
+                    || ui.input(|input| input.key_pressed(Key::Escape));
+                start = ui
+                    .add(crate::dialog::primary("Collect Files and Copy"))
+                    .clicked()
+                    || ui.input(|input| input.key_pressed(Key::Enter));
+            });
+        }
+    });
     if close {
         if let Some(job) = manager.job.take() {
             job.cancel.store(true, Ordering::Relaxed);
@@ -101,19 +106,26 @@ pub(crate) fn window(editor: &mut Editor, ctx: &egui::Context) {
         editor.project_manager = None;
     } else if start && !manager.folder.trim().is_empty() {
         let folder = PathBuf::from(manager.folder.trim());
-        let (sequence, copies) = collect_files(editor.timeline.sequence(), &folder, manager.keep);
-        let project = folder.join(format!("{name}.{}", project::EXTENSION));
-        let total = copies.len();
-        match spawn(sequence, copies, project) {
-            Ok((events, cancel)) => {
-                manager.job = Some(CollectJob {
-                    events,
-                    cancel,
-                    copied: 0,
-                    total,
-                });
+        if !folder.is_absolute() {
+            editor.notice("Choose a full folder path to collect the project into".to_owned());
+        } else {
+            let job = Job {
+                sequence: editor.timeline.project().clone(),
+                folder,
+                keep: manager.keep,
+                name,
+            };
+            match spawn(job) {
+                Ok((events, cancel)) => {
+                    manager.job = Some(CollectJob {
+                        events,
+                        cancel,
+                        copied: 0,
+                        total: 0,
+                    });
+                }
+                Err(error) => editor.notice(format!("Cannot start copying: {error}")),
             }
-            Err(error) => editor.notice(format!("Cannot start copying: {error}")),
         }
     }
 }
@@ -128,10 +140,11 @@ fn poll(editor: &mut Editor, ctx: &egui::Context) {
     };
     let finished = loop {
         match job.events.try_recv() {
+            Ok(CollectEvent::Planned(total)) => job.total = total,
             Ok(CollectEvent::Copied) => job.copied += 1,
             Ok(CollectEvent::Finished(result)) => break Some(result),
             Err(TryRecvError::Empty) => break None,
-            Err(TryRecvError::Disconnected) => break Some(Err("the copy stopped".to_owned())),
+            Err(TryRecvError::Disconnected) => break Some(Err(AppError::WorkerStopped)),
         }
     };
     let Some(result) = finished else {
@@ -152,18 +165,21 @@ fn poll(editor: &mut Editor, ctx: &egui::Context) {
     }
 }
 
-fn spawn(
+struct Job {
     sequence: Sequence,
-    copies: Vec<FileCopy>,
-    project: PathBuf,
-) -> std::io::Result<(Receiver<CollectEvent>, Arc<AtomicBool>)> {
+    folder: PathBuf,
+    keep: Collect,
+    name: String,
+}
+
+fn spawn(job: Job) -> std::io::Result<(Receiver<CollectEvent>, Arc<AtomicBool>)> {
     let (events, received) = channel::unbounded();
     let cancel = Arc::new(AtomicBool::new(false));
     let stop = Arc::clone(&cancel);
     thread::Builder::new()
         .name("project manager".to_owned())
         .spawn(move || {
-            let result = collect(sequence, &copies, &project, &stop, &events);
+            let result = collect(job, &stop, &events);
             // A closed window no longer listens.
             let _ = events.send(CollectEvent::Finished(result));
         })?;
@@ -171,30 +187,48 @@ fn spawn(
 }
 
 fn collect(
-    sequence: Sequence,
-    copies: &[FileCopy],
-    project: &Path,
+    job: Job,
     stop: &AtomicBool,
     events: &Sender<CollectEvent>,
-) -> Result<(PathBuf, Vec<String>), String> {
-    let folder = project.parent().unwrap_or(Path::new("."));
-    std::fs::create_dir_all(folder).map_err(|error| error.to_string())?;
+) -> Result<(PathBuf, Vec<String>), AppError> {
+    std::fs::create_dir_all(&job.folder)?;
+    let taken: HashSet<String> = std::fs::read_dir(&job.folder)?
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name().to_string_lossy().to_lowercase())
+        .collect();
+    let (mut sequence, copies) = collect_files(&job.sequence, &job.folder, job.keep, &taken);
+    let _ = events.send(CollectEvent::Planned(copies.len()));
+    let project = unused_name(&job.folder, &job.name, &taken);
     let mut failed = Vec::new();
-    for copy in copies {
+    let mut uncopied = Vec::new();
+    for copy in &copies {
         if stop.load(Ordering::Relaxed) {
-            return Err("cancelled".to_owned());
+            return Err(AppError::Cancelled);
         }
         if copy.from != copy.to {
             if let Err(error) = copy_source(&copy.from, &copy.to) {
                 failed.push(format!("{} ({error})", copy.from.display()));
+                uncopied.push(copy.clone());
             }
         }
         let _ = events.send(CollectEvent::Copied);
     }
-    ProjectFile::new(sequence)
-        .save(project)
-        .map_err(|error| error.to_string())?;
-    Ok((project.to_path_buf(), failed))
+    // The collected project keeps using the originals it has no copy of.
+    uncollect_failed(&mut sequence, &uncopied);
+    ProjectFile::new(sequence).save(&project)?;
+    Ok((project, failed))
+}
+
+/// The project file to save, numbered past any project of that name already there.
+fn unused_name(folder: &Path, name: &str, taken: &HashSet<String>) -> PathBuf {
+    let extension = project::EXTENSION;
+    (1..)
+        .map(|number| match number {
+            1 => format!("{name}.{extension}"),
+            _ => format!("{name} ({number}).{extension}"),
+        })
+        .find(|file| !taken.contains(&file.to_lowercase()))
+        .map_or_else(|| folder.join(name), |file| folder.join(file))
 }
 
 /// Copies a file, or each frame of an image sequence to the pattern it is copied to.

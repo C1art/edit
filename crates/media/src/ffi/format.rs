@@ -1,12 +1,13 @@
-use std::ffi::{c_char, CStr, CString};
+use std::ffi::{c_char, c_int, CStr, CString};
 use std::path::Path;
 use std::ptr::{self, NonNull};
 
 use ffmpeg_sys_next as sys;
-use timeline::{Ticks, Timebase};
+use timeline::{ColorSpace, FieldOrder, Ticks, Timebase};
 
 use super::error::check;
 use super::Packet;
+use crate::turn::Turn;
 use crate::{MediaError, StreamInfo, StreamKind};
 
 /// An opened demuxer whose stream info has been read.
@@ -49,11 +50,13 @@ impl InputContext {
         // FFmpeg frees the context and leaves `raw` null.
         check(unsafe {
             sys::avformat_open_input(&mut raw, c_path.as_ptr(), demuxer, &mut options.0)
-        })?;
+        })
+        .map_err(unreadable)?;
         let input = Self(NonNull::new(raw).ok_or_else(unsupported)?);
 
         // SAFETY: the context was opened above and is exclusively owned by `input`.
-        check(unsafe { sys::avformat_find_stream_info(input.0.as_ptr(), ptr::null_mut()) })?;
+        check(unsafe { sys::avformat_find_stream_info(input.0.as_ptr(), ptr::null_mut()) })
+            .map_err(unreadable)?;
         Ok(input)
     }
 
@@ -84,7 +87,29 @@ impl InputContext {
         let index = unsafe {
             sys::av_find_best_stream(self.0.as_ptr(), media_type, -1, -1, ptr::null_mut(), 0)
         };
-        usize::try_from(index).ok()
+        let best = usize::try_from(index).ok()?;
+        if kind != StreamKind::Video || !self.is_cover_art(best) {
+            return Some(best);
+        }
+        // Music files carry their album art as a one-picture video stream; taken as the
+        // picture, a song would import as a still clip instead of sound.
+        (0..self.raw_streams().len()).find(|&index| {
+            self.stream_kind(index) == Some(StreamKind::Video) && !self.is_cover_art(index)
+        })
+    }
+
+    fn is_cover_art(&self, index: usize) -> bool {
+        // SAFETY: `stream` returns valid stream pointers owned by the open context.
+        self.stream(index).is_some_and(|stream| unsafe {
+            (*stream).disposition & sys::AV_DISPOSITION_ATTACHED_PIC != 0
+        })
+    }
+
+    fn stream_kind(&self, index: usize) -> Option<StreamKind> {
+        // SAFETY: `stream` returns valid stream pointers owned by the open context, and
+        // every stream has non-null `codecpar`.
+        let codec_type = unsafe { (*(*self.stream(index)?).codecpar).codec_type };
+        Some(stream_kind(codec_type))
     }
 
     pub(crate) fn stream_timebase(&self, index: usize) -> Option<Timebase> {
@@ -111,6 +136,73 @@ impl InputContext {
         let num = u32::try_from(ratio.num).ok().filter(|&num| num > 0)?;
         let den = u32::try_from(ratio.den).ok().filter(|&den| den > 0)?;
         Some((num, den))
+    }
+
+    /// The color space the stream declares, taking undeclared parts as Rec. 709's.
+    pub(crate) fn color_space(&self, index: usize) -> ColorSpace {
+        use sys::AVColorPrimaries::*;
+        use sys::AVColorTransferCharacteristic::*;
+        let Some(stream) = self.stream(index) else {
+            return ColorSpace::Rec709;
+        };
+        // SAFETY: `stream` returns valid stream pointers owned by the open context, and
+        // every stream has non-null `codecpar`.
+        let codecpar = unsafe { &*(*stream).codecpar };
+        let p3 = codecpar.color_primaries == AVCOL_PRI_SMPTE432;
+        let wide = codecpar.color_primaries == AVCOL_PRI_BT2020;
+        match codecpar.color_trc {
+            AVCOL_TRC_SMPTE2084 if p3 => ColorSpace::P3D65Pq,
+            AVCOL_TRC_SMPTE2084 => ColorSpace::Rec2100Pq,
+            AVCOL_TRC_ARIB_STD_B67 => ColorSpace::Rec2100Hlg,
+            _ if wide => ColorSpace::Rec2020,
+            _ if p3 => ColorSpace::P3D65,
+            _ => ColorSpace::Rec709,
+        }
+    }
+
+    /// The order the stream's fields are shown in, as the codec parameters declare it;
+    /// undeclared counts as progressive.
+    pub(crate) fn field_order(&self, index: usize) -> FieldOrder {
+        use sys::AVFieldOrder::*;
+        let Some(stream) = self.stream(index) else {
+            return FieldOrder::Progressive;
+        };
+        // SAFETY: `stream` returns valid stream pointers owned by the open context, and
+        // every stream has non-null `codecpar`.
+        let codecpar = unsafe { &*(*stream).codecpar };
+        // The second letter is the field shown first; the first is the one coded first.
+        match codecpar.field_order {
+            AV_FIELD_TT | AV_FIELD_BT => FieldOrder::UpperFirst,
+            AV_FIELD_BB | AV_FIELD_TB => FieldOrder::LowerFirst,
+            _ => FieldOrder::Progressive,
+        }
+    }
+
+    /// The turn that stands the stream's pictures upright, from the display matrix the
+    /// container keeps for it.
+    pub(crate) fn display_turn(&self, index: usize) -> Turn {
+        /// A display matrix is 3 by 3 32-bit numbers.
+        const MATRIX_BYTES: usize = 9 * 4;
+        let Some(stream) = self.stream(index) else {
+            return Turn::None;
+        };
+        // SAFETY: `stream` returns valid stream pointers owned by the open context, and
+        // every stream has non-null `codecpar`, whose `coded_side_data` holds
+        // `nb_coded_side_data` entries. The entry found is checked to hold a whole
+        // matrix before it is read.
+        let counterclockwise = unsafe {
+            let codecpar = &*(*stream).codecpar;
+            let side_data = sys::av_packet_side_data_get(
+                codecpar.coded_side_data,
+                codecpar.nb_coded_side_data,
+                sys::AVPacketSideDataType::AV_PKT_DATA_DISPLAYMATRIX,
+            );
+            if side_data.is_null() || (*side_data).size < MATRIX_BYTES {
+                return Turn::None;
+            }
+            sys::av_display_rotation_get((*side_data).data.cast::<i32>())
+        };
+        Turn::clockwise(-counterclockwise)
     }
 
     /// The coded picture size declared in the stream header.
@@ -140,6 +232,28 @@ impl InputContext {
         // name is a static string.
         let name = unsafe { text((*self.0.as_ref().iformat).name) };
         name.is_some_and(|name| name == "image2" || name.ends_with("_pipe"))
+    }
+
+    /// The `timecode` tag cameras and editors write, as "01:00:00:00", on the container
+    /// or on any of its streams, as a timecode track's.
+    pub(crate) fn timecode_tag(&self) -> Option<String> {
+        // SAFETY: the context is open, so its metadata and each stream's are null or
+        // valid dictionaries it owns for as long as `self`.
+        let dictionaries = std::iter::once(unsafe { self.0.as_ref() }.metadata).chain(
+            self.raw_streams()
+                .iter()
+                .map(|&stream| unsafe { (*stream).metadata }),
+        );
+        dictionaries
+            .filter(|dictionary| !dictionary.is_null())
+            .find_map(|dictionary| {
+                // SAFETY: `dictionary` is a valid dictionary and the key a NUL-terminated
+                // static string; the entry returned, if any, lives in the dictionary.
+                unsafe {
+                    let entry = sys::av_dict_get(dictionary, c"timecode".as_ptr(), ptr::null(), 0);
+                    entry.as_ref().and_then(|entry| text(entry.value))
+                }
+            })
     }
 
     /// Bits per second over the whole file, when the container knows it.
@@ -183,6 +297,34 @@ impl InputContext {
         .map(drop)
     }
 
+    /// Has the demuxer skip every stream but `kept`, so reading one stream of a file
+    /// doesn't also read the data of the others.
+    pub(crate) fn keep_only(&mut self, kept: &[usize]) {
+        for (index, &stream) in self.raw_streams().iter().enumerate() {
+            let discard = if kept.contains(&index) {
+                sys::AVDiscard::AVDISCARD_DEFAULT
+            } else {
+                sys::AVDiscard::AVDISCARD_ALL
+            };
+            // SAFETY: `raw_streams` holds valid stream pointers owned by the open context,
+            // which `&mut self` lets this call change.
+            unsafe { (*stream).discard = discard };
+        }
+    }
+
+    /// The timestamp of the last keyframe at or before `timestamp` in stream `index`, both
+    /// in the stream's timebase, when the container indexes its keyframes.
+    pub(crate) fn keyframe_before(&self, index: usize, timestamp: i64) -> Option<i64> {
+        let stream = self.stream(index)?;
+        let backward = sys::AVSEEK_FLAG_BACKWARD as c_int;
+        // SAFETY: `stream` is a valid stream of the open context; a non-null entry points
+        // into its index, which nothing changes before it is read here.
+        unsafe {
+            let entry = sys::avformat_index_get_entry_from_timestamp(stream, timestamp, backward);
+            entry.as_ref().map(|entry| entry.timestamp)
+        }
+    }
+
     pub(crate) fn streams(&self) -> Vec<StreamInfo> {
         self.raw_streams()
             .iter()
@@ -223,6 +365,17 @@ impl Drop for InputContext {
         let mut raw = self.0.as_ptr();
         // SAFETY: the context came from avformat_open_input and is closed exactly once here.
         unsafe { sys::avformat_close_input(&mut raw) };
+    }
+}
+
+/// FFmpeg reports a file in no format it knows and one cut short the same way, as
+/// "invalid data", which means nothing to someone importing it.
+fn unreadable(error: MediaError) -> MediaError {
+    match error {
+        MediaError::Ffmpeg { code, .. } if code == sys::AVERROR_INVALIDDATA => {
+            MediaError::UnreadableFile
+        }
+        error => error,
     }
 }
 

@@ -1,13 +1,15 @@
 use egui::DragValue;
 use timeline::{
-    nearest_transition_edge, Alignment, Clip, Edge, Rgb, Sequence, SetTransition, Side, Sweep,
-    Ticks, TrackKind, TrackRef, Transition, TransitionKind,
+    nearest_transition_edge, Alignment, ApplyTransitions, Clip, Edge, RemoveTransitions, Rgb,
+    Sequence, SetTransition, Side, Sweep, Ticks, TrackKind, TrackRef, Transition, TransitionKind,
 };
 
 use crate::editor::Editor;
 
 pub(super) fn controls(editor: &mut Editor, ui: &mut egui::Ui, track: TrackRef, clip: &Clip) {
+    let defaults = editor.transition_defaults;
     let sequence = editor.timeline.sequence();
+    let fallback = defaults.transition(sequence, track.kind);
     let neighbours = sequence.track(track).map(|track| {
         let at = |time| track.clips.iter().any(|other| other.end() == time);
         (
@@ -29,7 +31,8 @@ pub(super) fn controls(editor: &mut Editor, ui: &mut egui::Ui, track: TrackRef, 
                     continue;
                 }
                 let at_cut = edge == Edge::Head && at_cut;
-                let row = transition_row(ui, sequence, track.kind, label, current, at_cut);
+                let row =
+                    transition_row(ui, sequence, track.kind, label, current, at_cut, fallback);
                 if let Some(transition) = row {
                     edits.push(SetTransition {
                         clip: clip.id,
@@ -52,6 +55,7 @@ fn transition_row(
     label: &str,
     current: Option<Transition>,
     at_cut: bool,
+    fallback: Transition,
 ) -> Option<Option<Transition>> {
     let (rate, timebase) = (sequence.format.frame_rate, sequence.timebase);
     let (kinds, name): (&[TransitionKind], fn(TransitionKind) -> &'static str) = match track {
@@ -60,7 +64,7 @@ fn transition_row(
     };
     let mut chosen = current;
     ui.horizontal(|ui| {
-        ui.add_sized([30.0, 18.0], egui::Label::new(label));
+        super::controls::label_column(ui, label);
         let selected = current.map_or("None", |transition| name(transition.kind));
         egui::ComboBox::from_id_salt(label)
             .selected_text(selected)
@@ -73,14 +77,19 @@ fn transition_row(
                     if ui.selectable_label(on, name(kind)).clicked() {
                         chosen = Some(Transition {
                             kind,
-                            ..current.unwrap_or_else(|| default_transition(sequence))
+                            ..current.unwrap_or(fallback)
                         });
                     }
                 }
             });
         if let Some(transition) = &mut chosen {
             let mut frames = rate.frame_at(transition.duration, timebase);
-            let response = ui.add(DragValue::new(&mut frames).range(1..=600).suffix(" fr"));
+            let response = ui.add(
+                DragValue::new(&mut frames)
+                    .update_while_editing(false)
+                    .range(1..=600)
+                    .suffix(" fr"),
+            );
             if response.changed() {
                 transition.duration = rate.frame_start(frames, timebase);
             }
@@ -146,6 +155,7 @@ fn wipe_row(ui: &mut egui::Ui, label: &str, transition: &mut Transition) {
         let border = &mut transition.border;
         ui.add(
             DragValue::new(&mut border.width)
+                .update_while_editing(false)
                 .range(0..=200)
                 .suffix(" px"),
         )
@@ -163,28 +173,24 @@ fn wipe_row(ui: &mut egui::Ui, label: &str, transition: &mut Transition) {
         }
         ui.label("Softness");
         let mut softness = (transition.softness() * 100.0).round() as u8;
-        let soften = DragValue::new(&mut softness).range(0..=100).suffix("%");
+        let soften = DragValue::new(&mut softness)
+            .update_while_editing(false)
+            .range(0..=100)
+            .suffix("%");
         if ui.add(soften).changed() {
             transition.softness = Some(softness);
         }
     });
 }
 
-/// A one-second cross dissolve, like Premiere's default; on audio it is a
-/// constant-power crossfade.
-pub fn default_transition(sequence: &Sequence) -> Transition {
-    let rate = sequence.format.frame_rate;
-    let frames = i64::from(rate.num().div_ceil(rate.den()));
-    Transition::new(
-        TransitionKind::CrossDissolve,
-        rate.frame_start(frames, sequence.timebase),
-    )
-}
-
 /// Applies the default transition at the cut or clip end nearest the playhead on the
 /// targeted track of `kind`, or on the first such track when none is targeted.
 pub fn apply_default_transition(editor: &mut Editor, kind: TrackKind) {
-    apply_transition(editor, kind, TransitionKind::CrossDissolve);
+    let transition = match kind {
+        TrackKind::Video => editor.transition_defaults.video,
+        TrackKind::Audio => TransitionKind::CrossDissolve,
+    };
+    apply_transition(editor, kind, transition);
 }
 
 /// Like [`apply_default_transition`], with a transition of `transition` kind.
@@ -197,9 +203,34 @@ pub fn apply_transition(editor: &mut Editor, kind: TrackKind, transition: Transi
     add_transition(editor, track, editor.playhead(), transition);
 }
 
+/// Puts the default transition at every cut between the selected clips and at their
+/// free ends, on video and audio alike.
+pub fn apply_default_transitions_to_selection(editor: &mut Editor) {
+    let clips = editor.view.selection.clone();
+    let sequence = editor.timeline.sequence();
+    let defaults = editor.transition_defaults;
+    let video = defaults.transition(sequence, TrackKind::Video);
+    let audio = defaults.transition(sequence, TrackKind::Audio);
+    if !editor.apply(ApplyTransitions {
+        clips,
+        video,
+        audio,
+    }) {
+        editor.notice("Select clips with an edit point that has no transition yet");
+    }
+}
+
+pub fn remove_transitions_from_selection(editor: &mut Editor) {
+    let clips = editor.view.selection.clone();
+    if !editor.apply(RemoveTransitions { clips }) {
+        editor.notice("The selected clips have no transitions");
+    }
+}
+
 /// Puts a `kind` transition at the cut or clip end on `track` nearest `at`, keeping the
 /// settings of one already there.
 pub fn add_transition(editor: &mut Editor, track: TrackRef, at: Ticks, kind: TransitionKind) {
+    let defaults = editor.transition_defaults;
     let sequence = editor.timeline.sequence();
     let Some((clip, edge)) = sequence
         .track(track)
@@ -214,7 +245,7 @@ pub fn add_transition(editor: &mut Editor, track: TrackRef, at: Ticks, kind: Tra
     });
     let transition = Transition {
         kind,
-        ..existing.unwrap_or_else(|| default_transition(sequence))
+        ..existing.unwrap_or_else(|| defaults.transition(sequence, track.kind))
     };
     editor.apply(SetTransition {
         clip,

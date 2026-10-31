@@ -20,10 +20,14 @@ fn linear_wipe_shown(at: vec2<f32>, size: vec2<f32>) -> f32 {
     if wipe.x <= 0.0 {
         return 1.0;
     }
+    // #if clip_linear.x
     let way = heading(wipe.y);
     let half = 0.5 * dot(abs(way), size);
     // A pixel's soft edge keeps a hard wipe from stepping along its slant.
     return run_shown(dot(at - 0.5 * size, way) + half, 2.0 * half, wipe.x, max(wipe.z, 1.0));
+    // #else
+    return 1.0;
+    // #endif
 }
 
 fn radial_wipe_shown(at: vec2<f32>, size: vec2<f32>) -> f32 {
@@ -32,6 +36,7 @@ fn radial_wipe_shown(at: vec2<f32>, size: vec2<f32>) -> f32 {
     if wipe.z <= 0.0 {
         return 1.0;
     }
+    // #if clip_radial.z
     let away = at - wipe.xy * size;
     let reach = max(length(away), 1.0);
     var turned = atan2(away.x, -away.y) - wipe.w;
@@ -45,6 +50,9 @@ fn radial_wipe_shown(at: vec2<f32>, size: vec2<f32>) -> f32 {
     }
     // Measured along the arc, so the feather keeps its width in pixels at any distance.
     return run_shown(turned * reach, span * reach, wipe.z, max(detail.x, 1.0));
+    // #else
+    return 1.0;
+    // #endif
 }
 
 fn blinds_shown(at: vec2<f32>) -> f32 {
@@ -52,9 +60,13 @@ fn blinds_shown(at: vec2<f32>) -> f32 {
     if blinds.x <= 0.0 {
         return 1.0;
     }
+    // #if clip_blinds.x
     let along = dot(at, heading(blinds.y));
     let within = along - blinds.z * floor(along / blinds.z);
     return run_shown(within, blinds.z, blinds.x, min(max(blinds.w, 1.0), blinds.z));
+    // #else
+    return 1.0;
+    // #endif
 }
 
 // Each block hides once the completion passes its fixed random rank; the feather fades
@@ -64,10 +76,14 @@ fn blocks_shown(at: vec2<f32>) -> f32 {
     if blocks.x <= 0.0 {
         return 1.0;
     }
+    // #if clip_blocks.x
     let cell = floor(at / blocks.yz);
     let rank = fract(sin(dot(cell, vec2<f32>(12.9898, 78.233))) * 43758.5453);
     let soft = blocks.w / max(blocks.y, blocks.z);
     return run_shown(rank, 1.0, blocks.x, soft);
+    // #else
+    return 1.0;
+    // #endif
 }
 
 // How much of the picture at `uv` the Transition effects leave shown.

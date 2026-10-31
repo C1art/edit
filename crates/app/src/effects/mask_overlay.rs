@@ -1,5 +1,5 @@
 use egui::{Color32, CursorIcon, Pos2, Rect, Sense, Shape, Stroke, Vec2};
-use timeline::{Clip, Look, Mask, MaskShape, SetClipLook, Ticks, TrackKind};
+use timeline::{Clip, Look, Mask, MaskRef, MaskShape, SetClipLook, Ticks, TrackKind};
 
 mod pen;
 
@@ -63,9 +63,10 @@ pub fn mask_overlay(editor: &mut Editor, ui: &egui::Ui, area: Rect) {
     };
     let id = ui.make_persistent_id(("mask_overlay", clip.id));
     let response = ui.interact(frame.shown, id, Sense::click_and_drag());
-    let shapes: Vec<Geometry> = look
-        .masks
-        .iter()
+    // The opacity masks and every effect's, as one list the grips index into.
+    let refs: Vec<MaskRef> = look.mask_refs().collect();
+    let shapes: Vec<Geometry> = (refs.iter())
+        .filter_map(|&at| look.mask(at))
         .map(|mask| Geometry::new(mask, time, frame.fitted))
         .collect();
     let (pressed, down, moved, modifiers) = ui.input(|input| {
@@ -74,17 +75,19 @@ pub fn mask_overlay(editor: &mut Editor, ui: &egui::Ui, area: Rect) {
         let (pressed, down) = (pointer.primary_pressed(), pointer.primary_down());
         (pressed, down, moved, input.modifiers)
     });
-    let drawing = look
-        .masks
-        .iter()
-        .position(|mask| mask.shape == MaskShape::Path && !mask.closed);
+    let drawing = refs.iter().position(|&at| {
+        look.mask(at)
+            .is_some_and(|mask| mask.shape == MaskShape::Path && !mask.closed)
+    });
     let mut held = ui.data(|data| data.get_temp::<(usize, Grip)>(id));
     let mut change = None;
     let pointer = response.interact_pointer_pos();
     if let (Some(index), Some(pointer), true, None) = (drawing, pointer, pressed, held) {
-        if let Geometry::Path(path) = &shapes[index] {
-            held = pen::press(&mut look.masks[index], path, &frame, pointer, time)
-                .map(|grip| (index, grip));
+        if let (Some(Geometry::Path(path)), Some(mask)) = (
+            shapes.get(index),
+            refs.get(index).and_then(|&at| look.mask_mut(at)),
+        ) {
+            held = pen::press(mask, path, &frame, pointer, time).map(|grip| (index, grip));
             change = Some(Change::Live);
         }
     } else if drawing.is_none() && held.is_none() && response.drag_started() {
@@ -92,17 +95,12 @@ pub fn mask_overlay(editor: &mut Editor, ui: &egui::Ui, area: Rect) {
         held = origin.and_then(|origin| grab(&frame, &shapes, origin, modifiers.alt));
     }
     if let (true, Some(pointer), None) = (response.clicked(), pointer, drawing) {
-        let clicked = look
-            .masks
-            .iter_mut()
-            .zip(&shapes)
-            .rev()
-            .any(|(mask, shape)| {
-                let Geometry::Path(path) = shape else {
-                    return false;
-                };
-                pen::click(mask, path, &frame, pointer, modifiers, time)
-            });
+        let clicked = refs.iter().zip(&shapes).rev().any(|(&at, shape)| {
+            let (Geometry::Path(path), Some(mask)) = (shape, look.mask_mut(at)) else {
+                return false;
+            };
+            pen::click(mask, path, &frame, pointer, modifiers, time)
+        });
         if clicked {
             change = Some(Change::Commit);
         }
@@ -116,7 +114,7 @@ pub fn mask_overlay(editor: &mut Editor, ui: &egui::Ui, area: Rect) {
         } else if let (true, Some(pointer), Some(mask), Some(shape)) = (
             moved || change.is_some(),
             ui.input(|input| input.pointer.latest_pos()),
-            look.masks.get_mut(index),
+            refs.get(index).and_then(|&at| look.mask_mut(at)),
             shapes.get(index),
         ) {
             drag(
@@ -163,7 +161,8 @@ fn masked_clip(editor: &Editor) -> Option<Clip> {
         .filter_map(|&id| sequence.clip(id))
         .find(|(track, _)| track.kind == TrackKind::Video)?;
     let shown = (clip.start..clip.end()).contains(&playhead);
-    (shown && !shown_look(editor, clip).masks.is_empty()).then(|| clip.clone())
+    let masked = shown_look(editor, clip).mask_refs().next().is_some();
+    (shown && masked).then(|| clip.clone())
 }
 
 /// The topmost handle or mask body at `pointer`, handles first so a small mask can
@@ -232,7 +231,7 @@ fn drag(mask: &mut Mask, geometry: &Geometry, grip: Grip, to: Vec2, fitted: Vec2
 fn paint(ui: &egui::Ui, frame: &PictureFrame, look: &Look, time: Ticks, hovered: Option<Pos2>) {
     let painter = ui.painter_at(frame.shown);
     let stroke = Stroke::new(1.5, OUTLINE);
-    for mask in &look.masks {
+    for mask in look.mask_refs().filter_map(|at| look.mask(at)) {
         let shape = match Geometry::new(mask, time, frame.fitted) {
             Geometry::Path(path) => {
                 path.paint(&painter, frame, hovered);

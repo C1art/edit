@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use crossbeam::channel::{self, Receiver, TryRecvError};
 use media::{MediaError, Motion};
-use timeline::{ClipId, SetClipLook, TrackKind, VideoEffect};
+use timeline::{CameraPath, ClipId, SetClipLook, TrackKind, VideoEffect};
 
 use crate::editor::Editor;
 use crate::scene_edits::source_span;
@@ -23,11 +23,11 @@ pub struct MotionJob {
 }
 
 impl Editor {
-    /// Starts tracking the camera through `clip`'s footage, for its Warp Stabilizer.
+    /// Starts tracking the camera through `clip`'s footage, for its Warp Stabilizer or Rolling Shutter Repair.
     pub(crate) fn analyze_motion(&mut self, clip: ClipId) {
         if let Some(job) = &self.motion_job {
-            if job.clip != clip {
-                self.notice("Another clip's motion is still being analyzed");
+            if job.clip != clip && !self.motion_queue.contains(&clip) {
+                self.motion_queue.push_back(clip);
             }
             return;
         }
@@ -41,7 +41,7 @@ impl Editor {
             .media_item(found.source)
             .filter(|item| item.is_file() && item.video.is_some());
         let (Some(item), TrackKind::Video) = (item, track.kind) else {
-            self.notice("Warp Stabilizer needs a clip of video footage");
+            self.notice("Motion analysis needs a clip of video footage");
             return;
         };
         let (path, range, timebase) = (item.path.clone(), source_span(found), sequence.timebase);
@@ -91,19 +91,29 @@ impl Editor {
         let motion = loop {
             match job.events.try_recv() {
                 Ok(Event::Progress(done)) => job.progress = done,
-                Ok(Event::Done(motion)) => break motion,
+                Ok(Event::Done(motion)) => break Some(motion),
                 Err(TryRecvError::Empty) => {
                     ctx.request_repaint_after(Duration::from_millis(100));
                     return;
                 }
-                Err(TryRecvError::Disconnected) => {
-                    self.motion_job = None;
-                    return;
-                }
+                Err(TryRecvError::Disconnected) => break None,
             }
         };
         let clip = job.clip;
         self.motion_job = None;
+        if let Some(motion) = motion {
+            self.take_motion(clip, motion);
+        }
+        // A queued clip deleted meanwhile starts nothing, so the next one goes instead.
+        while self.motion_job.is_none() {
+            let Some(next) = self.motion_queue.pop_front() else {
+                break;
+            };
+            self.analyze_motion(next);
+        }
+    }
+
+    fn take_motion(&mut self, clip: ClipId, motion: Result<Motion, MediaError>) {
         let motion = match motion {
             Ok(motion) => motion,
             Err(error) => {
@@ -114,20 +124,30 @@ impl Editor {
         let sequence = self.timeline.sequence();
         // The clip or its stabilizer may have gone while the footage was read.
         let Some((_, found)) = sequence.clip(clip) else {
+            self.notice("Motion analysis finished, but its clip isn't in the open sequence");
             return;
         };
         let mut look = found.look.clone();
-        let stabilizer = look.effects.iter_mut().find_map(|effect| match effect {
-            VideoEffect::WarpStabilizer(stabilizer) => Some(stabilizer),
-            _ => None,
-        });
-        let Some(stabilizer) = stabilizer else {
+        let mut notice = None;
+        for effect in &mut look.effects {
+            match effect {
+                VideoEffect::WarpStabilizer(stabilizer) => {
+                    stabilizer.analyzed(motion.size, &motion.steps, sequence.timebase);
+                    let scale = f64::from(stabilizer.auto_scale) / 10.0;
+                    notice = Some(format!("Stabilized; Auto-scale {scale:.1}%"));
+                }
+                VideoEffect::RollingShutterRepair(repair) => {
+                    repair.path = Some(CameraPath::tracked(motion.size, &motion.steps));
+                    notice.get_or_insert_with(|| "Rolling shutter repaired".to_owned());
+                }
+                _ => {}
+            }
+        }
+        let Some(notice) = notice else {
             return;
         };
-        stabilizer.analyzed(motion.size, &motion.steps, sequence.timebase);
-        let scale = f64::from(stabilizer.auto_scale) / 10.0;
         if self.apply(SetClipLook { clip, look }) {
-            self.notice(format!("Stabilized; Auto-scale {scale:.1}%"));
+            self.notice(notice);
         }
     }
 }

@@ -1,5 +1,7 @@
 use egui::{ComboBox, DragValue, Key};
-use timeline::{AlphaInterpretation, FrameRate, InterpretFootage, PixelAspect, SourceId};
+use timeline::{
+    AlphaInterpretation, ColorSpace, FieldOrder, FrameRate, InterpretFootage, PixelAspect, SourceId,
+};
 
 use crate::editor::Editor;
 
@@ -19,7 +21,7 @@ const COMMON_RATES: [(&str, u32, u32); 10] = [
 
 /// How an item's pictures are read, chosen in Premiere's Interpret Footage dialog: the
 /// frame rate and pixel shape the file gives or ones assumed in their place, and what
-/// its alpha channel means.
+/// its alpha channel means and which color space its pictures are in.
 pub(crate) struct InterpretDialog {
     source: SourceId,
     name: String,
@@ -29,7 +31,13 @@ pub(crate) struct InterpretDialog {
     native_aspect: PixelAspect,
     conform: bool,
     aspect: PixelAspect,
+    native_fields: FieldOrder,
+    conform_fields: bool,
+    fields: FieldOrder,
     alpha: AlphaInterpretation,
+    native_color: ColorSpace,
+    override_color: bool,
+    color: ColorSpace,
 }
 
 impl Editor {
@@ -50,7 +58,13 @@ impl Editor {
             native_aspect: video.pixel_aspect,
             conform: item.interpreted_aspect.is_some(),
             aspect: item.pixel_aspect(),
+            native_fields: video.field_order,
+            conform_fields: item.interpreted_fields.is_some(),
+            fields: item.field_order(),
             alpha: item.alpha,
+            native_color: video.color_space,
+            override_color: item.interpreted_color.is_some(),
+            color: item.color_space(),
         });
     }
 }
@@ -61,46 +75,78 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     };
     let mut done = false;
     let mut cancelled = false;
-    egui::Window::new("Interpret Footage")
-        .collapsible(false)
-        .resizable(false)
-        .show(ctx, |ui| {
-            ui.strong(&dialog.name);
-            ui.separator();
-            ui.label("Frame Rate");
-            let native = format!(
-                "Use frame rate from file: {} fps",
-                fps(dialog.native.approx_fps())
-            );
-            ui.radio_value(&mut dialog.assume, false, native);
-            ui.horizontal(|ui| {
-                ui.radio_value(&mut dialog.assume, true, "Assume this frame rate:");
-                ui.add_enabled_ui(dialog.assume, |ui| rate_picker(ui, &mut dialog.rate));
-            });
-            ui.weak("Clips keep their frames, so they lengthen or shorten, and the sound follows.");
-            ui.separator();
-            ui.label("Pixel Aspect Ratio");
-            let native = format!(
-                "Use pixel aspect ratio from file: {}",
-                aspect_name(dialog.native_aspect)
-            );
-            ui.radio_value(&mut dialog.conform, false, native);
-            ui.horizontal(|ui| {
-                ui.radio_value(&mut dialog.conform, true, "Conform to:");
-                ui.add_enabled_ui(dialog.conform, |ui| aspect_picker(ui, &mut dialog.aspect));
-            });
-            ui.separator();
-            ui.label("Alpha Channel");
-            for alpha in AlphaInterpretation::ALL {
-                ui.radio_value(&mut dialog.alpha, alpha, alpha.name());
-            }
-            ui.separator();
-            ui.horizontal(|ui| {
-                done = ui.button("OK").clicked() || ui.input(|input| input.key_pressed(Key::Enter));
-                cancelled = ui.button("Cancel").clicked()
-                    || ui.input(|input| input.key_pressed(Key::Escape));
+    crate::dialog::window(ctx, "Interpret Footage").show(ctx, |ui| {
+        ui.strong(&dialog.name);
+        ui.separator();
+        ui.label("Frame Rate");
+        let native = format!(
+            "Use frame rate from file: {} fps",
+            fps(dialog.native.approx_fps())
+        );
+        ui.radio_value(&mut dialog.assume, false, native);
+        ui.horizontal(|ui| {
+            ui.radio_value(&mut dialog.assume, true, "Assume this frame rate:");
+            ui.add_enabled_ui(dialog.assume, |ui| rate_picker(ui, &mut dialog.rate));
+        });
+        ui.weak("Clips keep their frames, so they lengthen or shorten, and the sound follows.");
+        ui.separator();
+        ui.label("Pixel Aspect Ratio");
+        let native = format!(
+            "Use pixel aspect ratio from file: {}",
+            aspect_name(dialog.native_aspect)
+        );
+        ui.radio_value(&mut dialog.conform, false, native);
+        ui.horizontal(|ui| {
+            ui.radio_value(&mut dialog.conform, true, "Conform to:");
+            ui.add_enabled_ui(dialog.conform, |ui| aspect_picker(ui, &mut dialog.aspect));
+        });
+        ui.separator();
+        ui.label("Field Order");
+        let native = format!("Use field order from file: {}", dialog.native_fields.name());
+        ui.radio_value(&mut dialog.conform_fields, false, native);
+        ui.horizontal(|ui| {
+            ui.radio_value(&mut dialog.conform_fields, true, "Conform to:");
+            ui.add_enabled_ui(dialog.conform_fields, |ui| {
+                ComboBox::from_id_salt("conformed field order")
+                    .selected_text(dialog.fields.name())
+                    .show_ui(ui, |ui| {
+                        for order in FieldOrder::ALL {
+                            ui.selectable_value(&mut dialog.fields, order, order.name());
+                        }
+                    });
             });
         });
+        ui.weak("Interlaced pictures are rebuilt from their first field.");
+        ui.separator();
+        ui.label("Alpha Channel");
+        for alpha in AlphaInterpretation::ALL {
+            ui.radio_value(&mut dialog.alpha, alpha, alpha.name());
+        }
+        ui.separator();
+        ui.label("Color Management");
+        let native = format!("Use color space from file: {}", dialog.native_color.name());
+        ui.radio_value(&mut dialog.override_color, false, native);
+        ui.horizontal(|ui| {
+            ui.radio_value(&mut dialog.override_color, true, "Override to:");
+            ui.add_enabled_ui(dialog.override_color, |ui| {
+                ComboBox::from_id_salt("interpreted color space")
+                    .selected_text(dialog.color.name())
+                    .show_ui(ui, |ui| {
+                        for space in ColorSpace::ALL {
+                            ui.selectable_value(&mut dialog.color, space, space.name());
+                        }
+                    });
+            });
+        });
+        ui.weak("HDR pictures are tone mapped into the Rec. 709 working space.");
+        ui.separator();
+        crate::dialog::footer(ui, |ui| {
+            cancelled =
+                ui.button("Cancel").clicked() || ui.input(|input| input.key_pressed(Key::Escape));
+            done = ui.add(crate::dialog::primary("OK")).clicked()
+                || ui.input(|input| input.key_pressed(Key::Enter));
+        });
+    });
     if !(done || cancelled) {
         return;
     }
@@ -112,7 +158,9 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
             source: dialog.source,
             rate: dialog.assume.then_some(dialog.rate),
             aspect: dialog.conform.then_some(dialog.aspect),
+            fields: dialog.conform_fields.then_some(dialog.fields),
             alpha: dialog.alpha,
+            color: dialog.override_color.then_some(dialog.color),
         });
     }
 }

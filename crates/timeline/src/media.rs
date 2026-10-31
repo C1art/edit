@@ -1,12 +1,13 @@
 use std::ops::Range;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
 use crate::generator::placed_length;
 use crate::{
-    AlphaInterpretation, BinId, FrameRate, Generator, Nest, PixelAspect, Speed, Ticks, Timebase,
-    VideoFormat,
+    AlphaInterpretation, BinId, ColorSpace, FieldOrder, FrameFit, FrameRate, Generator, Nest,
+    PixelAspect, Speed, Ticks, Timebase, Transcript, VideoFormat,
 };
 
 /// Identifies a media item in the sequence's media pool.
@@ -49,6 +50,13 @@ pub struct MediaItem {
     pub interpreted_aspect: Option<PixelAspect>,
     #[serde(default, skip_serializing_if = "AlphaInterpretation::is_straight")]
     pub alpha: AlphaInterpretation,
+    /// The color space the pictures are read in instead of the one the file declares,
+    /// as for footage that is flagged wrongly or not at all.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interpreted_color: Option<ColorSpace>,
+    /// The field order the pictures are read with instead of the one the file declares.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interpreted_fields: Option<FieldOrder>,
     #[serde(default, skip_serializing_if = "MediaLog::is_empty")]
     pub log: MediaLog,
     /// Set by Make Offline: the file is left alone but no longer read, until relinked.
@@ -60,6 +68,25 @@ pub struct MediaItem {
     /// The file's channels played on each side instead of all of them mixed to stereo.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub channel_map: Option<ChannelMap>,
+    /// How long an edit places of a still or generated media when nothing is marked,
+    /// as the preference stood when it was imported; unset places the standard length.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub placed: Option<Ticks>,
+    /// How clips of the pictures are scaled to the sequence frame when placed, as the
+    /// preference stood when it was imported; unset places them at their own size.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frame_fit: Option<FrameFit>,
+    /// The timecode of the first frame, counted in frames at the rate the item plays:
+    /// the file's own, or as Modify > Timecode sets it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timecode: Option<i64>,
+    /// The file time of the picture the Project panel shows for the item; unset shows
+    /// where it starts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub poster: Option<Ticks>,
+    /// What was said in the sound, as speech recognition heard it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transcript: Option<Arc<Transcript>>,
 }
 
 /// Which of a file's audio channels, counting from zero, play on the left and the right;
@@ -97,10 +124,15 @@ impl MediaItem {
     /// What an edit places when no range is marked: all of a file or subclip, or the
     /// usual still length of a picture or generated media.
     pub fn default_range(&self, timebase: Timebase) -> Range<Ticks> {
+        let placed = || {
+            let length = self.placed.unwrap_or_else(|| placed_length(timebase));
+            Ticks::ZERO..length.min(self.duration)
+        };
         match (&self.generator, &self.subclip) {
-            (Some(_), _) => Ticks::ZERO..placed_length(timebase).min(self.duration),
+            (Some(Generator::CountingLeader(_)), _) => Ticks::ZERO..self.duration,
+            (Some(_), _) => placed(),
             (None, Some(range)) => range.clone(),
-            (None, None) if self.still => Ticks::ZERO..placed_length(timebase).min(self.duration),
+            (None, None) if self.still => placed(),
             (None, None) => Ticks::ZERO..self.duration,
         }
     }
@@ -130,11 +162,35 @@ impl MediaItem {
         })
     }
 
+    /// How far into the timecode clock the item's first frame is; zero without one.
+    pub fn start_timecode(&self, timebase: Timebase) -> Ticks {
+        match (self.timecode, self.played_format()) {
+            (Some(frame), Some(format)) => format.frame_rate.frame_start(frame, timebase),
+            _ => Ticks::ZERO,
+        }
+    }
+
     /// Whether the file is read otherwise than it describes itself.
     pub fn is_interpreted(&self) -> bool {
         self.interpreted_rate.is_some()
             || self.interpreted_aspect.is_some()
             || !self.alpha.is_straight()
+            || self.interpreted_color.is_some()
+            || self.interpreted_fields.is_some()
+    }
+
+    /// The field order the pictures are read with: the interpreted one or the file's.
+    pub fn field_order(&self) -> FieldOrder {
+        self.interpreted_fields
+            .or(self.video.map(|video| video.field_order))
+            .unwrap_or_default()
+    }
+
+    /// The color space the pictures are read in: the interpreted one or the file's.
+    pub fn color_space(&self) -> ColorSpace {
+        self.interpreted_color
+            .or(self.video.map(|video| video.color_space))
+            .unwrap_or_default()
     }
 
     /// The pixel shape the pictures are drawn with: the interpreted one or the file's.

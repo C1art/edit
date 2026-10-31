@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -59,7 +61,8 @@ impl Nest {
     }
 
     fn clips(&self) -> impl Iterator<Item = &Clip> {
-        self.tracks().flat_map(|(_, track)| &track.clips)
+        self.tracks()
+            .flat_map(|(_, track)| track.clips.iter().map(Arc::as_ref))
     }
 }
 
@@ -83,8 +86,7 @@ impl Sequence {
     /// Trades this sequence's tracks, mix, markers, marks and captions for those of nest
     /// `id`, so an edit of the sequence edits the nest. Swapping again trades them back.
     pub(crate) fn swap_nest(&mut self, id: SourceId) -> Result<(), TimelineError> {
-        let nest = self
-            .media
+        let nest = Arc::make_mut(&mut self.media)
             .iter_mut()
             .find(|item| item.id == id)
             .and_then(|item| item.nest.as_mut())
@@ -108,7 +110,7 @@ impl Sequence {
             .filter_map(|item| item.nest.as_ref())
             .flat_map(Nest::clips);
         self.tracks()
-            .flat_map(|(_, track)| &track.clips)
+            .flat_map(|(_, track)| track.clips.iter().map(Arc::as_ref))
             .chain(nested)
     }
 
@@ -123,7 +125,10 @@ impl Sequence {
             .max()
             .unwrap_or(Ticks::ZERO);
         let format = self.format;
-        let Some(item) = self.media.iter_mut().find(|item| item.id == id) else {
+        let Some(item) = Arc::make_mut(&mut self.media)
+            .iter_mut()
+            .find(|item| item.id == id)
+        else {
             return;
         };
         if let Some(nest) = &item.nest {

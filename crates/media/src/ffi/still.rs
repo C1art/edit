@@ -1,11 +1,11 @@
 use ffmpeg_sys_next as sys;
 
 use super::{Encoder, Frame, Packet, Received};
-use crate::MediaError;
+use crate::{MediaError, StillFormat};
 
-/// The file bytes of an RGBA picture, `size.0 * 4` bytes a row, in codec `id`.
+/// The file bytes of an RGBA picture, `size.0 * 4` bytes a row, in `format`.
 pub(crate) fn encode_rgba(
-    id: sys::AVCodecID,
+    format: StillFormat,
     size: (u32, u32),
     rgba: &[u8],
 ) -> Result<Vec<u8>, MediaError> {
@@ -13,6 +13,11 @@ pub(crate) fn encode_rgba(
     if row == 0 || rgba.len() != row * size.1 as usize {
         return Err(MediaError::InvalidFrame);
     }
+    let id = match format {
+        StillFormat::Png => sys::AVCodecID::AV_CODEC_ID_PNG,
+        StillFormat::Tiff => sys::AVCodecID::AV_CODEC_ID_TIFF,
+        StillFormat::Dpx => sys::AVCodecID::AV_CODEC_ID_DPX,
+    };
     let mut encoder = Encoder::still(id, size)?;
     let mut frame = Frame::for_video(size, sys::AVPixelFormat::AV_PIX_FMT_RGBA)?;
     let raw = frame.raw_mut();

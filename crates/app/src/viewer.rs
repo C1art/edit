@@ -35,13 +35,18 @@ impl Viewer {
             .iter()
             .map(ToString::to_string)
             .collect();
+        let mut shown = Ok(());
         if self.player.update() {
             let format = self.player.sequence().format;
             if let (Some(monitor), Some(frame)) = (&mut self.monitor, self.player.current_frame()) {
-                if let Err(error) = monitor.present(frame, (format.width, format.height)) {
-                    notices.push(format!("Cannot display frame: {error}"));
-                }
+                shown = monitor.present(frame, (format.width, format.height));
             }
+        }
+        if let Some(monitor) = &mut self.monitor {
+            shown = shown.and_then(|()| monitor.catch_up(ctx));
+        }
+        if let Err(error) = shown {
+            notices.push(format!("Cannot display frame: {error}"));
         }
         if self.player.is_busy() {
             ctx.request_repaint();
@@ -49,9 +54,29 @@ impl Viewer {
         notices
     }
 
+    #[cfg(test)]
+    pub(crate) fn building_shaders(&self) -> bool {
+        self.monitor.as_ref().is_some_and(Monitor::building_shaders)
+    }
+
     pub fn set_scope(&mut self, scope: Option<Scope>) {
         if let Some(monitor) = &mut self.monitor {
             monitor.set_scope(scope);
+        }
+    }
+
+    /// Shows the picture's transparent parts over a checkerboard, or over black.
+    pub fn set_transparency_grid(&mut self, shown: bool) {
+        let Some(monitor) = &mut self.monitor else {
+            return;
+        };
+        if !monitor.set_transparency_grid(shown) {
+            return;
+        }
+        let format = self.player.sequence().format;
+        if let Some(frame) = self.player.current_frame() {
+            // A failure shows on the next frame presented, which reports it.
+            let _ = monitor.present(frame, (format.width, format.height));
         }
     }
 

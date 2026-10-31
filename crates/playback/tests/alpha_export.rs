@@ -6,8 +6,8 @@ use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
 use std::time::{Duration, Instant};
 
-use media::{DecodedFrame, MediaReader, RateControl, VideoCodec};
-use playback::{ExportEvent, ExportJob, ExportSettings, VideoExport};
+use media::{Acceleration, DecodedFrame, MediaReader, RateControl, VideoCodec};
+use playback::{ExportEvent, ExportJob, ExportSettings, VideoEncoding, VideoExport};
 use timeline::{
     AddGenerated, FrameRate, Generator, PlaceClip, PlaceMode, Rgb, Sequence, Shape, ShapeKind,
     Ticks, Timebase, Timeline, VideoFormat,
@@ -46,6 +46,7 @@ fn sequence() -> Arc<Sequence> {
         .apply(AddGenerated {
             name: "Box".into(),
             generator: Generator::Shape(shape),
+            placed: None,
         })
         .unwrap();
     timeline
@@ -76,12 +77,14 @@ fn prores_4444_export_is_clear_where_nothing_is_drawn() {
     let settings = ExportSettings {
         path: path.clone(),
         video: Some(VideoExport {
-            codec: VideoCodec::ProRes4444,
-            rate_control: RateControl::Quality(0),
+            encoding: VideoEncoding::Movie(VideoCodec::ProRes4444, RateControl::Quality(0)),
             size: (64, 36),
+            acceleration: Acceleration::Software,
         }),
         audio: None,
         range: None,
+        previews: Vec::new(),
+        loudness: None,
     };
     let job = ExportJob::start(sequence(), device, queue, settings).unwrap();
     let deadline = Instant::now() + Duration::from_secs(30);
@@ -111,5 +114,7 @@ fn prores_4444_export_is_clear_where_nothing_is_drawn() {
         "{:?}",
         rgba(32, 18)
     );
+    // Windows won't remove a file that is still open.
+    drop(reader);
     std::fs::remove_file(&path).unwrap();
 }

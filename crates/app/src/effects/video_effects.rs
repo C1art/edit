@@ -1,6 +1,5 @@
 use timeline::{
-    ClipNameSource, ColorChange, ColorMatch, EffectCategory, RampShape, Rgb, TimecodeSource,
-    VideoEffect,
+    ClipNameSource, ColorChange, ColorMatch, EffectCategory, RampShape, TimecodeSource, VideoEffect,
 };
 
 use super::look::Rows;
@@ -14,8 +13,12 @@ pub(super) fn add_menu(ui: &mut egui::Ui, rows: &mut Rows, effects: &mut Vec<Vid
                 for effect in catalog.into_iter().filter(|e| e.category() == category) {
                     if ui.button(effect.name()).clicked() {
                         // Premiere analyzes as soon as the stabilizer is applied.
-                        rows.output.analyze_motion |=
-                            matches!(effect, VideoEffect::WarpStabilizer(_));
+                        rows.output.analyze_motion |= matches!(
+                            effect,
+                            VideoEffect::WarpStabilizer(_) | VideoEffect::RollingShutterRepair(_)
+                        );
+                        rows.output.analyze_reframe |=
+                            matches!(effect, VideoEffect::AutoReframe(_));
                         effects.push(effect);
                         rows.commit();
                         ui.close();
@@ -286,20 +289,64 @@ impl Rows {
                 self.param(ui, "Feather", feather, 0.0..=100.0, "");
             }
             VideoEffect::WarpStabilizer(stabilizer) => self.stabilizer(ui, stabilizer),
+            VideoEffect::RollingShutterRepair(repair) => self.rolling_shutter(ui, repair),
+            VideoEffect::AutoReframe(reframe) => self.auto_reframe(ui, reframe),
             VideoEffect::UltraKey { .. }
             | VideoEffect::TrackMatteKey { .. }
+            | VideoEffect::SetMatte { .. }
             | VideoEffect::ColorKey { .. }
             | VideoEffect::LumaKey { .. }
-            | VideoEffect::AlphaAdjust { .. } => self.keying(ui, effect, video_tracks),
-            VideoEffect::Checkerboard { .. }
-            | VideoEffect::Grid { .. }
-            | VideoEffect::Circle { .. }
-            | VideoEffect::FourColorGradient { .. } => self.generate(ui, effect),
+            | VideoEffect::AlphaAdjust { .. }
+            | VideoEffect::GarbageMatte(_)
+            | VideoEffect::ImageMatteKey(_) => self.keying(ui, effect, video_tracks),
+            VideoEffect::DifferenceMatte(_)
+            | VideoEffect::CompoundBlur(_)
+            | VideoEffect::Texturize(_) => self.layered(ui, effect, video_tracks),
+            VideoEffect::Checkerboard(_)
+            | VideoEffect::Grid(_)
+            | VideoEffect::Circle(_)
+            | VideoEffect::FourColorGradient(_)
+            | VideoEffect::Ellipse(_)
+            | VideoEffect::CellPattern(_)
+            | VideoEffect::Lightning(_) => self.generate(ui, effect),
+            VideoEffect::LightingEffects(lighting) => self.lighting_effects(ui, lighting),
+            VideoEffect::RadialShadow(shadow) => self.radial_shadow(ui, shadow),
+            VideoEffect::ColorPass(_)
+            | VideoEffect::ReduceInterlaceFlicker(_)
+            | VideoEffect::CineonConverter(_) => self.image(ui, effect),
+            VideoEffect::BrushStrokes(_)
+            | VideoEffect::EyedropperFill(_)
+            | VideoEffect::PaintBucket(_)
+            | VideoEffect::WriteOn(_)
+            | VideoEffect::SdrConform(_) => self.paint(ui, effect),
             VideoEffect::LensFlare { .. } | VideoEffect::Magnify { .. } => self.optics(ui, effect),
             VideoEffect::LinearWipe { .. }
             | VideoEffect::RadialWipe { .. }
             | VideoEffect::VenetianBlinds { .. }
             | VideoEffect::BlockDissolve { .. } => self.clip_wipes(ui, effect),
+            VideoEffect::UnsharpMask(_)
+            | VideoEffect::Median(_)
+            | VideoEffect::DustAndScratches(_)
+            | VideoEffect::EdgeFeather(_)
+            | VideoEffect::NoiseHls(_)
+            | VideoEffect::NoiseHlsAuto(_)
+            | VideoEffect::NoiseAlpha(_) => self.detail(ui, effect),
+            VideoEffect::RoughenEdges(_)
+            | VideoEffect::BevelEdges(_)
+            | VideoEffect::BevelAlpha(_)
+            | VideoEffect::AlphaGlow(_)
+            | VideoEffect::ColorEmboss(_) => self.edges(ui, effect),
+            VideoEffect::ConvolutionKernel(_)
+            | VideoEffect::Extract(_)
+            | VideoEffect::ShadowHighlight(_)
+            | VideoEffect::VideoLimiter(_)
+            | VideoEffect::AscCdl(_)
+            | VideoEffect::ColorReplace(_) => self.tone(ui, effect),
+            VideoEffect::ChangeColor(_) | VideoEffect::ColorBalance(_) => self.shift(ui, effect),
+            VideoEffect::SimpleText(_) => self.simple_text(ui, effect),
+            VideoEffect::ChannelBlur(_) | VideoEffect::CameraBlur { .. } | VideoEffect::Echo(_) => {
+                self.blur_echo(ui, effect)
+            }
             VideoEffect::LeaveColor {
                 color,
                 amount,
@@ -398,56 +445,5 @@ impl Rows {
                 }
             }
         }
-    }
-
-    /// A labelled row of controls that return whether they made a choice.
-    pub(super) fn choice(
-        &mut self,
-        ui: &mut egui::Ui,
-        label: &str,
-        add: impl FnOnce(&mut egui::Ui) -> bool,
-    ) {
-        ui.horizontal(|ui| {
-            ui.add_space(20.0);
-            ui.add_sized([72.0, 18.0], egui::Label::new(label));
-            if add(ui) {
-                self.commit();
-            }
-        });
-    }
-
-    /// A drop-down of `all`, named by `name`.
-    pub(super) fn options<T: Copy + PartialEq>(
-        &mut self,
-        ui: &mut egui::Ui,
-        label: &str,
-        id: &str,
-        value: &mut T,
-        all: impl IntoIterator<Item = T>,
-        name: fn(T) -> &'static str,
-    ) {
-        self.choice(ui, label, |ui| {
-            let mut chosen = false;
-            egui::ComboBox::from_id_salt(id)
-                .selected_text(name(*value))
-                .show_ui(ui, |ui| {
-                    for option in all {
-                        chosen |= ui.selectable_value(value, option, name(option)).clicked();
-                    }
-                });
-            chosen
-        });
-    }
-
-    pub(super) fn color(&mut self, ui: &mut egui::Ui, label: &str, color: &mut Rgb) {
-        ui.horizontal(|ui| {
-            ui.add_space(20.0);
-            ui.add_sized([72.0, 18.0], egui::Label::new(label));
-            let mut rgb = [color.r, color.g, color.b];
-            if ui.color_edit_button_srgb(&mut rgb).changed() {
-                *color = Rgb::new(rgb[0], rgb[1], rgb[2]);
-                self.commit();
-            }
-        });
     }
 }

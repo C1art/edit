@@ -1,15 +1,19 @@
+mod peak_cache;
 mod thumbnails;
 mod waveforms;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
 use egui::{ColorImage, TextureHandle, TextureId, TextureOptions};
 use media::{Peaks, VideoFrame};
 use timeline::{SourceId, Ticks, Timebase};
 
 pub use thumbnails::ThumbnailWorker;
+#[cfg(test)]
+pub(crate) use thumbnails::OPEN_READERS;
 use thumbnails::{Reply, Request};
 pub use waveforms::WaveformWorker;
 
@@ -42,7 +46,10 @@ pub struct ClipArt {
     timebase: Timebase,
     frame: u64,
     pub show_waveforms: bool,
+    /// Waveforms rise from the clip's foot instead of mirroring about its middle.
+    pub rectified_waveforms: bool,
     pub show_thumbnails: bool,
+    pub show_duplicates: bool,
     /// Media whose files are missing, drawn as offline instead.
     pub offline: HashSet<SourceId>,
 }
@@ -57,7 +64,9 @@ impl ClipArt {
             timebase: Timebase::HZ_90K,
             frame: 0,
             show_waveforms: true,
+            rectified_waveforms: false,
             show_thumbnails: true,
+            show_duplicates: false,
             offline: HashSet::new(),
         }
     }
@@ -91,7 +100,7 @@ impl ClipArt {
             .flat_map(BTreeMap::values)
             .any(|picture| matches!(picture, Picture::Pending));
         if reading || decoding {
-            ctx.request_repaint();
+            ctx.request_repaint_after(Duration::from_millis(50));
         }
     }
 
@@ -117,6 +126,15 @@ impl ClipArt {
     }
 
     fn evict(&mut self) {
+        let shown = self
+            .pictures
+            .values()
+            .flat_map(BTreeMap::values)
+            .filter(|picture| matches!(picture, Picture::Ready { .. }))
+            .count();
+        if shown <= MAX_PICTURES {
+            return;
+        }
         let mut ready: Vec<(u64, PathBuf, Ticks)> = self
             .pictures
             .iter()
@@ -129,9 +147,6 @@ impl ClipArt {
                     })
             })
             .collect();
-        if ready.len() <= MAX_PICTURES {
-            return;
-        }
         ready.sort_unstable_by_key(|(used, _, _)| *used);
         let excess = ready.len() - MAX_PICTURES * 3 / 4;
         for (_, path, at) in ready.into_iter().take(excess) {
@@ -160,6 +175,10 @@ impl ClipArt {
     }
 
     fn peak_state(&mut self, path: &Path) -> &PeakState {
+        // Looked up before `entry`, which would copy the path on every call.
+        if self.peaks.contains_key(path) {
+            return &self.peaks[path];
+        }
         self.peaks
             .entry(path.to_owned())
             .or_insert_with(|| match &self.waveforms {

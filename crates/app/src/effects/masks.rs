@@ -2,21 +2,36 @@ use egui::RichText;
 use media::TrackDirection;
 use render::MAX_MASKS;
 use timeline::{
-    key_path, path_is_animated, toggle_path_animation, Mask, MaskShape, MaskTracking, Ticks,
+    key_path, path_is_animated, toggle_path_animation, Mask, MaskOwner, MaskRef, MaskShape,
+    MaskTracking, Ticks,
 };
 
-use super::look::{icon_button, Icon, Rows, ANIMATED};
+use super::key_icons::{icon_button, Icon};
+use super::look::{Rows, ANIMATED};
+use crate::icons::{self, Look};
 use crate::mask_tracking::TrackSpan;
 
-/// The masks under Opacity: each shape's geometry and edge, and buttons to add more.
-pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, masks: &mut Vec<Mask>) {
+/// The masks under Opacity or an effect: each shape's geometry and edge, and buttons to
+/// add more.
+pub(super) fn controls(
+    ui: &mut egui::Ui,
+    rows: &mut Rows,
+    owner: MaskOwner,
+    masks: &mut Vec<Mask>,
+) {
     let mut removed = None;
     for (index, mask) in masks.iter_mut().enumerate() {
         ui.push_id(("mask", index), |ui| {
+            let at = MaskRef { owner, index };
             ui.horizontal(|ui| {
                 let title = format!("Mask ({}) – {}", index + 1, mask.shape.name());
                 ui.label(RichText::new(title).strong());
-                if ui.small_button("Remove").clicked() {
+                // Tracking writes back to a mask by its index.
+                let removable = rows.tracking.is_none();
+                if ui
+                    .add_enabled(removable, egui::Button::new("Remove").small())
+                    .clicked()
+                {
                     removed = Some(index);
                 }
             });
@@ -31,7 +46,7 @@ pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, masks: &mut Vec<Mask>
                 rows.param(ui, "Height", height, 0.0..=400.0, "%");
                 rows.param(ui, "Rotation", &mut mask.rotation, -3_600.0..=3_600.0, "°");
             }
-            tracking_rows(ui, rows, index, mask);
+            tracking_rows(ui, rows, at, mask);
             rows.param(ui, "Feather", &mut mask.feather, 0.0..=1_000.0, " px");
             rows.param(ui, "Opacity", &mut mask.opacity, 0.0..=100.0, "%");
             rows.param(
@@ -41,33 +56,43 @@ pub(super) fn controls(ui: &mut egui::Ui, rows: &mut Rows, masks: &mut Vec<Mask>
                 -1_000.0..=1_000.0,
                 " px",
             );
-            if ui.checkbox(&mut mask.inverted, "Inverted").changed() {
-                rows.commit();
-            }
+            rows.checkbox(ui, &mut mask.inverted, "Inverted");
         });
     }
     if let Some(index) = removed {
         masks.remove(index);
         rows.commit();
     }
-    ui.horizontal(|ui| {
-        for shape in MaskShape::ALL {
-            let add = egui::Button::new(format!("Add {} Mask", shape.name())).small();
-            if ui.add_enabled(masks.len() < MAX_MASKS, add).clicked() {
-                masks.push(Mask::new(shape));
-                rows.commit();
+    rows.choice(ui, "Add Mask", |ui| {
+        let mut added = false;
+        ui.add_enabled_ui(masks.len() < MAX_MASKS, |ui| {
+            for shape in MaskShape::ALL {
+                let icon = match shape {
+                    MaskShape::Ellipse => icons::Icon::Ellipse,
+                    MaskShape::Rectangle => icons::Icon::Rectangle,
+                    MaskShape::Path => icons::Icon::Pen,
+                };
+                let hover = format!("Add {} Mask", shape.name());
+                if icons::toggle(ui, false, icon, Look::Filled)
+                    .on_hover_text(hover)
+                    .clicked()
+                {
+                    masks.push(Mask::new(shape));
+                    added = true;
+                }
             }
-        }
+        });
+        added
     });
 }
 
 /// Buttons that key the mask along the picture under it from the playhead, one frame
 /// or to the clip's end either way, and what of the picture's motion it follows.
-fn tracking_rows(ui: &mut egui::Ui, rows: &mut Rows, index: usize, mask: &mut Mask) {
+fn tracking_rows(ui: &mut egui::Ui, rows: &mut Rows, at: MaskRef, mask: &mut Mask) {
     ui.horizontal(|ui| {
         ui.add_space(20.0);
         ui.add_sized([72.0, 18.0], egui::Label::new("Track"));
-        if let Some((_, done)) = rows.tracking.filter(|(tracked, _)| *tracked == index) {
+        if let Some((_, done)) = rows.tracking.filter(|(tracked, _)| *tracked == at) {
             let text = format!("Tracking… {:.0}%", done * 100.0);
             ui.add(egui::ProgressBar::new(done).desired_width(120.0).text(text));
             rows.output.stop_tracking = ui.small_button("Stop").clicked();
@@ -93,7 +118,7 @@ fn tracking_rows(ui: &mut egui::Ui, rows: &mut Rows, index: usize, mask: &mut Ma
             let button = icon_button(ui, Icon::Track(direction, span), false, trackable)
                 .on_hover_text(format!("Track the mask {way}"));
             if button.clicked() {
-                rows.output.track_mask = Some((index, direction, span));
+                rows.output.track_mask = Some((at, direction, span));
             }
         }
     });

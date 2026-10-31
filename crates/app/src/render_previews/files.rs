@@ -74,8 +74,10 @@ impl PreviewFiles {
         });
     }
 
+    /// Then looks again, to bring back any preview that couldn't be removed.
     pub(super) fn delete_all(&self) {
         let _ = self.requests.send(Request::DeleteAll);
+        let _ = self.requests.send(Request::Scan);
     }
 
     pub(super) fn poll(&self) -> Vec<Reply> {
@@ -108,12 +110,18 @@ fn serve(folder: &Path, request: Request) -> std::io::Result<Reply> {
                     .extension()
                     .is_some_and(|extension| extension == EXTENSION)
                 {
-                    std::fs::remove_file(path)?;
+                    remove(&path)?;
                 }
             }
             Ok(Reply::Deleted)
         }
     }
+}
+
+/// Removes `path`, giving the player a moment to let go of it, as Windows refuses to
+/// remove a file that is open.
+fn remove(path: &Path) -> std::io::Result<()> {
+    project::retry_while_in_use(|| std::fs::remove_file(path))
 }
 
 /// The fingerprints of the previews in `folder`.
@@ -134,4 +142,32 @@ fn scan(folder: &Path) -> HashSet<u64> {
                 .flatten()
         })
         .collect()
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use std::os::windows::fs::OpenOptionsExt;
+    use std::time::Duration;
+
+    use super::*;
+
+    #[test]
+    fn a_preview_is_removed_once_the_player_closes_it() {
+        const FILE_SHARE_READ: u32 = 1;
+        let path = std::env::temp_dir().join(format!("edit-preview-{}.mov", std::process::id()));
+        std::fs::write(&path, b"").unwrap();
+        // Shared the way FFmpeg opens files, which leaves out deleting.
+        let held = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(FILE_SHARE_READ)
+            .open(&path)
+            .unwrap();
+        let player = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(60));
+            drop(held);
+        });
+        remove(&path).unwrap();
+        player.join().unwrap();
+        assert!(!path.exists());
+    }
 }

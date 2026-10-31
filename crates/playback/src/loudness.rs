@@ -1,11 +1,11 @@
-use std::ops::Range;
+use std::ops::{ControlFlow, Range};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
 
 use audio::{LoudnessMeter, SampleRate};
 use crossbeam::channel::{Receiver, Sender};
-use timeline::{ClipId, Gain, Param, Sequence, Ticks, Track};
+use timeline::{ClipId, Gain, Param, Sequence, Ticks, Timebase, Track};
 
 use crate::sequence_mix::{SequenceMix, CHUNK_FRAMES};
 use crate::PlaybackError;
@@ -28,6 +28,32 @@ pub enum LoudnessEvent {
     Warning(PlaybackError),
     /// One result per piece, in the order given.
     Measured(Vec<Loudness>),
+}
+
+/// Brings an export's sound to a loudness, as far as a ceiling on its peaks allows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LoudnessTarget {
+    /// Integrated loudness, in LUFS.
+    pub lufs: i32,
+    /// The highest a sample may reach, in dBFS.
+    pub peak_db: i32,
+}
+
+impl LoudnessTarget {
+    /// The linear gain that brings sound measured as `measured` to the target, lowered
+    /// so its peak stays under the ceiling; unity for silence.
+    pub fn gain(self, measured: Loudness) -> f32 {
+        let Some(integrated) = measured.integrated else {
+            return 1.0;
+        };
+        let wanted = db_to_linear(self.lufs as f32 - integrated);
+        let ceiling = db_to_linear(self.peak_db as f32) / measured.peak.max(f32::EPSILON);
+        wanted.min(ceiling)
+    }
+}
+
+fn db_to_linear(db: f32) -> f32 {
+    10_f32.powf(db / 20.0)
 }
 
 /// A sequence and the part of it to measure.
@@ -67,40 +93,63 @@ impl Drop for LoudnessJob {
 fn measure(pieces: &[Piece], events: &Sender<LoudnessEvent>, cancel: &AtomicBool) {
     let mut mix = SequenceMix::new(MEASURE_RATE);
     let rate = mix.rate();
-    let frames = |(sequence, range): &Piece| {
-        let to_frames = |time: Ticks| time.rescale(sequence.timebase, rate).0;
-        to_frames(range.start)..to_frames(range.end)
-    };
     let total: i64 = pieces
         .iter()
-        .map(|piece| frames(piece).count() as i64)
+        .map(|(sequence, range)| span_frames(sequence, range, rate).count() as i64)
         .sum();
     let mut done = 0;
     let mut results = Vec::with_capacity(pieces.len());
-    let mut warnings = Vec::new();
-    for piece in pieces {
-        let mut meter = LoudnessMeter::new(MEASURE_RATE);
-        let span = frames(piece);
-        mix.reset();
-        for start in span.clone().step_by(CHUNK_FRAMES) {
+    for (sequence, range) in pieces {
+        let measured = measure_span(&mut mix, sequence, range.clone(), |length, warnings| {
             if cancel.load(Ordering::Relaxed) {
-                return;
+                return ControlFlow::Break(());
             }
-            mix.mix_chunk(&piece.0, start, &mut warnings);
-            let length = (span.end - start).min(CHUNK_FRAMES as i64);
-            meter.push(&mix.mix[..usize::try_from(length).unwrap_or(0) * 2]);
             done += length;
             for warning in warnings.drain(..) {
                 let _ = events.send(LoudnessEvent::Warning(warning));
             }
             let _ = events.send(LoudnessEvent::Progress(done as f32 / total.max(1) as f32));
-        }
-        results.push(Loudness {
-            integrated: meter.integrated(),
-            peak: meter.peak(),
+            ControlFlow::Continue(())
         });
+        let Some(measured) = measured else {
+            return;
+        };
+        results.push(measured);
     }
     let _ = events.send(LoudnessEvent::Measured(results));
+}
+
+fn span_frames(sequence: &Sequence, range: &Range<Ticks>, rate: Timebase) -> Range<i64> {
+    let to_frames = |time: Ticks| time.rescale(sequence.timebase, rate).0;
+    to_frames(range.start)..to_frames(range.end)
+}
+
+/// Mixes `range` of `sequence` and measures it, calling `step` after each chunk with
+/// how many sample frames it held and what went wrong mixing it; `None` once `step`
+/// breaks off.
+pub(crate) fn measure_span(
+    mix: &mut SequenceMix,
+    sequence: &Sequence,
+    range: Range<Ticks>,
+    mut step: impl FnMut(i64, &mut Vec<PlaybackError>) -> ControlFlow<()>,
+) -> Option<Loudness> {
+    let rate = mix.rate();
+    let mut meter = LoudnessMeter::new(mix.sample_rate());
+    let span = span_frames(sequence, &range, rate);
+    let mut warnings = Vec::new();
+    mix.reset();
+    for start in span.clone().step_by(CHUNK_FRAMES) {
+        mix.mix_chunk(sequence, start, &mut warnings);
+        let length = (span.end - start).min(CHUNK_FRAMES as i64);
+        meter.push(&mix.mix[..usize::try_from(length).unwrap_or(0) * 2]);
+        if step(length, &mut warnings).is_break() {
+            return None;
+        }
+    }
+    Some(Loudness {
+        integrated: meter.integrated(),
+        peak: meter.peak(),
+    })
 }
 
 /// `sequence` with only `clip` left, heard at unity with no volume, effects (its own or
@@ -119,7 +168,7 @@ pub fn clip_alone(sequence: &Sequence, clip: ClipId) -> Option<Piece> {
             clips: std::mem::take(&mut track.clips),
             ..Track::default()
         };
-        for kept in &mut track.clips {
+        for kept in track.clips.iter_mut().map(Arc::make_mut) {
             kept.gain = Gain::UNITY;
             kept.volume = Param::default();
             kept.pan = Param::default();
@@ -130,4 +179,29 @@ pub fn clip_alone(sequence: &Sequence, clip: ClipId) -> Option<Piece> {
         }
     }
     Some((Arc::new(alone), range))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn target_gain_stops_at_the_peak_ceiling() {
+        let target = LoudnessTarget {
+            lufs: -14,
+            peak_db: -1,
+        };
+        let quiet = Loudness {
+            integrated: Some(-20.0),
+            peak: 0.1,
+        };
+        assert!((target.gain(quiet) - db_to_linear(6.0)).abs() < 1e-4);
+        let peaky = Loudness { peak: 0.5, ..quiet };
+        assert!((target.gain(peaky) * 0.5 - db_to_linear(-1.0)).abs() < 1e-4);
+        let silent = Loudness {
+            integrated: None,
+            peak: 0.0,
+        };
+        assert_eq!(target.gain(silent), 1.0);
+    }
 }

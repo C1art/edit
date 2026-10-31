@@ -1,11 +1,12 @@
 use egui::Rangef;
 use timeline::{
-    clamp_delta, preview, ClipId, Edge, Edit, LinkedSelection, MoveClips, MoveMode, RateStretch,
-    Roll, Sequence, SetClipVolume, SetTrackAutomation, Slide, Slip, Ticks, Timeline, TimelineError,
-    TrackKind, TrackRef, Trim, TrimMode, Unlinked,
+    preview, ClipId, DeltaBounds, Edge, Edit, LinkedSelection, MoveClips, MoveMode, RateStretch,
+    Roll, Sequence, SetClipLine, SetClipVolume, SetTrackAutomation, SetTransition, Slide, Slip,
+    Ticks, Timeline, TimelineError, TrackKind, TrackRef, Trim, TrimMode, Unlinked,
 };
 
 use super::rubber_band::{self, BandHit, BandOwner, Envelope};
+use super::transition_grip::Grip;
 
 /// What a drag in the timeline is doing, fixed when the drag starts.
 #[derive(Debug, Clone)]
@@ -40,10 +41,12 @@ pub enum Gesture {
         band: Rangef,
         origin_y: f32,
     },
+    /// Drags an outer end of a transition to change how long it lasts.
+    TransitionLength(Grip),
 }
 
 /// An edit a gesture would make, previewed while dragging and applied on release.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum PendingEdit {
     Move(MoveClips),
     Trim(Trim),
@@ -52,7 +55,9 @@ pub enum PendingEdit {
     Slip(Slip),
     Slide(Slide),
     Volume(SetClipVolume),
+    Look(SetClipLine),
     Automation(SetTrackAutomation),
+    Transition(SetTransition),
 }
 
 impl PendingEdit {
@@ -65,7 +70,9 @@ impl PendingEdit {
             Self::Slip(edit) => preview(sequence, edit),
             Self::Slide(edit) => preview(sequence, edit),
             Self::Volume(edit) => preview(sequence, edit),
+            Self::Look(edit) => preview(sequence, edit),
             Self::Automation(edit) => preview(sequence, edit),
+            Self::Transition(edit) => preview(sequence, edit),
         }
     }
 
@@ -93,7 +100,9 @@ impl PendingEdit {
             Self::Slip(edit) => run(timeline, edit, links),
             Self::Slide(edit) => run(timeline, edit, links),
             Self::Volume(edit) => run(timeline, edit, links),
+            Self::Look(edit) => run(timeline, edit, links),
             Self::Automation(edit) => run(timeline, edit, links),
+            Self::Transition(edit) => run(timeline, edit, links),
         }
     }
 }
@@ -111,15 +120,13 @@ impl Gesture {
     pub fn moving_edges(&self, sequence: &Sequence) -> Vec<Ticks> {
         match self {
             Self::Move { clips, .. } | Self::Slide { clips } => sequence
-                .with_links(clips)
+                .clips_with_links(clips)
                 .into_iter()
-                .filter_map(|id| sequence.clip(id))
                 .flat_map(|(_, clip)| [clip.start, clip.end()])
                 .collect(),
             Self::Trim { clips, edge, .. } | Self::Stretch { clips, edge } => sequence
-                .with_links(clips)
+                .clips_with_links(clips)
                 .into_iter()
-                .filter_map(|id| sequence.clip(id))
                 .map(|(_, clip)| match edge {
                     Edge::Head => clip.start,
                     Edge::Tail => clip.end(),
@@ -136,6 +143,19 @@ impl Gesture {
                 .into_iter()
                 .collect(),
             Self::Volume { .. } => Vec::new(),
+            Self::TransitionLength(grip) => vec![grip.at],
+        }
+    }
+
+    /// Whether clips beside the grabbed edges move with them, so an edge where one
+    /// started is no place to snap to: snapping there would hold the drag still.
+    pub fn carries_neighbours(&self) -> bool {
+        match self {
+            Self::Roll { .. } | Self::Slide { .. } | Self::TransitionLength(_) => true,
+            Self::Trim { mode, .. } => *mode == TrimMode::Ripple,
+            Self::Move { .. } | Self::Stretch { .. } | Self::Slip { .. } | Self::Volume { .. } => {
+                false
+            }
         }
     }
 
@@ -147,7 +167,7 @@ impl Gesture {
             | Self::Stretch { clips, .. }
             | Self::Slip { clips }
             | Self::Slide { clips } => sequence.with_links(clips),
-            Self::Roll { .. } | Self::Volume { .. } => Vec::new(),
+            Self::Roll { .. } | Self::Volume { .. } | Self::TransitionLength(_) => Vec::new(),
         }
     }
 
@@ -160,6 +180,7 @@ impl Gesture {
         track: Option<TrackRef>,
         y: f32,
         mode: MoveMode,
+        bounds: &mut DeltaBounds,
     ) -> PendingEdit {
         match self {
             Self::Move { clips, from } => {
@@ -172,7 +193,7 @@ impl Gesture {
                     delta,
                     mode: *mode,
                 };
-                PendingEdit::Trim(make(clamp_delta(sequence, delta, make)))
+                PendingEdit::Trim(make(bounds.clamp(sequence, delta, make)))
             }
             Self::Roll { at, tracks } => {
                 let make = |delta| Roll {
@@ -180,7 +201,7 @@ impl Gesture {
                     tracks: tracks.clone(),
                     delta,
                 };
-                PendingEdit::Roll(make(clamp_delta(sequence, delta, make)))
+                PendingEdit::Roll(make(bounds.clamp(sequence, delta, make)))
             }
             Self::Stretch { clips, edge } => {
                 let make = |delta| RateStretch {
@@ -188,7 +209,7 @@ impl Gesture {
                     edge: *edge,
                     delta,
                 };
-                PendingEdit::Stretch(make(clamp_delta(sequence, delta, make)))
+                PendingEdit::Stretch(make(bounds.clamp(sequence, delta, make)))
             }
             Self::Slip { clips } => {
                 // Dragging right reveals earlier source material, as in other editors.
@@ -196,14 +217,14 @@ impl Gesture {
                     clips: clips.clone(),
                     delta,
                 };
-                PendingEdit::Slip(make(clamp_delta(sequence, Ticks(-delta.0), make)))
+                PendingEdit::Slip(make(bounds.clamp(sequence, Ticks(-delta.0), make)))
             }
             Self::Slide { clips } => {
                 let make = |delta| Slide {
                     clips: clips.clone(),
                     delta,
                 };
-                PendingEdit::Slide(make(clamp_delta(sequence, delta, make)))
+                PendingEdit::Slide(make(bounds.clamp(sequence, delta, make)))
             }
             Self::Volume {
                 owner,
@@ -211,18 +232,36 @@ impl Gesture {
                 band,
                 origin_y,
             } => {
-                let db = rubber_band::db_for_drag(*band, y - origin_y);
-                let volume = Envelope::of(sequence, *owner, sequence.duration())
-                    .map_or_else(Default::default, |envelope| {
-                        rubber_band::dragged(&envelope, *grabbed, delta, db)
-                    });
+                let param = Envelope::of(sequence, *owner, sequence.duration()).map_or_else(
+                    Default::default,
+                    |envelope| {
+                        let change = envelope.change_for_drag(*band, y - origin_y);
+                        rubber_band::dragged(&envelope, *grabbed, delta, change)
+                    },
+                );
                 match *owner {
-                    BandOwner::Clip(clip) => PendingEdit::Volume(SetClipVolume { clip, volume }),
+                    BandOwner::Clip(clip) => PendingEdit::Volume(SetClipVolume {
+                        clip,
+                        volume: param,
+                    }),
+                    BandOwner::Look(clip, line) => {
+                        PendingEdit::Look(SetClipLine { clip, line, param })
+                    }
                     BandOwner::Track(track) => PendingEdit::Automation(SetTrackAutomation {
                         track,
-                        automation: volume,
+                        automation: param,
                     }),
                 }
+            }
+            Self::TransitionLength(grip) => {
+                let frame = sequence.format.frame_rate.frame_start(1, sequence.timebase);
+                // A fade handle dragged nowhere or outward lays no fade.
+                let unlaid = grip.transition.duration == Ticks::ZERO && grip.stretch * delta.0 <= 0;
+                PendingEdit::Transition(SetTransition {
+                    clip: grip.clip,
+                    edge: grip.edge,
+                    transition: (!unlaid).then(|| grip.dragged(delta, frame)),
+                })
             }
         }
     }
@@ -237,24 +276,33 @@ fn clamped_move(
     mode: MoveMode,
 ) -> MoveClips {
     let moved: Vec<(TrackRef, Ticks)> = sequence
-        .with_links(clips)
+        .clips_with_links(clips)
         .into_iter()
-        .filter_map(|id| sequence.clip(id))
         .map(|(track, clip)| (track, clip.start))
         .collect();
     let earliest = moved.iter().map(|&(_, start)| start).min();
     let delta = earliest.map_or(delta, |earliest| delta.max(Ticks::ZERO - earliest));
-    let lowest = |kind| {
+    let indices = || {
         moved
             .iter()
-            .filter(|(track, _)| track.kind == kind)
+            .filter(|(track, _)| track.kind == from.kind)
             .map(|(track, _)| track.index)
-            .min()
     };
     let offset = over
         .filter(|over| over.kind == from.kind)
         .map_or(0, |over| over.index as isize - from.index as isize);
-    let offset = lowest(from.kind).map_or(0, |lowest| offset.max(-(lowest as isize)));
+    let offset = indices()
+        .min()
+        .map_or(0, |lowest| offset.max(-(lowest as isize)));
+    // Past the last track the move would add one, and the rows drawn from that preview
+    // would no longer line up with those the pointer is tested against.
+    let tracks = sequence
+        .tracks()
+        .filter(|(track, _)| track.kind == from.kind)
+        .count();
+    let offset = indices().max().map_or(offset, |highest| {
+        offset.min(tracks as isize - 1 - highest as isize)
+    });
     let (video_tracks, audio_tracks) = match from.kind {
         TrackKind::Video => (offset, 0),
         TrackKind::Audio => (0, offset),

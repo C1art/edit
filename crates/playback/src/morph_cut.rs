@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use media::VideoFrame;
+
 use crate::optical_flow::{interpolate, Flow};
 use crate::LayerPicture;
 
@@ -11,14 +13,22 @@ pub(crate) fn morphed(
     incoming: &LayerPicture,
     fraction: f32,
 ) -> Option<LayerPicture> {
-    let (LayerPicture::Frame(from), LayerPicture::Frame(to)) = (outgoing, incoming) else {
+    let (Some(from), Some(to)) = (rgba(outgoing), rgba(incoming)) else {
         return None;
     };
     if (from.width, from.height) != (to.width, to.height) || from.pixels.len() != to.pixels.len() {
         return None;
     }
-    let flow = Flow::between(from, to);
+    let flow = Flow::between(&from, &to);
     Some(LayerPicture::Frame(Arc::new(interpolate(
-        from, to, &flow, fraction,
+        &from, &to, &flow, fraction,
     ))))
+}
+
+fn rgba(picture: &LayerPicture) -> Option<Arc<VideoFrame>> {
+    match picture {
+        LayerPicture::Frame(frame) => Some(Arc::clone(frame)),
+        LayerPicture::Planes(frame, _) => frame.to_rgba().ok().map(Arc::new),
+        _ => None,
+    }
 }

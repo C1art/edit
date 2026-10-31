@@ -1,8 +1,10 @@
+use serde::{Deserialize, Serialize};
+
 use crate::edit::ops;
 use crate::{ClipId, Edit, MediaItem, Param, Sequence, TimelineError, TrackKind, VideoFormat};
 
 /// How a picture of another shape is matched to the sequence frame.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FrameFit {
     /// All of the picture shows, with bars where the shapes differ.
     Fit,
@@ -55,7 +57,7 @@ impl Edit for SetToFrameSize {
 }
 
 /// The scale, in hundredths of a percent, that matches `picture` to `frame`.
-fn scale_hundredths(picture: VideoFormat, frame: VideoFormat, fit: FrameFit) -> i32 {
+pub(crate) fn scale_hundredths(picture: VideoFormat, frame: VideoFormat, fit: FrameFit) -> i32 {
     let ratio = |to: u32, from: u32| {
         let from = u64::from(from.max(1));
         (u64::from(to) * 10_000 + from / 2) / from

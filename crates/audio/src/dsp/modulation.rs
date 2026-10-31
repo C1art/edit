@@ -54,7 +54,7 @@ impl ModulatedDelay {
                 let swing = 0.5 + 0.5 * (TAU * (self.phase + 0.25 * side as f32)).sin();
                 let delay = ((sweep.base_ms + sweep.depth_ms * swing) * per_ms).clamp(1.0, longest);
                 let delayed = read(&self.line, self.write, delay, side);
-                self.line[self.write][side] = *sample + delayed * feedback;
+                self.line[self.write][side] = super::flush(*sample + delayed * feedback);
                 *sample += (delayed - *sample) * mix;
             }
             self.write = (self.write + 1) % length;

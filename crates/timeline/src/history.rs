@@ -29,6 +29,10 @@ pub fn preview(sequence: &Sequence, edit: &impl Edit) -> Result<Sequence, Timeli
     Ok(working)
 }
 
+/// Edits kept for undo. Each holds the sequence as it was before it, sharing the clips
+/// and media the edit left alone, so what a step costs is what it changed.
+pub(crate) const UNDO_LEVELS: usize = 100;
+
 #[derive(Debug)]
 struct Snapshot<E> {
     edit: E,
@@ -53,6 +57,35 @@ impl<E: Edit> EditCommand for Snapshot<E> {
     }
 }
 
+/// Edits made as one step of the user's, undone and redone together under the name of
+/// the last.
+#[derive(Debug)]
+struct Joined(Vec<Box<dyn EditCommand>>);
+
+impl EditCommand for Joined {
+    fn name(&self) -> &'static str {
+        self.0.last().map_or("Edit", |command| command.name())
+    }
+
+    fn apply(&mut self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        for (done, command) in self.0.iter_mut().enumerate() {
+            if let Err(error) = command.apply(sequence) {
+                for command in self.0[..done].iter_mut().rev() {
+                    command.revert(sequence);
+                }
+                return Err(error);
+            }
+        }
+        Ok(())
+    }
+
+    fn revert(&mut self, sequence: &mut Sequence) {
+        for command in self.0.iter_mut().rev() {
+            command.revert(sequence);
+        }
+    }
+}
+
 /// Owns the sequence so that every mutation goes through the undo stack. One of its
 /// nested sequences can be open, which then stands in for the sequence: it is what
 /// [`Timeline::sequence`] shows and what edits change.
@@ -63,6 +96,8 @@ pub struct Timeline {
     undo_stack: Vec<Box<dyn EditCommand>>,
     redo_stack: Vec<Box<dyn EditCommand>>,
     revision: u64,
+    /// Edits executed so far, for [`Timeline::join_since`].
+    executed: u64,
 }
 
 impl Timeline {
@@ -73,6 +108,7 @@ impl Timeline {
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             revision: 0,
+            executed: 0,
         }
     }
 
@@ -139,9 +175,32 @@ impl Timeline {
     pub fn execute(&mut self, mut command: Box<dyn EditCommand>) -> Result<(), TimelineError> {
         command.apply(&mut self.sequence)?;
         self.undo_stack.push(command);
+        if self.undo_stack.len() > UNDO_LEVELS {
+            self.undo_stack.remove(0);
+        }
         self.redo_stack.clear();
+        self.executed += 1;
         self.changed();
         Ok(())
+    }
+
+    /// Marks where an action of several edits starts, for [`Timeline::join_since`].
+    pub fn edit_mark(&self) -> u64 {
+        self.executed
+    }
+
+    /// Makes the edits executed since `mark` a single undo step.
+    pub fn join_since(&mut self, mark: u64) {
+        let count = usize::try_from(self.executed.saturating_sub(mark))
+            .unwrap_or(usize::MAX)
+            .min(self.undo_stack.len());
+        if count < 2 {
+            return;
+        }
+        let joined = self.undo_stack.split_off(self.undo_stack.len() - count);
+        self.undo_stack.push(Box::new(Joined(joined)));
+        // Marks count undo steps, so an enclosing join still finds where it began.
+        self.executed -= (count - 1) as u64;
     }
 
     pub fn undo_name(&self) -> Option<&'static str> {

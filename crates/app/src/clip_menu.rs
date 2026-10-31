@@ -1,7 +1,7 @@
-use egui::{Button, Ui};
+use egui::{Atom, Button, Checkbox, RichText, Ui};
 use timeline::{
-    ClipId, Edit, FrameFit, IntoSync, Label, SetClipLabel, SetTimeInterpolation, SyncMethod,
-    TimeInterpolation, TrackKind,
+    ClipId, Edit, FrameFit, HoldFrame, IntoSync, JoinThroughEdits, Label, SetClipLabel, SetGrouped,
+    SetTimeInterpolation, SpeedRamp, SyncMethod, TimeInterpolation, TitleTemplate, TrackKind,
 };
 
 use crate::editor::Editor;
@@ -59,88 +59,31 @@ pub(crate) fn context(editor: &mut Editor, ui: &mut Ui) {
     items(editor, ui);
 }
 
-/// The Clip menu's commands on the selection.
+/// The Clip menu's commands on the selection, disabled while nothing is selected.
 pub(crate) fn items(editor: &mut Editor, ui: &mut Ui) {
-    ui.menu_button("Replace With Clip", |ui| {
-        let has_source = editor.source.is_some();
-        if ui
-            .add_enabled(has_source, Button::new("From Source Monitor"))
-            .clicked()
-        {
-            editor.replace_with_source(false);
-        }
-        let matched = Button::new("From Source Monitor, Match Frame");
-        if ui.add_enabled(has_source, matched).clicked() {
-            editor.replace_with_source(true);
-        }
-    });
-    let speed =
-        Button::new("Speed/Duration…").shortcut_text(editor.keymap.label(Command::SpeedDuration));
-    if ui.add(speed).clicked() {
-        editor.speed_duration();
-    }
-    if ui.button("Rename…").clicked() {
-        editor.rename_clips();
-    }
-    let enable = Button::new("Enable").shortcut_text(editor.keymap.label(Command::ToggleEnabled));
-    if ui.add(enable).clicked() {
-        editor.toggle_enabled();
-    }
-    let link = if editor.selection_linked() == Some(true) {
-        "Unlink"
-    } else {
-        "Link"
-    };
-    let link = Button::new(link).shortcut_text(editor.keymap.label(Command::ToggleLink));
-    if ui.add(link).clicked() {
-        editor.toggle_link();
-    }
-    for (command, grouped) in [(Command::Group, true), (Command::Ungroup, false)] {
-        let button = Button::new(command.name()).shortcut_text(editor.keymap.label(command));
-        if ui.add(button).clicked() {
-            editor.set_grouped(grouped);
-        }
-    }
-    let join = Button::new(Command::JoinThroughEdits.name())
-        .shortcut_text(editor.keymap.label(Command::JoinThroughEdits));
-    if ui.add(join).clicked() {
-        editor.join_through_edits();
-    }
-    let gain = Button::new("Audio Gain…").shortcut_text(editor.keymap.label(Command::AudioGain));
-    if ui.add(gain).clicked() {
-        editor.prompt_clip_gain();
-    }
-    if ui
-        .button("Auto Duck…")
-        .on_hover_text("Lower the selected music wherever other tracks are heard")
-        .clicked()
-    {
-        editor.open_auto_duck();
-    }
-    ui.menu_button("Label", |ui| labels(editor, ui));
-    ui.menu_button("Video Options", |ui| {
-        if ui.button("Add Frame Hold").clicked() {
-            editor.add_frame_hold();
-        }
-        if ui.button("Set to Frame Size").clicked() {
-            editor.set_to_frame_size(FrameFit::Fit);
-        }
-        if ui.button("Set to Fill Frame").clicked() {
-            editor.set_to_frame_size(FrameFit::Fill);
-        }
-        ui.menu_button("Time Interpolation", |ui| time_interpolation(editor, ui));
-    });
+    let selected = !editor.view.selection.is_empty();
+    ui.add_enabled_ui(selected, |ui| on_selection(editor, ui));
+    let has_clips = editor.timeline.sequence().has_clips();
+    ui.add_enabled_ui(has_clips, |ui| video_options(editor, ui, selected));
     crate::multicam::camera_menu(editor, ui);
+    let scenes = Button::new("Scene Edit Detection");
     if ui
-        .button("Scene Edit Detection")
+        .add_enabled(selected, scenes)
         .on_hover_text("Cut the selected clips where their shots change")
         .clicked()
     {
         editor.detect_scene_edits();
     }
     ui.separator();
-    if ui.button("Nest").clicked() {
+    if ui.add_enabled(selected, Button::new("Nest")).clicked() {
         editor.nest_selection();
+    }
+    if ui
+        .add_enabled(selected, Button::new("Unnest"))
+        .on_hover_text("Put the clips inside the selected nests back in their place")
+        .clicked()
+    {
+        editor.unnest_selection();
     }
     let render = Button::new("Render and Replace");
     if ui
@@ -159,7 +102,201 @@ pub(crate) fn items(editor: &mut Editor, ui: &mut Ui) {
     }
 }
 
+fn on_selection(editor: &mut Editor, ui: &mut Ui) {
+    ui.menu_button("Replace With Clip", |ui| {
+        let has_source = editor.source.is_some();
+        if ui
+            .add_enabled(has_source, Button::new("From Source Monitor"))
+            .clicked()
+        {
+            editor.replace_with_source(false);
+        }
+        let matched = Button::new("From Source Monitor, Match Frame");
+        if ui.add_enabled(has_source, matched).clicked() {
+            editor.replace_with_source(true);
+        }
+    });
+    let speed =
+        Button::new("Speed/Duration…").shortcut_text(editor.keymap.label(Command::SpeedDuration));
+    if ui.add(speed).clicked() {
+        editor.speed_duration();
+    }
+    ui.menu_button("Speed Ramp", |ui| {
+        for ramp in SpeedRamp::ALL {
+            let button = ui.button(ramp.name()).on_hover_text(ramp.description());
+            if button.clicked() {
+                editor.speed_ramp(ramp);
+                ui.close();
+            }
+        }
+    });
+    let transitions = Button::new("Apply Default Transitions")
+        .shortcut_text(editor.keymap.label(Command::TransitionsToSelection));
+    if ui.add(transitions).clicked() {
+        crate::effects::apply_default_transitions_to_selection(editor);
+    }
+    if ui.button("Remove Transitions").clicked() {
+        crate::effects::remove_transitions_from_selection(editor);
+    }
+    if ui.button("Rename…").clicked() {
+        editor.rename_clips();
+    }
+    if let Some(source) = editor.selected_source() {
+        if ui.button("Reveal in Project").clicked() {
+            editor.reveal_in_project(source);
+        }
+        let on_disk = editor
+            .timeline
+            .sequence()
+            .media
+            .iter()
+            .any(|item| item.id == source && item.is_file() && !item.offline);
+        if on_disk && ui.button("Reveal in Explorer").clicked() {
+            editor.reveal_in_explorer(source);
+        }
+        if on_disk && ui.button("Edit Original").clicked() {
+            editor.edit_original(source);
+        }
+    }
+    if let Some(clip) = kept_title(editor) {
+        if ui.button("Save as Title Template…").clicked() {
+            editor.name_title_template(clip);
+        }
+    }
+    let sequence = editor.timeline.sequence();
+    let mut enabled = !editor.view.selection.is_empty()
+        && sequence
+            .clips_of(&editor.view.selection)
+            .into_iter()
+            .all(|(_, clip)| !clip.disabled);
+    let shortcut = RichText::new(editor.keymap.label(Command::ToggleEnabled)).weak();
+    if ui
+        .add(Checkbox::new(
+            &mut enabled,
+            ("Enable", Atom::grow(), shortcut),
+        ))
+        .clicked()
+    {
+        editor.toggle_enabled();
+    }
+    let link = if editor.selection_linked() == Some(true) {
+        "Unlink"
+    } else {
+        "Link"
+    };
+    let link = Button::new(link).shortcut_text(editor.keymap.label(Command::ToggleLink));
+    if ui.add(link).clicked() {
+        editor.toggle_link();
+    }
+    for (command, grouped) in [(Command::Group, true), (Command::Ungroup, false)] {
+        let clips = editor.view.selection.clone();
+        let changes = SetGrouped { clips, grouped }.changes(editor.timeline.sequence());
+        let button = Button::new(command.name()).shortcut_text(editor.keymap.label(command));
+        if ui.add_enabled(changes, button).clicked() {
+            editor.set_grouped(grouped);
+        }
+    }
+    let clips = editor.view.selection.clone();
+    let joins = JoinThroughEdits { clips }.joins_any(editor.timeline.sequence());
+    let join = Button::new(Command::JoinThroughEdits.name())
+        .shortcut_text(editor.keymap.label(Command::JoinThroughEdits));
+    if ui.add_enabled(joins, join).clicked() {
+        editor.join_through_edits();
+    }
+    ui.menu_button("Synchronize", |ui| {
+        ui.weak("Line up with the earliest selected clip by");
+        for point in crate::clip_sync::SyncPoint::ALL {
+            if ui.button(point.name()).clicked() {
+                editor.synchronize(point);
+            }
+        }
+    });
+    let gain = Button::new("Audio Gain…").shortcut_text(editor.keymap.label(Command::AudioGain));
+    if ui.add(gain).clicked() {
+        editor.prompt_clip_gain();
+    }
+    let sequence = editor.timeline.sequence();
+    let has_audio = sequence
+        .clips_of(&sequence.with_links(&editor.view.selection))
+        .into_iter()
+        .any(|(track, _)| track.kind == TrackKind::Audio);
+    if ui
+        .add_enabled(has_audio, Button::new("Auto Duck…"))
+        .on_hover_text("Lower the selected music wherever other tracks are heard")
+        .clicked()
+    {
+        editor.open_auto_duck();
+    }
+    if ui
+        .add_enabled(has_audio, Button::new("Remove Pauses…"))
+        .on_hover_text("Cut out where the selected clips go quiet")
+        .clicked()
+    {
+        editor.open_remove_pauses();
+    }
+    if ui
+        .add_enabled(has_audio, Button::new("Add Markers at Beats…"))
+        .on_hover_text("Mark the beats of the selected music")
+        .clicked()
+    {
+        editor.open_beat_markers();
+    }
+    if ui
+        .add_enabled(has_audio, Button::new("Remix…"))
+        .on_hover_text("Cut or loop the selected music to a new length")
+        .clicked()
+    {
+        editor.open_remix();
+    }
+    ui.menu_button("Label", |ui| labels(editor, ui));
+}
+
 /// Radio choices for the selected video clips, checked where they all agree.
+fn video_options(editor: &mut Editor, ui: &mut Ui, selected: bool) {
+    ui.menu_button("Video Options", |ui| {
+        // A frame hold also takes the clips under the playhead.
+        if ui.button("Add Frame Hold").clicked() {
+            editor.add_frame_hold();
+        }
+        if ui.button("Insert Frame Hold Segment").clicked() {
+            editor.insert_frame_hold();
+        }
+        ui.menu_button("Frame Hold Options", |ui| frame_hold_options(editor, ui));
+        ui.add_enabled_ui(selected, |ui| {
+            if ui.button("Set to Frame Size").clicked() {
+                editor.set_to_frame_size(FrameFit::Fit);
+            }
+            if ui.button("Set to Fill Frame").clicked() {
+                editor.set_to_frame_size(FrameFit::Fill);
+            }
+            if ui
+                .button("Add Blurred Background")
+                .on_hover_text("Fills the frame beneath the clip with a blurred copy of it")
+                .clicked()
+            {
+                editor.add_blurred_background();
+            }
+        });
+        ui.menu_button("Time Interpolation", |ui| time_interpolation(editor, ui));
+    });
+}
+
+fn frame_hold_options(editor: &mut Editor, ui: &mut Ui) {
+    let at = editor.playhead();
+    let choices = [
+        ("Hold In Point", Some(HoldFrame::In)),
+        ("Hold Out Point", Some(HoldFrame::Out)),
+        ("Hold Playhead Frame", Some(HoldFrame::At(at))),
+        ("Release Frame Hold", None),
+    ];
+    for (name, frame) in choices {
+        if ui.button(name).clicked() {
+            editor.set_frame_hold(frame);
+            ui.close();
+        }
+    }
+}
+
 fn time_interpolation(editor: &mut Editor, ui: &mut Ui) {
     let sequence = editor.timeline.sequence();
     let clips: Vec<ClipId> = editor
@@ -173,9 +310,9 @@ fn time_interpolation(editor: &mut Editor, ui: &mut Ui) {
         })
         .copied()
         .collect();
-    let mut current = clips
-        .iter()
-        .filter_map(|&id| sequence.clip(id))
+    let mut current = sequence
+        .clips_of(&clips)
+        .into_iter()
         .map(|(_, clip)| clip.interpolation);
     let shared = current
         .next()
@@ -215,6 +352,26 @@ fn labels(editor: &mut Editor, ui: &mut Ui) {
     if ui.button("Track Color").clicked() {
         set_label(editor, None);
     }
+    ui.separator();
+    if ui.button("Select Label Group").clicked() {
+        select_label_group(editor);
+    }
+}
+
+/// Selects every clip in the sequence labeled as one of the selected clips is.
+fn select_label_group(editor: &mut Editor) {
+    let sequence = editor.timeline.sequence();
+    let labels: Vec<Option<Label>> = sequence
+        .clips_of(&editor.view.selection)
+        .into_iter()
+        .map(|(_, clip)| clip.label)
+        .collect();
+    editor.view.selection = sequence
+        .tracks()
+        .flat_map(|(_, track)| track.clips.iter())
+        .filter(|clip| labels.contains(&clip.label))
+        .map(|clip| clip.id)
+        .collect();
 }
 
 fn set_label(editor: &mut Editor, label: Option<Label>) {
@@ -224,4 +381,18 @@ fn set_label(editor: &mut Editor, label: Option<Label>) {
     }
     let clips = editor.view.selection.clone();
     editor.apply(SetClipLabel { clips, label });
+}
+
+/// The one selected clip when it's a title or graphic that can be kept as a template.
+fn kept_title(editor: &Editor) -> Option<ClipId> {
+    let [clip] = editor.view.selection[..] else {
+        return None;
+    };
+    let sequence = editor.timeline.sequence();
+    let (_, placed) = sequence.clip(clip)?;
+    let item = sequence
+        .media
+        .iter()
+        .find(|item| item.id == placed.source)?;
+    TitleTemplate::is_kept(item).then_some(clip)
 }

@@ -1,17 +1,15 @@
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
 
-use crossbeam::channel::{Receiver, RecvTimeoutError, Sender, TrySendError};
+use crossbeam::channel::{Receiver, Select, Sender};
 use timeline::{Sequence, SourceId, Ticks};
 
+use crate::clock::SharedPosition;
 use crate::command::{coalesce, Coalesced, Command, Event};
 use crate::frame_picker::TaggedFrame;
-use crate::previews::PreviewPictures;
+use crate::preroll::preroll;
+use crate::previews::{self, PreviewPictures};
 use crate::{compose, ComposedFrame, Layer, Resolution};
-
-/// How long the worker waits for room in the frame queue before checking commands again.
-const BACKOFF: Duration = Duration::from_millis(4);
 
 pub(crate) struct VideoChannels {
     pub(crate) commands: Receiver<Command>,
@@ -21,6 +19,7 @@ pub(crate) struct VideoChannels {
     pub(crate) stale_frames: Receiver<TaggedFrame>,
     /// Without an audio worker, video reports seeks so the player can start its clock.
     pub(crate) reports_seeks: bool,
+    pub(crate) playing_at: Arc<SharedPosition>,
 }
 
 pub(crate) fn spawn(
@@ -37,6 +36,7 @@ pub(crate) fn spawn(
             pending: None,
             finished: true,
             composed: false,
+            prerolling: false,
             warned: Vec::new(),
             resolution: Resolution::Full,
             previews: None,
@@ -56,6 +56,8 @@ struct VideoWorker {
     finished: bool,
     /// Whether a frame went out since the last seek.
     composed: bool,
+    /// Whether decoding ahead for clips about to start may have more to do.
+    prerolling: bool,
     /// Media already reported as unreadable.
     warned: Vec<SourceId>,
     resolution: Resolution,
@@ -67,19 +69,36 @@ impl VideoWorker {
     fn run(mut self) {
         loop {
             let command = if let Some(frame) = self.pending.take() {
-                let tagged = TaggedFrame {
-                    generation: self.generation,
-                    frame,
+                // Waits for room in the frame queue or a command, whichever comes first;
+                // a paused player leaves the queue full for as long as it stays paused.
+                let mut select = Select::new();
+                let room = select.send(&self.channels.frames);
+                select.recv(&self.channels.commands);
+                // The wait for room is spent readying the clips coming up.
+                let ready = match select.try_select() {
+                    Ok(ready) => ready,
+                    Err(_) if self.prerolling => {
+                        let (sequence, pts) = (&self.sequence, frame.pts);
+                        self.prerolling = preroll(sequence, pts, &mut self.tracks, self.resolution);
+                        self.pending = Some(frame);
+                        continue;
+                    }
+                    Err(_) => select.select(),
                 };
-                match self.channels.frames.try_send(tagged) {
-                    Ok(()) => continue,
-                    Err(TrySendError::Full(tagged)) => self.pending = Some(tagged.frame),
-                    Err(TrySendError::Disconnected(_)) => return,
+                if ready.index() == room {
+                    let tagged = TaggedFrame {
+                        generation: self.generation,
+                        frame,
+                    };
+                    if ready.send(&self.channels.frames, tagged).is_err() {
+                        return;
+                    }
+                    continue;
                 }
-                match self.channels.commands.recv_timeout(BACKOFF) {
+                self.pending = Some(frame);
+                match ready.recv(&self.channels.commands) {
                     Ok(command) => command,
-                    Err(RecvTimeoutError::Timeout) => continue,
-                    Err(RecvTimeoutError::Disconnected) => return,
+                    Err(_) => return,
                 }
             } else if !self.finished {
                 match self.channels.commands.try_recv() {
@@ -114,8 +133,8 @@ impl VideoWorker {
             if let Some(previews) = previews {
                 self.previews = PreviewPictures::new(&previews, &self.sequence);
             }
-            if let Some((position, generation)) = seek {
-                self.seek(position, generation);
+            if let Some(seek) = seek {
+                self.seek(seek.position, seek.generation);
             }
         }
     }
@@ -138,10 +157,14 @@ impl VideoWorker {
 
     fn compose_next(&mut self) {
         let sequence = Arc::clone(&self.sequence);
-        let pts = sequence
-            .format
-            .frame_rate
-            .frame_start(self.next_frame, sequence.timebase);
+        let rate = sequence.format.frame_rate;
+        // A frame whose time has passed would only be dropped once shown, so composing
+        // too slowly to keep up skips to where playing has reached, keeping in sync.
+        if let Some(reached) = self.channels.playing_at.get().filter(|_| self.composed) {
+            let due = rate.frame_at(reached, sequence.timebase);
+            self.next_frame = self.next_frame.max(due);
+        }
+        let pts = rate.frame_start(self.next_frame, sequence.timebase);
         // A seek to the end shows the last frame, or nothing in an empty sequence, so
         // the picture from before the seek doesn't linger, as after undoing every edit.
         if pts >= sequence.duration() && !self.composed {
@@ -184,6 +207,11 @@ impl VideoWorker {
         for warning in warnings {
             let _ = self.channels.events.send(Event::Warning(warning));
         }
+        // A step per frame even when composing can't get ahead, so the next clip, often
+        // far into a long group of pictures in recordings, is ready when it comes up
+        // instead of decoding from its keyframe there and stalling.
+        self.prerolling =
+            pts.is_none_or(|pts| preroll(sequence, pts, &mut self.tracks, self.resolution));
         self.pending = Some(ComposedFrame {
             pts: pts.unwrap_or(Ticks::ZERO),
             layers,
@@ -191,17 +219,7 @@ impl VideoWorker {
         self.composed = true;
     }
 
-    /// The preview's picture where one covers `pts`. A preview that can't be read is
-    /// dropped, and the sequence composed from then on.
     fn previewed(&mut self, pts: Ticks) -> Option<Vec<Layer>> {
-        let previews = self
-            .previews
-            .as_mut()
-            .filter(|previews| previews.covers(pts))?;
-        let layers = previews.layers_at(pts, self.resolution);
-        if layers.is_none() {
-            self.previews = None;
-        }
-        layers
+        previews::previewed(&mut self.previews, pts, self.resolution)
     }
 }

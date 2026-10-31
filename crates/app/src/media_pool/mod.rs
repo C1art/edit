@@ -1,17 +1,24 @@
 mod actions;
+mod item_menu;
+pub(crate) mod remove;
 mod rows;
+mod search_bins;
 mod tiles;
 
 use std::iter;
 
-use egui::{CollapsingHeader, DragAndDrop, Response, RichText, Sense, StrokeKind, TextEdit};
-use timeline::{Bin, BinId, MediaItem, Sequence, SourceId};
+use egui::{CollapsingHeader, DragAndDrop, Response, RichText, Sense, StrokeKind};
+use timeline::{Bin, BinId, BinSearch, MediaItem, Sequence, SourceId};
 
 use crate::clip_art::ClipArt;
+use crate::icons::{self, Icon, Look};
 use crate::multicam_sync::MulticamSync;
 use crate::proxies::ProxyMaker;
-use rows::{item_row, proxy_menu, rename_field, Field};
+use crate::theme;
+use rows::{item_row, rename_field, Field};
 use tiles::{tile, PoolLayout, PoolSort};
+
+const HEADER_BUTTON: egui::Vec2 = egui::vec2(24.0, 22.0);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PoolAction {
@@ -31,8 +38,20 @@ pub enum PoolAction {
     Interpret(SourceId),
     /// Asks which of the file's channels play on each side.
     AudioChannels(SourceId),
+    Timecode(SourceId),
+    EditSubclip(SourceId),
+    /// Shows the frame the source monitor is parked on for the item.
+    SetPosterFrame(SourceId),
+    ClearPosterFrame(SourceId),
+    /// Adds a mono item for each of the file's channels.
+    BreakoutToMono(SourceId),
+    /// Asks for files to import.
+    Import,
     /// Adds a bin inside the given one, or at the top, and starts naming it.
     NewBin(Option<BinId>),
+    /// Adds a search bin at the top of the project and starts naming it.
+    NewSearchBin(BinSearch),
+    SetBinSearch(BinId, BinSearch),
     RenameBin(BinId, String),
     RemoveBin(BinId),
     Move(PoolEntry, Option<BinId>),
@@ -42,6 +61,11 @@ pub enum PoolAction {
     Merge(Vec<SourceId>, MulticamSync, bool),
     /// Makes a sequence holding all of the item and opens it.
     NewSequenceFrom(SourceId),
+    RevealInExplorer(SourceId),
+    /// Opens the item's file in the application the system opens it with.
+    EditOriginal(SourceId),
+    /// Asks how to lay the selected items into the sequence.
+    Automate,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,6 +84,36 @@ pub struct PoolView {
     layout: PoolLayout,
     sort: PoolSort,
     remove_camera_audio: bool,
+    /// How tall a plain list row came out, the space kept for rows scrolled away.
+    row_height: Option<f32>,
+    /// An item in use, waiting on the user to confirm removing it with its clips.
+    removing: Option<SourceId>,
+    /// An item to open the bins around and scroll to.
+    revealing: Option<SourceId>,
+}
+
+impl PoolView {
+    /// Drops what was picked, typed or asked about in the closed project.
+    pub(crate) fn forget_items(&mut self) {
+        self.selected.clear();
+        self.renaming = None;
+        self.removing = None;
+        self.revealing = None;
+    }
+
+    /// Selects `source` alone and brings it into view.
+    pub(crate) fn reveal(&mut self, source: SourceId) {
+        self.selected = vec![source];
+        self.revealing = Some(source);
+        self.search.clear();
+    }
+
+    /// The selected items in the order the panel lists them.
+    pub(crate) fn selected_in_sort_order(&self, sequence: &Sequence) -> Vec<SourceId> {
+        let items = sequence.media.iter();
+        let items = items.filter(|item| self.selected.contains(&item.id));
+        self.sort.sorted(items).iter().map(|item| item.id).collect()
+    }
 }
 
 /// Lists imported media in its bins. Click opens an item in the source monitor;
@@ -68,11 +122,11 @@ pub fn ui(
     ui: &mut egui::Ui,
     view: &mut PoolView,
     sequence: &Sequence,
-    importing: bool,
+    importing: u64,
     proxies: Option<&ProxyMaker>,
     art: &mut ClipArt,
 ) -> Option<PoolAction> {
-    if sequence.media.is_empty() && sequence.bins.is_empty() && !importing {
+    if sequence.media.is_empty() && sequence.bins.is_empty() && importing == 0 {
         ui.label("Drop files here or use File → Import (Ctrl+I).");
     }
     let mut pool = Pool {
@@ -83,23 +137,28 @@ pub fn ui(
         action: None,
     };
     ui.horizontal(|ui| {
-        let new_bin = ui
-            .button("New Bin")
-            .on_hover_text("Add a bin at the top of the project");
-        if new_bin.clicked() {
-            pool.action = Some(PoolAction::NewBin(None));
-        }
         pool.view_options(ui);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let new_bin = icons::button(ui, Icon::NewBin, HEADER_BUTTON)
+                .on_hover_text("New Bin: add a bin at the top of the project");
+            if new_bin.clicked() {
+                pool.action = Some(PoolAction::NewBin(None));
+            }
+        });
     });
-    ui.add(
-        TextEdit::singleline(&mut pool.view.search)
-            .hint_text("Search")
-            .desired_width(f32::INFINITY),
-    );
+    pool.search_row(ui);
+    if importing > 0 {
+        ui.horizontal(|ui| {
+            ui.spinner();
+            ui.label(match importing {
+                1 => "Importing 1 file…".to_owned(),
+                count => format!("Importing {count} files…"),
+            });
+        });
+    }
     let wanted = pool.view.search.to_lowercase();
     egui::ScrollArea::vertical()
         .auto_shrink([false, true])
-        .max_height(ui.available_height() * 0.6)
         .show(ui, |ui| {
             if wanted.is_empty() {
                 pool.contents(ui, None);
@@ -112,12 +171,6 @@ pub fn ui(
                 pool.items(ui, found);
             }
         });
-    if importing {
-        ui.horizontal(|ui| {
-            ui.spinner();
-            ui.label("Importing…");
-        });
-    }
     pool.action
 }
 
@@ -136,7 +189,7 @@ impl Pool<'_> {
         for child in sequence.bins.iter().filter(|child| child.parent == bin) {
             self.bin(ui, child);
         }
-        self.items(ui, sequence.media.iter().filter(|item| item.bin == bin));
+        self.items(ui, sequence.bin_items(bin));
     }
 
     /// `items` in the chosen order, as rows or as tiles wrapped across the panel.
@@ -158,21 +211,51 @@ impl Pool<'_> {
         }
     }
 
+    /// Whether the item being revealed sits in `bin` or in a bin inside it.
+    fn reveals_inside(&self, bin: BinId) -> bool {
+        let sequence = self.sequence;
+        let Some(item) = self
+            .view
+            .revealing
+            .and_then(|id| sequence.media.iter().find(|item| item.id == id))
+        else {
+            return false;
+        };
+        let parent = |at: &BinId| {
+            let held = sequence.bins.iter().find(|held| held.id == *at)?;
+            held.parent
+        };
+        iter::successors(item.bin, parent)
+            .take(sequence.bins.len())
+            .any(|at| at == bin)
+    }
+
     fn view_options(&mut self, ui: &mut egui::Ui) {
         let view = &mut *self.view;
-        ui.selectable_value(&mut view.layout, PoolLayout::List, "List")
-            .on_hover_text("List View");
-        ui.selectable_value(&mut view.layout, PoolLayout::Icons, "Icons")
-            .on_hover_text("Icon View: hover over a picture to scrub through it");
-        egui::ComboBox::from_id_salt("pool sort")
-            .selected_text(view.sort.name())
-            .show_ui(ui, |ui| {
-                for sort in PoolSort::ALL {
-                    ui.selectable_value(&mut view.sort, sort, sort.name());
-                }
-            })
-            .response
-            .on_hover_text("Sort Items");
+        let layouts = [
+            (PoolLayout::List, Icon::List, "List View"),
+            (
+                PoolLayout::Icons,
+                Icon::Tiles,
+                "Icon View: hover over a picture to scrub through it",
+            ),
+        ];
+        for (layout, icon, tip) in layouts {
+            let on = view.layout == layout;
+            if icons::sized_toggle(ui, on, icon, Look::Filled, HEADER_BUTTON)
+                .on_hover_text(tip)
+                .clicked()
+            {
+                view.layout = layout;
+            }
+        }
+        let sort = icons::button(ui, Icon::Sort, HEADER_BUTTON)
+            .on_hover_text(format!("Sort Items: {}", view.sort.name()));
+        egui::Popup::menu(&sort).show(|ui| {
+            for sort in PoolSort::ALL {
+                ui.selectable_value(&mut view.sort, sort, sort.name());
+            }
+        });
     }
 
     fn bin(&mut self, ui: &mut egui::Ui, bin: &Bin) {
@@ -187,23 +270,34 @@ impl Pool<'_> {
             .iter()
             .filter(|child| child.parent == inside)
             .count()
-            + sequence
-                .media
-                .iter()
-                .filter(|item| item.bin == inside)
-                .count();
+            + sequence.bin_items(inside).count();
         let title = RichText::new(format!("{} ({count})", bin.name)).strong();
         let shown = CollapsingHeader::new(title)
             .id_salt(("bin", bin.id.0))
+            .open(self.reveals_inside(bin.id).then_some(true))
             .show(ui, |ui| self.contents(ui, inside));
         let header = shown.header_response.interact(Sense::click_and_drag());
+        if bin.search.is_some() {
+            let mark = egui::Rect::from_center_size(
+                header.rect.right_center() + egui::vec2(10.0, 0.0),
+                egui::vec2(11.0, 11.0),
+            );
+            icons::paint(ui.painter(), mark, Icon::Search, theme::WEAK_TEXT);
+        }
         if header.drag_started() {
             header.dnd_set_drag_payload(bin.id);
         }
-        self.drop_target(ui, &header, inside);
+        if bin.search.is_none() {
+            self.drop_target(ui, &header, inside);
+        }
         header.context_menu(|ui| {
-            if ui.button("New Bin Inside").clicked() {
-                self.action = Some(PoolAction::NewBin(inside));
+            match &bin.search {
+                Some(search) => self.search_bin_menu(ui, bin.id, search),
+                None => {
+                    if ui.button("New Bin Inside").clicked() {
+                        self.action = Some(PoolAction::NewBin(inside));
+                    }
+                }
             }
             if ui.button("Rename").clicked() {
                 self.view.renaming = Some((entry, bin.name.clone()));
@@ -225,15 +319,41 @@ impl Pool<'_> {
         if self.rename_in_place(ui, entry) {
             return;
         }
-        let building = self.proxies.and_then(|maker| maker.progress(item.id));
+        let building = self
+            .proxies
+            .and_then(|maker| maker.progress(item.id, &item.path));
         let offline = self.art.offline.contains(&item.id);
+        let plain_row =
+            matches!(self.view.layout, PoolLayout::List) && building.is_none() && !offline;
+        let revealing = self.view.revealing == Some(item.id);
+        if let Some(height) = self.view.row_height.filter(|_| plain_row && !revealing) {
+            let top = ui.cursor().top();
+            let shown = ui.clip_rect().y_range();
+            if top > shown.max || top + height < shown.min {
+                ui.allocate_space(egui::vec2(ui.available_width(), height));
+                return;
+            }
+        }
         let timebase = self.sequence.timebase;
         let response = match self.view.layout {
             PoolLayout::List => item_row(ui, item, timebase, building, offline),
             PoolLayout::Icons => tile(ui, item, timebase, self.art, offline),
         };
+        if plain_row {
+            self.view.row_height = Some(response.rect.height());
+        }
+        if revealing {
+            response.scroll_to_me(Some(egui::Align::Center));
+            self.view.revealing = None;
+        }
+        let selected = &mut self.view.selected;
         if response.drag_started() {
             response.dnd_set_drag_payload(item.id);
+            // Dragging an item outside the selection carries it alone, so it's selected
+            // alone to show that.
+            if !selected.contains(&item.id) {
+                *selected = vec![item.id];
+            }
         }
         self.drop_target(ui, &response, item.bin);
         let selected = &mut self.view.selected;
@@ -256,110 +376,11 @@ impl Pool<'_> {
             ui.painter()
                 .rect_stroke(rect, 2.0, stroke, StrokeKind::Inside);
         }
-        // In project order, whatever order they were picked in.
-        let cameras: Vec<SourceId> = self
-            .sequence
-            .media
-            .iter()
-            .filter(|item| selected.contains(&item.id) && item.is_file() && item.video.is_some())
-            .map(|item| item.id)
-            .collect();
-        let merge = merge_sources(self.sequence, selected, item.id);
-        let to_take_offline: Vec<SourceId> = if selected.contains(&item.id) {
-            self.sequence
-                .media
-                .iter()
-                .filter(|item| selected.contains(&item.id) && item.is_file() && !item.offline)
-                .map(|item| item.id)
-                .collect()
-        } else {
-            vec![item.id]
-        };
         if response.double_clicked() && item.nest.is_some() {
             self.action = Some(PoolAction::OpenNest(item.id));
         }
         response.context_menu(|ui| {
-            if ui.button("Open in Source Monitor").clicked() {
-                self.action = Some(PoolAction::Open(item.id));
-            }
-            let can_sync = cameras.len() >= 2 && cameras.contains(&item.id);
-            ui.add_enabled_ui(can_sync, |ui| {
-                ui.menu_button("Create Multi-Camera Source Sequence", |ui| {
-                    for (sync, label) in [
-                        (MulticamSync::Start, "Synchronize by Start"),
-                        (MulticamSync::Audio, "Synchronize by Audio"),
-                    ] {
-                        if ui.button(label).clicked() {
-                            self.action = Some(PoolAction::CreateMulticam(cameras.clone(), sync));
-                        }
-                    }
-                })
-            })
-            .response
-            .on_disabled_hover_text("Ctrl+click two or more video clips to use as cameras");
-            ui.add_enabled_ui(merge.is_some(), |ui| {
-                ui.menu_button("Merge Clips", |ui| {
-                    ui.checkbox(
-                        &mut self.view.remove_camera_audio,
-                        "Remove Audio from AV Clip",
-                    );
-                    for (sync, label) in [
-                        (MulticamSync::Start, "Synchronize by Start"),
-                        (MulticamSync::Audio, "Synchronize by Audio"),
-                    ] {
-                        if let Some(sources) = merge.as_ref().filter(|_| ui.button(label).clicked())
-                        {
-                            let remove = self.view.remove_camera_audio;
-                            self.action = Some(PoolAction::Merge(sources.clone(), sync, remove));
-                        }
-                    }
-                })
-            })
-            .response
-            .on_disabled_hover_text(
-                "Ctrl+click one video clip and the audio clips recorded with it",
-            );
-            let playable = item.video.is_some() || item.has_audio;
-            if playable && ui.button("New Sequence From Clip").clicked() {
-                self.action = Some(PoolAction::NewSequenceFrom(item.id));
-            }
-            if item.nest.is_some() && ui.button("Open in Timeline").clicked() {
-                self.action = Some(PoolAction::OpenNest(item.id));
-            }
-            if ui.button("Rename").clicked() {
-                self.view.renaming = Some((entry, item.name.clone()));
-            }
-            if ui.button("Duplicate").clicked() {
-                self.action = Some(PoolAction::Duplicate(item.id));
-            }
-            if item.bin.is_some() && ui.button("Move to Top").clicked() {
-                self.action = Some(PoolAction::Move(entry, None));
-            }
-            let relink = if offline {
-                "Link Media…"
-            } else {
-                "Replace Footage…"
-            };
-            if item.is_file() && ui.button(relink).clicked() {
-                self.action = Some(PoolAction::Replace(item.id));
-            }
-            if item.is_file() && !item.offline && ui.button("Make Offline").clicked() {
-                self.action = Some(PoolAction::MakeOffline(to_take_offline));
-            }
-            if ui.button("Remove from Project").clicked() {
-                self.action = Some(PoolAction::Remove(item.id));
-            }
-            if item.has_audio && item.is_file() && ui.button("Modify Audio Channels…").clicked() {
-                self.action = Some(PoolAction::AudioChannels(item.id));
-            }
-            if item.video.is_some() && item.is_file() {
-                if ui.button("Interpret Footage…").clicked() {
-                    self.action = Some(PoolAction::Interpret(item.id));
-                }
-                ui.separator();
-                let can_build = self.proxies.is_some() && building.is_none();
-                proxy_menu(ui, item, can_build, &mut self.action);
-            }
+            crate::theme::scrolling_menu(ui, |ui| self.item_menu(ui, item, offline, building));
         });
     }
 
@@ -386,10 +407,14 @@ impl Pool<'_> {
         true
     }
 
-    /// The space below the list, where a drop moves things out of every bin.
+    /// The space below the list, where a drop moves things out of every bin and a click
+    /// selects nothing.
     fn top_drop_zone(&mut self, ui: &mut egui::Ui) {
-        let size = egui::vec2(ui.available_width(), 32.0);
+        let size = egui::vec2(ui.available_width(), ui.available_height().max(32.0));
         let (rect, zone) = ui.allocate_exact_size(size, Sense::click());
+        if zone.clicked() {
+            self.view.selected.clear();
+        }
         if self.dragging_from_bin(ui.ctx()) {
             ui.painter().text(
                 rect.center(),
@@ -403,6 +428,9 @@ impl Pool<'_> {
         zone.context_menu(|ui| {
             if ui.button("New Bin").clicked() {
                 self.action = Some(PoolAction::NewBin(None));
+            }
+            if ui.button("Import…").clicked() {
+                self.action = Some(PoolAction::Import);
             }
         });
     }
@@ -446,31 +474,4 @@ impl Pool<'_> {
             self.action = Some(PoolAction::Move(entry, to));
         }
     }
-}
-
-/// The selected picture item first and then the selected sound-only items, when the
-/// selection holding `item` is one of each or more sound.
-fn merge_sources(
-    sequence: &Sequence,
-    selected: &[SourceId],
-    item: SourceId,
-) -> Option<Vec<SourceId>> {
-    if !selected.contains(&item) {
-        return None;
-    }
-    let (pictures, sounds): (Vec<&MediaItem>, Vec<&MediaItem>) = sequence
-        .media
-        .iter()
-        .filter(|item| selected.contains(&item.id) && item.is_file())
-        .partition(|item| item.video.is_some());
-    let all_sound = sounds.iter().all(|item| item.has_audio);
-    let [picture] = pictures[..] else {
-        return None;
-    };
-    (!sounds.is_empty() && all_sound).then(|| {
-        iter::once(picture)
-            .chain(sounds)
-            .map(|item| item.id)
-            .collect()
-    })
 }

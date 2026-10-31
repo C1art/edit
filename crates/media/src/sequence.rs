@@ -65,6 +65,18 @@ impl Pattern {
         (fits && all_digits).then(|| digits.parse().ok()).flatten()
     }
 
+    /// The width of the zero-padded numbers among `names` that fit this pattern's
+    /// prefix and suffix.
+    fn padding_among<'a>(&self, names: impl IntoIterator<Item = &'a str>) -> Option<usize> {
+        names.into_iter().find_map(|name| {
+            let digits = name
+                .strip_prefix(&self.prefix)?
+                .strip_suffix(&self.suffix)?;
+            let padded = digits.len() > 1 && digits.starts_with('0');
+            (padded && digits.bytes().all(|byte| byte.is_ascii_digit())).then_some(digits.len())
+        })
+    }
+
     fn name(&self) -> String {
         let number = match self.width {
             Some(width) => format!("%0{width}d"),
@@ -93,6 +105,37 @@ pub fn sequence_pattern(frame: &Path) -> Option<PathBuf> {
         suffix: name[digits_end..].to_owned(),
     };
     Some(frame.with_file_name(pattern.name()))
+}
+
+/// `pattern` padded to the width its folder's frames use, when it was named from a
+/// frame whose number needs no padding, such as `shot_100.png` among `shot_001.png`,
+/// and would otherwise leave out every padded frame.
+pub fn padded_pattern(pattern: &Path) -> PathBuf {
+    let padded = || {
+        let parsed = Pattern::parse(pattern.file_name()?.to_str()?)?;
+        if parsed.width.is_some() || pattern.is_file() {
+            return None;
+        }
+        let folder = pattern
+            .parent()
+            .filter(|folder| !folder.as_os_str().is_empty());
+        let entries = fs::read_dir(folder.unwrap_or(Path::new("."))).ok()?;
+        let names: Vec<_> = entries
+            .filter_map(Result::ok)
+            .filter_map(|entry| entry.file_name().into_string().ok())
+            .collect();
+        let width = parsed.padding_among(names.iter().map(String::as_str))?;
+        Some(
+            pattern.with_file_name(
+                Pattern {
+                    width: Some(width),
+                    ..parsed
+                }
+                .name(),
+            ),
+        )
+    };
+    padded().unwrap_or_else(|| pattern.to_owned())
 }
 
 /// The numbered files `path` names, lowest first, when it is a sequence pattern rather
@@ -209,6 +252,14 @@ mod tests {
         assert_eq!(unpadded.number("100%_7"), Some(7));
         assert_eq!(unpadded.number("100%_07"), None);
         assert_eq!(Pattern::parse("100%_done.png"), None);
+
+        let named_from_100 = Pattern::parse("shot_%d.png").unwrap();
+        let folder = ["shot_100.png", "shot_099.png", "shot_1.png", "take_007.png"];
+        assert_eq!(named_from_100.padding_among(folder), Some(3));
+        assert_eq!(
+            named_from_100.padding_among(["shot_7.png", "shot_10.png"]),
+            None
+        );
 
         let renamed = Path::new("copies/shot_%04d (2).png");
         let frame = sequence_frame(renamed, 7).unwrap();

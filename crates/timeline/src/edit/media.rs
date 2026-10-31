@@ -1,19 +1,41 @@
 use std::collections::HashMap;
 use std::ops::Range;
 use std::path::Path;
+use std::sync::Arc;
 
 use crate::model::IdGenerator;
 use crate::{
     ChannelMap, ClipId, Edit, GroupId, ImportMedia, LinkId, MediaItem, MediaLog, Nest, Sequence,
-    SourceId, Ticks, TimelineError,
+    SourceId, Ticks, TimelineError, Transcript,
 };
 
 fn media_item(sequence: &mut Sequence, source: SourceId) -> Result<&mut MediaItem, TimelineError> {
-    sequence
-        .media
+    Arc::make_mut(&mut sequence.media)
         .iter_mut()
         .find(|item| item.id == source)
         .ok_or(TimelineError::MediaNotFound(source))
+}
+
+/// Keeps what speech recognition heard in a media item's sound, or forgets it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetTranscript {
+    pub source: SourceId,
+    pub transcript: Option<Arc<Transcript>>,
+}
+
+impl Edit for SetTranscript {
+    fn name(&self) -> &'static str {
+        "Transcribe"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let item = media_item(sequence, self.source)?;
+        if item.transcript == self.transcript {
+            return Err(TimelineError::NothingToEdit);
+        }
+        item.transcript.clone_from(&self.transcript);
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -79,6 +101,30 @@ impl Edit for SetMediaLog {
             return Err(TimelineError::NothingToEdit);
         }
         item.log.clone_from(&self.log);
+        Ok(())
+    }
+}
+
+/// Modify > Timecode: where a file's timecode starts, in frames at the rate it plays, or
+/// `None` to count from zero.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetMediaTimecode {
+    pub source: SourceId,
+    pub timecode: Option<i64>,
+}
+
+impl Edit for SetMediaTimecode {
+    fn name(&self) -> &'static str {
+        "Modify Timecode"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let item = media_item(sequence, self.source)?;
+        let timecode = self.timecode.filter(|&frame| frame > 0);
+        if !item.is_file() || item.video.is_none() || item.timecode == timecode {
+            return Err(TimelineError::NothingToEdit);
+        }
+        item.timecode = timecode;
         Ok(())
     }
 }
@@ -183,7 +229,63 @@ impl Edit for MakeSubclip {
             subclip: Some(range),
             ..item
         };
-        sequence.media.push(subclip);
+        Arc::make_mut(&mut sequence.media).push(subclip);
+        Ok(())
+    }
+}
+
+/// Changes the part of the file a subclip stands for, or with no range makes it stand
+/// for the whole file again, as a master clip. Its clips keep their source times.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EditSubclip {
+    pub source: SourceId,
+    /// In the file's time.
+    pub range: Option<Range<Ticks>>,
+}
+
+impl Edit for EditSubclip {
+    fn name(&self) -> &'static str {
+        "Edit Subclip"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let item = media_item(sequence, self.source)?;
+        let range = self
+            .range
+            .as_ref()
+            .map(|range| range.start.max(Ticks::ZERO)..range.end.min(item.duration));
+        if range.as_ref().is_some_and(Range::is_empty) {
+            return Err(TimelineError::NonPositiveDuration);
+        }
+        if item.subclip.is_none() || item.subclip == range {
+            return Err(TimelineError::NothingToEdit);
+        }
+        item.subclip = range;
+        Ok(())
+    }
+}
+
+/// Picks the picture the Project panel shows for an item, or with none goes back to its
+/// first.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetPosterFrame {
+    pub source: SourceId,
+    /// In the file's time.
+    pub at: Option<Ticks>,
+}
+
+impl Edit for SetPosterFrame {
+    fn name(&self) -> &'static str {
+        "Set Poster Frame"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let item = media_item(sequence, self.source)?;
+        let at = self.at.map(|at| at.clamp(Ticks::ZERO, item.duration));
+        if item.video.is_none() || item.poster == at {
+            return Err(TimelineError::NothingToEdit);
+        }
+        item.poster = at;
         Ok(())
     }
 }
@@ -212,18 +314,18 @@ impl Edit for DuplicateMedia {
         if let Some(nest) = &mut copy.nest {
             renumber(nest, &mut sequence.ids);
         }
-        sequence.media.insert(index + 1, copy);
+        Arc::make_mut(&mut sequence.media).insert(index + 1, copy);
         Ok(())
     }
 }
 
 /// Gives a copied sequence's clips, links and groups ids of their own, so nothing kept per
 /// clip, such as a selection or a cached preview, mistakes the copy for its original.
-fn renumber(nest: &mut Nest, ids: &mut IdGenerator) {
+pub(super) fn renumber(nest: &mut Nest, ids: &mut IdGenerator) {
     let mut links: HashMap<LinkId, LinkId> = HashMap::new();
     let mut groups: HashMap<GroupId, GroupId> = HashMap::new();
     let tracks = nest.video.iter_mut().chain(&mut nest.audio);
-    for clip in tracks.flat_map(|track| &mut track.clips) {
+    for clip in tracks.flat_map(|track| track.clips.iter_mut().map(Arc::make_mut)) {
         clip.id = ClipId(ids.next());
         if let Some(link) = &mut clip.link {
             *link = *links.entry(*link).or_insert_with(|| LinkId(ids.next()));
@@ -231,5 +333,55 @@ fn renumber(nest: &mut Nest, ids: &mut IdGenerator) {
         if let Some(group) = &mut clip.group {
             *group = *groups.entry(*group).or_insert_with(|| GroupId(ids.next()));
         }
+    }
+}
+
+/// Adds a mono item for each of a file's `channels` after it, as Premiere's Breakout to
+/// Mono does so each microphone can be placed and mixed on its own.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BreakoutToMono {
+    pub source: SourceId,
+    pub channels: u16,
+}
+
+impl Edit for BreakoutToMono {
+    fn name(&self) -> &'static str {
+        "Breakout to Mono"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let index = sequence
+            .media
+            .iter()
+            .position(|item| item.id == self.source)
+            .ok_or(TimelineError::MediaNotFound(self.source))?;
+        let original = &sequence.media[index];
+        if !original.has_audio || !original.is_file() || self.channels < 2 {
+            return Err(TimelineError::NothingToEdit);
+        }
+        let mono: Vec<_> = (0..self.channels)
+            .map(|channel| MediaItem {
+                id: SourceId(sequence.ids.next()),
+                name: format!("{} {}", original.name, channel_name(channel, self.channels)),
+                video: None,
+                proxy: None,
+                frame_fit: None,
+                channel_map: Some(ChannelMap {
+                    left: channel,
+                    right: channel,
+                }),
+                ..original.clone()
+            })
+            .collect();
+        Arc::make_mut(&mut sequence.media).splice(index + 1..index + 1, mono);
+        Ok(())
+    }
+}
+
+fn channel_name(channel: u16, channels: u16) -> String {
+    match (channel, channels) {
+        (0, 2) => "Left".to_owned(),
+        (1, 2) => "Right".to_owned(),
+        _ => format!("Channel {}", channel + 1),
     }
 }

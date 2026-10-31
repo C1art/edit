@@ -1,7 +1,9 @@
 use std::ops::Range;
 
-use timeline::{MediaItem, Sequence, Speed};
+use timeline::{MediaItem, Sequence};
 
+use crate::band_limit;
+pub(crate) use crate::clip_read::ClipRead;
 use crate::stretch::Wsola;
 use crate::track_audio::TrackAudio;
 use crate::PlaybackError;
@@ -9,6 +11,8 @@ use crate::PlaybackError;
 const CHANNELS: usize = 2;
 /// Source frames read at once when playing backwards, a second at 48 kHz.
 const BACKWARD_BLOCK: i64 = 48_000;
+/// Source frames read and dropped before each backward block, for a resampler to settle.
+const BACKWARD_LEAD_IN: i64 = 1_024;
 
 /// Stereo frames of a media item's audio at the output rate.
 pub(crate) trait FrameSource {
@@ -41,42 +45,6 @@ impl FrameSource for TrackAudio {
     }
 }
 
-/// Where a clip's audio comes from, in frames at the output rate.
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct ClipRead {
-    /// The first source frame of the clip's range, which a reversed clip plays last.
-    pub source_in: i64,
-    /// Output frames in the clip; a reversed clip counts back from its end.
-    pub length: i64,
-    pub speed: Speed,
-    pub reverse: bool,
-    pub maintain_pitch: bool,
-}
-
-impl ClipRead {
-    /// The source position heard `frame` output frames into the clip, as a whole frame
-    /// and the fraction past it.
-    pub(crate) fn position(&self, frame: i64) -> (i64, f32) {
-        let (num, den) = (i128::from(self.speed.num()), i128::from(self.speed.den()));
-        let (travelled, before) = if self.reverse {
-            (i128::from(self.length - frame) * num, 1)
-        } else {
-            (i128::from(frame) * num, 0)
-        };
-        let whole = i128::from(self.source_in) + travelled.div_euclid(den) - before;
-        let fraction = travelled.rem_euclid(den) as f64 / den as f64;
-        (i64::try_from(whole).unwrap_or(i64::MAX), fraction as f32)
-    }
-
-    pub(crate) fn direction(&self) -> i64 {
-        if self.reverse {
-            -1
-        } else {
-            1
-        }
-    }
-}
-
 /// One clip's audio at its speed and direction. Off normal speed the source is
 /// interpolated, so its pitch follows the speed as on tape, unless the clip maintains
 /// pitch.
@@ -100,6 +68,12 @@ impl<S: FrameSource> ClipAudio<S> {
 
     pub(crate) fn reset(&mut self) {
         self.source.reset();
+        self.forget_window();
+    }
+
+    /// Forgets the audio read for another clip, which reading by frame numbers alone
+    /// would otherwise take for this one's, while the source reads on where it can.
+    pub(crate) fn forget_window(&mut self) {
         self.window.clear();
         self.stretch.reset();
     }
@@ -118,13 +92,13 @@ impl<S: FrameSource> ClipAudio<S> {
         if frames == 0 {
             return Ok(());
         }
-        if read.speed.is_normal() && !read.reverse {
+        if !read.is_varied() && !read.reverse {
             let first = read.position(offset).0;
             let skip = (-first).clamp(0, frames);
             let out = &mut out[usize::try_from(skip).unwrap_or(0) * CHANNELS..];
             return self.source.read(pool, media, first + skip, out);
         }
-        if read.maintain_pitch && !read.speed.is_normal() {
+        if read.maintain_pitch && read.is_varied() {
             let needed = Wsola::needed(read, offset..offset + frames);
             self.fill(pool, media, needed, read.reverse)?;
             let (window, start) = (&self.window, self.window_start);
@@ -138,17 +112,33 @@ impl<S: FrameSource> ClipAudio<S> {
         if high < 0 {
             return Ok(());
         }
-        self.fill(pool, media, (low - 1).max(0)..high + 3, read.reverse)?;
+        let reach = band_limit::reach(read.fastest()).max(3);
+        self.fill(
+            pool,
+            media,
+            (low - reach).max(0)..high + reach,
+            read.reverse,
+        )?;
+        let at = |frame: i64, channel: usize| {
+            window_sample(&self.window, self.window_start, frame, channel)
+        };
         for (frame, pair) in (offset..).zip(out.as_chunks_mut::<CHANNELS>().0) {
             let (index, t) = read.position(frame);
             if index < 0 {
                 continue;
             }
-            for (channel, sample) in pair.iter_mut().enumerate() {
-                let at =
-                    |frame: i64| window_sample(&self.window, self.window_start, frame, channel);
-                *sample += cubic(at(index - 1), at(index), at(index + 1), at(index + 2), t);
-            }
+            let speed = read.speed_at(frame);
+            let heard = if speed > 1.0 {
+                band_limit::stereo_at(at, index, t, speed)
+            } else {
+                [0, 1].map(|channel| {
+                    let at = |frame: i64| at(frame, channel);
+                    cubic(at(index - 1), at(index), at(index + 1), at(index + 2), t)
+                })
+            };
+            pair.iter_mut()
+                .zip(heard)
+                .for_each(|(sample, heard)| *sample += heard);
         }
         Ok(())
     }
@@ -170,11 +160,17 @@ impl<S: FrameSource> ClipAudio<S> {
                 && needed.end <= end(self);
             if !inside {
                 let start = (needed.start - BACKWARD_BLOCK).max(0);
-                let frames = usize::try_from(needed.end - start).unwrap_or(0);
+                // Each block seeks, which starts a resampler afresh; what it gives while
+                // it settles is read ahead of the block and dropped, so it can't click.
+                let lead = BACKWARD_LEAD_IN.min(start);
+                let frames = usize::try_from(needed.end - start + lead).unwrap_or(0);
                 self.window.clear();
                 self.window.resize(frames * CHANNELS, 0.0);
+                self.source
+                    .read(pool, media, start - lead, &mut self.window)?;
+                let settling = usize::try_from(lead).unwrap_or(0) * CHANNELS;
+                self.window.drain(..settling.min(self.window.len()));
                 self.window_start = start;
-                self.source.read(pool, media, start, &mut self.window)?;
             }
             return Ok(());
         }
@@ -220,7 +216,7 @@ fn cubic(a: f32, b: f32, c: f32, d: f32, t: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use timeline::{SourceId, Ticks, Timebase};
+    use timeline::{SourceId, Speed, Ticks, Timebase};
 
     /// Each frame's value is its frame number, and every read's start is recorded.
     #[derive(Default)]
@@ -248,6 +244,8 @@ mod tests {
 
     fn media() -> MediaItem {
         MediaItem {
+            poster: None,
+            transcript: None,
             id: SourceId(1),
             name: "ramp".into(),
             path: "ramp.wav".into(),
@@ -261,11 +259,16 @@ mod tests {
             subclip: None,
             interpreted_rate: None,
             interpreted_aspect: None,
+            interpreted_color: None,
+            interpreted_fields: None,
             alpha: Default::default(),
             log: Default::default(),
             offline: false,
             still: false,
             channel_map: None,
+            placed: None,
+            frame_fit: None,
+            timecode: None,
         }
     }
 
@@ -273,13 +276,14 @@ mod tests {
         Sequence::new(Timebase::HZ_90K, Default::default())
     }
 
-    fn forward(source_in: i64, speed: Speed) -> ClipRead {
+    fn forward(source_in: i64, speed: Speed) -> ClipRead<'static> {
         ClipRead {
             source_in,
             length: 1_000,
             speed,
             reverse: false,
             maintain_pitch: false,
+            curve: &[],
         }
     }
 
@@ -289,7 +293,7 @@ mod tests {
 
     #[test]
     fn chunks_at_an_odd_speed_read_the_source_straight_through() {
-        let speed = Speed::new(3, 2).unwrap();
+        let speed = Speed::new(3, 4).unwrap();
         let mut clip = ClipAudio::new(Ramp::default());
         let mut chunks = Vec::new();
         for chunk in 0..3 {
@@ -298,10 +302,10 @@ mod tests {
                 .unwrap();
             chunks.extend(left(&out));
         }
-        let expected: Vec<f32> = (0..12).map(|k| 100.0 + k as f32 * 1.5).collect();
+        let expected: Vec<f32> = (0..12).map(|k| 100.0 + k as f32 * 0.75).collect();
         assert_eq!(chunks, expected);
         let reads = &clip.source.reads;
-        assert_eq!(reads[0], 99);
+        assert!(reads[0] < 100);
         assert!(reads.windows(2).all(|pair| pair[0] < pair[1]));
         assert_eq!(reads.len(), 3);
     }
@@ -335,5 +339,80 @@ mod tests {
         let expected: Vec<f32> = (0..12).map(|k| 1_099.0 - k as f32).collect();
         assert_eq!(heard, expected);
         assert_eq!(clip.source.reads, [0]);
+    }
+
+    #[test]
+    fn each_backward_block_is_read_from_ahead_of_it_and_plays_only_its_own_frames() {
+        let read = ClipRead {
+            reverse: true,
+            ..forward(200_000, Speed::NORMAL)
+        };
+        let mut clip = ClipAudio::new(Ramp::default());
+        let mut out = vec![0.0; 4 * CHANNELS];
+        clip.mix_into(&pool(), &media(), &read, 0, &mut out)
+            .unwrap();
+        assert_eq!(left(&out), [200_999.0, 200_998.0, 200_997.0, 200_996.0]);
+        let block_start = clip.window_start;
+        assert_eq!(clip.source.reads, [block_start - BACKWARD_LEAD_IN]);
+    }
+
+    #[test]
+    fn a_remapped_clip_plays_each_segment_at_its_own_speed() {
+        let curve = [[0, 100], [4, 102], [8, 106]];
+        let read = ClipRead {
+            curve: &curve,
+            ..forward(100, Speed::NORMAL)
+        };
+        let mut clip = ClipAudio::new(Ramp::default());
+        let mut out = vec![0.0; 10 * CHANNELS];
+        clip.mix_into(&pool(), &media(), &read, 0, &mut out)
+            .unwrap();
+        let expected = [
+            100.0, 100.5, 101.0, 101.5, 102.0, 103.0, 104.0, 105.0, 106.0, 107.0,
+        ];
+        assert_eq!(left(&out), expected);
+    }
+
+    /// A sine of `cycles_per_frame`.
+    struct Tone(f64);
+
+    impl FrameSource for Tone {
+        fn read(
+            &mut self,
+            _: &Sequence,
+            _: &MediaItem,
+            first: i64,
+            out: &mut [f32],
+        ) -> Result<(), PlaybackError> {
+            for (frame, pair) in (first..).zip(out.as_chunks_mut::<CHANNELS>().0) {
+                let value = (std::f64::consts::TAU * self.0 * frame as f64).sin() as f32;
+                pair.iter_mut().for_each(|sample| *sample += value);
+            }
+            Ok(())
+        }
+
+        fn reset(&mut self) {}
+    }
+
+    fn level_at_double_speed(cycles_per_frame: f64) -> f32 {
+        let mut clip = ClipAudio::new(Tone(cycles_per_frame));
+        let read = forward(1_000, Speed::new(2, 1).unwrap());
+        let mut out = vec![0.0; 2_000 * CHANNELS];
+        clip.mix_into(&pool(), &media(), &read, 0, &mut out)
+            .unwrap();
+        let left = left(&out);
+        (left.iter().map(|sample| sample * sample).sum::<f32>() / left.len() as f32).sqrt()
+    }
+
+    #[test]
+    fn doubled_speed_drops_the_highs_that_would_fold_back_and_keeps_the_rest() {
+        // At 48 kHz: 2 kHz plays as 4 kHz; 20 kHz would fold back to 8 kHz.
+        let kept = level_at_double_speed(2.0 / 48.0);
+        let folded = level_at_double_speed(20.0 / 48.0);
+        assert!(
+            (kept - std::f32::consts::FRAC_1_SQRT_2).abs() < 0.02,
+            "{kept}"
+        );
+        assert!(folded < 0.02, "{folded}");
     }
 }

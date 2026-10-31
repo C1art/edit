@@ -26,6 +26,7 @@ struct WipeCover {
     border: vec3<f32>,
 }
 
+// #if wipes
 // Where `pixel` falls in the order `pattern` uncovers a canvas of `size` pixels.
 fn wipe_order(pattern: u32, pixel: vec2<f32>, size: vec2<f32>) -> f32 {
     let half = size * 0.5;
@@ -146,11 +147,13 @@ fn wipe_turn(side: u32, pixel: vec2<f32>, size: vec2<f32>) -> array<vec2<f32>, 2
         default: { return array<vec2<f32>, 2>(pixel, size); }
     }
 }
+// #endif
 
 fn wipe_cover(canvas: vec2<f32>) -> WipeCover {
     // Canvas pixels of the target being drawn.
     let size = 1.0 / max(abs(vec2<f32>(dpdx(canvas.x), dpdy(canvas.y))), vec2<f32>(1e-6));
     var cover = WipeCover(1.0, 1.0, vec3<f32>(0.0));
+    // #if wipes
     for (var i = 0u; i < 2u; i++) {
         let shape = placement.wipes[i * 3u];
         let border = placement.wipes[i * 3u + 1u];
@@ -179,5 +182,6 @@ fn wipe_cover(canvas: vec2<f32>) -> WipeCover {
         cover.shown *= shown;
         cover.picture *= min(picture, 1.0);
     }
+    // #endif
     return cover;
 }

@@ -1,5 +1,12 @@
-use super::VideoEffect;
-use crate::Param;
+use super::{
+    AlphaGlow, AscCdl, Bevel, BrushStrokes, CellPattern, ChangeColor, ChannelBlur, Checkerboard,
+    CineonConverter, Circle, ColorBalance, ColorEmboss, ColorPass, ColorReplace, CompoundBlur,
+    ConvolutionKernel, DifferenceMatte, Echo, EdgeFeather, Ellipse, Extract, EyedropperFill,
+    FourColorGradient, Grid, Light, LightingEffects, Lightning, Median, NoiseAlpha, NoiseHls,
+    NoiseHlsAuto, PaintBucket, RadialShadow, ReduceInterlaceFlicker, RoughenEdges, SdrConform,
+    ShadowHighlight, SimpleText, Texturize, UnsharpMask, VideoEffect, VideoLimiter, WriteOn,
+};
+use crate::{AutoReframe, Param};
 
 // One match serves both borrows: default binding modes make the same patterns bind
 // `&Param` or `&mut Param`, and `$iter` picks the iterator that matches.
@@ -37,7 +44,10 @@ macro_rules! effect_params {
             | VideoEffect::VerticalFlip
             | VideoEffect::BlackAndWhite
             | VideoEffect::TrackMatteKey { .. }
-            | VideoEffect::WarpStabilizer(_) => Vec::new(),
+            | VideoEffect::SetMatte { .. }
+            | VideoEffect::ImageMatteKey(_)
+            | VideoEffect::WarpStabilizer(_)
+            | VideoEffect::RollingShutterRepair(_) => Vec::new(),
             VideoEffect::Tint { amount, .. }
             | VideoEffect::Invert { amount }
             | VideoEffect::Sharpen { amount } => {
@@ -112,7 +122,13 @@ macro_rules! effect_params {
                 size,
                 opacity,
                 ..
-            } => vec![x, y, size, opacity],
+            }
+            | VideoEffect::SimpleText(SimpleText {
+                position: [x, y],
+                size,
+                opacity,
+                ..
+            }) => vec![x, y, size, opacity],
             VideoEffect::Transform {
                 anchor: [anchor_x, anchor_y],
                 position: [x, y],
@@ -164,40 +180,120 @@ macro_rules! effect_params {
             VideoEffect::LumaKey { threshold, cutoff } => vec![threshold, cutoff],
             VideoEffect::AlphaAdjust { opacity, .. } => vec![opacity],
             VideoEffect::ColorBalanceRgb { gains } => gains.$iter().collect(),
-            VideoEffect::Checkerboard {
+            VideoEffect::Checkerboard(Checkerboard {
                 anchor,
                 size,
                 opacity,
                 ..
-            } => anchor
+            }) => anchor
                 .$iter()
                 .chain(size.$iter())
                 .chain([opacity])
                 .collect(),
-            VideoEffect::Grid {
+            VideoEffect::Grid(Grid {
                 anchor,
                 size,
                 border,
                 opacity,
                 ..
-            } => anchor
+            }) => anchor
                 .$iter()
                 .chain(size.$iter())
                 .chain([border, opacity])
                 .collect(),
-            VideoEffect::Circle {
+            VideoEffect::Circle(Circle {
                 center,
                 radius,
                 feather,
                 opacity,
                 ..
-            } => center.$iter().chain([radius, feather, opacity]).collect(),
-            VideoEffect::FourColorGradient {
+            }) => center.$iter().chain([radius, feather, opacity]).collect(),
+            VideoEffect::FourColorGradient(FourColorGradient {
                 points,
                 blend,
                 opacity,
                 ..
-            } => points.$iter().flatten().chain([blend, opacity]).collect(),
+            }) => points.$iter().flatten().chain([blend, opacity]).collect(),
+            VideoEffect::Ellipse(Ellipse {
+                center,
+                width,
+                height,
+                thickness,
+                softness,
+                ..
+            }) => center
+                .$iter()
+                .chain([width, height, thickness, softness])
+                .collect(),
+            VideoEffect::CellPattern(CellPattern {
+                contrast,
+                disperse,
+                size,
+                offset,
+                evolution,
+                blend_with_original,
+                ..
+            }) => [contrast, disperse, size]
+                .into_iter()
+                .chain(offset.$iter())
+                .chain([evolution, blend_with_original])
+                .collect(),
+            VideoEffect::LightingEffects(LightingEffects {
+                lights,
+                ambience_intensity,
+                surface_gloss,
+                surface_material,
+                exposure,
+                bump_height,
+                ..
+            }) => lights
+                .$iter()
+                .flat_map(|light| {
+                    let Light {
+                        center: [x, y],
+                        major_radius,
+                        minor_radius,
+                        angle,
+                        intensity,
+                        focus,
+                        ..
+                    } = light;
+                    [x, y, major_radius, minor_radius, angle, intensity, focus]
+                })
+                .chain([
+                    ambience_intensity,
+                    surface_gloss,
+                    surface_material,
+                    exposure,
+                    bump_height,
+                ])
+                .collect(),
+            VideoEffect::RadialShadow(RadialShadow {
+                opacity,
+                light_source,
+                projection_distance,
+                softness,
+                color_influence,
+                ..
+            }) => light_source
+                .$iter()
+                .chain([opacity, projection_distance, softness, color_influence])
+                .collect(),
+            VideoEffect::Lightning(Lightning {
+                start_point,
+                end_point,
+                segments,
+                amplitude,
+                branching,
+                width,
+                core_width,
+                speed,
+                ..
+            }) => start_point
+                .$iter()
+                .chain(end_point.$iter())
+                .chain([segments, amplitude, branching, width, core_width, speed])
+                .collect(),
             VideoEffect::LensFlare {
                 center,
                 brightness,
@@ -256,6 +352,60 @@ macro_rules! effect_params {
                 block_height: third,
                 feather,
             } => vec![first, second, third, feather],
+            VideoEffect::UnsharpMask(UnsharpMask {
+                amount,
+                radius,
+                threshold,
+            }) => vec![amount, radius, threshold],
+            VideoEffect::Median(Median { radius, threshold })
+            | VideoEffect::DustAndScratches(Median { radius, threshold }) => {
+                vec![radius, threshold]
+            }
+            VideoEffect::EdgeFeather(EdgeFeather { amount }) => vec![amount],
+            VideoEffect::NoiseHls(NoiseHls {
+                hue,
+                lightness,
+                saturation,
+                grain_size,
+                phase,
+            }) => vec![hue, lightness, saturation, grain_size, phase],
+            VideoEffect::NoiseHlsAuto(NoiseHlsAuto {
+                hue,
+                lightness,
+                saturation,
+                grain_size,
+                animation_speed,
+            }) => vec![hue, lightness, saturation, grain_size, animation_speed],
+            other @ (VideoEffect::AlphaGlow(_)
+            | VideoEffect::AscCdl(_)
+            | VideoEffect::AutoReframe(_)
+            | VideoEffect::BevelAlpha(_)
+            | VideoEffect::BevelEdges(_)
+            | VideoEffect::BrushStrokes(_)
+            | VideoEffect::CameraBlur { .. }
+            | VideoEffect::ChangeColor(_)
+            | VideoEffect::ChannelBlur(_)
+            | VideoEffect::CineonConverter(_)
+            | VideoEffect::ColorBalance(_)
+            | VideoEffect::ColorEmboss(_)
+            | VideoEffect::ColorPass(_)
+            | VideoEffect::ColorReplace(_)
+            | VideoEffect::ConvolutionKernel(_)
+            | VideoEffect::Echo(_)
+            | VideoEffect::Extract(_)
+            | VideoEffect::EyedropperFill(_)
+            | VideoEffect::GarbageMatte(_)
+            | VideoEffect::NoiseAlpha(_)
+            | VideoEffect::ReduceInterlaceFlicker(_)
+            | VideoEffect::RoughenEdges(_)
+            | VideoEffect::SdrConform(_)
+            | VideoEffect::PaintBucket(_)
+            | VideoEffect::WriteOn(_)
+            | VideoEffect::DifferenceMatte(_)
+            | VideoEffect::CompoundBlur(_)
+            | VideoEffect::Texturize(_)
+            | VideoEffect::ShadowHighlight(_)
+            | VideoEffect::VideoLimiter(_)) => more_effect_params!(other, $iter),
         }
     };
 }

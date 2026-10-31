@@ -111,6 +111,19 @@ pub fn track_layers_at<'a>(
     vec![layer(current, reveal)]
 }
 
+/// Where `clip` on `track` first shows: before its start when a transition into it
+/// reaches back over the clip before.
+pub fn shows_from(track: &Track, clip: &Clip) -> Ticks {
+    let previous = track
+        .clips
+        .iter()
+        .find(|previous| previous.end() == clip.start);
+    match (clip.transition_in, previous) {
+        (Some(transition), Some(previous)) => clip.start - cut_window(previous, clip, transition).0,
+        _ => clip.start,
+    }
+}
+
 /// How far a transition at the cut between `outgoing` and `incoming` reaches before and
 /// after the cut, as aligned, but never further than either clip's own length.
 pub fn cut_window(outgoing: &Clip, incoming: &Clip, transition: Transition) -> (Ticks, Ticks) {
@@ -174,7 +187,7 @@ mod tests {
         let mut incoming = clip(2, 100, 100, 500);
         incoming.transition_in = dissolve(TransitionKind::CrossDissolve, 40);
         let track = Track {
-            clips: vec![clip(1, 0, 100, 0), incoming],
+            clips: vec![clip(1, 0, 100, 0).into(), incoming.into()],
             ..Track::default()
         };
         let sequence = sequence();
@@ -184,6 +197,8 @@ mod tests {
         // Past its out point the outgoing clip keeps reading its media.
         assert_eq!(at(110), vec![(1, 110, 1.0), (2, 510, 0.75)]);
         assert_eq!(at(120), vec![(2, 520, 1.0)]);
+        assert_eq!(shows_from(&track, &track.clips[1]), Ticks(80));
+        assert_eq!(shows_from(&track, &track.clips[0]), Ticks(0));
     }
 
     #[test]
@@ -191,7 +206,7 @@ mod tests {
         let mut incoming = clip(2, 100, 100, 500);
         incoming.transition_in = dissolve(TransitionKind::MorphCut, 40);
         let track = Track {
-            clips: vec![clip(1, 0, 100, 0), incoming],
+            clips: vec![clip(1, 0, 100, 0).into(), incoming.into()],
             ..Track::default()
         };
         let sequence = sequence();
@@ -211,7 +226,7 @@ mod tests {
             ..Transition::new(TransitionKind::CrossDissolve, Ticks(40))
         });
         let track = Track {
-            clips: vec![clip(1, 0, 100, 0), incoming],
+            clips: vec![clip(1, 0, 100, 0).into(), incoming.into()],
             ..Track::default()
         };
         let sequence = sequence();
@@ -226,7 +241,7 @@ mod tests {
         let mut incoming = clip(2, 100, 100, 0);
         incoming.transition_in = dissolve(TransitionKind::DipToBlack, 40);
         let track = Track {
-            clips: vec![clip(1, 0, 100, 0), incoming],
+            clips: vec![clip(1, 0, 100, 0).into(), incoming.into()],
             ..Track::default()
         };
         let sequence = sequence();
@@ -242,7 +257,7 @@ mod tests {
         lone.transition_in = dissolve(TransitionKind::CrossDissolve, 20);
         lone.transition_out = dissolve(TransitionKind::DipToBlack, 50);
         let track = Track {
-            clips: vec![clip(2, 0, 50, 0), lone],
+            clips: vec![clip(2, 0, 50, 0).into(), lone.into()],
             ..Track::default()
         };
         let sequence = sequence();
@@ -258,7 +273,7 @@ mod tests {
             let mut incoming = clip(2, 100, 100, 0);
             incoming.transition_in = dissolve(kind, 40);
             Track {
-                clips: vec![clip(1, 0, 100, 0), incoming],
+                clips: vec![clip(1, 0, 100, 0).into(), incoming.into()],
                 ..Track::default()
             }
         };
@@ -287,7 +302,7 @@ mod tests {
         let mut lone = clip(3, 300, 100, 0);
         lone.transition_in = dissolve(TransitionKind::PageTurn, 40);
         let track = Track {
-            clips: vec![clip(1, 0, 100, 0), incoming, lone],
+            clips: vec![clip(1, 0, 100, 0).into(), incoming.into(), lone.into()],
             ..Track::default()
         };
         let sequence = sequence();

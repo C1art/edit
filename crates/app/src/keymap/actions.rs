@@ -13,7 +13,6 @@ impl Command {
             Self::RippleTool => Tool::Ripple,
             Self::RollTool => Tool::Roll,
             Self::RateStretchTool => Tool::RateStretch,
-            Self::RazorTool => Tool::Razor,
             Self::SlipTool => Tool::Slip,
             Self::SlideTool => Tool::Slide,
             Self::HandTool => Tool::Hand,
@@ -25,6 +24,12 @@ impl Command {
         })
     }
 
+    pub fn for_tool(tool: Tool) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|command| command.tool() == Some(tool))
+    }
+
     /// What the command asks of the focused monitor, for playback commands.
     pub fn transport(self) -> Option<TransportKey> {
         Some(match self {
@@ -32,6 +37,8 @@ impl Command {
             Self::ShuttleLeft => TransportKey::Reverse,
             Self::ShuttleStop => TransportKey::Pause,
             Self::ShuttleRight => TransportKey::Forward,
+            Self::ShuttleSlowLeft => TransportKey::SlowReverse,
+            Self::ShuttleSlowRight => TransportKey::SlowForward,
             Self::StepBack => TransportKey::Step(-1),
             Self::StepForward => TransportKey::Step(1),
             Self::StepBackFive => TransportKey::Step(-5),

@@ -40,19 +40,42 @@ pub(super) fn panel(editor: &mut Editor, ui: &mut egui::Ui) {
         editor.mixer.inserts.open = None;
         return;
     };
-    let mut effects = match &editor.mixer.inserts.adjusting {
-        Some((adjusting, effects)) if *adjusting == channel => effects.clone(),
-        _ => current,
-    };
+    let mut effects = adjusting(editor, channel).unwrap_or(current);
     ui.separator();
     ui.label(RichText::new(format!("{name} Effects")).strong());
-    let (change, seek) = crate::effects::track_effect_controls(ui, &mut effects, editor.playhead());
+    let playhead = editor.playhead();
+    let (change, seek, open_editor) =
+        crate::effects::track_effect_controls(ui, &mut effects, playhead, &mut editor.vst);
     if let Some(key) = seek {
         editor.seek_program(key);
     }
-    let Some(change) = change else {
-        return;
-    };
+    if let Some(change) = change {
+        set_effects(editor, channel, effects, change);
+    }
+    if let Some(index) = open_editor {
+        let holder = crate::vst::Holder::Channel(channel);
+        crate::vst::open_editor(editor, ui.ctx(), holder, index);
+    }
+}
+
+fn adjusting(editor: &Editor, channel: Channel) -> Option<Vec<AudioEffect>> {
+    match &editor.mixer.inserts.adjusting {
+        Some((adjusting, effects)) if *adjusting == channel => Some(effects.clone()),
+        _ => None,
+    }
+}
+
+/// A strip's inserts, as they are while being adjusted.
+pub(crate) fn effects(editor: &Editor, channel: Channel) -> Option<Vec<AudioEffect>> {
+    adjusting(editor, channel).or_else(|| owned(editor, channel).map(|(_, effects)| effects))
+}
+
+pub(crate) fn set_effects(
+    editor: &mut Editor,
+    channel: Channel,
+    effects: Vec<AudioEffect>,
+    change: Change,
+) {
     editor.mixer.inserts.adjusting = (change == Change::Live).then(|| (channel, effects.clone()));
     match channel {
         Channel::Track(track) => settle(editor, change, SetTrackEffects { track, effects }),
@@ -65,7 +88,7 @@ pub(super) fn panel(editor: &mut Editor, ui: &mut egui::Ui) {
     }
 }
 
-fn settle(editor: &mut Editor, change: Change, edit: impl Edit + 'static) {
+pub(super) fn settle(editor: &mut Editor, change: Change, edit: impl Edit + 'static) {
     match change {
         Change::Live => live(editor, &edit),
         Change::Commit => editor.apply_levels(edit),

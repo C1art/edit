@@ -64,9 +64,11 @@ fn lut(path: &Path, warnings: &mut Vec<PlaybackError>) -> Option<Arc<Lut3d>> {
         if let Some((_, lut)) = luts.iter().find(|(kept, _)| kept == path) {
             return lut.clone();
         }
-        let lut = std::fs::read_to_string(path)
+        let lut = std::fs::read(path)
             .map_err(|error| error.to_string())
-            .and_then(|text| Lut3d::parse_cube(&text).map_err(|error| error.to_string()))
+            .and_then(|bytes| {
+                Lut3d::parse_cube(&timeline::decode_text(&bytes)).map_err(|error| error.to_string())
+            })
             .map(Arc::new)
             .map_err(|reason| {
                 warnings.push(PlaybackError::Lut {

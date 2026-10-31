@@ -3,6 +3,7 @@ use timeline::{Sequence, Track, TrackKind, TrackRef, TrackSwitch};
 
 use super::layout::Row;
 use super::Targets;
+use crate::icons::{self, Icon, Look};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HeaderAction {
@@ -39,6 +40,9 @@ pub fn header(
 ) -> Option<HeaderAction> {
     let track = sequence.track(row.track)?;
     let rect = Rect::from_x_y_ranges(column, row.y_range()).shrink2(egui::vec2(4.0, 0.0));
+    let card = Rect::from_x_y_ranges(column, row.y_range()).shrink2(egui::vec2(0.0, 1.0));
+    ui.painter()
+        .rect_filled(card, 4.0, ui.visuals().faint_bg_color);
     let editing = renaming
         .as_ref()
         .is_some_and(|edit| edit.track == row.track);
@@ -128,30 +132,42 @@ pub fn header(
 /// Mute or hide, lock, sync lock and, for audio, solo and the automation toggle.
 fn switches(ui: &mut egui::Ui, row: &Row, track: &Track, automation: bool) -> Option<HeaderAction> {
     let mut action = None;
-    let mute_label = match row.track.kind {
-        TrackKind::Video => "Hide",
-        TrackKind::Audio => "Mute",
+    ui.spacing_mut().item_spacing.x = 2.0;
+    let output = match row.track.kind {
+        TrackKind::Video => (Icon::Eye, "Toggle track output"),
+        TrackKind::Audio => (Icon::Speaker, "Mute track"),
     };
-    let solo =
-        (row.track.kind == TrackKind::Audio).then_some(("Solo", TrackSwitch::Solo, track.solo));
+    let solo = (row.track.kind == TrackKind::Audio).then_some((
+        Icon::Solo,
+        "Solo track",
+        TrackSwitch::Solo,
+        track.solo,
+    ));
     let switches = [
-        (mute_label, TrackSwitch::Mute, track.muted),
-        ("Lock", TrackSwitch::Lock, track.locked),
-        ("Sync", TrackSwitch::SyncLock, !track.sync_unlocked),
+        (output.0, output.1, TrackSwitch::Mute, track.muted),
+        (Icon::Lock, "Lock track", TrackSwitch::Lock, track.locked),
+        (
+            Icon::Link,
+            "Sync lock: inserts and ripples on other tracks shift this one too",
+            TrackSwitch::SyncLock,
+            !track.sync_unlocked,
+        ),
     ];
-    for (label, switch, on) in switches.into_iter().chain(solo) {
-        let mut toggle = ui.selectable_label(on, label);
-        if switch == TrackSwitch::SyncLock {
-            toggle = toggle
-                .on_hover_text("Sync lock: inserts and ripples on other tracks shift this one too");
-        }
-        if toggle.clicked() {
+    for (icon, hover, switch, on) in switches.into_iter().chain(solo) {
+        let look = match switch {
+            TrackSwitch::Mute => Look::Crossed,
+            TrackSwitch::SyncLock => Look::Quiet,
+            _ => Look::Filled,
+        };
+        if icons::toggle(ui, on, icon, look)
+            .on_hover_text(hover)
+            .clicked()
+        {
             action = Some(HeaderAction::Switch(row.track, switch, !on));
         }
     }
     if row.track.kind == TrackKind::Audio {
-        let toggle = ui
-            .selectable_label(automation, "Auto")
+        let toggle = icons::toggle(ui, automation, Icon::Keyframes, Look::Filled)
             .on_hover_text("Show and edit the track's volume keyframes");
         if toggle.clicked() {
             action = Some(HeaderAction::ToggleAutomation(row.track));

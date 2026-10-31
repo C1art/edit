@@ -47,7 +47,8 @@ struct Placement {
     mask_space: vec4<f32>,
     // Three for each mask: center and size as fractions of the picture; rotation in
     // radians, feather and expansion in pixels, opacity; then its shape (0 ellipse,
-    // 1 rectangle, 2 path), 1 when inverted and a path's point count.
+    // 1 rectangle, 2 path), 1 when inverted, a path's point count and 1 when it
+    // intersects.
     masks: array<vec4<f32>, 12>,
     // Each mask's path outline as fractions of the picture, two points to a vec4.
     outlines: array<vec4<f32>, 128>,
@@ -77,6 +78,8 @@ struct Placement {
     // in turns; then the noise's center as fractions of the picture, and 1 when on.
     style_turbulence: vec4<f32>,
     style_turbulence_center: vec4<f32>,
+    // Rolling Shutter Repair's travel during the read and the way the read moves.
+    style_shutter: vec4<f32>,
     // Mirror's center, angle and 1 when on; the warps' map back to the picture, its
     // first row ending in 1 when on; the warped picture's bounds; then a page fold's
     // corner, progress, and 1 when flat or 2 when curling (see reshape.wgsl).
@@ -105,7 +108,8 @@ struct Placement {
     recolor_change_to: vec4<f32>,
     recolor_change_detail: vec4<f32>,
     // Ultra Key's pedestal, contrast, choke and soften in source pixels; then its spill,
-    // its output (see key.wgsl), and 1 to ignore the source's alpha or 2 to invert it.
+    // its output (see key.wgsl), 1 to ignore the source's alpha or 2 to invert it, and
+    // the source's color space (see color.wgsl).
     key_matte: vec4<f32>,
     key_spill: vec4<f32>,
     // Color Balance (RGB)'s gains, then Replicate's count; Solarize's and Threshold's
@@ -154,13 +158,91 @@ struct Placement {
     clip_radial_detail: vec4<f32>,
     clip_blinds: vec4<f32>,
     clip_blocks: vec4<f32>,
+    // Unsharp Mask's amount, radius and threshold, then the median's radius; the
+    // median's threshold, Edge Feather's width, Noise HLS's grain size and phase; then
+    // its hue, lightness and saturation amounts (see detail.wgsl).
+    detail_unsharp: vec4<f32>,
+    detail_median: vec4<f32>,
+    detail_noise: vec4<f32>,
+    // Roughen Edges' border, softness, fractal scale and complexity; its evolution,
+    // fractal influence and offset; its edge color and whether to show it. Bevel Edges'
+    // thickness, light angle and intensity, then its light color, and Bevel Alpha's the
+    // same. Alpha Glow's size, brightness and fade-out, its start and end colors; then
+    // Color Emboss's direction, relief, contrast and share (see edges.wgsl).
+    edges_roughen: vec4<f32>,
+    edges_roughen_noise: vec4<f32>,
+    edges_roughen_color: vec4<f32>,
+    edges_bevel: vec4<f32>,
+    edges_bevel_color: vec4<f32>,
+    edges_bevel_alpha: vec4<f32>,
+    edges_bevel_alpha_color: vec4<f32>,
+    edges_glow: vec4<f32>,
+    edges_glow_start: vec4<f32>,
+    edges_glow_end: vec4<f32>,
+    edges_emboss: vec4<f32>,
+    tone_kernel_a: vec4<f32>,
+    tone_kernel_b: vec4<f32>,
+    tone_kernel_c: vec4<f32>,
+    tone_extract: vec4<f32>,
+    tone_lift: vec4<f32>,
+    tone_lift_more: vec4<f32>,
+    tone_limit: vec4<f32>,
+    tone_limit_warning: vec4<f32>,
+    tone_cdl_slope: vec4<f32>,
+    tone_cdl_offset: vec4<f32>,
+    tone_cdl_power: vec4<f32>,
+    tone_replace_target: vec4<f32>,
+    tone_replace_with: vec4<f32>,
+    shift_change_target: vec4<f32>,
+    shift_change_amounts: vec4<f32>,
+    shift_change_detail: vec4<f32>,
+    shift_balance_shadows: vec4<f32>,
+    shift_balance_midtones: vec4<f32>,
+    shift_balance_highlights: vec4<f32>,
+    pattern_ellipse: vec4<f32>,
+    pattern_ellipse_detail: vec4<f32>,
+    pattern_ellipse_inside: vec4<f32>,
+    pattern_ellipse_outside: vec4<f32>,
+    pattern_cells: vec4<f32>,
+    pattern_cells_more: vec4<f32>,
+    pattern_cells_flags: vec4<f32>,
+    lighting_lamps: array<vec4<f32>, 15>,
+    lighting_ambience: vec4<f32>,
+    lighting_surface: vec4<f32>,
+    lighting_flags: vec4<f32>,
+    // Radial Shadow's light, as a fraction of the picture, and scale, then whether it
+    // hides the picture and tints by it.
+    point_shadow: vec4<f32>,
+    point_shadow_look: vec4<f32>,
+    // Noise Alpha's amount, squaring, mix and overflow, then its seed, phase, cycle and
+    // kind: 0 off, 1 still, 2 animated.
+    noise_alpha: vec4<f32>,
+    noise_alpha_timing: vec4<f32>,
+    // Cineon Converter's black and white codes, internal black and white, then gamma,
+    // highlight rolloff and kind: 0 off, 1 log to linear, 2 linear to log, 3 log to log.
+    cineon: vec4<f32>,
+    cineon_shape: vec4<f32>,
+    // Brush Strokes' angle, size, length and randomness, then its surface (0 off,
+    // 1 original, 2 transparent, 3 white, 4 black) and blend; Eyedropper Fill's point,
+    // radius and flag, then its blend and whether it keeps alpha; SDR Conform's
+    // brightness, contrast, knee and flag.
+    paint_brush: vec4<f32>,
+    paint_brush_look: vec4<f32>,
+    paint_fill: vec4<f32>,
+    paint_fill_look: vec4<f32>,
+    paint_conform: vec4<f32>,
+    // How a group combines with another track's (see combine.wgsl): the kind, then its
+    // settings.
+    combine: vec4<f32>,
+    combine_view: vec4<f32>,
 };
 
 const OUTLINE_VEC4S: u32 = 32u;
 
 const MID_GREY: f32 = 0.18;
+// Keeps a power's base above zero where the power itself can reach zero.
+const TINY: f32 = 1.0e-10;
 const LUMA: vec3<f32> = vec3<f32>(0.2126, 0.7152, 0.0722);
-const GAMMA: f32 = 2.2;
 // How far blacks at their limit lift pure black, in linear light.
 const BLACK_LIFT: f32 = 0.03;
 // Stops a wheel at its rim pushes its range toward the hue, and its level brightens it.
@@ -191,13 +273,13 @@ fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
         vec2<f32>(0.0, 0.0), vec2<f32>(1.0, 0.0), vec2<f32>(0.0, 1.0),
         vec2<f32>(0.0, 1.0), vec2<f32>(1.0, 0.0), vec2<f32>(1.0, 1.0),
     );
-    // Waves and a shadow reach past the picture, so the quad grows to hold them.
+    // Waves, a shadow and a glow reach past the picture, so the quad grows to hold them.
     let shadow = placement.style_shadow;
     let reach = abs(placement.style_wave.x) + select(
         0.0,
         max(abs(shadow.x), abs(shadow.y)) + shadow.z,
         shadow.w > 0.0,
-    );
+    ) + select(0.0, placement.edges_glow.x, placement.edges_glow.y > 0.0);
     let margin = vec2<f32>(reach) / picture_size();
     var low = placement.crop.xy - margin;
     var high = vec2<f32>(1.0) - placement.crop.zw + margin;
@@ -209,6 +291,12 @@ fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
     let folding = f32(placement.reshape_fold.w > 0.5);
     low -= folding;
     high += folding;
+    let radial = placement.point_shadow;
+    if radial.w > 0.5 {
+        let spread = vec2<f32>(placement.style_shadow.z) / picture_size();
+        low = min(low, radial.xy * (1.0 - radial.z) - spread);
+        high = max(high, radial.xy + (vec2<f32>(1.0) - radial.xy) * radial.z + spread);
+    }
     let uv = mix(low, high, corners[index]);
     let center = placement.center_axis_x.xy;
     let axis_x = placement.center_axis_x.zw;
@@ -227,14 +315,18 @@ fn correct(rgb_in: vec3<f32>) -> vec3<f32> {
     let balance = placement.balance;
     let white = vec3<f32>(1.0 + 0.3 * balance.x, 1.0 - 0.3 * balance.y, 1.0 - 0.3 * balance.x);
     var rgb = rgb_in * white * exp2(tone.x);
-    // Contrast pivots on mid grey in log space, as a camera's tone curve does.
+    // Contrast pivots on mid grey in log space, as a camera's tone curve does. Full
+    // negative contrast makes the power 0, and pow(0, 0) is undefined, so black is kept
+    // just above zero.
     let pivot = vec3<f32>(MID_GREY);
-    rgb = pivot * pow(max(rgb, vec3<f32>(0.0)) / pivot, vec3<f32>(1.0 + tone.y));
+    rgb = pivot * pow(max(rgb, vec3<f32>(TINY)) / pivot, vec3<f32>(1.0 + tone.y));
+    // #if tone.z tone.w finish.x finish.y wheels
     let luma = dot(rgb, LUMA);
     let highlight_weight = smoothstep(MID_GREY, 1.0, luma);
     let shadow_weight = 1.0 - smoothstep(0.0, MID_GREY * 2.0, luma);
     rgb *= exp2(tone.z * highlight_weight + tone.w * shadow_weight);
     rgb = finish(rgb);
+    // #endif
     return saturate_color(rgb, balance.z, placement.finish.z);
 }
 
@@ -274,16 +366,6 @@ fn saturate_color(rgb: vec3<f32>, saturation: f32, vibrance: f32) -> vec3<f32> {
     return max(mix(grey, rgb, amount), vec3<f32>(0.0));
 }
 
-// The sRGB curve exactly, so a LUT sees the code values the source was decoded from.
-fn srgb_encode(rgb: vec3<f32>) -> vec3<f32> {
-    let c = clamp(rgb, vec3<f32>(0.0), vec3<f32>(1.0));
-    return select(1.055 * pow(c, vec3<f32>(1.0 / 2.4)) - 0.055, c * 12.92, c <= vec3<f32>(0.0031308));
-}
-
-fn srgb_decode(c: vec3<f32>) -> vec3<f32> {
-    return select(pow((c + 0.055) / 1.055, vec3<f32>(2.4)), c / 12.92, c <= vec3<f32>(0.04045));
-}
-
 // Texel centers span the cube, so 0 and 1 land exactly on its first and last entries.
 fn lookup(lut: texture_3d<f32>, size: f32, rgb: vec3<f32>) -> vec3<f32> {
     let coord = srgb_encode(rgb) * ((size - 1.0) / size) + vec3<f32>(0.5 / size);
@@ -294,17 +376,24 @@ fn input_grade(rgb: vec3<f32>) -> vec3<f32> {
     if placement.grade.x < 2.0 {
         return rgb;
     }
+    // #if grade.x
     return lookup(input_lut, placement.grade.x, rgb);
+    // #else
+    return rgb;
+    // #endif
 }
 
 fn creative_grade(rgb_in: vec3<f32>) -> vec3<f32> {
     let grade = placement.grade;
     var rgb = rgb_in;
+    // #if grade.y
     if grade.y >= 2.0 {
         rgb = mix(rgb, lookup(look_lut, grade.y, rgb), grade.z);
     }
+    // #endif
     rgb = creative_tone(rgb);
     let flags = u32(grade.w + 0.5);
+    // #if grade.w
     if (flags & 1u) != 0u {
         let size = f32(textureDimensions(curves).x);
         let row = 0.5 / f32(textureDimensions(curves).y);
@@ -318,18 +407,12 @@ fn creative_grade(rgb_in: vec3<f32>) -> vec3<f32> {
     if (flags & 2u) != 0u {
         rgb = hue_curves(rgb);
     }
+    // #endif
     return rgb;
 }
 
-fn to_gamma(rgb: vec3<f32>) -> vec3<f32> {
-    return pow(max(rgb, vec3<f32>(0.0)), vec3<f32>(1.0 / GAMMA));
-}
-
-fn to_linear(rgb: vec3<f32>) -> vec3<f32> {
-    return pow(max(rgb, vec3<f32>(0.0)), vec3<f32>(GAMMA));
-}
-
 fn stylize(rgb_in: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
+    // #if amounts.z amounts.w tint_black.w
     let amounts = placement.amounts;
     let mapped = mix(placement.tint_black.rgb, placement.tint_white.rgb, dot(rgb_in, LUMA));
     var rgb = mix(rgb_in, mapped, amounts.w);
@@ -345,6 +428,9 @@ fn stylize(rgb_in: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
         rgb = mix(rgb, vec3<f32>(1.0), amount * edge);
     }
     return creative_vignette(rgb, uv);
+    // #else
+    return creative_vignette(rgb_in, uv);
+    // #endif
 }
 
 @fragment
@@ -358,11 +444,12 @@ fn in_crop(uv: vec2<f32>) -> bool {
 
 // The picture at the warped `uv`, unpremultiplied and through the input LUT.
 fn source_color(uv: vec2<f32>) -> vec4<f32> {
-    var color = picture_at(magnified(uv));
-    if placement.axis_y_opacity.w > 0.5 {
-        color = vec4<f32>(color.rgb / max(color.a, 1e-6), color.a);
-    }
-    let drawn = generated(ramped(vec4<f32>(input_grade(color.rgb), color.a), uv), uv);
+    let at = magnified(uv);
+    let picture = picture_at(at);
+    // Divided by the alpha the colors were stored with, before Interpret Footage
+    // ignores or inverts it.
+    let color = vec4<f32>(color_managed(unpremultiplied(picture)), interpreted_alpha(picture.a, at));
+    let drawn = patterned(generated(ramped(vec4<f32>(input_grade(color.rgb), color.a), uv), uv), uv);
     return flared(drawn, uv);
 }
 
@@ -383,17 +470,23 @@ fn layer_color(in: VertexOutput) -> vec4<f32> {
     let wiped = wipe_cover(in.canvas);
     let matte = key_alpha(color.rgb, uv);
     let keyed = key_shown(matte);
-    let sharp = sharpen(despill(color.rgb, matte), uv);
-    var rgb = adjusted(restyle(stylize(secondary(creative_grade(correct(change_to_color(mix_channels(leave_color(sharp)))))), pinned), uv));
-    rgb = page_side(key_view(rgb, matte), page);
+    let sharp = unsharp(sharpen(median_filtered(convolved(despill(color.rgb, matte), uv), uv), uv), uv);
+    var rgb = noise_hls(adjusted(restyle(stylize(secondary(creative_grade(correct(color_balance(change_color(change_to_color(mix_channels(leave_color(toned(cineon(brushed(eyedropper_filled(sharp), uv)), uv))))))))), pinned), uv)), pinned);
+    let rough = roughened(pinned);
+    rgb = roughen_colored(edge_lit(lighting_effects(rgb, uv), pinned, uv), rough.y);
+    rgb = page_side(key_view(limited(sdr_conformed(rgb)), matte), page);
     rgb = mix(rgb, vec3<f32>(1.0), placement.balance.w);
-    let viewed = alpha_view(rgb, adjusted_alpha(color.a) * keyed * luma_matte(color.rgb) * f32(in_crop(pinned)));
+    let viewed = alpha_view(rgb, noise_alpha(adjusted_alpha(painted_alpha(color.a, pinned)), uv) * keyed * luma_matte(color.rgb) * f32(in_crop(pinned)) * rough.x);
     rgb = viewed.rgb;
-    let picture = viewed.a;
+    let picture = viewed.a * (1.0 - placement.point_shadow_look.x);
     let shadow = shadow_alpha(pinned);
-    let covered = picture + shadow * (1.0 - picture);
-    rgb = mix(placement.style_shadow_color.rgb, rgb, picture / max(covered, 1e-6));
-    let opacity = placement.axis_y_opacity.z * mask_coverage(page.uv) * clip_wipes_shown(page.uv);
+    let glow = alpha_glow(pinned);
+    let backing = glow.a + shadow * (1.0 - glow.a);
+    let backing_rgb = mix(shadow_tint(pinned), glow.rgb, glow.a / max(backing, 1e-6));
+    let covered = picture + backing * (1.0 - picture);
+    rgb = mix(backing_rgb, rgb, picture / max(covered, 1e-6));
+    let opacity = placement.axis_y_opacity.z * mask_coverage(page.uv) * clip_wipes_shown(page.uv)
+        * edge_feathered(pinned);
     let shown = covered * wiped.picture;
     let border = 1.0 - wiped.picture;
     rgb = (rgb * shown + wiped.border * border) / max(shown + border, 1e-6);

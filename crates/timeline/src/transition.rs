@@ -429,7 +429,7 @@ mod tests {
             )
         };
         let track = Track {
-            clips: vec![clip(1, 0), clip(2, 100), clip(3, 300)],
+            clips: vec![clip(1, 0).into(), clip(2, 100).into(), clip(3, 300).into()],
             ..Track::default()
         };
         assert_eq!(

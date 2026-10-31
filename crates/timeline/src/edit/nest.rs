@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::ops::{insert, remove};
 use crate::{
     Clip, ClipId, Edit, LinkId, MediaItem, Nest, PlaceClip, PlaceMode, Sequence, SourceId, Ticks,
@@ -70,14 +72,14 @@ impl Edit for NestClips {
                 tracks.resize_with(track.index + 1, Default::default);
             }
             clip.start = clip.start - start;
-            tracks[track.index].clips.push(clip);
+            tracks[track.index].clips.push(clip.into());
         }
         for track in nest.video.iter_mut().chain(&mut nest.audio) {
             track.clips.sort_by_key(|clip| clip.start);
         }
 
         let id = SourceId(sequence.ids.next());
-        sequence.media.push(MediaItem {
+        Arc::make_mut(&mut sequence.media).push(MediaItem {
             id,
             name: self.name.clone(),
             path: Default::default(),
@@ -91,11 +93,18 @@ impl Edit for NestClips {
             subclip: None,
             interpreted_rate: None,
             interpreted_aspect: None,
+            interpreted_color: None,
+            interpreted_fields: None,
             alpha: Default::default(),
             log: Default::default(),
             offline: false,
             still: false,
             channel_map: None,
+            placed: None,
+            frame_fit: None,
+            timecode: None,
+            poster: None,
+            transcript: None,
         });
         let link = (video.is_some() && audio.is_some()).then(|| LinkId(sequence.ids.next()));
         let placements = [video.map(TrackRef::video), audio.map(TrackRef::audio)];
@@ -127,7 +136,7 @@ impl Edit for AddNest {
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
         let id = SourceId(sequence.ids.next());
-        sequence.media.push(MediaItem {
+        Arc::make_mut(&mut sequence.media).push(MediaItem {
             id,
             name: self.name.clone(),
             path: Default::default(),
@@ -141,11 +150,18 @@ impl Edit for AddNest {
             subclip: None,
             interpreted_rate: None,
             interpreted_aspect: None,
+            interpreted_color: None,
+            interpreted_fields: None,
             alpha: Default::default(),
             log: Default::default(),
             offline: false,
             still: false,
             channel_map: None,
+            placed: None,
+            frame_fit: None,
+            timecode: None,
+            poster: None,
+            transcript: None,
         });
         sequence.fit_nest(id);
         Ok(())

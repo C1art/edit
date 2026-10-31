@@ -1,19 +1,39 @@
-use crate::{Marker, Nest, Sequence, Ticks, TimelineError, Track, TrackRef};
+use std::collections::HashMap;
+
+use crate::{
+    Captions, Marker, Marks, MediaItem, Nest, Sequence, SourceId, Ticks, TimelineError, Track,
+    TrackKind, TrackRef,
+};
+
+/// The media pool by id, as looking every clip's media up in turn would take as long as
+/// clips times media.
+type Pool<'a> = HashMap<SourceId, &'a MediaItem>;
+
+/// Years at any timebase, yet far enough from `i64::MAX` that times can be added to one
+/// another and scaled by the fastest speed without overflowing.
+const LATEST: Ticks = Ticks(1 << 52);
 
 /// Checks the invariants every edit must preserve: on each track clips are sorted,
-/// don't overlap and have positive length, every clip stays within its media, and
+/// don't overlap and have positive length, as do their transitions, every clip stays
+/// within its media, and
 /// locked tracks are untouched since `before`. Markers are in time order, and no nested
-/// sequence contains itself. Nested sequences are held to the same rules.
+/// sequence contains itself. Captions are in order and don't overlap. No time is past
+/// [`LATEST`]. Nested sequences are held to the same rules.
 pub(crate) fn check(before: &Sequence, after: &Sequence) -> Result<(), TimelineError> {
-    check_tracks(after, before.tracks(), after.tracks())?;
+    let pool: Pool = after.media.iter().map(|item| (item.id, item)).collect();
+    check_tracks(&pool, before.tracks(), after.tracks())?;
     check_markers(&after.markers)?;
-    for item in &after.media {
+    check_marks(after.marks)?;
+    check_captions(&after.captions)?;
+    for item in after.media.iter() {
         let Some(nest) = &item.nest else {
             continue;
         };
         let old = before.media_item(item.id).and_then(|old| old.nest.as_ref());
-        check_tracks(after, old.into_iter().flat_map(Nest::tracks), nest.tracks())?;
+        check_tracks(&pool, old.into_iter().flat_map(Nest::tracks), nest.tracks())?;
         check_markers(&nest.markers)?;
+        check_marks(nest.marks)?;
+        check_captions(&nest.captions)?;
         if after.nest_contains_itself(item.id) {
             return Err(TimelineError::NestCycle(item.id));
         }
@@ -21,26 +41,33 @@ pub(crate) fn check(before: &Sequence, after: &Sequence) -> Result<(), TimelineE
     Ok(())
 }
 
-/// `media` resolves the clips' sources.
 fn check_tracks<'a>(
-    media: &Sequence,
+    pool: &Pool,
     before: impl Iterator<Item = (TrackRef, &'a Track)>,
     after: impl Iterator<Item = (TrackRef, &'a Track)>,
 ) -> Result<(), TimelineError> {
     let before: Vec<(TrackRef, &Track)> = before.collect();
-    for (track_ref, track) in after {
-        let was_locked = before
-            .iter()
-            .find(|(old_ref, old)| *old_ref == track_ref && old.locked && track.locked);
-        if was_locked.is_some_and(|(_, old)| old.clips != track.clips) {
-            return Err(TimelineError::TrackLocked(track_ref));
-        }
+    let after: Vec<(TrackRef, &Track)> = after.collect();
+    check_locked(&before, &after)?;
+    for &(track_ref, track) in &after {
         let mut previous_end = Ticks::ZERO;
         for clip in &track.clips {
             if clip.start < Ticks::ZERO {
                 return Err(TimelineError::BeforeSequenceStart);
             }
-            if clip.duration <= Ticks::ZERO {
+            if [clip.start, clip.duration, clip.source_in]
+                .iter()
+                .any(|&time| time > LATEST)
+            {
+                return Err(TimelineError::TooLate);
+            }
+            let transitions = [clip.transition_in, clip.transition_out];
+            if clip.duration <= Ticks::ZERO
+                || transitions
+                    .iter()
+                    .flatten()
+                    .any(|transition| transition.duration <= Ticks::ZERO)
+            {
                 return Err(TimelineError::NonPositiveDuration);
             }
             check_markers(&clip.markers)?;
@@ -50,12 +77,11 @@ fn check_tracks<'a>(
                     at: clip.start,
                 });
             }
-            let item = media
-                .media_item(clip.source)
+            let item = pool
+                .get(&clip.source)
                 .ok_or(TimelineError::MediaNotFound(clip.source))?;
             if let Some(unrendered) = clip.unrendered {
-                media
-                    .media_item(unrendered)
+                pool.get(&unrendered)
                     .ok_or(TimelineError::MediaNotFound(unrendered))?;
             }
             if !clip.speed.is_in_range() || clip.remap.as_ref().is_some_and(|r| !r.is_valid()) {
@@ -70,7 +96,50 @@ fn check_tracks<'a>(
     Ok(())
 }
 
+/// Tracks have no identity of their own, and adding or removing a track renumbers those
+/// above it, so locked tracks are matched in order. Only locking or unlocking changes how
+/// many there are, and that renumbers nothing.
+fn check_locked(
+    before: &[(TrackRef, &Track)],
+    after: &[(TrackRef, &Track)],
+) -> Result<(), TimelineError> {
+    for kind in [TrackKind::Video, TrackKind::Audio] {
+        let (old, new) = (locked(before, kind), locked(after, kind));
+        let pairs: Vec<_> = if old.len() == new.len() {
+            old.iter().zip(&new).collect()
+        } else {
+            old.iter()
+                .flat_map(|old| {
+                    new.iter()
+                        .filter(|new| new.0 == old.0)
+                        .map(move |new| (old, new))
+                })
+                .collect()
+        };
+        if let Some((_, (track_ref, _))) =
+            pairs.iter().find(|(old, new)| old.1.clips != new.1.clips)
+        {
+            return Err(TimelineError::TrackLocked(*track_ref));
+        }
+    }
+    Ok(())
+}
+
+fn locked<'a>(tracks: &[(TrackRef, &'a Track)], kind: TrackKind) -> Vec<(TrackRef, &'a Track)> {
+    tracks
+        .iter()
+        .filter(|(track_ref, track)| track_ref.kind == kind && track.locked)
+        .copied()
+        .collect()
+}
+
 fn check_markers(markers: &[Marker]) -> Result<(), TimelineError> {
+    if markers
+        .iter()
+        .any(|marker| marker.at > LATEST || !(Ticks::ZERO..=LATEST).contains(&marker.duration))
+    {
+        return Err(TimelineError::TooLate);
+    }
     if markers
         .first()
         .is_some_and(|marker| marker.at < Ticks::ZERO)
@@ -81,6 +150,24 @@ fn check_markers(markers: &[Marker]) -> Result<(), TimelineError> {
         return Err(TimelineError::MarkersOutOfOrder);
     }
     Ok(())
+}
+
+fn check_marks(marks: Marks) -> Result<(), TimelineError> {
+    match [marks.mark_in, marks.mark_out]
+        .into_iter()
+        .flatten()
+        .any(|at| at > LATEST)
+    {
+        true => Err(TimelineError::TooLate),
+        false => Ok(()),
+    }
+}
+
+fn check_captions(captions: &Captions) -> Result<(), TimelineError> {
+    if captions.items.iter().any(|caption| caption.end > LATEST) {
+        return Err(TimelineError::TooLate);
+    }
+    captions.validate()
 }
 
 impl Sequence {

@@ -1,7 +1,7 @@
 use egui::{Pos2, Rangef};
 use timeline::{
-    ClipId, LinkedSelection, MarkerOwner, MoveMode, Razor, RazorTarget, Sequence, SetClipVolume,
-    SetTrackAutomation, Ticks, Timeline, TrackKind, TrackRef,
+    ClipId, DeltaBounds, LinkedSelection, MarkerOwner, MoveMode, Sequence, SetClipLine,
+    SetClipVolume, SetTrackAutomation, Ticks, Timeline, TrackKind, TrackRef,
 };
 
 use super::gesture::{self, Gesture};
@@ -10,6 +10,7 @@ use super::markers;
 use super::rubber_band::{self, BandHit, BandOwner, Envelope};
 use super::scale::{self, TimeScale};
 use super::track_select;
+use super::transition_grip;
 use super::{Drag, TimelineOutput, TimelineView, Tool, SNAP_POINTS};
 
 impl TimelineView {
@@ -26,13 +27,29 @@ impl TimelineView {
         let rows = layout::rows(sequence, &self.heights, top);
         let (rate, timebase) = (sequence.format.frame_rate, sequence.timebase);
         let frame_time = |x: f32| scale::nearest_frame(scale.time(x), rate, timebase);
-        let (shift, command, alt) = response.ctx.input(|input| {
+        let (shift, command, alt, focused) = response.ctx.input(|input| {
             let modifiers = input.modifiers;
-            (modifiers.shift, modifiers.command, modifiers.alt)
+            (
+                modifiers.shift,
+                modifiers.command,
+                modifiers.alt,
+                input.focused,
+            )
         });
+        // The button's release goes to whichever window took focus, so a drag left
+        // running would follow the pointer with no button held and commit on a later
+        // click.
+        if !focused {
+            self.cancel_drag();
+        }
+        let primary = egui::PointerButton::Primary;
 
         if response.double_clicked() && self.tool.on_timeline() == Tool::Selection {
             if let Some(pos) = response.interact_pointer_pos() {
+                if let Some(shown) = transition_grip::transition_at(sequence, &rows, &scale, pos) {
+                    output.transition_duration = Some((shown.clip, shown.edge, shown.longest));
+                    return;
+                }
                 if let Hit::Body { clip, .. } = layout::hit(sequence, &rows, &scale, pos) {
                     let marker = sequence
                         .clip(clip)
@@ -50,7 +67,10 @@ impl TimelineView {
                 let hit = layout::hit(sequence, &rows, &scale, pos);
                 self.context_clip = matches!(hit, Hit::Body { .. } | Hit::Edge { .. });
                 self.select_gap(sequence, hit, scale.time(pos.x));
-                self.context_gap = self.gap.is_some();
+                self.context_empty = match hit {
+                    Hit::Empty { track: Some(track) } => Some((track, frame_time(pos.x))),
+                    _ => None,
+                };
                 if let Hit::Body { clip, .. } | Hit::Edge { clip, .. } = hit {
                     if !self.selection.contains(&clip) {
                         self.selection = sequence.with_groups(&[clip]);
@@ -59,31 +79,23 @@ impl TimelineView {
             }
             return;
         }
-        if response.clicked() || response.drag_started() {
+        if response.clicked() || response.drag_started_by(primary) {
             self.edit_point = None;
         }
         if response.clicked() {
             if let Some(pos) = response.interact_pointer_pos() {
                 let hit = layout::hit(sequence, &rows, &scale, pos);
-                if self.tool.on_timeline() == Tool::Razor {
-                    if let Hit::Body { clip, .. } | Hit::Edge { clip, .. } = hit {
-                        let razor = Razor {
-                            at: frame_time(pos.x),
-                            target: RazorTarget::Clips(vec![clip]),
-                        };
-                        if let Err(error) = timeline.apply(razor) {
-                            output.errors.push(error.to_string());
-                        }
-                    }
-                } else if let Tool::TrackSelect(direction) = self.tool.on_timeline() {
+                if let Tool::TrackSelect(direction) = self.tool.on_timeline() {
                     let only = shift.then(|| hit_track(hit)).flatten();
+                    // The time under the pointer itself, so a click on a clip's first
+                    // or last frame takes it whichever side of the frame's middle it is.
                     self.selection =
-                        track_select::pick(sequence, frame_time(pos.x), direction, only);
+                        track_select::pick(sequence, scale.time(pos.x), direction, only);
                 } else if let Some((owner, grabbed, _)) = self
                     .band_hit(sequence, &rows, &scale, hit, pos)
                     .filter(|_| command && self.tool.on_timeline() == Tool::Selection)
                 {
-                    toggle_volume_key(timeline, owner, grabbed, output);
+                    toggle_level_key(timeline, owner, grabbed, output);
                 } else {
                     self.click(sequence, hit, shift, alt);
                     self.select_gap(sequence, hit, scale.time(pos.x));
@@ -92,7 +104,9 @@ impl TimelineView {
             return;
         }
 
-        if response.drag_started() {
+        // Only the primary button drags, so a right-press that wanders a little opens the
+        // context menu instead of moving the clip.
+        if response.drag_started_by(primary) {
             let Some(pos) = response.interact_pointer_pos() else {
                 return;
             };
@@ -126,57 +140,75 @@ impl TimelineView {
             {
                 self.selection = vec![clip];
             }
+            let selecting = self.tool.on_timeline() == Tool::Selection;
+            let grip = transition_grip::grip_at(sequence, &rows, &scale, origin)
+                .filter(|_| matches!(hit, Hit::Body { .. }))
+                .or_else(|| transition_grip::fade_at(sequence, &rows, &scale, origin))
+                .filter(|_| selecting);
             let band = self
                 .band_hit(sequence, &rows, &scale, hit, origin)
-                .filter(|_| self.tool.on_timeline() == Tool::Selection);
-            let gesture = match band {
-                Some((owner, grabbed, band)) => Some(Gesture::Volume {
+                .filter(|_| selecting);
+            let gesture = match (grip, band) {
+                (Some(grip), _) => Some(Gesture::TransitionLength(grip)),
+                (None, Some((owner, grabbed, band))) => Some(Gesture::Volume {
                     owner,
                     grabbed,
                     band,
                     origin_y: origin.y,
                 }),
-                None => self.gesture(sequence, hit),
+                (None, None) => self.gesture(sequence, hit),
             };
-            self.drag = gesture.map(|gesture| Drag {
-                gesture,
-                links,
-                origin: frame_time(origin.x),
-                pending: None,
-                preview: None,
+            let origin = frame_time(origin.x);
+            self.drag = gesture.map(|gesture| {
+                let grabbed = gesture
+                    .moving_edges(sequence)
+                    .into_iter()
+                    .min_by_key(|&edge| (edge - origin).0.unsigned_abs());
+                Drag {
+                    bounds: grabbed.map_or_else(DeltaBounds::default, DeltaBounds::on_frames),
+                    gesture,
+                    links,
+                    origin,
+                    pending: None,
+                    preview: None,
+                    unlinked: matches!(links, LinkedSelection::Apart)
+                        .then(|| gesture::apart(sequence)),
+                    snapped_to: None,
+                }
             });
         }
 
         let Some(drag) = &mut self.drag else {
             return;
         };
-        let unlinked;
-        let sequence = match drag.links {
-            LinkedSelection::Together => sequence,
-            LinkedSelection::Apart => {
-                unlinked = gesture::apart(sequence);
-                &unlinked
-            }
-        };
-        if response.dragged() {
+        let sequence = drag.unlinked.as_ref().unwrap_or(sequence);
+        if response.dragged_by(primary) {
             if let Some(pos) = response.interact_pointer_pos() {
+                let edges = drag.gesture.moving_edges(sequence);
                 let mut delta = frame_time(pos.x) - drag.origin;
+                // At 23.976 or 59.94 fps frames alternate in length by a tick, so the same
+                // tick delta would leave the grabbed edge between frames: move it by whole
+                // frames instead.
+                let grabbed = edges
+                    .iter()
+                    .min_by_key(|&&edge| (edge - drag.origin).0.unsigned_abs());
+                if let Some(&edge) = grabbed {
+                    let frames = rate.frame_at(frame_time(pos.x), timebase)
+                        - rate.frame_at(drag.origin, timebase);
+                    let target = rate.frame_at(edge, timebase) + frames;
+                    delta = rate.frame_start(target, timebase) - edge;
+                }
+                drag.snapped_to = None;
                 if self.snapping {
                     let moving = drag.gesture.moving_clips(sequence);
-                    let mut targets: Vec<Ticks> = sequence
-                        .tracks()
-                        .flat_map(|(_, track)| &track.clips)
-                        .filter(|clip| !moving.contains(&clip.id))
-                        .flat_map(|clip| {
-                            let marks = clip.shown_markers().map(|(position, _)| position);
-                            [clip.start, clip.end()].into_iter().chain(marks)
-                        })
-                        .collect();
-                    targets.extend(sequence.markers.iter().map(|marker| marker.at));
-                    targets.push(playhead);
-                    targets.push(Ticks::ZERO);
-                    let edges = drag.gesture.moving_edges(sequence);
+                    let mut targets = scale::snap_targets(sequence, &moving, playhead);
+                    if drag.gesture.carries_neighbours() {
+                        targets.retain(|target| !edges.contains(target));
+                    }
                     delta = scale::snap(delta, &edges, &targets, scale.span(SNAP_POINTS));
+                    drag.snapped_to = targets
+                        .into_iter()
+                        .find(|&target| edges.iter().any(|&edge| edge + delta == target));
                 }
                 let over = layout::row_at(&rows, pos.y).map(|row| row.track);
                 let mode = match (command, alt) {
@@ -184,12 +216,17 @@ impl TimelineView {
                     (true, false) => MoveMode::Insert,
                     (false, _) => MoveMode::Overwrite,
                 };
-                let pending = drag.gesture.edit(sequence, delta, over, pos.y, mode);
-                drag.preview = pending.preview(sequence).ok();
-                drag.pending = Some(pending);
+                let pending =
+                    drag.gesture
+                        .edit(sequence, delta, over, pos.y, mode, &mut drag.bounds);
+                // The pointer moves far more often than a frame-snapped edit changes.
+                if drag.pending.as_ref() != Some(&pending) {
+                    drag.preview = pending.preview(sequence).ok();
+                    drag.pending = Some(pending);
+                }
             }
         }
-        if response.drag_stopped() {
+        if response.drag_stopped_by(primary) {
             let pending = self
                 .drag
                 .take()
@@ -203,10 +240,10 @@ impl TimelineView {
         }
     }
 
-    /// The volume line the pointer is on, what it grabs there and the band the line
-    /// moves in: a shown track's automation anywhere along its row, else an audio
-    /// clip's own line.
-    fn band_hit(
+    /// The level line the pointer is on, what it grabs there and the band the line
+    /// moves in: a shown track's automation anywhere along its row, else a clip's own
+    /// volume line or the line a video clip shows.
+    pub(super) fn band_hit(
         &self,
         sequence: &Sequence,
         rows: &[Row],
@@ -214,6 +251,11 @@ impl TimelineView {
         hit: Hit,
         pointer: Pos2,
     ) -> Option<(BandOwner, BandHit, Rangef)> {
+        // A locked track's lines stay put like its clips.
+        let row_track = layout::row_at(rows, pointer.y).and_then(|row| sequence.track(row.track));
+        if row_track.is_some_and(|track| track.locked) {
+            return None;
+        }
         if let Some(row) =
             layout::row_at(rows, pointer.y).filter(|row| self.automation_shown.contains(&row.track))
         {
@@ -230,14 +272,19 @@ impl TimelineView {
         let Hit::Body { clip, track } = hit else {
             return None;
         };
-        if track.kind != TrackKind::Audio {
-            return None;
-        }
         let row = rows.iter().find(|row| row.track == track)?;
         let (_, clip) = sequence.clip(clip)?;
         let rect = layout::clip_rect(row, scale, clip.start, clip.end()).shrink(1.0);
-        let grabbed = rubber_band::hit(rect, scale, &Envelope::clip(clip), pointer)?;
-        Some((BandOwner::Clip(clip.id), grabbed, rubber_band::band(rect)))
+        let (owner, envelope) = match track.kind {
+            TrackKind::Audio => (BandOwner::Clip(clip.id), Envelope::clip(clip)),
+            TrackKind::Video if rubber_band::video_line_shown(rect.expand(1.0)) => (
+                BandOwner::Look(clip.id, self.clip_line),
+                Envelope::look(clip, self.clip_line, &sequence.format),
+            ),
+            TrackKind::Video => return None,
+        };
+        let grabbed = rubber_band::hit(rect, scale, &envelope, pointer)?;
+        Some((owner, grabbed, rubber_band::band(rect)))
     }
 
     /// Selects the gap a click on an empty stretch of a track lands in.
@@ -294,7 +341,7 @@ impl TimelineView {
                     from,
                 })
             }
-            (Tool::Razor, _) | (_, Hit::Empty { .. }) => None,
+            (_, Hit::Empty { .. }) => None,
             (Tool::Selection | Tool::Ripple, Hit::Edge { clip, edge, .. }) => {
                 self.selection = sequence.with_links(&[clip]);
                 let mode = if self.tool.on_timeline() == Tool::Ripple {
@@ -318,9 +365,8 @@ impl TimelineView {
             (Tool::RateStretch, Hit::Body { .. }) => None,
             (Tool::Roll, Hit::Edge { clip, at, .. }) => {
                 let mut tracks: Vec<TrackRef> = sequence
-                    .with_links(&[clip])
+                    .clips_of(&sequence.with_links(&[clip]))
                     .into_iter()
-                    .filter_map(|id| sequence.clip(id))
                     .filter(|(_, clip)| clip.start == at || clip.end() == at)
                     .map(|(track, _)| track)
                     .collect();
@@ -349,7 +395,7 @@ fn hit_track(hit: Hit) -> Option<TrackRef> {
 }
 
 /// Adds a keyframe where the line was clicked, or removes the one clicked.
-fn toggle_volume_key(
+fn toggle_level_key(
     timeline: &mut Timeline,
     owner: BandOwner,
     grabbed: BandHit,
@@ -359,20 +405,24 @@ fn toggle_volume_key(
     let Some(envelope) = Envelope::of(sequence, owner, sequence.duration()) else {
         return;
     };
-    let mut volume = envelope.volume().clone();
+    let mut param = envelope.param().clone();
     let time = match grabbed {
-        BandHit::Key(index) => volume.keys.get(index).map(|key| key.time),
+        BandHit::Key(index) => param.keys.get(index).map(|key| key.time),
         BandHit::Line(at) => Some(at),
     };
     let Some(time) = time else {
         return;
     };
-    volume.toggle_key(time);
+    param.toggle_key(time);
     let applied = match owner {
-        BandOwner::Clip(clip) => timeline.apply(SetClipVolume { clip, volume }),
+        BandOwner::Clip(clip) => timeline.apply(SetClipVolume {
+            clip,
+            volume: param,
+        }),
+        BandOwner::Look(clip, line) => timeline.apply(SetClipLine { clip, line, param }),
         BandOwner::Track(track) => timeline.apply(SetTrackAutomation {
             track,
-            automation: volume,
+            automation: param,
         }),
     };
     if let Err(error) = applied {

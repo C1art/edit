@@ -1,7 +1,11 @@
+use std::collections::HashSet;
+
 use timeline::{
-    AddFrameHold, AddTrack, Clipboard, CloseGap, FrameFit, JoinThroughEdits, Lift, LinkedSelection,
-    PasteClips, PlaceMode, Razor, RazorTarget, RippleDelete, SetClipsEnabled, SetGrouped,
-    SetLinked, SetLinkedSelection, SetToFrameSize, Timecode, TrackKind, TrackRef,
+    AddBlurredBackground, AddFrameHold, AddTrack, ClipId, Clipboard, CloseGap, CloseGaps,
+    DeleteEmptyTracks, FrameFit, Gain, HoldFrame, InsertFrameHold, JoinThroughEdits, Lift,
+    LinkedSelection, MakeSubsequence, NudgeClipGain, PasteClips, PasteMode, Razor, RazorTarget,
+    RippleDelete, Sequence, SetClipsEnabled, SetFrameHold, SetGrouped, SetLinked,
+    SetLinkedSelection, SetToFrameSize, Ticks, Timebase, TrackKind, TrackRef,
 };
 
 use crate::editor::Editor;
@@ -101,6 +105,20 @@ impl Editor {
         }
     }
 
+    /// A new sequence of the selected clips, or of the marked span with none selected,
+    /// added to the project beside this one.
+    pub(crate) fn make_subsequence(&mut self) {
+        let name = format!("{} Sub", self.shown_sequence_name());
+        let clips = self.view.selection.clone();
+        if !self.apply(MakeSubsequence { clips, name }) {
+            self.notice("Select clips or mark In and Out to make a subsequence");
+        }
+    }
+
+    pub(crate) fn close_all_gaps(&mut self) {
+        self.apply(CloseGaps);
+    }
+
     fn close_gap(&mut self) {
         if let Some((track, at)) = self.view.gap.take() {
             self.apply(CloseGap { track, at });
@@ -113,24 +131,43 @@ impl Editor {
             return;
         };
         // Paste only arrives as an event while the system clipboard holds text.
-        let timecode = Timecode::new(
-            clipboard.duration(),
-            sequence.timebase,
-            sequence.format.frame_rate,
-        );
+        let timecode = sequence.timecode(clipboard.duration());
         self.ctx
             .copy_text(format!("{} clips, {timecode}", clipboard.clip_count()));
         self.clipboard = Some(clipboard);
     }
 
     pub(crate) fn cut(&mut self) {
+        // Lifting nothing would close a gap instead.
+        if self.view.selection.is_empty() {
+            return;
+        }
         self.copy();
         self.lift();
     }
 
-    /// Pastes at the playhead, onto the targeted tracks where they are set, and parks
-    /// the playhead after the pasted clips.
-    pub(crate) fn paste(&mut self, mode: PlaceMode) {
+    /// Pastes at the playhead: a plain paste onto the tracks the clips came from, moved up
+    /// past anything in the way; an insert onto the targeted tracks.
+    pub(crate) fn paste(&mut self, mode: PasteMode) {
+        let targets = match mode {
+            PasteMode::Insert => [self.view.targets.video, self.view.targets.audio],
+            PasteMode::Overwrite | PasteMode::OntoFreeTracks => [None, None],
+        };
+        self.paste_onto(mode, self.playhead(), targets);
+    }
+
+    /// Pastes at `at` with the clicked track taking the clips of its kind.
+    pub(crate) fn paste_here(&mut self, mode: PasteMode, track: TrackRef, at: Ticks) {
+        let targets = match track.kind {
+            TrackKind::Video => [Some(track.index), None],
+            TrackKind::Audio => [None, Some(track.index)],
+        };
+        self.paste_onto(mode, at, targets);
+    }
+
+    /// `targets` are the video and audio tracks the first copied track of each kind
+    /// lands on; `None` keeps the tracks the clips came from.
+    fn paste_onto(&mut self, mode: PasteMode, at: Ticks, targets: [Option<usize>; 2]) {
         let Some(clipboard) = self.clipboard.clone() else {
             return;
         };
@@ -138,22 +175,32 @@ impl Editor {
             (Some(first), Some(target)) => target as isize - first as isize,
             _ => 0,
         };
-        let at = self.playhead();
         let end = at + clipboard.duration();
         let paste = PasteClips {
-            video_offset: offset(TrackKind::Video, self.view.targets.video),
-            audio_offset: offset(TrackKind::Audio, self.view.targets.audio),
+            video_offset: offset(TrackKind::Video, targets[0]),
+            audio_offset: offset(TrackKind::Audio, targets[1]),
             clipboard,
             at,
             mode,
         };
+        let before: HashSet<ClipId> = clip_ids(self.timeline.sequence()).collect();
         if self.apply(paste) {
+            self.view.selection = clip_ids(self.timeline.sequence())
+                .filter(|id| !before.contains(id))
+                .collect();
             self.seek_program(end);
         }
     }
 
     pub(crate) fn add_track(&mut self, kind: TrackKind) {
         self.apply(AddTrack { kind });
+    }
+
+    pub(crate) fn delete_empty_tracks(&mut self, kinds: &[TrackKind]) {
+        let kinds = kinds.to_vec();
+        if !self.apply(DeleteEmptyTracks { kinds }) {
+            self.notice("No empty, unlocked tracks to delete");
+        }
     }
 }
 
@@ -163,9 +210,8 @@ impl Editor {
     pub(crate) fn prompt_clip_gain(&mut self) {
         let sequence = self.timeline.sequence();
         let audio_gain = sequence
-            .with_links(&self.view.selection)
+            .clips_of(&sequence.with_links(&self.view.selection))
             .into_iter()
-            .filter_map(|id| sequence.clip(id))
             .find(|(track, _)| track.kind == TrackKind::Audio)
             .map(|(_, clip)| clip.gain);
         match audio_gain {
@@ -174,40 +220,87 @@ impl Editor {
         }
     }
 
+    /// Raises or lowers the selected clips' audio by `db` from where each one is.
+    pub(crate) fn nudge_clip_gain(&mut self, db: f32) {
+        let clips = self.view.selection.clone();
+        if self.apply(NudgeClipGain {
+            clips,
+            by: Gain::from_db(db),
+        }) {
+            return;
+        }
+        let sequence = self.timeline.sequence();
+        let selected_audio = sequence
+            .clips_of(&sequence.with_links(&self.view.selection))
+            .into_iter()
+            .any(|(track, _)| track.kind == TrackKind::Audio);
+        if !selected_audio {
+            self.notice("Select a clip with audio first");
+        }
+    }
+
     /// Freezes the selected video clips, or else the unlocked ones under the playhead,
     /// on the frame at the playhead.
     pub(crate) fn add_frame_hold(&mut self) {
         let at = self.playhead();
-        let mut clips = self.view.selection.clone();
-        if clips.is_empty() {
-            clips = self
-                .timeline
-                .sequence()
-                .tracks()
-                .filter(|(track, contents)| track.kind == TrackKind::Video && !contents.locked)
-                .filter_map(|(_, contents)| contents.clip_at(at))
-                .map(|clip| clip.id)
-                .collect();
-        }
+        let clips = self.held_clips(at);
         if !self.apply(AddFrameHold { clips, at }) {
             self.notice("Put the playhead over a video clip to hold its frame");
         }
     }
 
+    /// Like `add_frame_hold`, but puts two seconds of the frame in the clip and pushes
+    /// the rest of it later.
+    pub(crate) fn insert_frame_hold(&mut self) {
+        let at = self.playhead();
+        let clips = self.held_clips(at);
+        let timebase = self.timeline.sequence().timebase;
+        let Some(length) = Timebase::new(2, 1).map(|two| Ticks(1).rescale(two, timebase)) else {
+            return;
+        };
+        if !self.apply(InsertFrameHold { clips, at, length }) {
+            self.notice("Put the playhead over a video clip to hold its frame");
+        }
+    }
+
+    /// Holds the selected video clips, or else those under the playhead, on one of their
+    /// frames for their whole length, or with `None` lets them play again.
+    pub(crate) fn set_frame_hold(&mut self, frame: Option<HoldFrame>) {
+        let clips = self.held_clips(self.playhead());
+        if !self.apply(SetFrameHold { clips, frame }) {
+            self.notice(match frame {
+                Some(_) => "Select video clips, or put the playhead over one, to hold",
+                None => "None of those clips holds a frame",
+            });
+        }
+    }
+
+    fn held_clips(&self, at: Ticks) -> Vec<ClipId> {
+        if !self.view.selection.is_empty() {
+            return self.view.selection.clone();
+        }
+        self.timeline
+            .sequence()
+            .tracks()
+            .filter(|(track, contents)| track.kind == TrackKind::Video && !contents.locked)
+            .filter_map(|(_, contents)| contents.clip_at(at))
+            .map(|clip| clip.id)
+            .collect()
+    }
+
     /// Disables the selected clips, or enables them when all are already disabled.
     pub(crate) fn toggle_enabled(&mut self) {
         let sequence = self.timeline.sequence();
-        let selected: Vec<_> = self
-            .view
-            .selection
-            .iter()
-            .filter_map(|&id| sequence.clip(id))
+        let selected: Vec<_> = sequence
+            .clips_of(&self.view.selection)
+            .into_iter()
             .collect();
         if selected.is_empty() {
             self.notice("Select clips to enable or disable");
             return;
         }
-        let enabled = selected.iter().all(|(_, clip)| clip.disabled);
+        // A mix of both turns everything on, as the menus offer "Enable" for it.
+        let enabled = selected.iter().any(|(_, clip)| clip.disabled);
         self.apply(SetClipsEnabled {
             clips: self.view.selection.clone(),
             enabled,
@@ -217,11 +310,9 @@ impl Editor {
     /// Whether every selected clip is linked; `None` when none is selected.
     pub(crate) fn selection_linked(&self) -> Option<bool> {
         let sequence = self.timeline.sequence();
-        let mut selected = self
-            .view
-            .selection
-            .iter()
-            .filter_map(|&id| sequence.clip(id))
+        let mut selected = sequence
+            .clips_of(&self.view.selection)
+            .into_iter()
             .peekable();
         selected.peek()?;
         Some(selected.all(|(_, clip)| clip.link.is_some()))
@@ -275,6 +366,15 @@ impl Editor {
         }
     }
 
+    pub(crate) fn add_blurred_background(&mut self) {
+        let edit = AddBlurredBackground {
+            clips: self.view.selection.clone(),
+        };
+        if !self.apply(edit) {
+            self.notice("Select video clips to put a blurred background under");
+        }
+    }
+
     pub(crate) fn set_to_frame_size(&mut self, fit: FrameFit) {
         if self.view.selection.is_empty() {
             self.notice("Select video clips to size to the frame");
@@ -288,4 +388,10 @@ impl Editor {
             self.notice("The selected video clips already match the frame");
         }
     }
+}
+
+fn clip_ids(sequence: &Sequence) -> impl Iterator<Item = ClipId> + '_ {
+    sequence
+        .tracks()
+        .flat_map(|(_, track)| track.clips.iter().map(|clip| clip.id))
 }

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::*;
 use crate::{ImportMedia, Marker, MarkerId, PlaceClip, PlaceMode, Timebase, Timeline};
 
@@ -19,10 +21,10 @@ fn times(markers: &[Marker]) -> Vec<(i64, i64, &str, &str)> {
         .collect()
 }
 
-#[test]
-fn an_exported_sequence_reads_back_as_a_nest_of_the_same_cut() {
+/// Two clips of one file cut together on V1 and A1, at ticks 0 and 50.
+fn two_clips(timebase: Timebase) -> Sequence {
     let format = VideoFormat::default();
-    let mut sequence = Sequence::new(Timebase::new(1, 25).expect("valid"), format);
+    let mut sequence = Sequence::new(timebase, format);
     sequence.video.resize_with(1, Default::default);
     sequence.audio.resize_with(1, Default::default);
     let mut timeline = Timeline::new(sequence);
@@ -34,6 +36,9 @@ fn an_exported_sequence_reads_back_as_a_nest_of_the_same_cut() {
         has_audio: true,
         still: false,
         interpreted_rate: None,
+        placed: None,
+        frame_fit: None,
+        timecode: None,
     };
     timeline.apply(import).unwrap();
     let source = timeline.sequence().media[0].id;
@@ -50,10 +55,20 @@ fn an_exported_sequence_reads_back_as_a_nest_of_the_same_cut() {
         };
         timeline.apply(place).unwrap();
     }
-    let mut sequence = timeline.sequence().clone();
+    timeline.sequence().clone()
+}
+
+#[test]
+fn an_exported_sequence_reads_back_as_a_nest_of_the_same_cut() {
+    let mut sequence = two_clips(Timebase::new(1, 25).expect("valid"));
     let dissolve = Transition::new(TransitionKind::DipToBlack, Ticks(10));
-    sequence.video[0].clips[1].transition_in = Some(dissolve);
-    sequence.audio[0].clips[0].gain = Gain::from_db(-6.0);
+    Arc::make_mut(&mut sequence.video[0].clips[1]).transition_in = Some(dissolve);
+    Arc::make_mut(&mut sequence.audio[0].clips[0]).gain = Gain::from_db(-6.0);
+    for track in [&mut sequence.video[0], &mut sequence.audio[0]] {
+        let clip = Arc::make_mut(&mut track.clips[1]);
+        clip.speed = Speed::from_basis_points(20_000).unwrap();
+        clip.reverse = true;
+    }
     let marker = |at, duration, name: &str| Marker {
         id: MarkerId(900),
         at: Ticks(at),
@@ -64,7 +79,7 @@ fn an_exported_sequence_reads_back_as_a_nest_of_the_same_cut() {
         kind: Default::default(),
     };
     sequence.markers = vec![marker(20, 0, "Point"), marker(60, 15, "Span")];
-    sequence.video[0].clips[1].markers = vec![marker(210, 0, "Take")];
+    Arc::make_mut(&mut sequence.video[0].clips[1]).markers = vec![marker(210, 0, "Take")];
     let mut timeline = Timeline::new(sequence.clone());
 
     let import = read_xmeml(&crate::to_xmeml(&sequence, "Cut")).unwrap();
@@ -78,6 +93,10 @@ fn an_exported_sequence_reads_back_as_a_nest_of_the_same_cut() {
     assert_eq!(spans(&nest.audio[0]), spans(&sequence.audio[0]));
     assert_eq!(nest.video[0].clips[1].transition_in, Some(dissolve));
     assert_eq!(nest.audio[0].clips[0].gain, Gain::from_db(-6.0));
+    for track in [&nest.video[0], &nest.audio[0]] {
+        let clip = &track.clips[1];
+        assert_eq!((clip.speed.percent(), clip.reverse), (200.0, true));
+    }
     assert_eq!(
         times(&nest.markers),
         [(20, 0, "Point", "a < b"), (60, 15, "Span", "a < b")]
@@ -92,4 +111,55 @@ fn an_exported_sequence_reads_back_as_a_nest_of_the_same_cut() {
         .collect();
     assert_eq!(links[0], links[1]);
     assert_ne!(links[0][0], links[0][1]);
+}
+
+#[test]
+fn a_centred_dissolve_of_an_odd_frame_count_reads_back_at_its_cut() {
+    // Two ticks a frame, so the dissolve's half before the cut ends mid-frame.
+    let mut sequence = two_clips(Timebase::new(1, 50).expect("valid"));
+    let dissolve = Transition::new(TransitionKind::CrossDissolve, Ticks(26));
+    Arc::make_mut(&mut sequence.video[0].clips[1]).transition_in = Some(dissolve);
+    let mut timeline = Timeline::new(sequence.clone());
+
+    let import = read_xmeml(&crate::to_xmeml(&sequence, "Cut")).unwrap();
+    timeline.apply(import).unwrap();
+
+    let nest = timeline.sequence().media[1].nest.as_ref().unwrap();
+    let clips = &nest.video[0].clips;
+    assert_eq!((clips[0].end(), clips[1].start), (Ticks(50), Ticks(50)));
+}
+
+#[test]
+fn the_start_time_is_written_as_timecode_the_way_the_sequence_shows_it() {
+    let timebase = Timebase::new(1001, 30_000).unwrap();
+    let mut sequence = Sequence::new(timebase, VideoFormat::default());
+    sequence.format.frame_rate = FrameRate::new(30_000, 1001).unwrap();
+    // One hour of drop-frame labels, which is 108 frames fewer than a nominal hour.
+    sequence.start_time = Ticks(107_892);
+    let xml = crate::to_xmeml(&sequence, "Hour");
+    assert!(xml.contains("<string>01:00:00;00</string>"), "{xml}");
+    assert!(xml.contains("<frame>107892</frame>"));
+    assert!(xml.contains("<displayformat>DF</displayformat>"));
+}
+
+#[test]
+fn a_file_first_described_inside_a_nested_sequence_is_found() {
+    let file = r#"<file id="f1"><name>a.mov</name><pathurl>file:///media/a.mov</pathurl>
+        <rate><timebase>25</timebase></rate><media><video/></media></file>"#;
+    let xml = format!(
+        r#"<xmeml version="4"><sequence><name>Main</name><rate><timebase>25</timebase></rate>
+        <media><video><track>
+          <clipitem id="nest"><start>0</start><end>50</end><in>0</in><out>50</out>
+            <sequence><media><video><track>
+              <clipitem id="inner"><start>0</start><end>50</end><in>0</in><out>50</out>{file}</clipitem>
+            </track></video></media></sequence>
+          </clipitem>
+          <clipitem id="outer"><start>50</start><end>100</end><in>10</in><out>60</out>
+            <file id="f1"/></clipitem>
+        </track></video></media></sequence></xmeml>"#
+    );
+    let import = read_xmeml(&xml).unwrap();
+    assert_eq!(import.files.len(), 1);
+    assert_eq!(import.files[0].path, PathBuf::from("/media/a.mov"));
+    assert_eq!(import.video[0].len(), 1);
 }

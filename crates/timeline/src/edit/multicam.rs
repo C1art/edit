@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::iter;
+use std::sync::Arc;
 
 use super::ops::{self, Relinks};
 use crate::{
@@ -44,17 +45,21 @@ impl Edit for CreateMulticam {
         for (item, start) in cameras {
             let start = start - earliest.unwrap_or(Ticks::ZERO);
             let link = item.has_audio.then(|| LinkId(sequence.ids.next()));
+            let conform = item.conform();
             let mut camera = || {
-                let mut clip = Clip::new(
-                    ClipId(sequence.ids.next()),
-                    item.id,
-                    start,
-                    item.duration,
-                    Ticks::ZERO,
-                );
-                clip.link = link;
+                let clip = Clip {
+                    conform,
+                    link,
+                    ..Clip::new(
+                        ClipId(sequence.ids.next()),
+                        item.id,
+                        start,
+                        conform.sequence_span(item.duration),
+                        Ticks::ZERO,
+                    )
+                };
                 Track {
-                    clips: vec![clip],
+                    clips: vec![clip.into()],
                     ..Track::default()
                 }
             };
@@ -69,7 +74,7 @@ impl Edit for CreateMulticam {
             return Err(TimelineError::NothingToEdit);
         }
         let id = SourceId(sequence.ids.next());
-        sequence.media.push(MediaItem {
+        Arc::make_mut(&mut sequence.media).push(MediaItem {
             id,
             name: self.name.clone(),
             path: Default::default(),
@@ -83,11 +88,18 @@ impl Edit for CreateMulticam {
             subclip: None,
             interpreted_rate: None,
             interpreted_aspect: None,
+            interpreted_color: None,
+            interpreted_fields: None,
             alpha: Default::default(),
             log: Default::default(),
             offline: false,
             still: false,
             channel_map: None,
+            placed: None,
+            frame_fit: None,
+            timecode: None,
+            poster: None,
+            transcript: None,
         });
         sequence.fit_nest(id);
         Ok(())
@@ -191,7 +203,7 @@ impl Edit for FlattenMulticam {
 fn flat_pieces(sequence: &Sequence, id: ClipId) -> Option<(TrackRef, Vec<Clip>)> {
     let (track, clip) = sequence.clip(id)?;
     let nest = sequence.multicam_of(clip)?;
-    if !plays_straight(clip) {
+    if !clip.rate().is_normal() || !plays_straight(clip) {
         return None;
     }
     let camera = match track.kind {
@@ -205,24 +217,35 @@ fn flat_pieces(sequence: &Sequence, id: ClipId) -> Option<(TrackRef, Vec<Clip>)>
         }
     };
     let (from, to) = (clip.source_in, clip.source_in + clip.duration);
-    let pieces = camera
+    let shown: Vec<&Arc<Clip>> = camera
         .clips
         .iter()
-        .filter(|inner| plays_straight(inner) && inner.start < to && from < inner.end())
+        .filter(|inner| inner.start < to && from < inner.end())
+        .collect();
+    // Leaving out a camera clip that can't be flattened would leave a hole in the cut.
+    if !shown.iter().all(|inner| plays_straight(inner)) {
+        return None;
+    }
+    let pieces = shown
+        .into_iter()
         .map(|inner| {
+            // The camera clip plays its media at its interpreted rate, which the pieces
+            // keep, so nest time maps to its source through that rate.
+            let rate = inner.rate();
+            let source_of = |time: Ticks| inner.source_in + rate.source_span(time - inner.start);
             let (start, end) = (inner.start.max(from), inner.end().min(to));
             let mut piece = Clip {
                 source: inner.source,
                 start: clip.start + (start - from),
                 duration: end - start,
-                source_in: inner.source_in + (start - inner.start),
+                source_in: source_of(start),
+                conform: inner.conform,
                 transition_in: clip.transition_in.filter(|_| start == from),
                 transition_out: clip.transition_out.filter(|_| end == to),
                 angle: 0,
                 ..clip.clone()
             };
             // Keyframes are kept in source time, which is the camera's now.
-            let shift = inner.source_in - inner.start;
             let params = piece
                 .look
                 .params_mut()
@@ -235,9 +258,15 @@ fn flat_pieces(sequence: &Sequence, id: ClipId) -> Option<(TrackRef, Vec<Clip>)>
                 );
             for param in params {
                 for key in &mut param.keys {
-                    key.time = key.time + shift;
+                    key.time = source_of(key.time);
                 }
             }
+            // Each piece keeps the markers it plays, so none is repeated across them.
+            let played = piece.source_in..source_of(end);
+            piece.markers.retain_mut(|marker| {
+                marker.at = source_of(marker.at);
+                played.contains(&marker.at)
+            });
             piece
         })
         .collect();
@@ -245,5 +274,5 @@ fn flat_pieces(sequence: &Sequence, id: ClipId) -> Option<(TrackRef, Vec<Clip>)>
 }
 
 fn plays_straight(clip: &Clip) -> bool {
-    clip.rate().is_normal() && !clip.reverse && !clip.hold && clip.remap.is_none()
+    clip.speed.is_normal() && !clip.reverse && !clip.hold && clip.remap.is_none()
 }

@@ -12,11 +12,15 @@ fn checkerboard(color: vec4<f32>, p: vec2<f32>, picture: vec2<f32>) -> vec4<f32>
     if fill.w <= 0.0 {
         return color;
     }
+    // #if generate_checker_color.w
     let cell = vec2<i32>(floor((p - board.xy * picture) / board.zw));
     if ((cell.x + cell.y) & 1) != 0 {
         return color;
     }
     return drawn_over(color, fill.rgb, fill.w);
+    // #else
+    return color;
+    // #endif
 }
 
 fn grid(color: vec4<f32>, p: vec2<f32>, picture: vec2<f32>) -> vec4<f32> {
@@ -25,6 +29,7 @@ fn grid(color: vec4<f32>, p: vec2<f32>, picture: vec2<f32>) -> vec4<f32> {
     if fill.w <= 0.0 {
         return color;
     }
+    // #if generate_grid_color.w
     let detail = placement.generate_detail;
     // Pixels to the nearest line, which runs along the cells' edges.
     let away = abs(fract((p - cells.xy * picture) / cells.zw + 0.5) - 0.5) * cells.zw;
@@ -34,6 +39,9 @@ fn grid(color: vec4<f32>, p: vec2<f32>, picture: vec2<f32>) -> vec4<f32> {
         line = 1.0 - line;
     }
     return drawn_over(color, fill.rgb, fill.w * line);
+    // #else
+    return color;
+    // #endif
 }
 
 fn circle(color: vec4<f32>, p: vec2<f32>, picture: vec2<f32>) -> vec4<f32> {
@@ -42,12 +50,16 @@ fn circle(color: vec4<f32>, p: vec2<f32>, picture: vec2<f32>) -> vec4<f32> {
     if fill.w <= 0.0 {
         return color;
     }
+    // #if generate_circle_color.w
     let away = distance(p, shape.xy * picture);
     var inside = 1.0 - smoothstep(shape.z - 0.5, shape.z + 0.5 + shape.w, away);
     if placement.generate_detail.z > 0.5 {
         inside = 1.0 - inside;
     }
     return drawn_over(color, fill.rgb, fill.w * inside);
+    // #else
+    return color;
+    // #endif
 }
 
 fn four_color_gradient(color: vec4<f32>, uv: vec2<f32>, picture: vec2<f32>) -> vec4<f32> {
@@ -56,6 +68,7 @@ fn four_color_gradient(color: vec4<f32>, uv: vec2<f32>, picture: vec2<f32>) -> v
     if opacity <= 0.0 {
         return color;
     }
+    // #if generate_four_colors
     let corners = placement.generate_four_points;
     let points = array<vec2<f32>, 4>(corners[0].xy, corners[0].zw, corners[1].xy, corners[1].zw);
     let aspect = picture / max(picture.x, picture.y);
@@ -75,6 +88,9 @@ fn four_color_gradient(color: vec4<f32>, uv: vec2<f32>, picture: vec2<f32>) -> v
         mixed += colors[i].rgb * weight;
     }
     return drawn_over(color, mixed / total, opacity);
+    // #else
+    return color;
+    // #endif
 }
 
 fn generated(color: vec4<f32>, uv: vec2<f32>) -> vec4<f32> {

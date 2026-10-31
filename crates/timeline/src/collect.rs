@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use crate::{Clip, Sequence, SourceId};
 
@@ -21,16 +22,19 @@ pub struct FileCopy {
 }
 
 /// The project as it reads once its files are copied into `folder`, with the copies to
-/// make: every media file, proxy and LUT once, renamed where two share a name.
+/// make: every media file, proxy and LUT once, renamed where two share a name or would
+/// replace a file of `taken`, the names already in the folder, lowercased. Files already
+/// in the folder stay where they are.
 pub fn collect_files(
     sequence: &Sequence,
     folder: &Path,
     keep: Collect,
+    taken: &HashSet<String>,
 ) -> (Sequence, Vec<FileCopy>) {
     let mut collected = sequence.clone();
     if keep == Collect::UsedOnly {
         let used: HashSet<SourceId> = sequence.all_clips().map(|clip| clip.source).collect();
-        collected.media.retain(|item| {
+        Arc::make_mut(&mut collected.media).retain(|item| {
             item.nest.is_some() || item.generator.is_some() || used.contains(&item.id)
         });
     }
@@ -38,14 +42,36 @@ pub fn collect_files(
         folder,
         copies: Vec::new(),
         targets: HashMap::new(),
-        names: HashSet::new(),
+        names: taken.clone(),
     };
-    for item in &mut collected.media {
+    map_files(&mut collected, |path| copier.copy(path));
+    (collected, copier.copies)
+}
+
+/// Points the files of `copies` that couldn't be copied back at their originals.
+pub fn uncollect_failed(sequence: &mut Sequence, failed: &[FileCopy]) {
+    if failed.is_empty() {
+        return;
+    }
+    let originals: HashMap<&Path, &Path> = failed
+        .iter()
+        .map(|copy| (copy.to.as_path(), copy.from.as_path()))
+        .collect();
+    map_files(sequence, |path| {
+        originals
+            .get(path)
+            .map_or_else(|| path.to_owned(), |from| from.to_path_buf())
+    });
+}
+
+/// Rewrites the path of every file the project refers to: media, proxies and LUTs.
+pub(crate) fn map_files(sequence: &mut Sequence, mut map: impl FnMut(&Path) -> PathBuf) {
+    for item in Arc::make_mut(&mut sequence.media) {
         if item.nest.is_none() && item.generator.is_none() {
-            item.path = copier.copy(&item.path);
+            item.path = map(&item.path);
         }
         if let Some(proxy) = &mut item.proxy {
-            *proxy = copier.copy(proxy);
+            *proxy = map(proxy);
         }
     }
     let mut luts = |clip: &mut Clip| {
@@ -54,21 +80,27 @@ pub fn collect_files(
             .input_lut
             .iter_mut()
             .chain(color.look.iter_mut())
-            .for_each(|lut| *lut = copier.copy(lut));
+            .for_each(|lut| *lut = map(lut));
     };
-    for track in collected.video.iter_mut().chain(&mut collected.audio) {
-        track.clips.iter_mut().for_each(&mut luts);
+    for track in sequence.video.iter_mut().chain(&mut sequence.audio) {
+        track
+            .clips
+            .iter_mut()
+            .map(Arc::make_mut)
+            .for_each(&mut luts);
     }
-    for nest in collected
-        .media
+    for nest in Arc::make_mut(&mut sequence.media)
         .iter_mut()
         .filter_map(|item| item.nest.as_mut())
     {
         for track in nest.video.iter_mut().chain(&mut nest.audio) {
-            track.clips.iter_mut().for_each(&mut luts);
+            track
+                .clips
+                .iter_mut()
+                .map(Arc::make_mut)
+                .for_each(&mut luts);
         }
     }
-    (collected, copier.copies)
 }
 
 struct Copier<'a> {
@@ -83,6 +115,12 @@ impl Copier<'_> {
     fn copy(&mut self, from: &Path) -> PathBuf {
         if let Some(to) = self.targets.get(from) {
             return to.clone();
+        }
+        if from
+            .parent()
+            .is_some_and(|parent| same_folder(parent, self.folder))
+        {
+            return from.to_path_buf();
         }
         let stem = from.file_stem().unwrap_or_default().to_string_lossy();
         let extension = from
@@ -113,6 +151,12 @@ impl Copier<'_> {
     }
 }
 
+/// Windows ignores case in paths, so a file picked as `D:\Out\a.mp4` is already in
+/// a folder chosen as `d:\out`.
+fn same_folder(a: &Path, b: &Path) -> bool {
+    a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -132,6 +176,9 @@ mod tests {
                 has_audio: true,
                 still: false,
                 interpreted_rate: None,
+                placed: None,
+                frame_fit: None,
+                timecode: None,
             };
             timeline.apply(import).unwrap();
         }
@@ -155,7 +202,9 @@ mod tests {
             timeline.apply(place).unwrap();
         }
         let folder = Path::new("/out");
-        let (collected, copies) = collect_files(timeline.sequence(), folder, Collect::UsedOnly);
+        let none = HashSet::new();
+        let (collected, copies) =
+            collect_files(timeline.sequence(), folder, Collect::UsedOnly, &none);
         let paths: Vec<&Path> = collected
             .media
             .iter()
@@ -170,7 +219,17 @@ mod tests {
             ]
         );
         assert_eq!(copies.len(), 2);
-        let (all, _) = collect_files(timeline.sequence(), folder, Collect::All);
+        let (all, _) = collect_files(timeline.sequence(), folder, Collect::All, &none);
         assert_eq!(all.media[2].path, Path::new("/out/unused.wav"));
+        let taken = HashSet::from(["take.mov".to_owned()]);
+        let (beside, _) = collect_files(timeline.sequence(), folder, Collect::UsedOnly, &taken);
+        assert_eq!(beside.media[0].path, Path::new("/out/take (2).mov"));
+        let (kept, copies) =
+            collect_files(timeline.sequence(), Path::new("/a"), Collect::All, &taken);
+        assert_eq!(kept.media[0].path, Path::new("/a/take.mov"));
+        assert_eq!(kept.media[1].path, Path::new("/a/Take (2).mov"));
+        assert!(copies
+            .iter()
+            .all(|copy| copy.from.parent() != Some(Path::new("/a"))));
     }
 }

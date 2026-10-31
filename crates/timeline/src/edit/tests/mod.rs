@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::*;
 use crate::{
     ClipId, FrameRate, Sequence, SourceId, Ticks, Timebase, Timeline, TimelineError, TrackRef,
@@ -31,6 +33,9 @@ fn timeline() -> (Timeline, SourceId) {
             has_audio: true,
             still: false,
             interpreted_rate: None,
+            placed: None,
+            frame_fit: None,
+            timecode: None,
         })
         .unwrap();
     let source = timeline.sequence().media[0].id;
@@ -107,6 +112,38 @@ fn insert_pushes_later_clips_on_every_unlocked_track() {
         [(0, 100, 0), (100, 150, 0), (150, 350, 100)]
     );
     assert_eq!(spans(&timeline, V2), [(450, 550, 0)]);
+}
+
+#[test]
+fn placing_several_pieces_inserts_them_end_to_end_as_one_undo_step() {
+    let (mut timeline, source) = timeline();
+    timeline
+        .apply(place(source, 0, 0, 300, PlaceMode::Overwrite))
+        .unwrap();
+    timeline
+        .apply(PlaceClips {
+            pieces: vec![
+                (source, Ticks(500), Ticks(50)),
+                (source, Ticks(700), Ticks(20)),
+            ],
+            at: Ticks(100),
+            video_track: Some(0),
+            audio_track: Some(0),
+            mode: PlaceMode::Insert,
+        })
+        .unwrap();
+
+    assert_eq!(
+        spans(&timeline, A1),
+        [
+            (0, 100, 0),
+            (100, 150, 500),
+            (150, 170, 700),
+            (170, 370, 100)
+        ]
+    );
+    timeline.undo();
+    assert_eq!(spans(&timeline, V1), [(0, 300, 0)]);
 }
 
 #[test]
@@ -283,6 +320,46 @@ fn undo_and_redo_restore_each_state_exactly() {
 }
 
 #[test]
+fn undo_steps_share_what_an_edit_left_alone() {
+    let (mut timeline, source) = timeline();
+    for at in [0, 200] {
+        timeline
+            .apply(place(source, at, 0, 100, PlaceMode::Overwrite))
+            .unwrap();
+    }
+    let before = timeline.sequence().clone();
+    timeline
+        .apply(place(source, 500, 0, 50, PlaceMode::Overwrite))
+        .unwrap();
+    let after = timeline.sequence();
+    let kept = |track: TrackRef| {
+        let (old, new) = (
+            &before.track(track).unwrap().clips,
+            &after.track(track).unwrap().clips,
+        );
+        old.iter().zip(new).all(|(old, new)| Arc::ptr_eq(old, new))
+    };
+    assert!(kept(V1) && kept(A1));
+    assert!(Arc::ptr_eq(&before.media, &after.media));
+}
+
+#[test]
+fn only_the_latest_edits_can_be_undone() {
+    let (mut timeline, source) = timeline();
+    let mut first = None;
+    for step in 0..=crate::history::UNDO_LEVELS {
+        let at = i64::try_from(step).unwrap() * 10;
+        timeline
+            .apply(place(source, at, 0, 5, PlaceMode::Overwrite))
+            .unwrap();
+        first.get_or_insert_with(|| timeline.sequence().clone());
+    }
+    assert_eq!(timeline.done().count(), crate::history::UNDO_LEVELS);
+    while timeline.undo() {}
+    assert_eq!(Some(timeline.sequence()), first.as_ref());
+}
+
+#[test]
 fn going_to_a_step_undoes_or_redoes_everything_between() {
     let (mut timeline, source) = timeline();
     let opened = timeline.sequence().clone();
@@ -365,30 +442,48 @@ fn proxy_replaces_only_the_decoded_path_and_undoes() {
     assert_eq!(timeline.sequence().media[0].proxy, None);
 }
 
+mod adjust;
 mod attributes;
+mod automate;
 mod bin;
 mod caption;
+mod cleanup;
+mod duplicates;
 mod enable;
 mod frame_size;
 mod generate;
 mod group;
+mod guide;
+mod history;
 mod hold;
 mod interpret;
+mod levels;
 mod link;
 mod marker;
 mod media;
 mod merge;
+mod motion_preset;
 mod multicam;
 mod nest;
 mod paste;
+mod pauses;
+mod random;
 mod range;
 mod rearrange;
+mod reframe;
 mod remap;
+mod remix;
 mod rename;
 mod render_replace;
 mod replace;
+mod simplify;
 mod speed;
+mod start_time;
 mod submix;
+mod subsequence;
+mod synchronize;
 mod through;
 mod track;
+mod transcript;
+mod transitions;
 mod trim;

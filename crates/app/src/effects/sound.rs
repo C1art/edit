@@ -3,12 +3,13 @@ use timeline::{AudioEffect, Gain, Param, Ticks};
 
 use super::look::{Output, Rows};
 use crate::mixer::Change;
+use crate::vst::PluginHost;
 
 const GAIN_DB: std::ops::RangeInclusive<f32> = -24.0..=24.0;
 const HEARING_HZ: std::ops::RangeInclusive<f32> = 20.0..=20_000.0;
 
 /// The add menu's groups, as Premiere's Effects panel files them.
-pub(crate) const CATEGORIES: [&str; 8] = [
+pub(crate) const CATEGORIES: [&str; 10] = [
     "Amplitude and Compression",
     "Filter and EQ",
     "Modulation",
@@ -17,6 +18,8 @@ pub(crate) const CATEGORIES: [&str; 8] = [
     "Time and Pitch",
     "Channels",
     "Noise Reduction/Restoration",
+    "Special",
+    "Stereo Imagery",
 ];
 
 pub(crate) fn category(effect: &AudioEffect) -> &'static str {
@@ -27,24 +30,45 @@ pub(crate) fn category(effect: &AudioEffect) -> &'static str {
         | AudioEffect::NoiseGate { .. }
         | AudioEffect::DeEsser { .. }
         | AudioEffect::ChannelVolume { .. }
-        | AudioEffect::MultibandCompressor { .. } => CATEGORIES[0],
+        | AudioEffect::MultibandCompressor { .. }
+        | AudioEffect::Dynamics(_)
+        | AudioEffect::TubeCompressor { .. }
+        | AudioEffect::SpeechVolumeLeveler { .. } => CATEGORIES[0],
         AudioEffect::Bass { .. }
         | AudioEffect::Treble { .. }
         | AudioEffect::Equalizer { .. }
         | AudioEffect::GraphicEqualizer { .. }
+        | AudioEffect::GraphicEqualizer20 { .. }
+        | AudioEffect::GraphicEqualizer30 { .. }
         | AudioEffect::HighPass { .. }
         | AudioEffect::LowPass { .. }
-        | AudioEffect::Notch { .. } => CATEGORIES[1],
-        AudioEffect::Chorus { .. } | AudioEffect::Flanger { .. } => CATEGORIES[2],
-        AudioEffect::Delay { .. } => CATEGORIES[3],
-        AudioEffect::Reverb { .. } => CATEGORIES[4],
+        | AudioEffect::Notch { .. }
+        | AudioEffect::BandPass { .. }
+        | AudioEffect::SimpleParametricEq { .. }
+        | AudioEffect::ScientificFilter { .. } => CATEGORIES[1],
+        AudioEffect::Chorus { .. } | AudioEffect::Flanger { .. } | AudioEffect::Phaser { .. } => {
+            CATEGORIES[2]
+        }
+        AudioEffect::Delay { .. }
+        | AudioEffect::MultitapDelay { .. }
+        | AudioEffect::AnalogDelay { .. } => CATEGORIES[3],
+        AudioEffect::Reverb { .. } | AudioEffect::ConvolutionReverb { .. } => CATEGORIES[4],
         AudioEffect::PitchShifter { .. } => CATEGORIES[5],
         AudioEffect::Balance { .. }
         | AudioEffect::FillLeftWithRight
         | AudioEffect::FillRightWithLeft
         | AudioEffect::SwapChannels
         | AudioEffect::Invert => CATEGORIES[6],
-        AudioEffect::DeNoise { .. } | AudioEffect::DeHum { .. } => CATEGORIES[7],
+        AudioEffect::DeNoise { .. }
+        | AudioEffect::DeHum { .. }
+        | AudioEffect::AutomaticClickRemover { .. }
+        | AudioEffect::DeReverb { .. } => CATEGORIES[7],
+        AudioEffect::Distortion { .. }
+        | AudioEffect::VocalEnhancer { .. }
+        | AudioEffect::Mastering { .. }
+        | AudioEffect::GuitarSuite { .. }
+        | AudioEffect::Plugin(_) => CATEGORIES[8],
+        AudioEffect::StereoExpander { .. } => CATEGORIES[9],
     }
 }
 
@@ -74,6 +98,7 @@ pub(super) fn effect_controls(
     ui: &mut egui::Ui,
     effects: &mut Vec<AudioEffect>,
     mut rows: Rows,
+    host: &mut PluginHost,
 ) -> Output {
     egui::CollapsingHeader::new("Audio Effects")
         .default_open(true)
@@ -82,12 +107,20 @@ pub(super) fn effect_controls(
             for (index, effect) in effects.iter_mut().enumerate() {
                 ui.push_id(index, |ui| {
                     ui.horizontal(|ui| {
-                        ui.label(RichText::new(effect.name()).strong());
+                        ui.label(RichText::new(effect.title()).strong());
                         if ui.small_button("Remove").clicked() {
                             removed = Some(index);
                         }
+                        if matches!(effect, AudioEffect::Plugin(_)) && editor_button(ui) {
+                            rows.output.open_editor = Some(index);
+                        }
                     });
-                    effect_rows(ui, &mut rows, effect);
+                    match effect {
+                        AudioEffect::Plugin(plugin) => {
+                            super::sound_plugin::rows(ui, &mut rows, plugin, host);
+                        }
+                        effect => effect_rows(ui, &mut rows, effect),
+                    }
                 });
             }
             if let Some(index) = removed {
@@ -108,20 +141,48 @@ pub(super) fn effect_controls(
                         }
                     });
                 }
+                ui.menu_button("VST3", |ui| {
+                    if let Some(effect) = super::sound_plugin::add_menu(ui, host) {
+                        effects.push(effect);
+                        rows.commit();
+                        ui.close();
+                    }
+                });
             });
         });
     rows.output
 }
 
 /// Edits a track's inserts, keyframed over sequence time at `time`. Returns the change
-/// made and a keyframe to move the playhead to.
+/// made, a keyframe to move the playhead to and a plugin whose editor to open.
 pub(crate) fn track_effect_controls(
     ui: &mut egui::Ui,
     effects: &mut Vec<AudioEffect>,
     time: Ticks,
-) -> (Option<Change>, Option<Ticks>) {
-    let output = effect_controls(ui, effects, Rows::new(time, None, Default::default()));
-    (output.change, output.seek)
+    host: &mut PluginHost,
+) -> (Option<Change>, Option<Ticks>, Option<usize>) {
+    let rows = Rows::new(time, None, Default::default());
+    let output = effect_controls(ui, effects, rows, host);
+    (output.change, output.seek, output.open_editor)
+}
+
+fn editor_button(ui: &mut egui::Ui) -> bool {
+    let button = egui::Button::new("Open Editor").small();
+    ui.add_enabled(cfg!(windows), button)
+        .on_hover_text("Open the plugin's own window")
+        .on_disabled_hover_text("Plugin windows open on Windows only")
+        .clicked()
+}
+
+fn band_rows(ui: &mut egui::Ui, rows: &mut Rows, bands: &mut [Param], centers: &[f32]) {
+    for (band, &hz) in bands.iter_mut().zip(centers) {
+        let label = if hz < 1_000.0 {
+            format!("{hz} Hz")
+        } else {
+            format!("{} kHz", hz / 1_000.0)
+        };
+        rows.param(ui, &label, band, GAIN_DB, " dB");
+    }
 }
 
 fn effect_rows(ui: &mut egui::Ui, rows: &mut Rows, effect: &mut AudioEffect) {
@@ -205,14 +266,13 @@ fn effect_rows(ui: &mut egui::Ui, rows: &mut Rows, effect: &mut AudioEffect) {
             rows.param(ui, "Right", right, GAIN_DB, " dB");
         }
         AudioEffect::GraphicEqualizer { bands } => {
-            for (band, hz) in bands.iter_mut().zip(audio::GRAPHIC_BANDS_HZ) {
-                let label = if hz < 1_000.0 {
-                    format!("{hz} Hz")
-                } else {
-                    format!("{} kHz", hz / 1_000.0)
-                };
-                rows.param(ui, &label, band, GAIN_DB, " dB");
-            }
+            band_rows(ui, rows, bands, &audio::GRAPHIC_BANDS_HZ);
+        }
+        AudioEffect::GraphicEqualizer20 { bands } => {
+            band_rows(ui, rows, &mut bands[..], &audio::GRAPHIC_BANDS_20_HZ);
+        }
+        AudioEffect::GraphicEqualizer30 { bands } => {
+            band_rows(ui, rows, &mut bands[..], &audio::GRAPHIC_BANDS_30_HZ);
         }
         AudioEffect::MultibandCompressor {
             low_crossover,
@@ -275,5 +335,6 @@ fn effect_rows(ui: &mut egui::Ui, rows: &mut Rows, effect: &mut AudioEffect) {
             rows.param(ui, "Feedback", feedback, 0.0..=95.0, "%");
             rows.param(ui, "Mix", mix, 0.0..=100.0, "%");
         }
+        more => super::sound_more::effect_rows(ui, rows, more),
     }
 }

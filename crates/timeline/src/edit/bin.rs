@@ -1,4 +1,6 @@
-use crate::{Bin, BinId, Edit, Sequence, SourceId, TimelineError};
+use std::sync::Arc;
+
+use crate::{Bin, BinId, BinSearch, Edit, Sequence, SourceId, TimelineError};
 
 fn check_exists(sequence: &Sequence, bin: Option<BinId>) -> Result<(), TimelineError> {
     match bin {
@@ -7,20 +9,35 @@ fn check_exists(sequence: &Sequence, bin: Option<BinId>) -> Result<(), TimelineE
     }
 }
 
-/// Adds an empty bin inside `parent`, or at the top of the project.
+/// Checks that `bin` exists and can hold things, as a search bin can't.
+fn check_holds(sequence: &Sequence, bin: Option<BinId>) -> Result<(), TimelineError> {
+    check_exists(sequence, bin)?;
+    match bin {
+        Some(id) if sequence.bin(id).is_some_and(|bin| bin.search.is_some()) => {
+            Err(TimelineError::SearchBin(id))
+        }
+        _ => Ok(()),
+    }
+}
+
+/// Adds an empty bin, or a search bin, inside `parent` or at the top of the project.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AddBin {
     pub name: String,
     pub parent: Option<BinId>,
+    pub search: Option<BinSearch>,
 }
 
 impl Edit for AddBin {
     fn name(&self) -> &'static str {
-        "New Bin"
+        match self.search {
+            Some(_) => "New Search Bin",
+            None => "New Bin",
+        }
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
-        check_exists(sequence, self.parent)?;
+        check_holds(sequence, self.parent)?;
         let name = match self.name.trim() {
             "" => "Bin",
             name => name,
@@ -30,6 +47,7 @@ impl Edit for AddBin {
             id,
             name: name.to_owned(),
             parent: self.parent,
+            search: self.search.clone(),
         });
         Ok(())
     }
@@ -79,7 +97,10 @@ impl Edit for RemoveBin {
             .ok_or(TimelineError::BinNotFound(self.bin))?
             .parent;
         let removed = Some(self.bin);
-        for item in sequence.media.iter_mut().filter(|item| item.bin == removed) {
+        for item in Arc::make_mut(&mut sequence.media)
+            .iter_mut()
+            .filter(|item| item.bin == removed)
+        {
             item.bin = parent;
         }
         for bin in sequence.bins.iter_mut().filter(|bin| bin.parent == removed) {
@@ -87,6 +108,34 @@ impl Edit for RemoveBin {
         }
         sequence.bins.retain(|bin| bin.id != self.bin);
         Ok(())
+    }
+}
+
+/// Changes what a search bin finds.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetBinSearch {
+    pub bin: BinId,
+    pub search: BinSearch,
+}
+
+impl Edit for SetBinSearch {
+    fn name(&self) -> &'static str {
+        "Edit Search Bin"
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let bin = sequence
+            .bins
+            .iter_mut()
+            .find(|bin| bin.id == self.bin)
+            .ok_or(TimelineError::BinNotFound(self.bin))?;
+        match &mut bin.search {
+            Some(search) if *search != self.search => {
+                *search = self.search.clone();
+                Ok(())
+            }
+            Some(_) | None => Err(TimelineError::NothingToEdit),
+        }
     }
 }
 
@@ -104,7 +153,7 @@ impl Edit for MoveToBin {
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
-        check_exists(sequence, self.to)?;
+        check_holds(sequence, self.to)?;
         for &bin in &self.bins {
             check_exists(sequence, Some(bin))?;
             if self.to.is_some_and(|to| sequence.bin_within(to, bin)) {
@@ -119,7 +168,7 @@ impl Edit for MoveToBin {
             return Err(TimelineError::MediaNotFound(missing));
         }
         let mut moved = false;
-        for item in &mut sequence.media {
+        for item in Arc::make_mut(&mut sequence.media) {
             if self.media.contains(&item.id) && item.bin != self.to {
                 item.bin = self.to;
                 moved = true;

@@ -1,10 +1,16 @@
 use timeline::BlendMode;
 
+use crate::cineon::Cineon;
+use crate::combine::Combine;
 use crate::creative::Creative;
+use crate::lighting::Lighting;
 use crate::mask::{self, LayerMask, MAX_MASKS};
 #[cfg(test)]
 use crate::mask::{Outline, MAX_OUTLINE_POINTS};
+use crate::noise_alpha::NoisyAlpha;
 use crate::pixel::PixelEffects;
+use crate::point_shadow::PointShadow;
+use crate::reframe::Reframe;
 use crate::secondary::SecondaryAdjust;
 use crate::wipe::{self, LayerWipe};
 
@@ -25,8 +31,9 @@ pub struct LayerLook {
     pub opacity: f32,
     /// What of the picture the opacity applies to; none keeps all of it.
     pub opacity_masks: [Option<LayerMask>; MAX_MASKS],
-    /// Gaussian blur standard deviation in canvas pixels.
-    pub blur: f32,
+    /// Gaussian blur standard deviations of the red, green, blue and alpha channels, in
+    /// canvas pixels.
+    pub blur: [f32; 4],
     pub color: ColorAdjust,
     /// What of the canvas transitions show the layer in, whatever its placement.
     pub wipes: [Option<LayerWipe>; 2],
@@ -34,8 +41,21 @@ pub struct LayerLook {
     pub wash: f32,
     pub effects: PixelEffects,
     pub blend: BlendMode,
+    pub reach: Reach,
     /// The width over height of one of the picture's pixels; wider pixels show it wider.
     pub pixel_aspect: f32,
+    pub reframe: Option<Reframe>,
+}
+
+/// Where a layer shows over what lies under it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Reach {
+    #[default]
+    Everywhere,
+    /// Only where what lies under it shows, leaving that as covered as it was, so a
+    /// picture with an effect can lie over the same picture without it and keep its
+    /// edges. Drawn normally, whatever the blend mode.
+    OverBelow,
 }
 
 /// Color correction in linear light, every field neutral at zero except saturation.
@@ -98,13 +118,15 @@ impl LayerLook {
         crop: [0.0; 4],
         opacity: 1.0,
         opacity_masks: [None; MAX_MASKS],
-        blur: 0.0,
+        blur: [0.0; 4],
         color: ColorAdjust::IDENTITY,
         wipes: [None; 2],
         wash: 0.0,
         effects: PixelEffects::NONE,
         blend: BlendMode::Normal,
+        reach: Reach::Everywhere,
         pixel_aspect: 1.0,
+        reframe: None,
     };
 
     /// How big the picture of `size` stored pixels looks once its pixels are square.
@@ -112,6 +134,19 @@ impl LayerLook {
         let width = (width as f32 * self.pixel_aspect).round().max(1.0) as u32;
         (width, height)
     }
+}
+
+/// Whether, and how, the picture's colors are already multiplied by its alpha.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Premultiplied {
+    No,
+    /// In linear light, as composited.
+    InLight,
+    /// On the encoded values, as files store it, before the sampler decodes them.
+    Encoded,
+    /// In linear light, and to be written multiplied on the encoded values instead, as
+    /// the UI blends what it draws.
+    InLightForUi,
 }
 
 /// Where a layer lands in normalized device coordinates (the canvas spans -1..1, +y
@@ -132,8 +167,7 @@ pub(crate) struct Placement {
     pub(crate) wash: f32,
     pub(crate) effects: PixelEffects,
     pub(crate) blend: BlendMode,
-    /// Whether the picture's colors are already multiplied by its alpha.
-    pub(crate) premultiplied: bool,
+    pub(crate) premultiplied: Premultiplied,
     /// What the shader reads of the layer's lookups.
     pub(crate) grade: [f32; 4],
 }
@@ -152,7 +186,7 @@ impl Placement {
         wash: 0.0,
         effects: PixelEffects::NONE,
         blend: BlendMode::Normal,
-        premultiplied: false,
+        premultiplied: Premultiplied::No,
         grade: [0.0; 4],
     };
 
@@ -185,7 +219,7 @@ impl Placement {
             wash: look.wash.clamp(0.0, 1.0),
             effects: look.effects,
             blend: look.blend,
-            premultiplied: false,
+            premultiplied: Premultiplied::No,
             grade: [0.0; 4],
         }
     }
@@ -205,7 +239,12 @@ impl Placement {
         let [xx, xy] = self.axis_x;
         let [yx, yy] = self.axis_y;
         let color = &self.color;
-        let premultiplied = if self.premultiplied { 1.0 } else { 0.0 };
+        let premultiplied = match self.premultiplied {
+            Premultiplied::No => 0.0,
+            Premultiplied::InLight => 1.0,
+            Premultiplied::Encoded => 2.0,
+            Premultiplied::InLightForUi => 3.0,
+        };
         [cx, cy, xx, xy, yx, yy, self.opacity, premultiplied]
             .into_iter()
             .chain(self.crop)
@@ -243,6 +282,37 @@ impl Placement {
             .chain(self.effects.generate.uniform().into_iter().flatten())
             .chain(self.effects.optics.uniform().into_iter().flatten())
             .chain(self.effects.clip_wipes.uniform().into_iter().flatten())
+            .chain(self.effects.detail.uniform().into_iter().flatten())
+            .chain(self.effects.edges.uniform().into_iter().flatten())
+            .chain(self.effects.tone.uniform().into_iter().flatten())
+            .chain(self.effects.shift.uniform().into_iter().flatten())
+            .chain(self.effects.pattern.uniform().into_iter().flatten())
+            .chain(
+                Lighting::uniform(self.effects.lighting.as_ref())
+                    .into_iter()
+                    .flatten(),
+            )
+            .chain(
+                PointShadow::uniform(self.effects.point_shadow.as_ref())
+                    .into_iter()
+                    .flatten(),
+            )
+            .chain(
+                NoisyAlpha::uniform(self.effects.noise_alpha.as_ref())
+                    .into_iter()
+                    .flatten(),
+            )
+            .chain(
+                Cineon::uniform(self.effects.cineon.as_ref())
+                    .into_iter()
+                    .flatten(),
+            )
+            .chain(self.effects.paint.uniform().into_iter().flatten())
+            .chain(
+                Combine::uniform(self.effects.combine.as_ref())
+                    .into_iter()
+                    .flatten(),
+            )
             .flat_map(f32::to_le_bytes)
             .collect()
     }
@@ -280,6 +350,7 @@ mod tests {
             expansion: 0.0,
             opacity: 1.0,
             inverted: true,
+            intersect: false,
             outline: Outline::NONE,
         };
         let look = LayerLook {
@@ -289,14 +360,41 @@ mod tests {
         let bytes = Placement::new((1920, 1080), (1920, 1080), &look).to_bytes();
         // Twenty-two vec4s, five of them added by the wipes, lead the shader's struct. The
         // masks follow: the header, three vec4s each, then their outlines at two points
-        // a vec4; then the picture style's thirteen, the reshape's six, the recolor's twelve,
+        // a vec4; then the picture style's fourteen, the reshape's six, the recolor's twelve,
         // the key's two, the adjustments' six, Lumetri Creative's three,
         // the Generate effects' thirteen, Lens Flare and Magnify's three and the
-        // Transition effects' five.
+        // Transition effects' five, the detail effects' three, the edge effects' eleven
+        // the tone effects' thirteen, Change Color and Color Balance's six, Ellipse
+        // and Cell Pattern's seven, Lighting Effects' eighteen, Radial Shadow's two,
+        // Noise Alpha's two, Cineon Converter's two, the paint effects' five and the
+        // combining pass's two.
         let outlines = MAX_MASKS * MAX_OUTLINE_POINTS / 2;
         assert_eq!(
             bytes.len(),
-            (25 + 1 + 3 * MAX_MASKS + outlines + 13 + 6 + 12 + 2 + 6 + 3 + 13 + 3 + 5) * 16
+            (25 + 1
+                + 3 * MAX_MASKS
+                + outlines
+                + 14
+                + 6
+                + 12
+                + 2
+                + 6
+                + 3
+                + 13
+                + 3
+                + 5
+                + 3
+                + 11
+                + 13
+                + 6
+                + 7
+                + 18
+                + 2
+                + 2
+                + 2
+                + 5
+                + 2)
+                * 16
         );
         assert!(bytes.len() as u64 <= crate::blit::UNIFORM_BYTES);
     }

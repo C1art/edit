@@ -1,6 +1,7 @@
 use audio::SampleRate;
 use timeline::{Sequence, Ticks, Timebase};
 
+use crate::audio_plugin::{PluginLoading, SparePlugins};
 use crate::tracks_mix::{Bus, TracksMix};
 use crate::{Levels, PlaybackError};
 
@@ -12,21 +13,41 @@ pub(crate) const CHUNK_FRAMES: usize = 1024;
 /// stereo at one output rate.
 pub(crate) struct SequenceMix {
     tracks: TracksMix,
+    sample_rate: SampleRate,
     /// The last chunk mixed.
     pub(crate) mix: Vec<f32>,
+    /// Last, so it drops after the chains above have handed it their plugins.
+    _spares: SparePlugins,
 }
 
 impl SequenceMix {
+    /// A mix where every sample counts, so plugins are loaded before it goes on.
     pub(crate) fn new(sample_rate: SampleRate) -> Self {
+        Self::with_plugin_loading(sample_rate, PluginLoading::InPlace)
+    }
+
+    /// A mix for live playback, which plays on while plugins load. Made on the thread
+    /// that mixes.
+    pub(crate) fn live(sample_rate: SampleRate) -> Self {
+        Self::with_plugin_loading(sample_rate, PluginLoading::Background)
+    }
+
+    fn with_plugin_loading(sample_rate: SampleRate, loading: PluginLoading) -> Self {
         Self {
             tracks: TracksMix::new(sample_rate),
+            sample_rate,
             mix: vec![0.0; CHUNK_FRAMES * 2],
+            _spares: SparePlugins::new(loading),
         }
     }
 
     /// One tick per output frame.
     pub(crate) fn rate(&self) -> Timebase {
         self.tracks.rate()
+    }
+
+    pub(crate) fn sample_rate(&self) -> SampleRate {
+        self.sample_rate
     }
 
     /// Forgets decode positions, so the next chunk seeks.

@@ -6,6 +6,8 @@ use eframe::egui_wgpu::RenderState;
 use playback::PlaybackError;
 use timeline::{Clip, ClipId, Marks, MediaItem, Sequence, SourceId, Speed, Ticks, Track};
 
+use crate::editor::Editor;
+use crate::monitors::Focus;
 use crate::transport;
 use crate::viewer::Viewer;
 
@@ -44,11 +46,32 @@ impl SourceMonitor {
 
     /// Picks up changes to the item shown, such as a proxy being attached.
     pub fn refresh(&mut self, item: &MediaItem, pool: &Sequence) {
-        let player = &mut self.viewer.player;
-        if player.sequence().media_item(item.id) != Some(item) {
-            player.set_sequence(Arc::new(source_sequence(item, pool)));
-            self.conform = item.conform();
+        if self.viewer.player.sequence().media_item(item.id) == Some(item) {
+            return;
         }
+        let left = self.left_at();
+        let offset = item.default_range(pool.timebase).start;
+        let conform = item.conform();
+        let reframed = offset != self.offset || conform != self.conform;
+        self.viewer
+            .player
+            .set_sequence(Arc::new(source_sequence(item, pool)));
+        self.offset = offset;
+        self.conform = conform;
+        self.name.clone_from(&item.name);
+        // An edited subclip starts elsewhere in the media; the marks stay on the same media.
+        if reframed {
+            self.resume(left);
+        }
+    }
+
+    fn to_media(&self, time: Ticks) -> Ticks {
+        self.offset + self.conform.source_span(time)
+    }
+
+    fn to_monitor(&self, media: Ticks) -> Ticks {
+        let into = (media - self.offset).max(Ticks::ZERO);
+        self.conform.sequence_span(into).min(self.duration())
     }
 
     pub fn mark_in(&mut self) {
@@ -76,23 +99,54 @@ impl SourceMonitor {
         )
     }
 
+    /// Where the monitor is parked, in the media's time.
+    pub fn media_position(&self) -> Ticks {
+        let position = self.viewer.player.position();
+        self.media_range(position..position).0
+    }
+
     pub fn duration(&self) -> Ticks {
         self.viewer.player.duration()
     }
 
+    pub fn left_at(&self) -> LeftAt {
+        LeftAt {
+            mark_in: self.marks.mark_in.map(|time| self.to_media(time)),
+            mark_out: self.marks.mark_out.map(|time| self.to_media(time)),
+            position: self.to_media(self.viewer.player.position()),
+            marked: self.marks.is_set().then(|| self.range()),
+        }
+    }
+
+    fn resume(&mut self, left: LeftAt) {
+        self.marks = Marks {
+            mark_in: left.mark_in.map(|media| self.to_monitor(media)),
+            mark_out: left.mark_out.map(|media| self.to_monitor(media)),
+        };
+        self.viewer.player.seek(self.to_monitor(left.position));
+    }
+
     /// Marks the media range `marked` and parks on media time `at`.
     pub fn show_media(&mut self, marked: Range<Ticks>, at: Ticks) {
-        let end = self.viewer.player.duration();
-        let to_monitor = |time: Ticks| {
-            let into = (time - self.offset).max(Ticks::ZERO);
-            self.conform.sequence_span(into).min(end)
-        };
         self.marks = Marks {
-            mark_in: Some(to_monitor(marked.start)),
-            mark_out: Some(to_monitor(marked.end)),
+            mark_in: Some(self.to_monitor(marked.start)),
+            mark_out: Some(self.to_monitor(marked.end)),
         };
-        self.viewer.player.seek(to_monitor(at));
+        self.viewer.player.seek(self.to_monitor(at));
     }
+}
+
+/// How the source monitor left an item it moved on from, so that going back to it
+/// brings back its marks and position, as in Premiere.
+#[derive(Debug, Clone, Copy)]
+pub struct LeftAt {
+    /// In the media's time, so they hold when a subclip's bounds change meanwhile.
+    mark_in: Option<Ticks>,
+    mark_out: Option<Ticks>,
+    position: Ticks,
+    /// The marked media as `(source_in, duration)`, which dragging the item from the
+    /// project places.
+    marked: Option<(Ticks, Ticks)>,
 }
 
 /// A sequence that shows `item` from start to end in its own format; generated media,
@@ -104,11 +158,14 @@ fn source_sequence(item: &MediaItem, pool: &Sequence) -> Sequence {
     let range = item.default_range(timebase);
     let conform = item.conform();
     let duration = conform.sequence_span(range.end - range.start);
+    // The monitor reads the media's own timecode, from where a subclip starts.
+    sequence.start_time = item.start_timecode(timebase) + conform.sequence_span(range.start);
     let track = |id| Track {
         clips: vec![Clip {
             conform,
             ..Clip::new(ClipId(id), item.id, Ticks::ZERO, duration, range.start)
-        }],
+        }
+        .into()],
         ..Track::default()
     };
     if item.video.is_some() {
@@ -118,4 +175,39 @@ fn source_sequence(item: &MediaItem, pool: &Sequence) -> Sequence {
         sequence.audio.push(track(2));
     }
     sequence
+}
+
+impl Editor {
+    pub(crate) fn open_source(&mut self, id: SourceId) {
+        let Some(item) = self.timeline.sequence().media_item(id).cloned() else {
+            return;
+        };
+        // Drop the old player first so its workers stop feeding the audio output.
+        if let Some(source) = self.source.take() {
+            self.left_sources.insert(source.source, source.left_at());
+        }
+        match SourceMonitor::open(
+            &item,
+            self.timeline.project(),
+            self.audio.as_ref(),
+            self.render_state.as_ref(),
+        ) {
+            Ok(mut source) => {
+                if let Some(&left) = self.left_sources.get(&id) {
+                    source.resume(left);
+                }
+                self.source = Some(source);
+                self.focus = Focus::Source;
+            }
+            Err(error) => self.notice(format!("Cannot open {}: {error}", item.name)),
+        }
+    }
+
+    /// The part of `id` marked in the source monitor, now or when it was last shown.
+    pub(crate) fn source_marked(&self, id: SourceId) -> Option<(Ticks, Ticks)> {
+        match &self.source {
+            Some(source) if source.source == id => source.left_at().marked,
+            _ => self.left_sources.get(&id)?.marked,
+        }
+    }
 }

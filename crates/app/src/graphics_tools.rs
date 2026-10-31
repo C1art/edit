@@ -1,7 +1,11 @@
 use egui::{Align2, Color32, CursorIcon, FontId, Pos2, Rect, Sense, Stroke, Vec2};
-use timeline::{Generator, SetClipLook, Shape, ShapeKind, Ticks, Title};
+use timeline::{
+    Generator, Graphic, GraphicContent, GraphicLayer, SetClipGenerator, SetClipLook, Shape,
+    ShapeKind, Ticks, Title,
+};
 
 use crate::editor::Editor;
+use crate::effects::keyframe_time;
 use crate::placing;
 use crate::timeline_view::Tool;
 
@@ -193,6 +197,9 @@ fn draw_shape(
 
 /// Places a new graphic at the playhead with its middle `at` from the frame's middle.
 fn place(editor: &mut Editor, generator: Generator, at: Vec2) {
+    if add_layer_to_selected(editor, &generator, at) {
+        return;
+    }
     let Some(clip) = placing::new_generated(editor, generator) else {
         return;
     };
@@ -204,4 +211,67 @@ fn place(editor: &mut Editor, generator: Generator, at: Vec2) {
     x.set_at(Ticks::ZERO, at.x.round());
     y.set_at(Ticks::ZERO, at.y.round());
     editor.apply(SetClipLook { clip, look });
+}
+
+/// With one graphic, still title or shape selected, draws `generator` as its new top
+/// layer instead of as a clip of its own, as Premiere's tools do.
+fn add_layer_to_selected(editor: &mut Editor, generator: &Generator, at: Vec2) -> bool {
+    let &[clip] = editor.view.selection.as_slice() else {
+        return false;
+    };
+    let sequence = editor.timeline.sequence();
+    let Some((_, placed)) = sequence.clip(clip) else {
+        return false;
+    };
+    let Some(drawn) = sequence
+        .media_item(placed.source)
+        .and_then(|item| item.generator.as_ref())
+    else {
+        return false;
+    };
+    let graphic = match drawn {
+        Generator::Graphic(graphic) => Some(graphic.clone()),
+        other => Graphic::layered(other),
+    };
+    let Some(mut graphic) = graphic else {
+        return false;
+    };
+    // Into the graphic's own pixels, undoing its position, anchor and scale, so the
+    // layer shows where and as big as it was drawn; turns are left as they are, since
+    // layers don't turn.
+    let time = keyframe_time(editor, placed);
+    let motion = &placed.look.motion;
+    let [x, y] = motion.position.each_ref().map(|axis| axis.value_at(time));
+    let [anchor_x, anchor_y] = motion.anchor.each_ref().map(|axis| axis.value_at(time));
+    let [width, height] = motion
+        .scale_at(time)
+        .map(|percent| (percent / 100.0).max(0.01));
+    let offset = [
+        (at.x - x) / width + anchor_x,
+        (at.y - y) / height + anchor_y,
+    ]
+    .map(|value| value.round() as i32);
+    let mut layer = match generator {
+        Generator::Title(title) => {
+            let mut layer = GraphicLayer::new(GraphicContent::Text(title.clone()));
+            layer.scale = (100.0 / (width * height).sqrt()).round() as u32;
+            layer
+        }
+        Generator::Shape(shape) => {
+            let unscaled = |side: u32, scale: f32| (side as f32 / scale).round() as u32;
+            GraphicLayer::new(GraphicContent::Shape(timeline::Shape {
+                width: unscaled(shape.width, width),
+                height: unscaled(shape.height, height),
+                ..*shape
+            }))
+        }
+        _ => return false,
+    };
+    layer.offset = offset;
+    graphic.layers.insert(0, layer);
+    editor.apply(SetClipGenerator {
+        clip: placed.id,
+        generator: Generator::Graphic(graphic),
+    });
+    true
 }

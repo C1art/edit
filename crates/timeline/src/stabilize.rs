@@ -160,6 +160,29 @@ pub struct CameraPath {
     pub size: [u32; 2],
 }
 
+impl CameraPath {
+    /// Chains each frame's motion from the frame before, which the first frame's is
+    /// ignored, into poses.
+    pub fn tracked(size: [u32; 2], steps: &[(Ticks, Similarity)]) -> Self {
+        let mut camera = Similarity::IDENTITY;
+        let poses = steps
+            .iter()
+            .enumerate()
+            .map(|(index, (_, step))| {
+                if index > 0 {
+                    camera = camera.then(step);
+                }
+                Pose::from(camera)
+            })
+            .collect();
+        Self {
+            frames: steps.iter().map(|&(time, _)| time).collect(),
+            poses,
+            size,
+        }
+    }
+}
+
 /// Warp Stabilizer's settings and the correction they make of the analyzed path.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Stabilizer {
@@ -199,22 +222,7 @@ impl Stabilizer {
     /// Takes the analysis of a clip: its picture's `size` and each frame's motion from
     /// the frame before, which the first frame's is ignored.
     pub fn analyzed(&mut self, size: [u32; 2], steps: &[(Ticks, Similarity)], timebase: Timebase) {
-        let mut camera = Similarity::IDENTITY;
-        let poses = steps
-            .iter()
-            .enumerate()
-            .map(|(index, (_, step))| {
-                if index > 0 {
-                    camera = camera.then(step);
-                }
-                Pose::from(camera)
-            })
-            .collect();
-        self.path = Some(CameraPath {
-            frames: steps.iter().map(|&(time, _)| time).collect(),
-            poses,
-            size,
-        });
+        self.path = Some(CameraPath::tracked(size, steps));
         self.retune(timebase);
     }
 
@@ -281,7 +289,7 @@ fn aspect([width, height]: [u32; 2]) -> [f64; 2] {
     [f64::from(width) / longer, f64::from(height) / longer]
 }
 
-fn frames_per_second(frames: &[Ticks], timebase: Timebase) -> f64 {
+pub(crate) fn frames_per_second(frames: &[Ticks], timebase: Timebase) -> f64 {
     let (Some(first), Some(last)) = (frames.first(), frames.last()) else {
         return 0.0;
     };
@@ -295,7 +303,7 @@ fn frames_per_second(frames: &[Ticks], timebase: Timebase) -> f64 {
 
 /// Each value averaged with its neighbors by a Gaussian of `sigma` frames; the ends
 /// repeat beyond the clip.
-fn smooth(values: &[[f64; 4]], sigma: f64) -> Vec<[f64; 4]> {
+pub(crate) fn smooth<const N: usize>(values: &[[f64; N]], sigma: f64) -> Vec<[f64; N]> {
     if sigma < 0.5 {
         return values.to_vec();
     }
@@ -307,7 +315,7 @@ fn smooth(values: &[[f64; 4]], sigma: f64) -> Vec<[f64; 4]> {
     let last = values.len() as i64 - 1;
     (0..=last)
         .map(|index| {
-            let mut sum = [0.0; 4];
+            let mut sum = [0.0; N];
             for (offset, weight) in (-reach..=reach).zip(&weights) {
                 let neighbor = values[(index + offset).clamp(0, last) as usize];
                 for (sum, value) in sum.iter_mut().zip(neighbor) {

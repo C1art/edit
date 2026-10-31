@@ -2,7 +2,9 @@ use timeline::BlendMode;
 
 use crate::blit::{self, Blit};
 use crate::compositor::extent;
-use crate::WORKING_FORMAT;
+use crate::layer_pipelines::LayerPass;
+use crate::layer_shader::Features;
+use crate::{Reach, WORKING_FORMAT};
 
 /// A canvas-sized copy of what lies under a layer drawn with a blend mode.
 pub(crate) struct Backdrop {
@@ -14,6 +16,8 @@ pub(crate) struct Backdrop {
 pub(crate) struct Drawn<'a> {
     pub(crate) groups: [&'a wgpu::BindGroup; 2],
     pub(crate) blend: BlendMode,
+    pub(crate) reach: Reach,
+    pub(crate) features: Features,
 }
 
 impl Backdrop {
@@ -29,14 +33,7 @@ impl Backdrop {
             view_formats: &[],
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let binding = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("backdrop_bind_group"),
-            layout: &blit.backdrop_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::TextureView(&view),
-            }],
-        });
+        let binding = blit.bind_backdrop(device, &view);
         Self { texture, binding }
     }
 
@@ -53,13 +50,30 @@ impl Backdrop {
     ) {
         let mut load = wgpu::LoadOp::Clear(clear);
         let mut normal = Vec::new();
+        let draw_normal = |encoder: &mut wgpu::CommandEncoder,
+                           normal: &[(wgpu::RenderPipeline, [&wgpu::BindGroup; 2])],
+                           load| {
+            let quads: Vec<_> = normal
+                .iter()
+                .map(|(pipeline, groups)| (pipeline, *groups))
+                .collect();
+            blit::draw_each(encoder, view, &quads, load);
+        };
         for layer in layers {
-            if layer.blend == BlendMode::Normal {
-                normal.push(layer.groups);
+            let plain_pass = match (layer.reach, layer.blend) {
+                (Reach::OverBelow, _) => Some(LayerPass::Atop),
+                (Reach::Everywhere, BlendMode::Normal) => Some(LayerPass::Over),
+                (Reach::Everywhere, _) => None,
+            };
+            if let Some(pass) = plain_pass {
+                // A pipeline still being built leaves the frame unshown, so it's skipped.
+                if let Some(pipeline) = blit.pipeline(layer.features, pass) {
+                    normal.push((pipeline, layer.groups));
+                }
                 continue;
             }
             if !normal.is_empty() || load != wgpu::LoadOp::Load {
-                blit::draw(encoder, view, &blit.to_working, &normal, load);
+                draw_normal(encoder, &normal, load);
                 normal.clear();
                 load = wgpu::LoadOp::Load;
             }
@@ -70,10 +84,12 @@ impl Backdrop {
             );
             let [placed, grade] = layer.groups;
             let groups = [placed, grade, &self.binding];
-            blit::draw(encoder, view, &blit.blended, &[groups], load);
+            if let Some(blended) = blit.pipeline(layer.features, LayerPass::Blended) {
+                blit::draw(encoder, view, &blended, &[groups], load);
+            }
         }
         if !normal.is_empty() || load != wgpu::LoadOp::Load {
-            blit::draw(encoder, view, &blit.to_working, &normal, load);
+            draw_normal(encoder, &normal, load);
         }
     }
 }

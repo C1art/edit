@@ -43,9 +43,7 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     };
     let mut done = false;
     let mut cancelled = false;
-    egui::Window::new("Modify Audio Channels")
-        .collapsible(false)
-        .resizable(false)
+    crate::dialog::window(ctx, "Modify Audio Channels")
         .show(ctx, |ui| {
             ui.strong(&dialog.name);
             ui.separator();
@@ -61,10 +59,10 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                 ui.weak("The same channel on both sides plays it as mono. A channel the file lacks is silent.");
             });
             ui.separator();
-            ui.horizontal(|ui| {
-                done = ui.button("OK").clicked() || ui.input(|input| input.key_pressed(Key::Enter));
+            crate::dialog::footer(ui, |ui| {
                 cancelled = ui.button("Cancel").clicked()
                     || ui.input(|input| input.key_pressed(Key::Escape));
+                done = ui.add(crate::dialog::primary("OK")).clicked() || ui.input(|input| input.key_pressed(Key::Enter));
             });
         });
     if !(done || cancelled) {

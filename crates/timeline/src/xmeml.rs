@@ -6,11 +6,12 @@
 use std::collections::HashMap;
 use std::fmt::{Display, Write};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use crate::file_url::path_url;
 use crate::{
-    cut_window, Alignment, Clip, ClipId, FrameRate, Marker, MediaItem, Sequence, Ticks, Track,
-    TrackKind, Transition,
+    cut_window, Alignment, Clip, ClipId, FrameRate, Marker, MediaItem, Sequence, Speed, Ticks,
+    TimeDisplay, Timecode, Track, TrackKind, Transition,
 };
 
 /// `sequence` as an xmeml document, named `title`.
@@ -54,6 +55,7 @@ fn exported<'a>(sequence: &'a Sequence, track: &'a Track) -> impl Iterator<Item 
     track
         .clips
         .iter()
+        .map(Arc::as_ref)
         .filter(|clip| file_of(sequence, clip).is_some())
 }
 
@@ -82,6 +84,7 @@ impl Writer<'_> {
         self.leaf("name", escape(title));
         self.leaf("duration", self.frames(sequence.duration()));
         self.rate();
+        self.start_timecode();
         self.markers(&sequence.markers);
         self.open("media");
         self.open("video");
@@ -125,16 +128,22 @@ impl Writer<'_> {
                         // Both clips run on under a transition at their cut.
                         start = -1;
                         let (before, after) = cut_window(previous, clip, transition);
-                        let alignment = match transition.alignment {
-                            Alignment::Center => "center",
-                            Alignment::StartAtCut => "start",
-                            Alignment::EndAtCut => "end",
+                        let cut = self.frames(clip.start);
+                        let length =
+                            self.frames(clip.start + after) - self.frames(clip.start - before);
+                        // Readers put a centred transition's cut at start + length / 2, so
+                        // an odd length is split around the cut the same way.
+                        let (first, alignment) = match transition.alignment {
+                            Alignment::Center => (cut - length / 2, "center"),
+                            Alignment::StartAtCut => (cut, "start"),
+                            Alignment::EndAtCut => (cut - length, "end"),
                         };
-                        (clip.start - before, clip.start + after, alignment)
+                        (first, first + length, alignment)
                     }
                     None => {
                         let length = transition.duration.min(clip.duration);
-                        (clip.start, clip.start + length, "start-black")
+                        let span = (self.frames(clip.start), self.frames(clip.start + length));
+                        (span.0, span.1, "start-black")
                     }
                 };
                 self.transition(transition, kind, span);
@@ -146,11 +155,8 @@ impl Writer<'_> {
             self.clip_item(clip, kind, start, end);
             if let Some(transition) = clip.transition_out.filter(|_| next.is_none()) {
                 let length = transition.duration.min(clip.duration);
-                self.transition(
-                    transition,
-                    kind,
-                    (clip.end() - length, clip.end(), "end-black"),
-                );
+                let span = (self.frames(clip.end() - length), self.frames(clip.end()));
+                self.transition(transition, kind, (span.0, span.1, "end-black"));
             }
         }
         self.leaf("enabled", flag(!track.muted));
@@ -158,11 +164,12 @@ impl Writer<'_> {
         self.close("track");
     }
 
-    fn transition(&mut self, transition: Transition, kind: TrackKind, span: (Ticks, Ticks, &str)) {
+    /// `span` is the first and end frame and the alignment.
+    fn transition(&mut self, transition: Transition, kind: TrackKind, span: (i64, i64, &str)) {
         let (start, end, alignment) = span;
         self.open("transitionitem");
-        self.leaf("start", self.frames(start));
-        self.leaf("end", self.frames(end));
+        self.leaf("start", start);
+        self.leaf("end", end);
         self.leaf("alignment", alignment);
         self.rate();
         self.open("effect");
@@ -208,10 +215,20 @@ impl Writer<'_> {
             self.leaf("trackindex", 1);
             self.close("sourcetrack");
         }
+        // Other applications know neither interpreted rates nor speed ramps, so a clip
+        // plays at its overall rate: interpreted, and a ramp's average.
+        let rate = match &clip.remap {
+            Some(_) => Speed::stretch(
+                Ticks((clip.source_out() - clip.source_in).0.abs()),
+                clip.duration,
+            ),
+            None => Some(clip.rate()),
+        };
         let speed = if clip.hold {
             Some(0.0)
         } else {
-            (!clip.speed.is_normal() || clip.reverse).then(|| clip.speed.percent())
+            rate.filter(|rate| !rate.is_normal() || clip.reverse)
+                .map(Speed::percent)
         };
         if let Some(percent) = speed.filter(|_| kind == TrackKind::Video) {
             self.open("filter");
@@ -323,6 +340,26 @@ impl Writer<'_> {
         self.close("rate");
     }
 
+    /// The sequence's start time, which clip times count from, labeled the way the
+    /// sequence shows timecode.
+    fn start_timecode(&mut self) {
+        let sequence = self.sequence;
+        let rate = sequence.format.frame_rate;
+        let (display, format) = match sequence.time_display.dropped(rate) {
+            Some(_) => (TimeDisplay::Timecode, "DF"),
+            None => (TimeDisplay::NonDropTimecode, "NDF"),
+        };
+        let label = Timecode::shown(sequence.start_time, sequence.timebase, rate, display)
+            .to_string()
+            .replacen(';', ":", 2);
+        self.open("timecode");
+        self.rate();
+        self.leaf("string", label);
+        self.leaf("frame", self.frames(sequence.start_time));
+        self.leaf("displayformat", format);
+        self.close("timecode");
+    }
+
     fn frames(&self, time: Ticks) -> i64 {
         let sequence = self.sequence;
         sequence.format.frame_rate.frame_at(time, sequence.timebase)
@@ -400,6 +437,9 @@ mod tests {
             has_audio: true,
             still: false,
             interpreted_rate: None,
+            placed: None,
+            frame_fit: None,
+            timecode: None,
         };
         timeline.apply(import).unwrap();
         let source = timeline.sequence().media[0].id;
@@ -417,7 +457,7 @@ mod tests {
             timeline.apply(place).unwrap();
         }
         let mut sequence = timeline.sequence().clone();
-        sequence.video[0].clips[1].transition_in =
+        Arc::make_mut(&mut sequence.video[0].clips[1]).transition_in =
             Some(Transition::new(TransitionKind::CrossDissolve, Ticks(10)));
         let [first, second] = [0, 1].map(|index| sequence.video[0].clips[index].id.0);
         let partner = sequence.audio[0].clips[1].id.0;

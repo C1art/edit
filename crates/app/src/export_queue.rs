@@ -1,10 +1,12 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
-use egui::{Key, ProgressBar, RichText};
+use egui::{Key, RichText};
 use playback::{ExportEvent, ExportJob, ExportSettings};
 use timeline::Sequence;
 
 use crate::editor::Editor;
+use crate::export_progress::{self, ExportProgress};
 
 /// Exports set up earlier, run one after another while editing carries on.
 #[derive(Default)]
@@ -28,7 +30,7 @@ struct Queued {
 
 enum Status {
     Waiting,
-    Exporting { done: i64, total: i64 },
+    Exporting(ExportProgress),
     Done,
     Cancelled,
     Failed(String),
@@ -51,6 +53,35 @@ impl ExportQueue {
         });
     }
 
+    /// Files that exports still to run will write.
+    pub(crate) fn pending_paths(&self) -> Vec<PathBuf> {
+        self.items
+            .iter()
+            .filter(|item| matches!(item.status, Status::Waiting | Status::Exporting(_)))
+            .map(|item| item.settings.path.clone())
+            .collect()
+    }
+
+    /// Runs the waiting exports, one after another.
+    pub(crate) fn start(&mut self) {
+        self.started = true;
+    }
+
+    /// How far the running export has got, and how many wait after it.
+    pub(crate) fn progress(&self) -> Option<(f32, usize)> {
+        let (id, _) = self.running.as_ref()?;
+        let item = self.items.iter().find(|item| item.id == *id)?;
+        let Status::Exporting(progress) = &item.status else {
+            return None;
+        };
+        let waiting = self
+            .items
+            .iter()
+            .filter(|item| matches!(item.status, Status::Waiting))
+            .count();
+        Some((progress.fraction(), waiting))
+    }
+
     fn item_mut(&mut self, id: u64) -> Option<&mut Queued> {
         self.items.iter_mut().find(|item| item.id == id)
     }
@@ -68,12 +99,19 @@ impl Editor {
             let (id, events) = (*id, job.poll());
             let mut ended = None;
             let mut progress = None;
+            let mut encoder = None;
+            let mut measuring = None;
             for event in events {
                 match event {
                     ExportEvent::Progress {
                         frames_done,
                         frames_total,
                     } => progress = Some((frames_done, frames_total)),
+                    ExportEvent::Measuring(fraction) => measuring = Some(fraction),
+                    ExportEvent::Encoder(name) => encoder = Some(name),
+                    ExportEvent::Timings(timings) => {
+                        notices.push(format!("Export speed: {timings}"));
+                    }
                     ExportEvent::Warning(error) => notices.push(format!("Export: {error}")),
                     ExportEvent::Finished => ended = Some(Status::Done),
                     ExportEvent::Cancelled => ended = Some(Status::Cancelled),
@@ -81,8 +119,17 @@ impl Editor {
                 }
             }
             if let Some(item) = queue.item_mut(id) {
-                if let Some((done, total)) = progress {
-                    item.status = Status::Exporting { done, total };
+                if let (Some((done, total)), Status::Exporting(running)) =
+                    (progress, &mut item.status)
+                {
+                    running.update(done, total);
+                }
+                if let (Some(fraction), Status::Exporting(running)) = (measuring, &mut item.status)
+                {
+                    running.measuring(fraction);
+                }
+                if let (Some(encoder), Status::Exporting(running)) = (encoder, &mut item.status) {
+                    running.set_encoder(encoder);
                 }
                 if let Some(status) = ended {
                     if matches!(status, Status::Done) {
@@ -92,7 +139,7 @@ impl Editor {
                     queue.running = None;
                 }
             }
-            ctx.request_repaint();
+            ctx.request_repaint_after(export_progress::REFRESH);
         }
         for notice in notices {
             self.notice(notice);
@@ -126,7 +173,7 @@ impl Editor {
         );
         match started {
             Ok(job) => {
-                item.status = Status::Exporting { done: 0, total: 0 };
+                item.status = Status::Exporting(ExportProgress::new());
                 queue.running = Some((item.id, job));
             }
             Err(error) => item.status = Status::Failed(error.to_string()),
@@ -141,7 +188,7 @@ pub fn window(editor: &mut Editor, ctx: &egui::Context) {
     }
     let mut open = true;
     let mut remove = None;
-    egui::Window::new("Export Queue")
+    crate::dialog::window(ctx, "Export Queue")
         .open(&mut open)
         .default_width(520.0)
         .show(ctx, |ui| {
@@ -165,7 +212,7 @@ pub fn window(editor: &mut Editor, ctx: &egui::Context) {
                                 ui.label(RichText::new(&item.summary).weak());
                                 status_row(ui, &item.status);
                             });
-                            let exporting = matches!(item.status, Status::Exporting { .. });
+                            let exporting = matches!(item.status, Status::Exporting(_));
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
@@ -201,11 +248,11 @@ pub fn window(editor: &mut Editor, ctx: &egui::Context) {
                     .add_enabled(waiting, egui::Button::new("Start Queue"))
                     .clicked()
                 {
-                    queue.started = true;
+                    queue.start();
                 }
                 if ui.button("Clear Finished").clicked() {
                     queue.items.retain(|item| {
-                        matches!(item.status, Status::Waiting | Status::Exporting { .. })
+                        matches!(item.status, Status::Waiting | Status::Exporting(_))
                     });
                 }
             });
@@ -224,17 +271,8 @@ fn status_row(ui: &mut egui::Ui, status: &Status) {
         Status::Waiting => {
             ui.label("Waiting");
         }
-        Status::Exporting { done, total } => {
-            let fraction = if *total > 0 {
-                *done as f32 / *total as f32
-            } else {
-                0.0
-            };
-            ui.add(
-                ProgressBar::new(fraction)
-                    .desired_width(300.0)
-                    .text(format!("frame {done} of {total}")),
-            );
+        Status::Exporting(progress) => {
+            ui.add(progress.bar(300.0));
         }
         Status::Done => {
             ui.label("Done");

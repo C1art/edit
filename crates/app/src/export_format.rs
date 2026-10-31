@@ -1,16 +1,23 @@
-use media::{AudioCodec, AudioSettings, DnxhrQuality, RateControl, VideoCodec};
-use playback::VideoExport;
+use media::{
+    Acceleration, AudioCodec, AudioSettings, DnxhrQuality, RateControl, StillFormat, VideoCodec,
+};
+use playback::{LoudnessTarget, VideoEncoding, VideoExport};
 
 /// What kind of file an export makes: its codecs and container.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Format {
     H264,
     Hevc,
+    /// VP9 with Opus sound in WebM, for the web.
+    WebM,
+    Av1,
     ProRes422,
     ProRes422Hq,
     ProRes4444,
     Dnxhr(DnxhrQuality),
     AnimatedGif,
+    /// Each frame as a numbered image.
+    Stills(StillFormat),
     Aac,
     Mp3,
     Wav,
@@ -18,9 +25,11 @@ pub enum Format {
 }
 
 impl Format {
-    pub const ALL: [Self; 15] = [
+    pub const ALL: [Self; 20] = [
         Self::H264,
         Self::Hevc,
+        Self::WebM,
+        Self::Av1,
         Self::ProRes422,
         Self::ProRes422Hq,
         Self::ProRes4444,
@@ -30,6 +39,9 @@ impl Format {
         Self::Dnxhr(DnxhrQuality::Hqx),
         Self::Dnxhr(DnxhrQuality::Dnx444),
         Self::AnimatedGif,
+        Self::Stills(StillFormat::Png),
+        Self::Stills(StillFormat::Tiff),
+        Self::Stills(StillFormat::Dpx),
         Self::Aac,
         Self::Mp3,
         Self::Wav,
@@ -40,6 +52,8 @@ impl Format {
         match self {
             Self::H264 => "H.264",
             Self::Hevc => "HEVC (H.265)",
+            Self::WebM => "WebM (VP9)",
+            Self::Av1 => "AV1",
             Self::ProRes422 => "Apple ProRes 422",
             Self::ProRes422Hq => "Apple ProRes 422 HQ",
             Self::ProRes4444 => "Apple ProRes 4444 with Alpha",
@@ -49,6 +63,9 @@ impl Format {
             Self::Dnxhr(DnxhrQuality::Hqx) => "Avid DNxHR HQX 10-bit",
             Self::Dnxhr(DnxhrQuality::Dnx444) => "Avid DNxHR 444 10-bit",
             Self::AnimatedGif => "Animated GIF",
+            Self::Stills(StillFormat::Png) => "PNG Sequence",
+            Self::Stills(StillFormat::Tiff) => "TIFF Sequence",
+            Self::Stills(StillFormat::Dpx) => "DPX Sequence",
             Self::Aac => "AAC Audio",
             Self::Mp3 => "MP3",
             Self::Wav => "Waveform Audio",
@@ -58,9 +75,11 @@ impl Format {
 
     pub fn extension(self) -> &'static str {
         match self {
-            Self::H264 | Self::Hevc => "mp4",
+            Self::H264 | Self::Hevc | Self::Av1 => "mp4",
+            Self::WebM => "webm",
             Self::ProRes422 | Self::ProRes422Hq | Self::ProRes4444 | Self::Dnxhr(_) => "mov",
             Self::AnimatedGif => "gif",
+            Self::Stills(still) => still.extension(),
             Self::Aac => "m4a",
             Self::Mp3 => "mp3",
             Self::Wav => "wav",
@@ -72,24 +91,31 @@ impl Format {
         match self {
             Self::H264 => Some(VideoCodec::H264),
             Self::Hevc => Some(VideoCodec::Hevc),
+            Self::WebM => Some(VideoCodec::Vp9),
+            Self::Av1 => Some(VideoCodec::Av1),
             Self::ProRes422 => Some(VideoCodec::ProRes422),
             Self::ProRes422Hq => Some(VideoCodec::ProRes422Hq),
             Self::ProRes4444 => Some(VideoCodec::ProRes4444),
             Self::Dnxhr(quality) => Some(VideoCodec::Dnxhr(quality)),
             Self::AnimatedGif => Some(VideoCodec::Gif),
-            Self::Aac | Self::Mp3 | Self::Wav | Self::Flac => None,
+            Self::Stills(_) | Self::Aac | Self::Mp3 | Self::Wav | Self::Flac => None,
         }
+    }
+
+    pub fn has_video(self) -> bool {
+        self.video_codec().is_some() || matches!(self, Self::Stills(_))
     }
 
     /// `None` for formats that can't carry sound.
     pub fn audio_codec(self) -> Option<AudioCodec> {
         match self {
-            Self::H264 | Self::Hevc | Self::Aac => Some(AudioCodec::Aac),
+            Self::H264 | Self::Hevc | Self::Av1 | Self::Aac => Some(AudioCodec::Aac),
+            Self::WebM => Some(AudioCodec::Opus),
             // Mastering formats carry uncompressed sound, as cameras and Premiere do.
             Self::ProRes422 | Self::ProRes422Hq | Self::ProRes4444 | Self::Dnxhr(_) => {
                 Some(AudioCodec::Pcm24)
             }
-            Self::AnimatedGif => None,
+            Self::AnimatedGif | Self::Stills(_) => None,
             Self::Mp3 => Some(AudioCodec::Mp3),
             Self::Wav => Some(AudioCodec::Pcm16),
             Self::Flac => Some(AudioCodec::Flac),
@@ -105,24 +131,32 @@ pub struct ExportFormat {
     /// sequence's own size when `None`.
     pub height: Option<u32>,
     pub rate_control: RateControl,
+    /// Kept when a preset is picked, as it says how to encode rather than what.
+    pub acceleration: Acceleration,
     /// Whether a video export carries sound; audio formats always do.
     pub with_audio: bool,
     pub audio_kbps: u32,
     pub sample_rate: u32,
+    /// Kept when a preset is picked, as it says how loud rather than what to make.
+    pub loudness: Option<LoudnessTarget>,
 }
 
 pub struct Preset {
     pub name: &'static str,
     pub format: ExportFormat,
+    /// Made for a vertical sequence, as phone apps show it.
+    pub vertical: bool,
 }
 
 const MATCH_SOURCE: ExportFormat = ExportFormat {
     format: Format::H264,
     height: None,
     rate_control: RateControl::Quality(18),
+    acceleration: Acceleration::Hardware,
     with_audio: true,
     audio_kbps: 320,
     sample_rate: 48_000,
+    loudness: None,
 };
 
 const fn video_preset(name: &'static str, height: u32, mbps: u32) -> Preset {
@@ -133,6 +167,15 @@ const fn video_preset(name: &'static str, height: u32, mbps: u32) -> Preset {
             rate_control: RateControl::Bitrate(mbps * 1_000_000),
             ..MATCH_SOURCE
         },
+        vertical: false,
+    }
+}
+
+/// 1080 × 1920 from a vertical sequence.
+const fn vertical_preset(name: &'static str, mbps: u32) -> Preset {
+    Preset {
+        vertical: true,
+        ..video_preset(name, 1920, mbps)
     }
 }
 
@@ -143,17 +186,22 @@ const fn format_preset(name: &'static str, format: Format) -> Preset {
             format,
             ..MATCH_SOURCE
         },
+        vertical: false,
     }
 }
 
-pub const PRESETS: [Preset; 15] = [
+pub const PRESETS: [Preset; 20] = [
     Preset {
         name: "Match Source - High Bitrate",
         format: MATCH_SOURCE,
+        vertical: false,
     },
     video_preset("YouTube 2160p 4K Ultra HD", 2160, 45),
     video_preset("YouTube 1080p Full HD", 1080, 16),
     video_preset("Vimeo 720p HD", 720, 10),
+    vertical_preset("YouTube Shorts 1080×1920", 16),
+    vertical_preset("TikTok 1080×1920", 12),
+    vertical_preset("Instagram Reels 1080×1920", 10),
     Preset {
         name: "HEVC Match Source",
         format: ExportFormat {
@@ -161,6 +209,26 @@ pub const PRESETS: [Preset; 15] = [
             rate_control: RateControl::Quality(22),
             ..MATCH_SOURCE
         },
+        vertical: false,
+    },
+    Preset {
+        name: "WebM VP9 Match Source",
+        format: ExportFormat {
+            format: Format::WebM,
+            rate_control: RateControl::Quality(20),
+            audio_kbps: 192,
+            ..MATCH_SOURCE
+        },
+        vertical: false,
+    },
+    Preset {
+        name: "AV1 Match Source",
+        format: ExportFormat {
+            format: Format::Av1,
+            rate_control: RateControl::Quality(22),
+            ..MATCH_SOURCE
+        },
+        vertical: false,
     },
     format_preset("Apple ProRes 422", Format::ProRes422),
     format_preset("Apple ProRes 422 HQ", Format::ProRes422Hq),
@@ -174,6 +242,7 @@ pub const PRESETS: [Preset; 15] = [
             height: Some(480),
             ..MATCH_SOURCE
         },
+        vertical: false,
     },
     format_preset("AAC Audio 320 kbps", Format::Aac),
     format_preset("MP3 320 kbps", Format::Mp3),
@@ -189,12 +258,13 @@ impl Default for ExportFormat {
 
 impl ExportFormat {
     /// The preset these settings match, if any, ignoring choices the format doesn't use.
-    pub fn preset_name(&self) -> Option<&'static str> {
+    pub fn preset(&self) -> Option<&'static Preset> {
         let used = self.used();
-        PRESETS
-            .iter()
-            .find(|preset| preset.format.used() == used)
-            .map(|preset| preset.name)
+        PRESETS.iter().find(|preset| preset.format.used() == used)
+    }
+
+    pub fn preset_name(&self) -> Option<&'static str> {
+        self.preset().map(|preset| preset.name)
     }
 
     /// These settings with choices the format ignores put back to their defaults.
@@ -203,7 +273,7 @@ impl ExportFormat {
         let codec = self.format.video_codec();
         let rate_controlled = codec.is_some_and(VideoCodec::is_rate_controlled);
         Self {
-            height: if codec.is_some() {
+            height: if self.format.has_video() {
                 self.height
             } else {
                 unused.height
@@ -213,13 +283,15 @@ impl ExportFormat {
             } else {
                 unused.rate_control
             },
-            with_audio: codec.is_none() || self.with_audio,
+            acceleration: unused.acceleration,
+            loudness: unused.loudness,
+            with_audio: !self.format.has_video() || self.with_audio,
             audio_kbps: if self.has_audio() && self.audio_is_lossy() {
                 self.audio_kbps
             } else {
                 unused.audio_kbps
             },
-            sample_rate: if self.has_audio() {
+            sample_rate: if self.has_audio() && self.fixed_sample_rate().is_none() {
                 self.sample_rate
             } else {
                 unused.sample_rate
@@ -229,8 +301,14 @@ impl ExportFormat {
     }
 
     pub fn has_audio(&self) -> bool {
-        let wanted = self.with_audio || self.format.video_codec().is_none();
+        let wanted = self.with_audio || !self.format.has_video();
         wanted && self.format.audio_codec().is_some()
+    }
+
+    pub fn fixed_sample_rate(&self) -> Option<u32> {
+        self.format
+            .audio_codec()
+            .and_then(AudioCodec::fixed_sample_rate)
     }
 
     pub fn audio_is_lossy(&self) -> bool {
@@ -238,10 +316,14 @@ impl ExportFormat {
     }
 
     pub fn video(&self, sequence_size: (u32, u32)) -> Option<VideoExport> {
+        let encoding = match self.format {
+            Format::Stills(still) => VideoEncoding::Stills(still),
+            format => VideoEncoding::Movie(format.video_codec()?, self.rate_control),
+        };
         Some(VideoExport {
-            codec: self.format.video_codec()?,
-            rate_control: self.rate_control,
+            encoding,
             size: self.size(sequence_size),
+            acceleration: self.acceleration,
         })
     }
 
@@ -254,7 +336,7 @@ impl ExportFormat {
         let codec = self.format.audio_codec().filter(|_| self.has_audio())?;
         Some(AudioSettings {
             codec,
-            sample_rate: self.sample_rate,
+            sample_rate: self.fixed_sample_rate().unwrap_or(self.sample_rate),
             bits_per_second: self.audio_kbps * 1_000,
         })
     }

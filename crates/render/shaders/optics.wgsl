@@ -10,6 +10,7 @@ fn magnified(uv: vec2<f32>) -> vec2<f32> {
     if detail.z <= 0.0 || lens.w <= 0.0 {
         return uv;
     }
+    // #if optics_detail.z
     let away = (uv - lens.xy) * picture_size();
     var reach = length(away);
     if detail.y > 0.5 {
@@ -17,8 +18,12 @@ fn magnified(uv: vec2<f32>) -> vec2<f32> {
     }
     let cover = clamp((lens.w - reach) / max(detail.x, 1.0), 0.0, 1.0) * detail.z;
     return mix(uv, lens.xy + (uv - lens.xy) / lens.z, cover);
+    // #else
+    return uv;
+    // #endif
 }
 
+// #if optics_flare.z
 // A color for the `index`th reflection, cycling round the hues.
 fn reflection_tint(index: f32) -> vec3<f32> {
     let hue = fract(index * 0.37 + 0.1);
@@ -69,12 +74,17 @@ fn flare_light(uv: vec2<f32>) -> vec3<f32> {
     }
     return sum * flare.z;
 }
+// #endif
 
 fn flared(color: vec4<f32>, uv: vec2<f32>) -> vec4<f32> {
     let share = 1.0 - placement.optics_detail.w;
     if placement.optics_flare.z <= 0.0 || share <= 0.0 {
         return color;
     }
+    // #if optics_flare.z
     let added = flare_light(uv) * share;
     return vec4<f32>(color.rgb + added, max(color.a, clamp(dot(added, LUMA), 0.0, 1.0)));
+    // #else
+    return color;
+    // #endif
 }

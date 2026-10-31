@@ -26,6 +26,8 @@ pub struct LeaveColor {
     pub tolerance: f32,
     pub softness: f32,
     pub by_hue: bool,
+    /// Greys the matching color instead of the others, as Color Pass's Reverse does.
+    pub reverse: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -155,6 +157,7 @@ impl Recolor {
             tolerance: -1.0,
             softness: 0.0,
             by_hue: false,
+            reverse: false,
         });
         let [lr, lg, lb] = leave.color;
         let ramp = self.ramp.unwrap_or(Ramp {
@@ -176,7 +179,11 @@ impl Recolor {
             lg,
             lb,
             leave.tolerance,
-            leave.amount,
+            if leave.reverse {
+                -leave.amount
+            } else {
+                leave.amount
+            },
             leave.softness,
             flag(leave.by_hue),
             key_softness,

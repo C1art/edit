@@ -1,12 +1,18 @@
-use egui::{Color32, Rect, Sense, Stroke, StrokeKind, UiBuilder};
+use egui::{Color32, Rect, Sense, UiBuilder};
 use playback::Resolution;
 use timeline::PlaceMode;
 
 use crate::editor::Editor;
+use crate::icons::Icon;
+use crate::keymap::{Command, Keymap};
+use crate::monitor_drop;
 use crate::placing;
 use crate::program_zoom::MonitorZoom;
 use crate::project_files::PathPurpose;
-use crate::transport;
+use crate::source_drag;
+use crate::source_waveform;
+use crate::theme;
+use crate::transport::{self, Buttons, Extra};
 use crate::trim_monitor::TrimMonitor;
 
 /// Space below each picture for its scrub bar, transport and buttons, until they
@@ -23,9 +29,29 @@ pub enum Focus {
 
 /// The source monitor on the left and the program monitor on the right.
 pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
+    let focus = editor.focus;
+    // Columns narrower than the gap between them have no width at all.
+    if ui.available_width() <= 2.0 * ui.spacing().item_spacing.x {
+        return;
+    }
     ui.columns(2, |columns| {
-        fitted(&mut columns[0], |ui| source(editor, ui));
-        fitted(&mut columns[1], |ui| program(editor, ui));
+        // Each monitor measures its own controls; the columns alone don't tell them apart.
+        theme::focus_card(&mut columns[0], focus == Focus::Source, |ui| {
+            ui.push_id("source", |ui| {
+                fitted(ui, |ui| source(editor, ui));
+                monitor_drop::source(editor, ui, ui.min_rect());
+            });
+        });
+        theme::focus_card(&mut columns[1], focus == Focus::Program, |ui| {
+            ui.push_id("program", |ui| {
+                fitted(ui, |ui| program(editor, ui));
+                let mut picture = ui.min_rect();
+                if let Some(bottom) = ui.data(|data| data.get_temp(picture_bottom_id(ui))) {
+                    picture.max.y = bottom;
+                }
+                monitor_drop::program(editor, ui, picture);
+            });
+        });
     });
 }
 
@@ -33,14 +59,24 @@ fn controls_id(ui: &egui::Ui) -> egui::Id {
     ui.scope_id().with("controls_height")
 }
 
-/// Shows a monitor, then measures what it showed besides its picture, so that its
+fn picture_bottom_id(ui: &egui::Ui) -> egui::Id {
+    ui.scope_id().with("picture_bottom")
+}
+
+/// Shows a monitor, then measures what it showed under its picture, so that its
 /// picture leaves room for buttons wrapped onto more rows in a narrow monitor.
 fn fitted(ui: &mut egui::Ui, monitor: impl FnOnce(&mut egui::Ui)) {
-    let top = ui.cursor().top();
-    let picture = picture_size(ui).y;
+    let bottom_id = picture_bottom_id(ui);
+    ui.data_mut(|data| data.remove::<f32>(bottom_id));
     monitor(ui);
+    let Some(picture_bottom) = ui.data(|data| data.get_temp::<f32>(bottom_id)) else {
+        return;
+    };
     let id = controls_id(ui);
-    let measured = (ui.min_rect().bottom() - top - picture).max(0.0);
+    // The card holding the monitor fills its panel, so what the monitor used is up to
+    // the cursor, not the card's whole rect.
+    let used = ui.cursor().top() - ui.spacing().item_spacing.y;
+    let measured = (used - picture_bottom).max(0.0);
     let controls = ui.data(|data| data.get_temp(id)).unwrap_or(CONTROLS_HEIGHT);
     if (measured - controls).abs() > 0.5 {
         ui.data_mut(|data| data.insert_temp(id, measured));
@@ -57,25 +93,18 @@ fn title(ui: &mut egui::Ui, text: &str, focused: bool) {
     ui.colored_label(color, text);
 }
 
+/// The room for the picture, which must be shown at the cursor.
 fn picture_size(ui: &egui::Ui) -> egui::Vec2 {
     let controls = ui
         .data(|data| data.get_temp(controls_id(ui)))
         .unwrap_or(CONTROLS_HEIGHT);
-    egui::vec2(
+    let size = egui::vec2(
         ui.available_width(),
         (ui.available_height() - controls).max(SMALLEST_PICTURE),
-    )
-}
-
-fn outline(ui: &egui::Ui, response: &egui::Response, focused: bool) {
-    if focused {
-        ui.painter().rect_stroke(
-            response.rect,
-            0.0,
-            Stroke::new(1.5, Color32::from_rgb(80, 160, 255)),
-            StrokeKind::Outside,
-        );
-    }
+    );
+    let bottom = ui.cursor().top() + size.y;
+    ui.data_mut(|data| data.insert_temp(picture_bottom_id(ui), bottom));
+    size
 }
 
 fn source(editor: &mut Editor, ui: &mut egui::Ui) {
@@ -87,46 +116,80 @@ fn source(editor: &mut Editor, ui: &mut egui::Ui) {
         ui.painter().text(
             rect.center(),
             egui::Align2::CENTER_CENTER,
-            "Click an item in the project to open it here",
+            "Click or drag an item from the project to open it here",
             egui::FontId::proportional(13.0),
             ui.visuals().weak_text_color(),
         );
         return;
     };
-    title(ui, &format!("Source: {}", source.name), focused);
-    let response = source.viewer.picture(ui, picture_size(ui));
-    outline(ui, &response, focused);
+    let item = editor.timeline.sequence().media_item(source.source);
+    let has_both = item.is_some_and(|item| item.video.is_some() && item.has_audio);
+    let sound_only = item.filter(|item| item.video.is_none() && item.has_audio);
+    ui.horizontal(|ui| {
+        title(ui, &format!("Source: {}", source.name), focused);
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            source_drag::handles(ui, source, has_both);
+        });
+    });
+    let picture = source.viewer.picture(ui, picture_size(ui));
+    if let Some(item) = sound_only {
+        source_waveform::paint(
+            ui.painter(),
+            picture.rect,
+            source,
+            item,
+            &mut editor.clip_art,
+        );
+    }
+    let picture_rect = picture.rect;
+    let picture = source_drag::picture(ui, source, &picture);
+    if sound_only.is_some() {
+        source_waveform::seek_on_click(&picture, source);
+    }
     let marks = source.marks;
-    transport::ui(ui, &mut source.viewer.player, Some(marks));
+    let keymap = &editor.keymap;
+    let before = mark_buttons(keymap);
+    let after = [
+        extra(
+            keymap,
+            Icon::Insert,
+            "Insert",
+            Command::Insert,
+            Action::Insert,
+        ),
+        extra(
+            keymap,
+            Icon::Overwrite,
+            "Overwrite",
+            Command::Overwrite,
+            Action::Overwrite,
+        ),
+        extra(
+            keymap,
+            Icon::Subclip,
+            "Make a subclip of the marked part",
+            Command::MakeSubclip,
+            Action::Subclip,
+        ),
+    ];
+    let buttons = Buttons {
+        before: &before,
+        after: &after,
+        settings: false,
+    };
+    transport::rate_badge(ui, picture_rect, &source.viewer.player);
+    let pressed = transport::ui(ui, &mut source.viewer.player, Some(marks), keymap, buttons);
     let mut place = None;
     let mut subclip = false;
-    ui.horizontal_wrapped(|ui| {
-        if ui.button("Mark In").on_hover_text("I").clicked() {
-            source.mark_in();
-        }
-        if ui.button("Mark Out").on_hover_text("O").clicked() {
-            source.mark_out();
-        }
-        if ui
-            .button("Clear")
-            .on_hover_text("Clear in and out")
-            .clicked()
-        {
-            source.marks = timeline::Marks::default();
-        }
-        ui.separator();
-        if ui.button("Insert").on_hover_text(",").clicked() {
-            place = Some(PlaceMode::Insert);
-        }
-        if ui.button("Overwrite").on_hover_text(".").clicked() {
-            place = Some(PlaceMode::Overwrite);
-        }
-        ui.separator();
-        subclip = ui
-            .button("Subclip")
-            .on_hover_text("Make a subclip of the marked part (Ctrl+U)")
-            .clicked();
-    });
+    match pressed.action {
+        Some(Action::MarkIn) => source.mark_in(),
+        Some(Action::MarkOut) => source.mark_out(),
+        Some(Action::ClearMarks) => source.marks = timeline::Marks::default(),
+        Some(Action::Insert) => place = Some(PlaceMode::Insert),
+        Some(Action::Overwrite) => place = Some(PlaceMode::Overwrite),
+        Some(Action::Subclip) => subclip = true,
+        _ => {}
+    }
     if pressed_inside(ui) {
         editor.focus = Focus::Source;
     }
@@ -136,67 +199,94 @@ fn source(editor: &mut Editor, ui: &mut egui::Ui) {
     if subclip {
         editor.make_subclip();
     }
+    crate::effects::ken_burns_overlay(editor, ui, picture_rect);
 }
 
 fn program(editor: &mut Editor, ui: &mut egui::Ui) {
     let focused = editor.focus == Focus::Program;
-    title(ui, "Program", focused);
-    if editor.program.is_none() {
+    let name = format!("Program: {}", editor.shown_sequence_name());
+    title(ui, &name, focused);
+    let Some(program) = &mut editor.program else {
         return;
-    }
-    if let Some(response) = trim_picture(editor, ui) {
-        outline(ui, &response, focused);
-    } else if let Some(response) = crate::comparison::ui(editor, ui, picture_size(ui)) {
-        outline(ui, &response, focused);
-    } else {
-        zoomed_program(editor, ui, focused);
+    };
+    program.set_transparency_grid(editor.transparency_grid);
+    if trim_picture(editor, ui).is_none()
+        && crate::comparison::ui(editor, ui, picture_size(ui)).is_none()
+    {
+        zoomed_program(editor, ui);
     }
     let Some(program) = &mut editor.program else {
         return;
     };
     let marks = editor.timeline.sequence().marks;
-    transport::ui(ui, &mut program.player, Some(marks));
-    ui.horizontal_wrapped(|ui| {
-        if ui.button("Mark In").on_hover_text("I").clicked() {
-            editor.mark_sequence_in();
-        }
-        if ui.button("Mark Out").on_hover_text("O").clicked() {
-            editor.mark_sequence_out();
-        }
-        if ui
-            .button("Clear")
-            .on_hover_text("Clear in and out (Ctrl+Shift+X)")
-            .clicked()
-        {
-            editor.clear_sequence_marks();
-        }
-        ui.separator();
-        if ui.button("Lift").on_hover_text(";").clicked() {
-            editor.lift_marked();
-        }
-        if ui.button("Extract").on_hover_text("'").clicked() {
-            editor.extract_marked();
-        }
-        ui.separator();
-        let export_frame = ui
-            .button("Still")
-            .on_hover_text("Export Frame: save the picture at the playhead as an image (Ctrl+Shift+E)");
-        if export_frame.clicked() {
-            editor.prompt_path(PathPurpose::ExportFrame);
-        }
-        ui.menu_button("View", |ui| {
+    let keymap = &editor.keymap;
+    let before = mark_buttons(keymap);
+    let after = [
+        extra(
+            keymap,
+            Icon::Lift,
+            "Lift",
+            Command::LiftMarked,
+            Action::Lift,
+        ),
+        extra(
+            keymap,
+            Icon::Extract,
+            "Extract",
+            Command::ExtractMarked,
+            Action::Extract,
+        ),
+        extra(
+            keymap,
+            Icon::Camera,
+            "Export Frame: save the picture at the playhead as an image",
+            Command::ExportFrame,
+            Action::ExportFrame,
+        ),
+    ];
+    let buttons = Buttons {
+        before: &before,
+        after: &after,
+        settings: true,
+    };
+    let pressed = transport::ui(ui, &mut program.player, Some(marks), keymap, buttons);
+    match pressed.action {
+        Some(Action::MarkIn) => editor.mark_sequence_in(),
+        Some(Action::MarkOut) => editor.mark_sequence_out(),
+        Some(Action::ClearMarks) => editor.clear_sequence_marks(),
+        Some(Action::Lift) => editor.lift_marked(),
+        Some(Action::Extract) => editor.extract_marked(),
+        Some(Action::ExportFrame) => editor.prompt_path(PathPurpose::ExportFrame),
+        _ => {}
+    }
+    if let Some(settings) = pressed.settings {
+        egui::Popup::menu(&settings).show(|ui| {
             ui.checkbox(&mut editor.safe_margins, "Safe Margins");
+            ui.checkbox(&mut editor.transparency_grid, "Transparency Grid")
+                .on_hover_text("A checkerboard where nothing covers the frame");
+            crate::guides::menu(ui, editor);
+            let mut ganged = editor.ganged;
+            let toggle = ui
+                .checkbox(&mut ganged, "Gang Source and Program")
+                .on_hover_text("Moving either playhead moves the other by as much");
+            if toggle.clicked() {
+                editor.toggle_gang();
+            }
+            ui.checkbox(
+                &mut editor.dropped_frame_indicator,
+                "Show Dropped Frame Indicator",
+            );
             let mut multicam = editor.multicam_view;
             let toggle = ui
                 .checkbox(&mut multicam, "Multi-Camera")
-                .on_hover_text("Every camera of the multi-camera clips beside the program; click one or press 1–9 to switch (Shift+0)");
+                .on_hover_text(editor.keymap.tip(MULTICAM_TIP, Command::MulticamView));
             if toggle.clicked() {
                 editor.toggle_multicam_view();
             }
             let mut comparing = editor.comparison.is_some();
             let toggle = ui
                 .checkbox(&mut comparing, "Comparison View")
-                .on_hover_text("A reference frame of the sequence beside the program, for matching shots");
+                .on_hover_text(COMPARISON_TIP);
             if toggle.clicked() {
                 editor.toggle_comparison_view();
             }
@@ -220,14 +310,72 @@ fn program(editor: &mut Editor, ui: &mut egui::Ui) {
                 }
             });
         });
-    });
+    }
     if pressed_inside(ui) {
         editor.focus = Focus::Program;
     }
 }
 
+const MULTICAM_TIP: &str = "Every camera of the multi-camera clips beside the program; click \
+                            one or press 1–9 to switch";
+const COMPARISON_TIP: &str =
+    "A reference frame of the sequence beside the program, for matching shots";
+
+#[derive(Debug, Clone, Copy)]
+enum Action {
+    MarkIn,
+    MarkOut,
+    ClearMarks,
+    Insert,
+    Overwrite,
+    Subclip,
+    Lift,
+    Extract,
+    ExportFrame,
+}
+
+fn extra(
+    keymap: &Keymap,
+    icon: Icon,
+    tip: &str,
+    command: Command,
+    action: Action,
+) -> Extra<Action> {
+    Extra {
+        icon,
+        tip: keymap.tip(tip, command),
+        action,
+    }
+}
+
+fn mark_buttons(keymap: &Keymap) -> [Extra<Action>; 3] {
+    [
+        extra(
+            keymap,
+            Icon::MarkIn,
+            "Mark In",
+            Command::MarkIn,
+            Action::MarkIn,
+        ),
+        extra(
+            keymap,
+            Icon::MarkOut,
+            "Mark Out",
+            Command::MarkOut,
+            Action::MarkOut,
+        ),
+        extra(
+            keymap,
+            Icon::ClearMarks,
+            "Clear In and Out",
+            Command::ClearInOut,
+            Action::ClearMarks,
+        ),
+    ]
+}
+
 /// The program picture at the chosen zoom, clipped to the monitor.
-fn zoomed_program(editor: &mut Editor, ui: &mut egui::Ui, focused: bool) {
+fn zoomed_program(editor: &mut Editor, ui: &mut egui::Ui) {
     let Some(program) = &editor.program else {
         return;
     };
@@ -243,11 +391,20 @@ fn zoomed_program(editor: &mut Editor, ui: &mut egui::Ui, focused: bool) {
     let painter = ui.painter_at(area);
     painter.rect_filled(area, 0.0, Color32::BLACK);
     program.paint(&painter, picture);
-    outline(ui, &response, focused);
     // Handles past the monitor's edge neither show nor take the pointer.
     let mut clipped = ui.new_child(UiBuilder::new().id_salt("program_overlays").max_rect(area));
     clipped.set_clip_rect(area.intersect(ui.clip_rect()));
     program_overlays(editor, &mut clipped, &response, picture);
+    if let Some(program) = editor
+        .program
+        .as_ref()
+        .filter(|_| editor.dropped_frame_indicator)
+    {
+        crate::dropped_frames::indicator(&mut clipped, area, &program.player);
+    }
+    if let Some(program) = &editor.program {
+        transport::rate_badge(&clipped, area, &program.player);
+    }
 }
 
 /// What the program picture shows on top: the camera grid, or safe margins and the
@@ -273,7 +430,9 @@ fn program_overlays(
         if !crate::graphics_tools::overlay(editor, ui, picture) {
             crate::effects::motion_overlay(editor, ui, picture);
             crate::effects::mask_overlay(editor, ui, picture);
+            crate::effects::matte_overlay(editor, ui, picture);
         }
+        crate::guides::overlay(editor, ui, picture);
     }
 }
 

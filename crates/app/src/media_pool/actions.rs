@@ -1,28 +1,26 @@
 use std::path::{Path, PathBuf};
 
+use media::MediaError;
 use timeline::{
-    AddBin, CreateMulticam, DuplicateMedia, Edit, InterpretFootage, MakeOffline, MakeSubclip,
-    MergeClips, MoveToBin, RelinkMedia, RemoveBin, RemoveMedia, RenameBin, RenameMedia, SetProxy,
-    SourceId, Ticks, TimelineError,
+    AddBin, BinSearch, CreateMulticam, DuplicateMedia, Edit, ImportMedia, InterpretFootage,
+    MakeOffline, MakeSubclip, MergeClips, MoveToBin, RelinkMedia, RemoveBin, RenameBin,
+    RenameMedia, SetBinSearch, SetPosterFrame, SetProxy, SourceId, Ticks, TimelineError,
 };
 
 use super::{PoolAction, PoolEntry};
 use crate::editor::Editor;
 use crate::import::Probed;
 use crate::multicam_sync::Synced;
-use crate::project_files::PathPurpose;
+use crate::project_files::{quoted_name, PathPurpose};
 
 impl Editor {
     pub(crate) fn pool_action(&mut self, action: PoolAction) {
         match action {
             PoolAction::Open(id) => self.open_source(id),
+            PoolAction::RevealInExplorer(id) => self.reveal_in_explorer(id),
+            PoolAction::EditOriginal(id) => self.edit_original(id),
             PoolAction::OpenNest(id) => self.enter_nest(id, Ticks::ZERO),
-            PoolAction::Remove(id) => {
-                if self.source_shows(id) {
-                    self.source = None;
-                }
-                self.apply_to_pool(RemoveMedia { source: id });
-            }
+            PoolAction::Remove(id) => self.remove_media(id),
             PoolAction::Duplicate(source) => {
                 self.apply_to_pool(DuplicateMedia { source });
             }
@@ -48,7 +46,22 @@ impl Editor {
             }
             PoolAction::Interpret(id) => self.open_interpret_footage(id),
             PoolAction::AudioChannels(id) => self.open_audio_channels(id),
-            PoolAction::NewBin(parent) => self.new_bin(parent),
+            PoolAction::Timecode(id) => self.open_media_timecode(id),
+            PoolAction::EditSubclip(id) => self.open_edit_subclip(id),
+            PoolAction::SetPosterFrame(id) => self.set_poster_frame(id),
+            PoolAction::ClearPosterFrame(id) => {
+                self.apply_to_pool(SetPosterFrame {
+                    source: id,
+                    at: None,
+                });
+            }
+            PoolAction::BreakoutToMono(id) => self.breakout_to_mono(id),
+            PoolAction::Import => self.prompt_path(PathPurpose::Import),
+            PoolAction::NewBin(parent) => self.new_bin(parent, None),
+            PoolAction::NewSearchBin(search) => self.new_bin(None, Some(search)),
+            PoolAction::SetBinSearch(bin, search) => {
+                self.apply_to_pool(SetBinSearch { bin, search });
+            }
             PoolAction::RenameBin(bin, name) => {
                 self.apply_to_pool(RenameBin { bin, name });
             }
@@ -57,11 +70,19 @@ impl Editor {
             }
             PoolAction::Move(entry, to) => {
                 let (media, bins) = match entry {
+                    // Moving one of several selected items takes the others along.
+                    PoolEntry::Media(id) if self.pool.selected.contains(&id) => {
+                        let sequence = self.timeline.project();
+                        let media = self.pool.selected.iter().copied();
+                        let media = media.filter(|&id| sequence.media_item(id).is_some());
+                        (media.collect(), Vec::new())
+                    }
                     PoolEntry::Media(id) => (vec![id], Vec::new()),
                     PoolEntry::Bin(id) => (Vec::new(), vec![id]),
                 };
                 self.apply_to_pool(MoveToBin { media, bins, to });
             }
+            PoolAction::Automate => self.open_automate(),
             PoolAction::CreateMulticam(sources, sync) => {
                 self.sync_sources(sources, sync, Synced::Multicam)
             }
@@ -82,7 +103,7 @@ impl Editor {
                 let rate = self.timeline.sequence().format.frame_rate;
                 importer.request(path, replacing, rate);
             }
-            None => self.notice(format!("Cannot import {}", path.display())),
+            None => self.notice(format!("Cannot import {}", quoted_name(&path))),
         }
     }
 
@@ -90,38 +111,72 @@ impl Editor {
         let Some(importer) = &mut self.importer else {
             return;
         };
-        for Probed { replacing, result } in importer.poll() {
-            match (result, replacing) {
-                (Ok(media), Some(source)) => {
+        let probed = importer.poll();
+        let failures = importer.take_failures();
+        let busy = importer.is_busy();
+        // Files picked together arrive over several frames but undo as one import.
+        let revision = self.timeline.revision();
+        let mark = match self.import_mark {
+            Some((mark, seen)) if seen == revision => mark,
+            _ => self.timeline.edit_mark(),
+        };
+        for Probed { replacing, media } in probed {
+            match replacing {
+                Some(source) => {
                     let folder = media.path.parent().map(Path::to_owned);
+                    let old_folder = self
+                        .timeline
+                        .project()
+                        .media
+                        .iter()
+                        .find(|item| item.id == source)
+                        .and_then(|item| item.path.parent().map(Path::to_owned));
                     if self.apply_to_pool(RelinkMedia { source, media }) {
-                        self.relinked(source, folder);
+                        self.relinked(source, folder, old_folder);
                         if self.source_shows(source) {
                             self.open_source(source);
                         }
                     }
                 }
-                (Ok(import), None) => {
-                    if self.apply(import) {
-                        if let Some(id) = self.timeline.sequence().media.last().map(|item| item.id)
-                        {
+                None => {
+                    let placed = media
+                        .still
+                        .then(|| self.still_length.placed(self.timeline.sequence()))
+                        .flatten();
+                    let frame_fit = self.media_scaling.fit();
+                    let media = ImportMedia {
+                        placed,
+                        frame_fit,
+                        ..media
+                    };
+                    if self.apply(media) {
+                        if let Some(item) = self.timeline.sequence().media.last() {
+                            self.proxy_offer.imported(item);
+                            let id = item.id;
                             self.open_source(id);
                         }
                     }
                 }
-                (Err((path, error)), _) => {
-                    self.notice(format!("Cannot use {}: {error}", path.display()));
-                }
             }
+        }
+        self.timeline.join_since(mark);
+        self.import_mark = busy.then(|| (mark, self.timeline.revision()));
+        if let Some(notice) = failures_notice(&failures) {
+            self.notice(notice);
         }
     }
 
-    /// Adds a bin numbered after the project's others and opens its name for typing.
-    fn new_bin(&mut self, parent: Option<timeline::BinId>) {
-        let name = format!("Bin {}", self.timeline.project().bins.len() + 1);
+    /// Adds a bin, numbered after the project's others or named for its search, and opens
+    /// its name for typing.
+    fn new_bin(&mut self, parent: Option<timeline::BinId>, search: Option<BinSearch>) {
+        let name = match &search {
+            Some(search) => format!("Search: {}", search.text),
+            None => format!("Bin {}", self.timeline.project().bins.len() + 1),
+        };
         if self.apply_to_pool(AddBin {
             name: name.clone(),
             parent,
+            search,
         }) {
             if let Some(bin) = self.timeline.project().bins.last() {
                 self.pool.renaming = Some((PoolEntry::Bin(bin.id), name));
@@ -178,6 +233,16 @@ impl Editor {
         }
     }
 
+    fn set_poster_frame(&mut self, id: SourceId) {
+        let Some(source) = self.source.as_ref().filter(|source| source.source == id) else {
+            self.open_source(id);
+            self.notice("Park the Source monitor on the frame, then Set Poster Frame again");
+            return;
+        };
+        let at = Some(source.media_position());
+        self.apply_to_pool(SetPosterFrame { source: id, at });
+    }
+
     /// Adds the source monitor's marked range to the project as a subclip.
     pub(crate) fn make_subclip(&mut self) {
         let Some(source) = &self.source else {
@@ -197,7 +262,7 @@ impl Editor {
         }
     }
 
-    fn source_shows(&self, id: SourceId) -> bool {
+    pub(super) fn source_shows(&self, id: SourceId) -> bool {
         self.source
             .as_ref()
             .is_some_and(|source| source.source == id)
@@ -218,4 +283,25 @@ impl Editor {
             }
         }
     }
+}
+
+/// One message for a batch of files that couldn't be imported, naming the first few.
+fn failures_notice(failures: &[(PathBuf, MediaError)]) -> Option<String> {
+    const NAMED: usize = 3;
+    let ((_, error), rest) = failures.split_first()?;
+    let more = match failures.len().saturating_sub(NAMED) {
+        0 => String::new(),
+        hidden => format!(" and {hidden} more"),
+    };
+    let named = failures.iter().take(NAMED);
+    let text = if rest.iter().all(|(_, other)| other == error) {
+        let names: Vec<String> = named.map(|(path, _)| quoted_name(path)).collect();
+        format!("{}{more}: {error}", names.join(", "))
+    } else {
+        let reasons: Vec<String> = named
+            .map(|(path, error)| format!("{}: {error}", quoted_name(path)))
+            .collect();
+        format!("{}{more}", reasons.join("; "))
+    };
+    Some(format!("Cannot import {text}"))
 }

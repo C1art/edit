@@ -1,11 +1,12 @@
 use std::ops::Range;
 use std::sync::Arc;
+use std::time::Duration;
 
 use egui::{Key, ProgressBar};
 use playback::{EnvelopeEvent, EnvelopeJob};
 use timeline::{
     active_spans, ducked_volume, AudioType, AutoDuck, ClipId, Gain, Sequence, Ticks, Timebase,
-    Track, TrackKind,
+    Track, TrackId, TrackKind,
 };
 
 use crate::editor::Editor;
@@ -19,7 +20,7 @@ const PAUSE_MS: i64 = 300;
 pub(crate) struct DuckDialog {
     clips: Vec<ClipId>,
     /// One per audio track: whether the clips duck under it.
-    against: Vec<bool>,
+    against: Vec<(TrackId, bool)>,
     amount_db: f32,
     /// 0 to 10; higher hears quieter sound as worth ducking for.
     sensitivity: f32,
@@ -31,6 +32,8 @@ struct Measuring {
     job: EnvelopeJob,
     start: Ticks,
     progress: f32,
+    /// The timeline revision listened to; what was heard is stale once it changes.
+    revision: u64,
 }
 
 impl Editor {
@@ -53,7 +56,7 @@ impl Editor {
         let against = sequence
             .audio
             .iter()
-            .map(|track| !holds_target(track))
+            .map(|track| (track.id, !holds_target(track)))
             .collect();
         self.duck_dialog = Some(DuckDialog {
             clips,
@@ -78,8 +81,10 @@ impl Editor {
                 clip.audio_type == Some(AudioType::Dialogue) && !dialog.clips.contains(&clip.id)
             })
         };
-        let against: Vec<bool> = sequence.audio.iter().map(speaks).collect();
-        if against.contains(&true) {
+        let against: Vec<_> = (sequence.audio.iter())
+            .map(|track| (track.id, speaks(track)))
+            .collect();
+        if against.iter().any(|&(_, on)| on) {
             dialog.against = against;
         }
     }
@@ -89,6 +94,7 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     let Some(dialog) = &mut editor.duck_dialog else {
         return;
     };
+    let tracks = &editor.timeline.sequence().audio;
     let mut measured = None;
     let mut warnings = Vec::new();
     if let Some(measuring) = &mut dialog.measuring {
@@ -99,65 +105,67 @@ pub(crate) fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                 EnvelopeEvent::Measured(levels) => measured = Some(levels),
             }
         }
-        ctx.request_repaint();
+        ctx.request_repaint_after(Duration::from_millis(100));
     }
     let mut generate = false;
     let mut cancelled = false;
-    egui::Window::new("Auto Duck")
-        .collapsible(false)
-        .resizable(false)
-        .show(ctx, |ui| {
-            let measuring = dialog.measuring.as_ref();
-            ui.add_enabled_ui(measuring.is_none(), |ui| {
-                ui.label(format!(
-                    "Lower {} selected audio clip(s) while these tracks are heard:",
-                    dialog.clips.len()
-                ));
-                ui.horizontal_wrapped(|ui| {
-                    for (index, against) in dialog.against.iter_mut().enumerate() {
+    crate::dialog::window(ctx, "Auto Duck").show(ctx, |ui| {
+        let measuring = dialog.measuring.as_ref();
+        ui.add_enabled_ui(measuring.is_none(), |ui| {
+            ui.label(format!(
+                "Lower {} selected audio clip(s) while these tracks are heard:",
+                dialog.clips.len()
+            ));
+            ui.horizontal_wrapped(|ui| {
+                for (id, against) in &mut dialog.against {
+                    // A track deleted since opening has nothing left to hear.
+                    if let Some(index) = tracks.iter().position(|track| track.id == *id) {
                         ui.checkbox(against, format!("A{}", index + 1));
                     }
+                }
+            });
+            egui::Grid::new("duck settings")
+                .num_columns(2)
+                .show(ui, |ui| {
+                    ui.label("Duck Amount");
+                    ui.add(
+                        egui::DragValue::new(&mut dialog.amount_db)
+                            .range(0.0..=-Gain::SILENT.db())
+                            .speed(0.1)
+                            .suffix(" dB"),
+                    );
+                    ui.end_row();
+                    ui.label("Sensitivity");
+                    ui.add(egui::Slider::new(&mut dialog.sensitivity, 0.0..=10.0))
+                        .on_hover_text("Higher ducks under quieter sound");
+                    ui.end_row();
+                    ui.label("Fade Duration");
+                    ui.add(
+                        egui::DragValue::new(&mut dialog.fade_ms)
+                            .range(0..=5_000)
+                            .suffix(" ms"),
+                    );
+                    ui.end_row();
                 });
-                egui::Grid::new("duck settings")
-                    .num_columns(2)
-                    .show(ui, |ui| {
-                        ui.label("Duck Amount");
-                        ui.add(
-                            egui::DragValue::new(&mut dialog.amount_db)
-                                .range(0.0..=-Gain::SILENT.db())
-                                .speed(0.1)
-                                .suffix(" dB"),
-                        );
-                        ui.end_row();
-                        ui.label("Sensitivity");
-                        ui.add(egui::Slider::new(&mut dialog.sensitivity, 0.0..=10.0))
-                            .on_hover_text("Higher ducks under quieter sound");
-                        ui.end_row();
-                        ui.label("Fade Duration");
-                        ui.add(
-                            egui::DragValue::new(&mut dialog.fade_ms)
-                                .range(0..=5_000)
-                                .suffix(" ms"),
-                        );
-                        ui.end_row();
-                    });
-                ui.weak("Replaces the clips' volume keyframes.");
-            });
-            if let Some(measuring) = measuring {
-                ui.add(
-                    ProgressBar::new(measuring.progress)
-                        .show_percentage()
-                        .text("Listening…"),
-                );
-            }
-            ui.horizontal(|ui| {
-                generate = measuring.is_none()
-                    && (ui.button("Generate Keyframes").clicked()
-                        || ui.input(|input| input.key_pressed(Key::Enter)));
-                cancelled = ui.button("Cancel").clicked()
-                    || ui.input(|input| input.key_pressed(Key::Escape));
-            });
+            ui.weak("Replaces the clips' volume keyframes.");
         });
+        if let Some(measuring) = measuring {
+            ui.add(
+                ProgressBar::new(measuring.progress)
+                    .show_percentage()
+                    .text("Listening…"),
+            );
+        }
+        crate::dialog::footer(ui, |ui| {
+            cancelled =
+                ui.button("Cancel").clicked() || ui.input(|input| input.key_pressed(Key::Escape));
+            generate = measuring.is_none()
+                && (ui
+                    .add(crate::dialog::primary("Generate Keyframes"))
+                    .clicked()
+                    || ui.input(|input| input.key_pressed(Key::Enter)));
+        });
+    });
     for warning in warnings {
         editor.notice(format!("Heard as silence: {warning}"));
     }
@@ -180,7 +188,7 @@ fn start(editor: &mut Editor) {
         editor.duck_dialog = None;
         return;
     };
-    if !dialog.against.contains(&true) {
+    if !dialog.against.iter().any(|&(_, on)| on) {
         editor.notice("Choose the tracks to duck under");
         return;
     }
@@ -191,6 +199,7 @@ fn start(editor: &mut Editor) {
                 job,
                 start: span.start,
                 progress: 0.0,
+                revision: editor.timeline.revision(),
             });
         }
         Err(error) => editor.notice(format!("Cannot auto duck: {error}")),
@@ -204,6 +213,10 @@ fn duck(editor: &mut Editor, levels: &[f32]) {
     let Some(measuring) = dialog.measuring else {
         return;
     };
+    if editor.timeline.revision() != measuring.revision {
+        editor.notice("The sequence changed while listening; run Auto Duck again");
+        return;
+    }
     let sequence = editor.timeline.sequence();
     let threshold = -20.0 - 3.0 * dialog.sensitivity;
     let pause = milliseconds(sequence, PAUSE_MS);
@@ -239,12 +252,12 @@ fn targets_span(sequence: &Sequence, clips: &[ClipId], fade: Ticks) -> Option<Ra
 }
 
 /// Only the chosen audio tracks, as they are mixed, without the clips being ducked.
-fn heard_alone(sequence: &Sequence, against: &[bool], ducked: &[ClipId]) -> Sequence {
+fn heard_alone(sequence: &Sequence, against: &[(TrackId, bool)], ducked: &[ClipId]) -> Sequence {
     let mut heard = sequence.clone();
     heard.video.iter_mut().for_each(|track| track.clips.clear());
     heard.master = Gain::UNITY;
-    for (index, track) in heard.audio.iter_mut().enumerate() {
-        if against.get(index).copied().unwrap_or(false) {
+    for track in &mut heard.audio {
+        if against.contains(&(track.id, true)) {
             track.clips.retain(|clip| !ducked.contains(&clip.id));
             track.muted = false;
             track.solo = false;

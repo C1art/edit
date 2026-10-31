@@ -1,4 +1,4 @@
-/// How an H.264 or HEVC encoder spends bits.
+/// How an H.264, HEVC, VP9 or AV1 encoder spends bits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RateControl {
     /// Constant rate factor: lower is better and larger; 18 looks lossless on most
@@ -8,11 +8,24 @@ pub enum RateControl {
     Bitrate(u32),
 }
 
+/// Which encoders a rate-controlled export may use.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Acceleration {
+    /// The GPU's encoder (NVIDIA NVENC, AMD AMF or Intel Quick Sync) when one opens,
+    /// otherwise software.
+    #[default]
+    Hardware,
+    Software,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum VideoCodec {
     #[default]
     H264,
     Hevc,
+    /// Google's VP9, for WebM on the web.
+    Vp9,
+    Av1,
     /// Apple ProRes 4:2:2 10-bit, which sets its own data rate.
     ProRes422,
     ProRes422Hq,
@@ -54,7 +67,7 @@ impl DnxhrQuality {
 impl VideoCodec {
     /// Whether [`RateControl`] applies.
     pub fn is_rate_controlled(self) -> bool {
-        matches!(self, Self::H264 | Self::Hevc)
+        matches!(self, Self::H264 | Self::Hevc | Self::Vp9 | Self::Av1)
     }
 
     /// Whether the picture's transparency is kept.
@@ -72,6 +85,7 @@ pub enum AudioCodec {
     #[default]
     Aac,
     Mp3,
+    Opus,
     Flac,
     Pcm16,
     Pcm24,
@@ -80,6 +94,11 @@ pub enum AudioCodec {
 impl AudioCodec {
     /// Whether the bitrate setting applies; lossless codecs take what they need.
     pub fn is_lossy(self) -> bool {
-        matches!(self, Self::Aac | Self::Mp3)
+        matches!(self, Self::Aac | Self::Mp3 | Self::Opus)
+    }
+
+    /// The one sample rate the codec takes, for codecs that can't be given another.
+    pub fn fixed_sample_rate(self) -> Option<u32> {
+        (self == Self::Opus).then_some(48_000)
     }
 }

@@ -147,6 +147,7 @@ mod tests {
             speed: Speed::new(1, 2).unwrap(),
             reverse: false,
             maintain_pitch: true,
+            curve: &[],
         };
         let mut wsola = Wsola::default();
         let mut out = vec![0.0; 2 * 9600];

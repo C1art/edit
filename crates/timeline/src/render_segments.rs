@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::ops::Range;
+use std::sync::Arc;
 
 use crate::{Clip, ColorCorrection, Look, Sequence, SourceId, Ticks, Track};
 
@@ -31,7 +32,10 @@ fn costly(sequence: &Sequence, visible: &[&Track], segment: &Range<Ticks>) -> bo
             }
         }
         // An incoming clip's transition starts before its cut.
-        let incoming = track.clips.iter().find(|clip| clip.start == segment.end);
+        let incoming = track
+            .clips
+            .get(track.clips.partition_point(|clip| clip.start < segment.end))
+            .filter(|clip| clip.start == segment.end);
         if incoming.is_some_and(|clip| clip.transition_in.is_some()) {
             return true;
         }
@@ -104,12 +108,13 @@ pub fn segment_content(sequence: &Sequence, segment: &Range<Ticks>) -> Sequence 
             media.proxy = None;
             media
         })
-        .collect();
+        .collect::<Vec<_>>()
+        .into();
     content
 }
 
 /// The clips overlapping `segment` and their neighbours on either side.
-fn around<'a>(track: &'a Track, segment: &Range<Ticks>) -> &'a [Clip] {
+fn around<'a>(track: &'a Track, segment: &Range<Ticks>) -> &'a [Arc<Clip>] {
     let first = track
         .clips
         .partition_point(|clip| clip.end() <= segment.start);
@@ -137,7 +142,7 @@ mod tests {
         sequence.video = tracks
             .into_iter()
             .map(|clips| Track {
-                clips,
+                clips: clips.into_iter().map(Arc::new).collect(),
                 ..Track::default()
             })
             .collect();
@@ -163,9 +168,9 @@ mod tests {
         let mut sequence = sequence(vec![vec![clip(1, 0, 100), clip(2, 100, 100)]; 2]);
         let segment = Ticks(0)..Ticks(100);
         let before = segment_content(&sequence, &segment);
-        sequence.video[0].clips.push(clip(4, 500, 100));
+        sequence.video[0].clips.push(clip(4, 500, 100).into());
         assert_eq!(segment_content(&sequence, &segment), before);
-        sequence.video[1].clips[1].look.opacity = crate::Param::new(5000);
+        Arc::make_mut(&mut sequence.video[1].clips[1]).look.opacity = crate::Param::new(5000);
         assert_ne!(segment_content(&sequence, &segment), before);
     }
 }

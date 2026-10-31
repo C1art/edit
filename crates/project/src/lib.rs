@@ -1,8 +1,11 @@
 mod error;
 mod json;
 mod presets;
+mod replace;
+mod templates;
+mod text_styles;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use timeline::Sequence;
@@ -10,6 +13,9 @@ use timeline::Sequence;
 pub use error::ProjectError;
 use json::Value;
 pub use presets::PresetsFile;
+pub use replace::{rename_into_place, replace_file, retry_while_in_use};
+pub use templates::TemplatesFile;
+pub use text_styles::TextStylesFile;
 
 /// Bump on every breaking change to the file layout and add a migration from the previous version.
 pub const FORMAT_VERSION: u32 = 1;
@@ -20,13 +26,26 @@ const VERSION_FIELD: &str = "format_version";
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProjectFile {
     pub format_version: u32,
+    /// The folder the project was saved in, so media moved along with it is found again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub saved_in: Option<PathBuf>,
     pub sequence: Sequence,
+}
+
+/// A project as `save` writes it, borrowing the sequence rather than copying it.
+#[derive(Serialize)]
+struct Saving<'a> {
+    format_version: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    saved_in: Option<&'a Path>,
+    sequence: &'a Sequence,
 }
 
 impl ProjectFile {
     pub fn new(sequence: Sequence) -> Self {
         Self {
             format_version: FORMAT_VERSION,
+            saved_in: None,
             sequence,
         }
     }
@@ -48,20 +67,24 @@ impl ProjectFile {
         Ok(project)
     }
 
-    /// Writes beside `path` first, so a failed save never leaves a half-written project.
     pub fn save(&self, path: &Path) -> Result<(), ProjectError> {
-        let text = self.to_text()?;
-        let mut partial = path.as_os_str().to_owned();
-        partial.push(".saving");
-        std::fs::write(&partial, text)?;
-        std::fs::rename(&partial, path).inspect_err(|_| {
-            let _ = std::fs::remove_file(&partial);
-        })?;
-        Ok(())
+        let saving = Saving {
+            format_version: self.format_version,
+            saved_in: path.parent().filter(|folder| folder.is_absolute()),
+            sequence: &self.sequence,
+        };
+        let text = json::to_value(&saving)?.to_text();
+        Ok(replace_file(path, text.as_bytes())?)
     }
 
+    /// Reads the project at `path`. If it was moved since it was saved, files missing from
+    /// where they were are looked for where they'd be had they moved along with it.
     pub fn load(path: &Path) -> Result<Self, ProjectError> {
-        Self::from_text(&std::fs::read_to_string(path)?)
+        let mut project = Self::from_text(&std::fs::read_to_string(path)?)?;
+        if let (Some(saved_in), Some(now_in)) = (&project.saved_in, path.parent()) {
+            timeline::follow_moved_project(&mut project.sequence, saved_in, now_in, Path::exists);
+        }
+        Ok(project)
     }
 }
 
@@ -86,6 +109,12 @@ fn format_version(document: &Value, newest: u32) -> Result<u32, ProjectError> {
     };
     if version > newest {
         return Err(ProjectError::UnsupportedVersion(version));
+    }
+    // Versions count from 1, so no build ever wrote a lower one.
+    if version < 1 {
+        return Err(ProjectError::Invalid(format!(
+            "format version {version} doesn't exist"
+        )));
     }
     Ok(version)
 }

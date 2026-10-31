@@ -1,13 +1,15 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use crate::file_url::path_from_url;
 use crate::xmeml_markers::XmlMarker;
 use crate::xml::{self, Element};
 use crate::{
     Alignment, Clip, ClipId, Edit, FrameRate, Gain, LinkId, MediaItem, Nest, Sequence, SourceId,
-    Ticks, TimelineError, Track, Transition, TransitionKind, VideoFormat,
+    Speed, Ticks, TimelineError, Track, Transition, TransitionKind, VideoFormat,
 };
+use resolve::{resolve, Item};
 
 /// A sequence read from Final Cut Pro XML, as Premiere, Resolve and Final Cut Pro 7
 /// write it. Applied, it joins the project as a nested sequence, adding its files to the
@@ -48,20 +50,15 @@ struct XmlClip {
     transition_in: Option<(TransitionKind, i64, Alignment)>,
     transition_out: Option<(TransitionKind, i64)>,
     markers: Vec<XmlMarker>,
+    retime: Option<Retime>,
 }
 
-/// One child of a `<track>` in document order, with times as written, -1 for unknown.
-enum Item {
-    Transition {
-        start: i64,
-        end: i64,
-        alignment: String,
-        kind: TransitionKind,
-    },
-    Clip {
-        clip: XmlClip,
-        out: i64,
-    },
+/// A Time Remap filter's constant speed, which writers put on the picture only; `None`
+/// speed is a frame hold.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Retime {
+    speed: Option<Speed>,
+    reverse: bool,
 }
 
 /// Reads the first sequence in a Final Cut Pro XML document.
@@ -78,8 +75,11 @@ pub fn read_xmeml(text: &str) -> Result<ImportXmeml, TimelineError> {
             format.and_then(rate_of)
         })
         .ok_or_else(|| unreadable("the sequence has no frame rate"))?;
+    let mut descriptions = HashMap::new();
+    file_descriptions(&root, &mut descriptions);
     let mut reader = Reader {
         rate,
+        descriptions,
         files: Vec::new(),
         file_keys: HashMap::new(),
         link_keys: HashMap::new(),
@@ -110,16 +110,20 @@ pub fn read_xmeml(text: &str) -> Result<ImportXmeml, TimelineError> {
     })
 }
 
-struct Reader {
+struct Reader<'a> {
     rate: FrameRate,
+    /// Every file described in full anywhere in the document, by id, for clips that
+    /// name a file first described somewhere this reader doesn't walk, such as inside a
+    /// nested sequence or a bin.
+    descriptions: HashMap<&'a str, &'a Element>,
     files: Vec<XmlFile>,
     file_keys: HashMap<String, usize>,
     /// Each linked set by the lowest clip id in it, which every member names.
     link_keys: HashMap<String, usize>,
 }
 
-impl Reader {
-    fn track(&mut self, track: &Element, video: bool) -> Result<Vec<XmlClip>, TimelineError> {
+impl<'a> Reader<'a> {
+    fn track(&mut self, track: &'a Element, video: bool) -> Result<Vec<XmlClip>, TimelineError> {
         let mut items = Vec::new();
         for element in &track.children {
             match element.name.as_str() {
@@ -154,7 +158,7 @@ impl Reader {
 
     /// A clip of a file; clips of generators and nested sequences have none and are
     /// skipped.
-    fn clip(&mut self, element: &Element, video: bool) -> Result<Option<Item>, TimelineError> {
+    fn clip(&mut self, element: &'a Element, video: bool) -> Result<Option<Item>, TimelineError> {
         let Some(file) = element.child("file") else {
             return Ok(None);
         };
@@ -183,17 +187,24 @@ impl Reader {
             transition_in: None,
             transition_out: None,
             markers: XmlMarker::all(element),
+            retime: retime(element),
         };
         let out = element.number_at(&["out"]).unwrap_or(-1);
         Ok(Some(Item::Clip { clip, out }))
     }
 
     /// The file a clip uses; the first mention describes it and later ones name its id.
-    fn file(&mut self, element: &Element, video: bool) -> Result<usize, TimelineError> {
+    fn file(&mut self, element: &'a Element, video: bool) -> Result<usize, TimelineError> {
         let key = element.attribute("id").unwrap_or_default().to_owned();
-        let described = element.child("pathurl").is_some() || element.child("name").is_some();
+        let element = match self.descriptions.get(key.as_str()) {
+            Some(&full) if !describes(element) && !self.file_keys.contains_key(&key) => full,
+            _ => element,
+        };
+        let described = describes(element);
         let index = match self.file_keys.get(&key) {
-            Some(&index) if !described || key.is_empty() => index,
+            // Writers that leave out file ids describe every file in full, so an id-less
+            // description is always a new file.
+            Some(&index) if !described || !key.is_empty() => index,
             _ if !described => {
                 return Err(unreadable(&format!(
                     "file {key} is used before it is described"
@@ -239,211 +250,6 @@ impl Reader {
     }
 }
 
-/// Fills in the times written as -1 around transitions, which sit at the cut between
-/// the clips, and hands each transition to the clip it belongs to.
-fn resolve(items: Vec<Item>) -> Vec<XmlClip> {
-    let mut clips: Vec<XmlClip> = Vec::new();
-    let mut pending: Option<(i64, TransitionKind, i64, Alignment)> = None;
-    let mut open_end = false;
-    for item in items {
-        match item {
-            Item::Transition {
-                start,
-                end,
-                alignment,
-                kind,
-            } => {
-                let length = (end - start).max(0);
-                let cut = match alignment.as_str() {
-                    "start" | "start-black" => start,
-                    "end" | "end-black" => end,
-                    _ => start + length / 2,
-                };
-                if alignment == "end-black" {
-                    if let Some(last) = clips.last_mut() {
-                        last.transition_out = Some((kind, length));
-                    }
-                } else {
-                    if open_end {
-                        if let Some(last) = clips.last_mut() {
-                            last.end = cut;
-                        }
-                    }
-                    let aligned = match alignment.as_str() {
-                        "start" => Alignment::StartAtCut,
-                        "end" => Alignment::EndAtCut,
-                        _ => Alignment::Center,
-                    };
-                    pending = Some((cut, kind, length, aligned));
-                }
-                open_end = false;
-            }
-            Item::Clip { mut clip, out } => {
-                let length = (out - clip.source_in).max(0);
-                if let Some((cut, kind, length, alignment)) = pending.take() {
-                    if clip.start < 0 {
-                        clip.start = cut;
-                    }
-                    clip.transition_in = Some((kind, length, alignment));
-                }
-                if clip.start < 0 {
-                    clip.start = clips.last().map_or(0, |last| last.end);
-                }
-                open_end = clip.end < 0;
-                if open_end {
-                    clip.end = clip.start + length;
-                }
-                clips.push(clip);
-            }
-        }
-    }
-    clips.retain(|clip| clip.end > clip.start);
-    clips
-}
-
-impl Edit for ImportXmeml {
-    fn name(&self) -> &'static str {
-        "Import XML"
-    }
-
-    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
-        let timebase = sequence.timebase;
-        let ticks = |rate: FrameRate, frames: i64| rate.frame_start(frames, timebase);
-        let used = |file: usize| {
-            self.video
-                .iter()
-                .chain(&self.audio)
-                .flatten()
-                .filter(|clip| clip.file == file)
-                .map(|clip| {
-                    ticks(clip.rate, clip.source_in) + ticks(self.rate, clip.end - clip.start)
-                })
-                .max()
-                .unwrap_or(Ticks(1))
-        };
-        let mut sources = Vec::new();
-        for (index, file) in self.files.iter().enumerate() {
-            let existing = sequence.media.iter().find(|item| {
-                item.nest.is_none() && item.generator.is_none() && item.path == file.path
-            });
-            let id = match existing {
-                Some(item) => item.id,
-                None => {
-                    let id = SourceId(sequence.ids.next());
-                    let length = file
-                        .frames
-                        .map_or(Ticks::ZERO, |frames| ticks(file.rate, frames));
-                    let (width, height) = file
-                        .size
-                        .unwrap_or((sequence.format.width, sequence.format.height));
-                    sequence.media.push(MediaItem {
-                        id,
-                        name: file.name.clone(),
-                        path: file.path.clone(),
-                        duration: length.max(used(index)),
-                        video: file.video.then_some(VideoFormat {
-                            width,
-                            height,
-                            frame_rate: file.rate,
-                            ..VideoFormat::default()
-                        }),
-                        has_audio: file.audio,
-                        proxy: None,
-                        generator: None,
-                        nest: None,
-                        bin: None,
-                        subclip: None,
-                        interpreted_rate: None,
-                        interpreted_aspect: None,
-                        alpha: Default::default(),
-                        log: Default::default(),
-                        offline: false,
-                        still: false,
-                        channel_map: None,
-                    });
-                    id
-                }
-            };
-            sources.push(id);
-        }
-        let links: Vec<LinkId> = (0..self.links)
-            .map(|_| LinkId(sequence.ids.next()))
-            .collect();
-        let transition =
-            |(kind, frames): (TransitionKind, i64)| Transition::new(kind, ticks(self.rate, frames));
-        let mut tracks = |clips: &[Vec<XmlClip>]| -> Vec<Track> {
-            clips
-                .iter()
-                .map(|clips| {
-                    let mut track = Track::default();
-                    for xml in clips {
-                        let start = ticks(self.rate, xml.start);
-                        let mut clip = Clip::new(
-                            ClipId(sequence.ids.next()),
-                            sources[xml.file],
-                            start,
-                            ticks(self.rate, xml.end) - start,
-                            ticks(xml.rate, xml.source_in),
-                        );
-                        clip.disabled = xml.disabled;
-                        clip.gain = xml.gain;
-                        clip.link = xml.link.map(|index| links[index]);
-                        clip.transition_in =
-                            xml.transition_in
-                                .map(|(kind, frames, alignment)| Transition {
-                                    alignment,
-                                    ..transition((kind, frames))
-                                });
-                        clip.transition_out = xml.transition_out.map(transition);
-                        clip.markers = xml
-                            .markers
-                            .iter()
-                            .map(|marker| marker.marker(&mut sequence.ids, xml.rate, timebase))
-                            .collect();
-                        track.clips.push(clip);
-                    }
-                    track
-                })
-                .collect()
-        };
-        let (video, audio) = (tracks(&self.video), tracks(&self.audio));
-        let markers = self
-            .markers
-            .iter()
-            .map(|marker| marker.marker(&mut sequence.ids, self.rate, timebase))
-            .collect();
-        let nest = Nest {
-            video,
-            audio,
-            markers,
-            ..Nest::default()
-        };
-        let id = SourceId(sequence.ids.next());
-        sequence.media.push(MediaItem {
-            id,
-            name: self.name.clone(),
-            path: PathBuf::new(),
-            duration: Ticks::ZERO,
-            video: None,
-            has_audio: false,
-            proxy: None,
-            generator: None,
-            nest: Some(nest),
-            bin: None,
-            subclip: None,
-            interpreted_rate: None,
-            interpreted_aspect: None,
-            alpha: Default::default(),
-            log: Default::default(),
-            offline: false,
-            still: false,
-            channel_map: None,
-        });
-        sequence.fit_nest(id);
-        Ok(())
-    }
-}
-
 fn unreadable(reason: &str) -> TimelineError {
     TimelineError::UnreadableSequence(reason.to_owned())
 }
@@ -468,6 +274,30 @@ fn rate_of(element: &Element) -> Option<FrameRate> {
     }
 }
 
+fn retime(clip: &Element) -> Option<Retime> {
+    let effect = clip
+        .children("filter")
+        .filter_map(|filter| filter.child("effect"))
+        .find(|effect| effect.text_at(&["effectid"]) == Some("timeremap"))?;
+    let parameter = |id: &str| {
+        effect
+            .children("parameter")
+            .find(|parameter| parameter.text_at(&["parameterid"]) == Some(id))
+            .and_then(|parameter| parameter.text_at(&["value"]))
+            .map(str::trim)
+    };
+    let percent: f64 = parameter("speed")?.parse().ok()?;
+    // In hundredths of a percent, within the 1% to 10,000% clips allow.
+    let points = (percent.abs() * 100.0).round();
+    let speed = (points > 0.0)
+        .then(|| Speed::from_basis_points(points.clamp(100.0, 1_000_000.0) as u64))
+        .flatten();
+    Some(Retime {
+        speed,
+        reverse: parameter("reverse") == Some("TRUE") || percent < 0.0,
+    })
+}
+
 /// The Audio Levels filter's amplitude as gain.
 fn level(clip: &Element) -> Gain {
     clip.children("filter")
@@ -480,6 +310,27 @@ fn level(clip: &Element) -> Gain {
         })
 }
 
+#[path = "xmeml_import_apply.rs"]
+mod apply;
+#[path = "xmeml_resolve.rs"]
+mod resolve;
+
 #[cfg(test)]
 #[path = "xmeml_import_tests.rs"]
 mod tests;
+
+fn describes(file: &Element) -> bool {
+    file.child("pathurl").is_some() || file.child("name").is_some()
+}
+
+/// The first full description of each file id under `element`.
+fn file_descriptions<'a>(element: &'a Element, found: &mut HashMap<&'a str, &'a Element>) {
+    for child in &element.children {
+        if child.name == "file" && describes(child) {
+            if let Some(id) = child.attribute("id").filter(|id| !id.is_empty()) {
+                found.entry(id).or_insert(child);
+            }
+        }
+        file_descriptions(child, found);
+    }
+}

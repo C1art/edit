@@ -1,3 +1,5 @@
+use std::ops::RangeInclusive;
+
 use serde::{Deserialize, Serialize};
 
 use crate::keyframe::{HandleSide, Handles, Interpolation, Keyframe};
@@ -109,6 +111,23 @@ impl Param {
         match self.keys.binary_search_by_key(&time, |key| key.time) {
             Ok(index) => self.keys[index].hundredths = hundredths,
             Err(index) => self.keys.insert(index, Keyframe::new(time, hundredths)),
+        }
+    }
+
+    /// Raises the value, or every keyframe so the animation keeps its shape, by `by`,
+    /// held within `range`. Adjusting many clips together does this, so each keeps its
+    /// own differences and animation.
+    pub fn offset(&mut self, by: f32, range: RangeInclusive<f32>) {
+        let raise = |hundredths: &mut i32| {
+            let value = (*hundredths as f32 / 100.0 + by).clamp(*range.start(), *range.end());
+            *hundredths = to_hundredths(value);
+        };
+        if self.is_animated() {
+            self.keys
+                .iter_mut()
+                .for_each(|key| raise(&mut key.hundredths));
+        } else {
+            raise(&mut self.hundredths);
         }
     }
 

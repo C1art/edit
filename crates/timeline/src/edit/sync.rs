@@ -32,16 +32,19 @@ impl Edit for IntoSync {
         let (other, offset) = sequence
             .out_of_sync_with(clip)
             .ok_or(TimelineError::NothingToEdit)?;
-        let source_in = other.source_time(clip.start);
+        // A reversed clip plays its first source frame last, so the frame to take from
+        // the partner is the one it plays where this clip plays that frame.
+        let source_in = other.source_time(clip.position_of(clip.source_in));
         let clip = ops::clip_mut(sequence, self.clip)?;
         match self.method {
             SyncMethod::Move => clip.start = clip.start - offset,
             SyncMethod::Slip => {
-                let delta = source_in - clip.source_in;
+                let old_in = clip.source_in;
                 clip.source_in = source_in;
                 if let Some(remap) = &mut clip.remap {
-                    remap.shift(Ticks::ZERO, delta);
+                    remap.shift(Ticks::ZERO, source_in - old_in);
                 }
+                clip.carry_pins_through_slip(old_in);
             }
         }
         // Moving may carry it past a neighbour on its track.

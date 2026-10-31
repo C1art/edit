@@ -21,7 +21,12 @@ pub struct CaptionPanel {
 pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
     let revision = editor.timeline.revision();
     let sequence = editor.timeline.sequence();
-    let (timebase, rate) = (sequence.timebase, sequence.format.frame_rate);
+    let (timebase, rate, display) = (
+        sequence.timebase,
+        sequence.format.frame_rate,
+        sequence.time_display,
+    );
+    let start = sequence.start_time;
     let mut captions = match &editor.captions.draft {
         // An undo or another edit since the draft began wins over it.
         Some((taken, draft)) if *taken == revision => draft.clone(),
@@ -29,7 +34,8 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
     };
     let playhead = editor.playhead();
     let mut change = None;
-    ui.horizontal(|ui| {
+    // The panel is often narrow; rows wrap rather than run off its edge.
+    ui.horizontal_wrapped(|ui| {
         let mut shown = !captions.hidden;
         if ui.checkbox(&mut shown, "Show captions").changed() {
             captions.hidden = !shown;
@@ -75,7 +81,7 @@ pub fn ui(editor: &mut Editor, ui: &mut egui::Ui) {
                 egui::Frame::group(ui.style()).fill(fill).show(ui, |ui| {
                     ui.push_id(index, |ui| {
                         let row = caption_row(ui, caption, playhead, |time| {
-                            Timecode::new(time, timebase, rate).to_string()
+                            Timecode::shown(time + start, timebase, rate, display).to_string()
                         });
                         match row {
                             Some(RowAction::Seek(time)) => seek = Some(time),
@@ -144,7 +150,7 @@ fn caption_row(
     playhead: Ticks,
     timecode: impl Fn(Ticks) -> String,
 ) -> Option<RowAction> {
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         let mut action = None;
         let start = ui.link(RichText::new(timecode(caption.start)).monospace());
         if start.on_hover_text("Go to the caption's start").clicked() {
@@ -175,27 +181,36 @@ fn caption_row(
 
 fn style_controls(ui: &mut egui::Ui, captions: &mut Captions) -> Option<Change> {
     let style = &mut captions.style;
-    ui.horizontal(|ui| {
-        ui.label("Size");
-        let size = ui.add(
-            egui::DragValue::new(&mut style.size)
-                .range(12..=200)
-                .suffix(" px"),
-        );
-        let mut change = response_state(&size, None);
-        ui.label("Color");
-        change = color_button(ui, &mut style.color).max(change);
-        let mut boxed = style.background.is_some();
-        if ui.checkbox(&mut boxed, "Background").changed() {
-            style.background = boxed.then_some(Rgb::BLACK);
-            change = Some(Change::Commit);
-        }
-        if let Some(background) = &mut style.background {
-            change = color_button(ui, background).max(change);
-        }
-        change
-    })
-    .inner
+    egui::Grid::new("caption style")
+        .num_columns(2)
+        .show(ui, |ui| {
+            ui.label("Size");
+            let size = ui.add(
+                egui::DragValue::new(&mut style.size)
+                    .update_while_editing(false)
+                    .range(12..=200)
+                    .suffix(" px"),
+            );
+            let mut change = response_state(&size, None);
+            ui.end_row();
+            ui.label("Color");
+            change = color_button(ui, &mut style.color).max(change);
+            ui.end_row();
+            ui.label("Background");
+            ui.horizontal(|ui| {
+                let mut boxed = style.background.is_some();
+                if ui.checkbox(&mut boxed, "").changed() {
+                    style.background = boxed.then_some(Rgb::BLACK);
+                    change = Some(Change::Commit);
+                }
+                if let Some(background) = &mut style.background {
+                    change = color_button(ui, background).max(change);
+                }
+            });
+            ui.end_row();
+            change
+        })
+        .inner
 }
 
 fn color_button(ui: &mut egui::Ui, color: &mut Rgb) -> Option<Change> {

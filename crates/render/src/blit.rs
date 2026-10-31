@@ -1,6 +1,6 @@
-use timeline::MatteChannel;
-
 use crate::grade::GradeLayout;
+use crate::layer_pipelines::{LayerPass, LayerPipelines};
+use crate::layer_shader::Features;
 use crate::placement::Placement;
 use crate::WORKING_FORMAT;
 
@@ -19,53 +19,25 @@ pub(crate) fn ui_view(texture: &wgpu::Texture) -> wgpu::TextureView {
 }
 
 /// Room for the placement, color and masks of a blit, or the parameters of a blur.
-pub(crate) const UNIFORM_BYTES: u64 = 3_664;
+pub(crate) const UNIFORM_BYTES: u64 = 8_192;
 
-/// The textured-rectangle pipelines and the layout their bindings share.
+/// The textured-rectangle pipelines and the layout their bindings share. Layer
+/// pipelines are built the first time a layer needs them, each from the layer shader
+/// cut down to the effects it uses.
 pub(crate) struct Blit {
     pub(crate) layout: wgpu::BindGroupLayout,
     /// The second bind group of layer and display blits; blurs have none.
     pub(crate) grade: GradeLayout,
     sampler: wgpu::Sampler,
-    /// Blends layers over the working texture.
-    pub(crate) to_working: wgpu::RenderPipeline,
     /// The third bind group of blend-mode blits: a copy of what lies under the layer.
-    pub(crate) backdrop_layout: wgpu::BindGroupLayout,
-    /// Draws a layer over the working texture by its blend mode.
-    pub(crate) blended: wgpu::RenderPipeline,
-    /// Keeps the part of a fill its track matte shows, by channel then reversed.
-    mattes: [[wgpu::RenderPipeline; 2]; 2],
-    /// Copies the working texture to the display texture.
-    pub(crate) to_display: wgpu::RenderPipeline,
+    backdrop_layout: wgpu::BindGroupLayout,
+    pub(crate) layers: LayerPipelines,
     /// One direction of a Gaussian blur into a working-format texture.
     pub(crate) blur: wgpu::RenderPipeline,
 }
 
 impl Blit {
     pub(crate) fn new(device: &wgpu::Device) -> Self {
-        let blit_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("blit.wgsl"),
-            source: wgpu::ShaderSource::Wgsl(
-                concat!(
-                    include_str!("../shaders/blit.wgsl"),
-                    include_str!("../shaders/blend.wgsl"),
-                    include_str!("../shaders/style.wgsl"),
-                    include_str!("../shaders/reshape.wgsl"),
-                    include_str!("../shaders/recolor.wgsl"),
-                    include_str!("../shaders/key.wgsl"),
-                    include_str!("../shaders/matte.wgsl"),
-                    include_str!("../shaders/adjust.wgsl"),
-                    include_str!("../shaders/mask.wgsl"),
-                    include_str!("../shaders/secondary.wgsl"),
-                    include_str!("../shaders/lumetri.wgsl"),
-                    include_str!("../shaders/generate.wgsl"),
-                    include_str!("../shaders/optics.wgsl"),
-                    include_str!("../shaders/clip_wipes.wgsl"),
-                    include_str!("../shaders/wipe.wgsl")
-                )
-                .into(),
-            ),
-        });
         let blur_shader = device.create_shader_module(wgpu::include_wgsl!("../shaders/blur.wgsl"));
         let fragment = wgpu::ShaderStages::FRAGMENT;
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -128,84 +100,56 @@ impl Blit {
             bind_group_layouts: &[Some(&layout)],
             immediate_size: 0,
         });
-        let pipeline = |shader: &wgpu::ShaderModule, pipeline_layout, format, blend, fragment| {
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some("blit_pipeline"),
-                layout: Some(pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: shader,
-                    entry_point: Some("vs_main"),
-                    buffers: &[],
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                },
-                primitive: wgpu::PrimitiveState::default(),
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                fragment: Some(wgpu::FragmentState {
-                    module: shader,
-                    entry_point: Some(fragment),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format,
-                        blend,
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                }),
-                multiview_mask: None,
-                cache: None,
-            })
-        };
-        let over = Some(wgpu::BlendState::ALPHA_BLENDING);
-        let matte = |fragment, reverse| {
-            let keep = wgpu::BlendComponent {
-                src_factor: wgpu::BlendFactor::Zero,
-                dst_factor: if reverse {
-                    wgpu::BlendFactor::OneMinusSrcAlpha
-                } else {
-                    wgpu::BlendFactor::SrcAlpha
-                },
-                operation: wgpu::BlendOperation::Add,
-            };
-            let blend = wgpu::BlendState {
-                color: keep,
-                alpha: keep,
-            };
-            pipeline(
-                &blit_shader,
-                &blit_layout,
-                WORKING_FORMAT,
-                Some(blend),
-                fragment,
-            )
-        };
-        let mattes = ["fs_matte_alpha", "fs_matte_luma"]
-            .map(|entry| [false, true].map(|reverse| matte(entry, reverse)));
         Self {
-            to_working: pipeline(&blit_shader, &blit_layout, WORKING_FORMAT, over, "fs_main"),
-            blended: pipeline(
-                &blit_shader,
-                &blended_layout,
-                WORKING_FORMAT,
-                over,
-                "fs_blend",
+            blur: render_pipeline(
+                device,
+                &blur_shader,
+                &blur_layout,
+                (WORKING_FORMAT, None),
+                "fs_main",
             ),
-            backdrop_layout,
-            mattes,
-            to_display: pipeline(&blit_shader, &blit_layout, DISPLAY_FORMAT, None, "fs_main"),
-            blur: pipeline(&blur_shader, &blur_layout, WORKING_FORMAT, None, "fs_main"),
             sampler: device.create_sampler(&wgpu::SamplerDescriptor {
                 label: Some("blit_sampler"),
                 mag_filter: wgpu::FilterMode::Linear,
                 min_filter: wgpu::FilterMode::Linear,
                 ..Default::default()
             }),
+            layers: LayerPipelines::new(device, blit_layout, blended_layout),
             layout,
             grade,
+            backdrop_layout,
         }
     }
 
-    pub(crate) fn matte(&self, channel: MatteChannel, reverse: bool) -> &wgpu::RenderPipeline {
-        &self.mattes[channel as usize][usize::from(reverse)]
+    /// Which effects a layer drawn with `placement` uses.
+    pub(crate) fn features(&self, placement: &[u8]) -> Features {
+        self.layers.features(placement)
+    }
+
+    /// The pipeline drawing `pass` with only the effects in `features`, or `None` while
+    /// it's being built in the background.
+    pub(crate) fn pipeline(
+        &self,
+        features: Features,
+        pass: LayerPass,
+    ) -> Option<wgpu::RenderPipeline> {
+        self.layers.get(features, pass)
+    }
+
+    /// Binds `view` where blend-mode blits read their backdrop.
+    pub(crate) fn bind_backdrop(
+        &self,
+        device: &wgpu::Device,
+        view: &wgpu::TextureView,
+    ) -> wgpu::BindGroup {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("backdrop_bind_group"),
+            layout: &self.backdrop_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(view),
+            }],
+        })
     }
 
     pub(crate) fn placement_buffer(device: &wgpu::Device) -> wgpu::Buffer {
@@ -217,12 +161,16 @@ impl Blit {
         })
     }
 
+    /// Writes `placement` to `buffer`, returning the effects drawing it needs.
     pub(crate) fn write_placement(
+        &self,
         queue: &wgpu::Queue,
         buffer: &wgpu::Buffer,
         placement: Placement,
-    ) {
-        queue.write_buffer(buffer, 0, &placement.to_bytes());
+    ) -> Features {
+        let bytes = placement.to_bytes();
+        queue.write_buffer(buffer, 0, &bytes);
+        self.features(&bytes)
     }
 
     pub(crate) fn bind(
@@ -261,6 +209,18 @@ pub(crate) fn draw<const GROUPS: usize>(
     bindings: &[[&wgpu::BindGroup; GROUPS]],
     load: wgpu::LoadOp<wgpu::Color>,
 ) {
+    let quads: Vec<_> = bindings.iter().map(|groups| (pipeline, *groups)).collect();
+    draw_each(encoder, target, &quads, load);
+}
+
+/// Draws one quad per entry of `quads` in one pass, each with its own pipeline and the
+/// bind groups of that pipeline's layout in order.
+pub(crate) fn draw_each<const GROUPS: usize>(
+    encoder: &mut wgpu::CommandEncoder,
+    target: &wgpu::TextureView,
+    quads: &[(&wgpu::RenderPipeline, [&wgpu::BindGroup; GROUPS])],
+    load: wgpu::LoadOp<wgpu::Color>,
+) {
     let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: Some("blit_pass"),
         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -277,11 +237,45 @@ pub(crate) fn draw<const GROUPS: usize>(
         occlusion_query_set: None,
         multiview_mask: None,
     });
-    pass.set_pipeline(pipeline);
-    for groups in bindings {
+    for (pipeline, groups) in quads {
+        pass.set_pipeline(pipeline);
         for (index, group) in (0..).zip(groups) {
             pass.set_bind_group(index, *group, &[]);
         }
         pass.draw(0..6, 0..1);
     }
+}
+
+pub(crate) fn render_pipeline(
+    device: &wgpu::Device,
+    shader: &wgpu::ShaderModule,
+    layout: &wgpu::PipelineLayout,
+    (format, blend): (wgpu::TextureFormat, Option<wgpu::BlendState>),
+    fragment: &str,
+) -> wgpu::RenderPipeline {
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some(fragment),
+        layout: Some(layout),
+        vertex: wgpu::VertexState {
+            module: shader,
+            entry_point: Some("vs_main"),
+            buffers: &[],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        },
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        fragment: Some(wgpu::FragmentState {
+            module: shader,
+            entry_point: Some(fragment),
+            targets: &[Some(wgpu::ColorTargetState {
+                format,
+                blend,
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        }),
+        multiview_mask: None,
+        cache: None,
+    })
 }

@@ -23,6 +23,10 @@ pub(crate) struct KeySelection {
     selected: Vec<(Id, Ticks)>,
     copied: Vec<(Id, Keyframe)>,
     action: Option<KeyAction>,
+    /// The property last changed or clicked, which Add/Remove Keyframe keys.
+    current: Option<Id>,
+    /// Add/Remove Keyframe was asked for, done by the current property as it's drawn.
+    toggle_current: bool,
 }
 
 impl KeySelection {
@@ -50,6 +54,15 @@ impl KeySelection {
         } else {
             self.selected.push(entry);
         }
+    }
+
+    pub(super) fn touch(&mut self, param: Id) {
+        self.current = Some(param);
+    }
+
+    /// Whether `param` is to add or remove its keyframe at the playhead now.
+    pub(super) fn toggles(&self, param: Id) -> bool {
+        self.toggle_current && self.current == Some(param)
     }
 
     pub(super) fn clear(&mut self) {
@@ -134,10 +147,23 @@ impl KeySelection {
         }
         self.pressed = false;
         self.action = None;
+        self.toggle_current = false;
     }
 }
 
 impl Editor {
+    /// Adds or removes a keyframe at the playhead on the property last touched in
+    /// Effect Controls, starting its animation if it had none.
+    pub(crate) fn toggle_focused_keyframe(&mut self) {
+        let shown = self.side_tab == super::SideTab::EffectControls;
+        if !shown || self.effects.keys.current.is_none() {
+            self.notice("Click a property in Effect Controls to add or remove its keyframes");
+            return;
+        }
+        self.effects.keys.toggle_current = true;
+        self.ctx.request_repaint();
+    }
+
     /// Hands `action` to the keyframes when Effect Controls' lanes have the focus;
     /// returns whether they took it.
     pub(crate) fn act_on_keyframes(&mut self, action: KeyAction) -> bool {

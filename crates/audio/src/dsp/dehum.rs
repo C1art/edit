@@ -29,10 +29,13 @@ impl DeHum {
     ) {
         let nyquist = rate.0 as f32 / 2.0;
         let used = harmonics.clamp(1, MAX_HARMONICS);
-        for (multiple, filter) in (1..).zip(&mut self.filters[..used]) {
+        for (multiple, filter) in (1..).zip(&mut self.filters) {
             let hz = frequency * multiple as f32;
-            if hz >= nyquist * 0.9 {
-                break;
+            // A harmonic out of use forgets what it last filtered, so it doesn't play
+            // that back when it is used again.
+            if multiple > used || hz >= nyquist * 0.9 {
+                filter.reset();
+                continue;
             }
             filter.set(Coefficients::peaking(
                 rate,

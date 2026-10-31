@@ -1,60 +1,15 @@
+use std::sync::Arc;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AudioEffect, AudioType, Bin, Captions, FrameRate, Gain, GroupId, Label, LinkedSelection, Look,
-    Marker, Marks, MediaItem, Param, PixelAspect, SourceId, Speed, Submix, Ticks,
-    TimeInterpolation, TimeRemap, Timebase, Transition,
+    AudioEffect, AudioType, Bin, Captions, ClipId, ColorSpace, FieldOrder, FrameRate, Gain,
+    GroupId, Guide, Label, LinkId, LinkedSelection, Look, Marker, Marks, MediaItem, Param,
+    PinnedEnds, PixelAspect, SourceId, Speed, Submix, Ticks, TimeDisplay, TimeInterpolation,
+    TimeRemap, Timebase, TrackKind, TrackRef, Transition,
 };
 
 pub use crate::track::Track;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct ClipId(pub u64);
-
-/// Clips sharing a link move, trim and delete together, like the video and audio of
-/// one source placed side by side.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct LinkId(pub u64);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-pub enum TrackKind {
-    Video,
-    Audio,
-}
-
-/// Video tracks are numbered from the bottom layer up (V1 is under V2); audio tracks
-/// from the top down.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct TrackRef {
-    pub kind: TrackKind,
-    pub index: usize,
-}
-
-impl TrackRef {
-    pub const fn video(index: usize) -> Self {
-        Self {
-            kind: TrackKind::Video,
-            index,
-        }
-    }
-
-    pub const fn audio(index: usize) -> Self {
-        Self {
-            kind: TrackKind::Audio,
-            index,
-        }
-    }
-}
-
-impl std::fmt::Display for TrackRef {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let letter = match self.kind {
-            TrackKind::Video => 'V',
-            TrackKind::Audio => 'A',
-        };
-        write!(f, "{letter}{}", self.index + 1)
-    }
-}
 
 /// All times are in the owning sequence's timebase.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -131,6 +86,8 @@ pub struct Clip {
     /// pictures in its place, at the same source times.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unrendered: Option<SourceId>,
+    #[serde(default, skip_serializing_if = "PinnedEnds::is_unpinned")]
+    pub pinned: PinnedEnds,
 }
 
 fn is_normal_speed(speed: &Speed) -> bool {
@@ -179,6 +136,7 @@ impl Clip {
             interpolation: TimeInterpolation::FrameSampling,
             conform: Speed::NORMAL,
             unrendered: None,
+            pinned: PinnedEnds::default(),
         }
     }
 
@@ -255,18 +213,25 @@ impl Clip {
     /// Moves the head `delta` later in the sequence (earlier when negative), keeping the
     /// tail and the source showing there. The caller moves `start`.
     pub(crate) fn trim_head(&mut self, delta: Ticks) {
-        if let (Some(remap), false) = (&mut self.remap, self.hold) {
+        let old_in = self.source_in;
+        if let Some(remap) = &mut self.remap {
+            // A held clip keeps its frame, but its remap still follows the start so
+            // releasing the hold plays on from the right place.
             remap.shift(Ticks::ZERO - delta, Ticks::ZERO);
-            self.source_in = remap.source_at(Ticks::ZERO);
+            if !self.hold {
+                self.source_in = remap.source_at(Ticks::ZERO);
+            }
         } else if !self.reverse && !self.hold {
             self.source_in = self.source_in + self.rate().source_span(delta);
         }
         self.duration = self.duration - delta;
+        self.carry_intro(old_in);
     }
 
     /// Moves the tail `delta` later in the sequence, keeping the head and the source
     /// showing there.
     pub(crate) fn trim_tail(&mut self, delta: Ticks) {
+        let old_out = self.source_out();
         if self.reverse && !self.hold && self.remap.is_none() {
             let source_out = self.source_out();
             self.duration = self.duration + delta;
@@ -274,6 +239,7 @@ impl Clip {
         } else {
             self.duration = self.duration + delta;
         }
+        self.carry_outro(old_out);
     }
 }
 
@@ -284,6 +250,11 @@ pub struct VideoFormat {
     pub frame_rate: FrameRate,
     #[serde(default, skip_serializing_if = "PixelAspect::is_square")]
     pub pixel_aspect: PixelAspect,
+    /// The color space the file's pictures were encoded in.
+    #[serde(default, skip_serializing_if = "ColorSpace::is_rec709")]
+    pub color_space: ColorSpace,
+    #[serde(default, skip_serializing_if = "FieldOrder::is_progressive")]
+    pub field_order: FieldOrder,
 }
 
 impl Default for VideoFormat {
@@ -293,6 +264,8 @@ impl Default for VideoFormat {
             height: 1080,
             frame_rate: FrameRate::FPS_25,
             pixel_aspect: PixelAspect::SQUARE,
+            color_space: ColorSpace::Rec709,
+            field_order: FieldOrder::Progressive,
         }
     }
 }
@@ -315,8 +288,9 @@ pub struct Sequence {
     pub timebase: Timebase,
     #[serde(default)]
     pub format: VideoFormat,
+    /// Shared like track clips, as most edits leave the pool be.
     #[serde(default)]
-    pub media: Vec<MediaItem>,
+    pub media: Arc<Vec<MediaItem>>,
     #[serde(default)]
     pub bins: Vec<Bin>,
     #[serde(default)]
@@ -333,12 +307,24 @@ pub struct Sequence {
     /// Sorted by time.
     #[serde(default)]
     pub markers: Vec<Marker>,
+    /// Whether `markers` move with what insert and ripple edits move.
+    #[serde(default)]
+    pub ripple_markers: bool,
     #[serde(default)]
     pub marks: Marks,
     #[serde(default)]
     pub captions: Captions,
     #[serde(default)]
     pub linked_selection: LinkedSelection,
+    #[serde(default)]
+    pub time_display: TimeDisplay,
+    /// The timecode the sequence's first frame shows, as broadcast masters start at an
+    /// hour; on the frame grid.
+    #[serde(default)]
+    pub start_time: Ticks,
+    /// Lines over the program frame, in the order they were added.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub guides: Vec<Guide>,
     #[serde(default)]
     pub(crate) ids: IdGenerator,
 }
@@ -348,7 +334,7 @@ impl Sequence {
         Self {
             timebase,
             format,
-            media: Vec::new(),
+            media: Arc::default(),
             bins: Vec::new(),
             video: Vec::new(),
             audio: Vec::new(),
@@ -356,9 +342,13 @@ impl Sequence {
             master_effects: Vec::new(),
             submixes: Vec::new(),
             markers: Vec::new(),
+            ripple_markers: false,
             marks: Marks::default(),
             captions: Captions::default(),
             linked_selection: LinkedSelection::default(),
+            time_display: TimeDisplay::default(),
+            start_time: Ticks::ZERO,
+            guides: Vec::new(),
             ids: IdGenerator::default(),
         }
     }
@@ -406,6 +396,10 @@ impl Sequence {
             .chain(audio.map(|(index, track)| (TrackRef::audio(index), track)))
     }
 
+    pub fn has_clips(&self) -> bool {
+        self.tracks().any(|(_, track)| !track.clips.is_empty())
+    }
+
     pub(crate) fn tracks_mut(&mut self) -> impl Iterator<Item = (TrackRef, &mut Track)> {
         let video = self.video.iter_mut().enumerate();
         let audio = self.audio.iter_mut().enumerate();
@@ -417,7 +411,7 @@ impl Sequence {
     pub fn clip(&self, id: ClipId) -> Option<(TrackRef, &Clip)> {
         self.tracks().find_map(|(track_ref, track)| {
             let clip = track.clips.iter().find(|clip| clip.id == id)?;
-            Some((track_ref, clip))
+            Some((track_ref, &**clip))
         })
     }
 
@@ -429,9 +423,11 @@ impl Sequence {
     /// pictures only, since proxies carry no sound.
     pub fn with_proxies(&self) -> Self {
         let mut sequence = self.clone();
-        for item in &mut sequence.media {
+        for item in Arc::make_mut(&mut sequence.media) {
             if let Some(proxy) = item.proxy.take() {
                 item.path = proxy;
+                // Proxies are made from deinterlaced pictures.
+                item.interpreted_fields = Some(FieldOrder::Progressive);
             }
         }
         sequence
@@ -443,31 +439,5 @@ impl Sequence {
             .map(|(_, track)| track.end())
             .max()
             .unwrap_or(Ticks::ZERO)
-    }
-
-    /// The first marker strictly after `position`.
-    pub fn marker_after(&self, position: Ticks) -> Option<&Marker> {
-        self.markers.iter().find(|marker| marker.at > position)
-    }
-
-    /// The last marker strictly before `position`.
-    pub fn marker_before(&self, position: Ticks) -> Option<&Marker> {
-        self.markers
-            .iter()
-            .rev()
-            .find(|marker| marker.at < position)
-    }
-
-    /// Clip starts and ends on all tracks, sorted and deduplicated, for snapping and
-    /// jumping between edits.
-    pub fn edit_points(&self) -> Vec<Ticks> {
-        let mut points: Vec<Ticks> = self
-            .tracks()
-            .flat_map(|(_, track)| &track.clips)
-            .flat_map(|clip| [clip.start, clip.end()])
-            .collect();
-        points.sort_unstable();
-        points.dedup();
-        points
     }
 }

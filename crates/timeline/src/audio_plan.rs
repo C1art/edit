@@ -1,4 +1,5 @@
 use std::f32::consts::FRAC_PI_2;
+use std::sync::Arc;
 
 use crate::plan::{cut_window, fraction};
 use crate::{Clip, Gain, Ticks, Track, TransitionKind};
@@ -85,6 +86,8 @@ pub fn audio_fade(track: &Track, index: usize, position: Ticks) -> f32 {
             gain *= match transition.kind {
                 kind if !kind.is_dip() => rise(1.0 - fraction(position - start, before + after)),
                 _ if position >= clip.end() => 0.0,
+                // Also the whole clip when the dip starts at the cut.
+                _ if position < start => 1.0,
                 _ => rise(1.0 - fraction(position - start, before)),
             };
         }
@@ -104,9 +107,12 @@ fn neighbors(track: &Track, index: usize) -> (Option<&Clip>, Option<&Clip>) {
     let clip = &clips[index];
     let previous = index
         .checked_sub(1)
-        .map(|i| &clips[i])
+        .map(|i| &*clips[i])
         .filter(|previous| previous.end() == clip.start);
-    let next = clips.get(index + 1).filter(|next| next.start == clip.end());
+    let next = clips
+        .get(index + 1)
+        .map(Arc::as_ref)
+        .filter(|next| next.start == clip.end());
     (previous, next)
 }
 
@@ -123,7 +129,7 @@ mod tests {
         ));
         let outgoing = Clip::new(ClipId(1), SourceId(1), Ticks(0), Ticks(100), Ticks(0));
         Track {
-            clips: vec![outgoing, incoming],
+            clips: vec![outgoing.into(), incoming.into()],
             ..Track::default()
         }
     }
@@ -149,7 +155,8 @@ mod tests {
     fn constant_gain_sums_amplitude_and_exponential_fades_evenly_in_decibels() {
         let curve = |kind| {
             let mut track = track_with_crossfade(40);
-            track.clips[1].transition_in = Some(Transition::new(kind, Ticks(40)));
+            Arc::make_mut(&mut track.clips[1]).transition_in =
+                Some(Transition::new(kind, Ticks(40)));
             let at = |index| audio_fade(&track, index, Ticks(100));
             (at(0), at(1))
         };
@@ -158,6 +165,17 @@ mod tests {
         let (out, incoming) = curve(TransitionKind::ExponentialFade);
         assert!((20.0 * incoming.log10() + 30.0).abs() < 0.01);
         assert!((out - incoming).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_dip_starting_at_the_cut_leaves_the_outgoing_clip_alone() {
+        let mut track = track_with_crossfade(40);
+        let mut dip = Transition::new(TransitionKind::DipToBlack, Ticks(40));
+        dip.alignment = crate::Alignment::StartAtCut;
+        Arc::make_mut(&mut track.clips[1]).transition_in = Some(dip);
+        assert_eq!(audio_fade(&track, 0, Ticks(99)), 1.0);
+        assert_eq!(audio_fade(&track, 1, Ticks(100)), 0.0);
+        assert!(audio_fade(&track, 1, Ticks(120)) > 0.0);
     }
 
     #[test]

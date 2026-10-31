@@ -1,13 +1,19 @@
 use std::ops::Range;
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{AudioEffect, Clip, Gain, Pan, Param, SubmixId, Ticks};
+use crate::{AudioEffect, Clip, Gain, Pan, Param, SubmixId, Ticks, TrackId, TrackSend};
 
 /// Clips are kept sorted by `start` and never overlap.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Eq, Serialize, Deserialize)]
 pub struct Track {
-    pub clips: Vec<Clip>,
+    /// Not part of what the track holds, so two tracks compare by their contents.
+    #[serde(skip)]
+    pub id: TrackId,
+    /// Shared, so that undo snapshots hold only the clips an edit changed;
+    /// `Arc::make_mut` copies a clip on its first change.
+    pub clips: Vec<Arc<Clip>>,
     /// Shown beside the track's number, as "A1 Dialogue"; none until the user names it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
@@ -40,6 +46,42 @@ pub struct Track {
     /// isn't in the sequence mixing it, as after nesting.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output: Option<SubmixId>,
+    /// Copies of an audio track's sound for submixes, besides its output.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sends: Vec<TrackSend>,
+}
+
+impl PartialEq for Track {
+    fn eq(&self, other: &Self) -> bool {
+        // Destructured so a new field can't be left out of the comparison.
+        let Self {
+            id: _,
+            clips,
+            name,
+            muted,
+            locked,
+            sync_unlocked,
+            solo,
+            volume,
+            pan,
+            automation,
+            effects,
+            output,
+            sends,
+        } = self;
+        *clips == other.clips
+            && *name == other.name
+            && *muted == other.muted
+            && *locked == other.locked
+            && *sync_unlocked == other.sync_unlocked
+            && *solo == other.solo
+            && *volume == other.volume
+            && *pan == other.pan
+            && *automation == other.automation
+            && *effects == other.effects
+            && *output == other.output
+            && *sends == other.sends
+    }
 }
 
 impl Track {
@@ -47,11 +89,12 @@ impl Track {
         let index = self.clips.partition_point(|clip| clip.start <= position);
         self.clips[..index]
             .last()
+            .map(|clip| &**clip)
             .filter(|clip| clip.covers(position))
     }
 
     pub fn end(&self) -> Ticks {
-        self.clips.last().map_or(Ticks::ZERO, Clip::end)
+        self.clips.last().map_or(Ticks::ZERO, |clip| clip.end())
     }
 
     /// The empty stretch around `position` with a clip after it, which closing pulls
@@ -64,7 +107,7 @@ impl Track {
         let end = self.clips.get(index)?.start;
         let start = self.clips[..index]
             .iter()
-            .map(Clip::end)
+            .map(|clip| clip.end())
             .max()
             .unwrap_or(Ticks::ZERO);
         Some(start..end)

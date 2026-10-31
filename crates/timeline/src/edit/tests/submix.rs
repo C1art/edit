@@ -1,4 +1,5 @@
 use super::*;
+use crate::TrackSend;
 
 #[test]
 fn deleting_a_submix_sends_its_tracks_to_the_master_and_undo_restores_the_route() {
@@ -18,6 +19,8 @@ fn deleting_a_submix_sends_its_tracks_to_the_master_and_undo_restores_the_route(
             output: Some(second),
         })
         .unwrap();
+    let sends = vec![TrackSend::new(second), TrackSend::new(first)];
+    timeline.apply(SetTrackSends { track: A1, sends }).unwrap();
     timeline.apply(RemoveSubmix { submix: first }).unwrap();
 
     let outputs = |timeline: &Timeline| -> Vec<_> {
@@ -29,13 +32,23 @@ fn deleting_a_submix_sends_its_tracks_to_the_master_and_undo_restores_the_route(
             .collect()
     };
     assert_eq!(outputs(&timeline), [None, Some(second)]);
+    assert_eq!(timeline.sequence().audio[0].sends, [TrackSend::new(second)]);
     let unknown = SetTrackOutput {
         track: A2,
         output: Some(first),
     };
     assert_eq!(timeline.apply(unknown), Err(TimelineError::NothingToEdit));
+    let unknown_send = SetTrackSends {
+        track: A2,
+        sends: vec![TrackSend::new(first)],
+    };
+    assert_eq!(
+        timeline.apply(unknown_send),
+        Err(TimelineError::NothingToEdit)
+    );
     timeline.undo();
     assert_eq!(outputs(&timeline), [Some(first), Some(second)]);
+    assert_eq!(timeline.sequence().audio[0].sends.len(), 2);
 }
 
 #[test]

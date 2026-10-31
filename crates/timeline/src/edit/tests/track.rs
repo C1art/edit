@@ -1,4 +1,5 @@
 use super::*;
+use crate::{MatteChannel, TrackKind, VideoEffect};
 
 #[test]
 fn a_track_name_is_trimmed_cleared_when_blank_and_restored_by_undo() {
@@ -45,4 +46,107 @@ fn a_ripple_leaves_tracks_without_sync_lock_alone_unless_it_edits_them() {
     assert_eq!(spans(&timeline, A1), [(0, 100, 0), (300, 400, 0)]);
     timeline.apply(close(A1)).unwrap();
     assert_eq!(spans(&timeline, A1), [(0, 100, 0), (100, 200, 0)]);
+}
+
+#[test]
+fn deleting_empty_tracks_keeps_effects_reading_the_tracks_they_read() {
+    let (mut timeline, source) = timeline();
+    timeline
+        .apply(AddTrack {
+            kind: TrackKind::Video,
+        })
+        .unwrap();
+    timeline
+        .apply(place(source, 0, 0, 400, PlaceMode::Overwrite))
+        .unwrap();
+    timeline
+        .apply(PlaceClip {
+            video_track: Some(2),
+            audio_track: None,
+            ..place(source, 0, 0, 400, PlaceMode::Overwrite)
+        })
+        .unwrap();
+    let keyed = clip_on(&timeline, V1, 0);
+    let mut look = timeline.sequence().clip(keyed).unwrap().1.look.clone();
+    look.effects.push(VideoEffect::TrackMatteKey {
+        matte: Some(2),
+        channel: MatteChannel::Luma,
+        reverse: false,
+    });
+    timeline.apply(SetClipLook { clip: keyed, look }).unwrap();
+    timeline
+        .apply(DeleteEmptyTracks {
+            kinds: vec![TrackKind::Video, TrackKind::Audio],
+        })
+        .unwrap();
+    let sequence = timeline.sequence();
+    assert_eq!((sequence.video.len(), sequence.audio.len()), (2, 1));
+    let effects = &sequence.clip(keyed).unwrap().1.look.effects;
+    assert!(matches!(
+        effects[..],
+        [VideoEffect::TrackMatteKey { matte: Some(1), .. }]
+    ));
+}
+
+#[test]
+fn tracks_added_between_others_keep_effects_reading_the_tracks_they_read() {
+    let (mut timeline, source) = timeline();
+    timeline
+        .apply(place(source, 0, 0, 400, PlaceMode::Overwrite))
+        .unwrap();
+    let keyed = clip_on(&timeline, V1, 0);
+    let mut look = timeline.sequence().clip(keyed).unwrap().1.look.clone();
+    look.effects.push(VideoEffect::TrackMatteKey {
+        matte: Some(1),
+        channel: MatteChannel::Luma,
+        reverse: false,
+    });
+    timeline.apply(SetClipLook { clip: keyed, look }).unwrap();
+    timeline
+        .apply(AddTracks {
+            video: NewTracks { at: 1, count: 2 },
+            audio: NewTracks { at: 0, count: 1 },
+        })
+        .unwrap();
+    let matte =
+        |timeline: &Timeline| match timeline.sequence().clip(keyed).unwrap().1.look.effects[..] {
+            [VideoEffect::TrackMatteKey { matte, .. }] => matte,
+            _ => None,
+        };
+    let sequence = timeline.sequence();
+    assert_eq!((sequence.video.len(), sequence.audio.len()), (4, 3));
+    assert_eq!(matte(&timeline), Some(3));
+    timeline.undo();
+    assert_eq!(matte(&timeline), Some(1));
+}
+
+#[test]
+fn removing_a_track_below_locked_ones_is_allowed() {
+    let (mut timeline, source) = timeline();
+    for _ in 0..2 {
+        timeline
+            .apply(AddTrack {
+                kind: TrackKind::Video,
+            })
+            .unwrap();
+    }
+    for (track, start) in [(1, 0), (2, 100)] {
+        timeline
+            .apply(PlaceClip {
+                video_track: Some(track),
+                audio_track: None,
+                ..place(source, start, 0, 50, PlaceMode::Overwrite)
+            })
+            .unwrap();
+        timeline
+            .apply(SetTrackSwitch {
+                track: TrackRef::video(track),
+                switch: TrackSwitch::Lock,
+                on: true,
+            })
+            .unwrap();
+    }
+    let tracks = timeline.sequence().video.len();
+    timeline.apply(RemoveTrack { track: V1 }).unwrap();
+    assert_eq!(timeline.sequence().video.len(), tracks - 1);
 }

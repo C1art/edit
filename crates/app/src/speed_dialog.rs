@@ -1,5 +1,5 @@
 use egui::Key;
-use timeline::{ClipId, SetClipSpeed, Speed, Ticks, Timecode};
+use timeline::{ApplySpeedRamp, ClipId, SetClipSpeed, Speed, SpeedRamp, Ticks};
 
 use crate::editor::Editor;
 
@@ -8,6 +8,8 @@ pub struct SpeedPrompt {
     clips: Vec<ClipId>,
     /// The source the clips play, which stays the same whatever the speed.
     source: Ticks,
+    /// The first clip's speed, which the percentage shows until it's changed.
+    shown: Speed,
     percent: f64,
     duration: Ticks,
     /// Whether the duration was typed last, so it's kept exactly instead of rounded
@@ -16,6 +18,7 @@ pub struct SpeedPrompt {
     ripple: bool,
     reverse: bool,
     maintain_pitch: bool,
+    opened: bool,
 }
 
 /// Like `150%` or `33.33%`.
@@ -26,6 +29,14 @@ pub fn percent_text(speed: Speed) -> String {
 }
 
 impl Editor {
+    /// Ramps the speed of the selected video clips, keeping where they start and end.
+    pub(crate) fn speed_ramp(&mut self, ramp: SpeedRamp) {
+        let clips = self.view.selection.clone();
+        if !self.apply(ApplySpeedRamp { clips, ramp }) {
+            self.notice("Select video clips at least two frames long, not held or reversed");
+        }
+    }
+
     /// Opens Speed/Duration for the selected clips.
     pub(crate) fn speed_duration(&mut self) {
         let sequence = self.timeline.sequence();
@@ -36,78 +47,80 @@ impl Editor {
         self.speed_prompt = Some(SpeedPrompt {
             clips: self.view.selection.clone(),
             source: clip.source_out() - clip.source_in,
+            shown: clip.speed,
             percent: clip.speed.percent(),
             duration: clip.duration,
             duration_typed: false,
             ripple: false,
             reverse: clip.reverse,
             maintain_pitch: clip.maintain_pitch,
+            opened: true,
         });
     }
 }
 
 pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     let sequence = editor.timeline.sequence();
-    let (timebase, rate) = (sequence.timebase, sequence.format.frame_rate);
+    let (timebase, rate, display) = (
+        sequence.timebase,
+        sequence.format.frame_rate,
+        sequence.time_display,
+    );
     let Some(prompt) = &mut editor.speed_prompt else {
         return;
     };
     let mut choice = None;
-    egui::Window::new("Clip Speed / Duration")
-        .collapsible(false)
-        .resizable(false)
-        .show(ctx, |ui| {
-            egui::Grid::new("speed_fields")
-                .num_columns(2)
-                .show(ui, |ui| {
-                    ui.label("Speed");
-                    let percent = ui.add(
-                        egui::DragValue::new(&mut prompt.percent)
-                            .range(1.0..=10_000.0)
-                            .speed(1.0)
-                            .max_decimals(2)
-                            .suffix("%"),
-                    );
-                    if percent.changed() {
-                        prompt.duration_typed = false;
-                        if let Some(speed) = typed_speed(prompt.percent) {
-                            prompt.duration = speed.sequence_span(prompt.source).max(Ticks(1));
-                        }
-                    }
-                    ui.end_row();
-                    ui.label("Duration");
-                    let mut frames = rate.frame_at(prompt.duration, timebase).max(1);
-                    let duration = ui.add(
-                        egui::DragValue::new(&mut frames)
-                            .range(1..=i64::MAX)
-                            .speed(0.5)
-                            .custom_formatter(|frames, _| {
-                                let ticks = rate.frame_start(frames as i64, timebase);
-                                Timecode::new(ticks, timebase, rate).to_string()
-                            }),
-                    );
-                    if duration.changed() {
-                        prompt.duration_typed = true;
-                        prompt.duration = rate.frame_start(frames, timebase);
-                        if let Some(speed) = Speed::stretch(prompt.source, prompt.duration) {
-                            prompt.percent = speed.percent();
-                        }
-                    }
-                    ui.end_row();
-                });
-            ui.checkbox(&mut prompt.reverse, "Reverse Speed");
-            ui.checkbox(&mut prompt.maintain_pitch, "Maintain Audio Pitch");
-            ui.checkbox(&mut prompt.ripple, "Ripple Edit, Shifting Trailing Clips");
-            ui.horizontal(|ui| {
-                if ui.button("OK").clicked() || ui.input(|input| input.key_pressed(Key::Enter)) {
-                    choice = Some(true);
+    crate::dialog::window(ctx, "Clip Speed / Duration").show(ctx, |ui| {
+        egui::Grid::new("speed_fields")
+            .num_columns(2)
+            .show(ui, |ui| {
+                ui.label("Speed");
+                if crate::dialog::opening(ui, &mut prompt.opened) {
+                    crate::dialog::focus_next_value(ui);
                 }
-                if ui.button("Cancel").clicked() || ui.input(|input| input.key_pressed(Key::Escape))
-                {
-                    choice = Some(false);
+                let percent = ui.add(
+                    egui::DragValue::new(&mut prompt.percent)
+                        .range(1.0..=10_000.0)
+                        .speed(1.0)
+                        .max_decimals(2)
+                        .suffix("%"),
+                );
+                if percent.changed() {
+                    prompt.duration_typed = false;
+                    if let Some(speed) = typed_speed(prompt.percent) {
+                        prompt.duration = speed.sequence_span(prompt.source).max(Ticks(1));
+                    }
                 }
+                ui.end_row();
+                ui.label("Duration");
+                let mut frames = rate.frame_at(prompt.duration, timebase).max(1);
+                let duration = ui.add(
+                    crate::timecode_field::frames(&mut frames, (timebase, rate, display))
+                        .range(1..=i64::MAX),
+                );
+                if duration.changed() {
+                    prompt.duration_typed = true;
+                    prompt.duration = rate.frame_start(frames, timebase);
+                    if let Some(speed) = Speed::stretch(prompt.source, prompt.duration) {
+                        prompt.percent = speed.percent();
+                    }
+                }
+                ui.end_row();
             });
+        ui.checkbox(&mut prompt.reverse, "Reverse Speed");
+        ui.checkbox(&mut prompt.maintain_pitch, "Maintain Audio Pitch");
+        ui.checkbox(&mut prompt.ripple, "Ripple Edit, Shifting Trailing Clips");
+        crate::dialog::footer(ui, |ui| {
+            if ui.button("Cancel").clicked() || ui.input(|input| input.key_pressed(Key::Escape)) {
+                choice = Some(false);
+            }
+            if ui.add(crate::dialog::primary("OK")).clicked()
+                || ui.input(|input| input.key_pressed(Key::Enter))
+            {
+                choice = Some(true);
+            }
         });
+    });
     let Some(apply) = choice else {
         return;
     };
@@ -115,6 +128,11 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
         return;
     };
     if !apply {
+        return;
+    }
+    let untouched = !prompt.duration_typed && prompt.percent == prompt.shown.percent();
+    if untouched {
+        keep_speeds(editor, prompt);
         return;
     }
     let speed = if prompt.duration_typed {
@@ -134,6 +152,29 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
         }
         None => editor.notice("Cannot change speed: the duration must be positive"),
     }
+}
+
+/// Applies only reverse and pitch, leaving each clip at its own exact speed.
+fn keep_speeds(editor: &mut Editor, prompt: SpeedPrompt) {
+    let sequence = editor.timeline.sequence();
+    let mut by_speed: Vec<(Speed, Vec<ClipId>)> = Vec::new();
+    for (_, clip) in sequence.clips_of(&prompt.clips) {
+        match by_speed.iter_mut().find(|(speed, _)| *speed == clip.speed) {
+            Some((_, clips)) => clips.push(clip.id),
+            None => by_speed.push((clip.speed, vec![clip.id])),
+        }
+    }
+    editor.as_one_edit(|editor| {
+        for (speed, clips) in by_speed {
+            editor.apply(SetClipSpeed {
+                clips,
+                speed,
+                ripple: prompt.ripple,
+                reverse: prompt.reverse,
+                maintain_pitch: prompt.maintain_pitch,
+            });
+        }
+    });
 }
 
 /// The percentage as typed, kept to hundredths of a percent.

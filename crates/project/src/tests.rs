@@ -1,23 +1,29 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use timeline::{
-    AlphaInterpretation, AudioEffect, Bin, BinId, Caption, Clip, ClipId, CurvePoint, Gain,
-    Generator, Interpolation, Keyframe, Marks, Mask, MaskShape, MediaItem, MediaLog, Nest, Pan,
-    Param, PixelAspect, Rgb, Scroll, ShadowStyle, SourceId, TextAlign, TextStroke, Ticks, Timebase,
-    Title, TitleFont, TitleMotion, Track, Transition, TransitionKind, VideoEffect, VideoFormat,
+    AlphaInterpretation, AudioEffect, Bin, BinId, BinSearch, BoxStyle, Caption, Clip, ClipId,
+    ColorSpace, CurvePoint, FillGradient, Gain, Generator, GradientKind, Interpolation, Keyframe,
+    Marks, Mask, MaskShape, MediaItem, MediaLog, Nest, Pan, Param, PixelAspect, PluginEffect,
+    PluginParam, PluginState, Rgb, Scroll, SearchField, ShadowStyle, SourceId, TextAlign,
+    TextStroke, Ticks, Timebase, Title, TitleFont, TitleMotion, Track, Transcript, Transition,
+    TransitionKind, VideoEffect, VideoFormat, Word,
 };
 
 use super::*;
 
 fn sample() -> ProjectFile {
     let mut sequence = Sequence::new(Timebase::HZ_90K, VideoFormat::default());
-    sequence.media.push(MediaItem {
+    Arc::make_mut(&mut sequence.media).push(MediaItem {
+        poster: Some(Ticks(45_000)),
+        transcript: None,
         id: SourceId(1),
         name: "Interview \"A\" — café\n".to_owned(),
         path: PathBuf::from(r"C:\Footage\interview 😀.mp4"),
         duration: Ticks(900_000),
         video: Some(VideoFormat {
             pixel_aspect: PixelAspect::new(10, 11).unwrap_or_default(),
+            color_space: ColorSpace::Rec2100Hlg,
             ..VideoFormat::default()
         }),
         has_audio: true,
@@ -29,6 +35,8 @@ fn sample() -> ProjectFile {
         interpreted_rate: None,
         interpreted_aspect: PixelAspect::new(40, 33),
         alpha: AlphaInterpretation::Invert,
+        interpreted_color: Some(ColorSpace::P3D65Pq),
+        interpreted_fields: None,
         log: MediaLog {
             description: "Wide, \"take 3\"".to_owned(),
             scene: "12A".to_owned(),
@@ -39,8 +47,13 @@ fn sample() -> ProjectFile {
         offline: false,
         still: false,
         channel_map: None,
+        placed: None,
+        frame_fit: None,
+        timecode: Some(90_000),
     });
-    sequence.media.push(MediaItem {
+    Arc::make_mut(&mut sequence.media).push(MediaItem {
+        poster: None,
+        transcript: None,
         id: SourceId(2),
         name: "Title 01".to_owned(),
         path: PathBuf::new(),
@@ -53,6 +66,11 @@ fn sample() -> ProjectFile {
             text: "Line one\n«two»".to_owned(),
             size: 72,
             color: Rgb::new(250, 200, 10),
+            gradient: Some(FillGradient {
+                kind: GradientKind::Radial,
+                to: Rgb::new(10, 20, 30),
+                angle: -30,
+            }),
             align: TextAlign::Right,
             font: TitleFont::Mono,
             shadow: false,
@@ -61,6 +79,11 @@ fn sample() -> ProjectFile {
                 ..ShadowStyle::falling(11, 4)
             }),
             background: Some(Rgb::BLACK),
+            background_style: BoxStyle {
+                opacity: 60,
+                padding: Some(24),
+                radius: 9,
+            },
             bold: true,
             italic: true,
             tracking: -40,
@@ -82,36 +105,70 @@ fn sample() -> ProjectFile {
         subclip: None,
         interpreted_rate: None,
         interpreted_aspect: None,
+        interpreted_color: None,
+        interpreted_fields: None,
         alpha: Default::default(),
         log: Default::default(),
         offline: false,
         still: false,
         channel_map: None,
+        placed: None,
+        frame_fit: None,
+        timecode: None,
     });
     sequence.bins = vec![
         Bin {
             id: BinId(4),
             name: "Graphics".to_owned(),
             parent: None,
+            search: None,
         },
         Bin {
             id: BinId(5),
             name: "Titles".to_owned(),
             parent: Some(BinId(4)),
+            search: None,
+        },
+        Bin {
+            id: BinId(40),
+            name: "Interviews".to_owned(),
+            parent: None,
+            search: Some(BinSearch {
+                text: "interview".to_owned(),
+                field: SearchField::Name,
+            }),
         },
     ];
     let mut nest = Nest::with_default_tracks();
-    nest.audio[1].clips.push(Clip::new(
-        ClipId(8),
-        SourceId(1),
-        Ticks(30),
-        Ticks(60),
-        Ticks(0),
-    ));
-    nest.audio[1].clips[0].audio_effects = AudioEffect::catalog().to_vec();
+    nest.audio[1]
+        .clips
+        .push(Clip::new(ClipId(8), SourceId(1), Ticks(30), Ticks(60), Ticks(0)).into());
+    Arc::make_mut(&mut nest.audio[1].clips[0]).audio_effects = AudioEffect::catalog().to_vec();
+    let mut drive = Param::from_value(0.25);
+    drive.keys.push(Keyframe::new(Ticks(45), 1_000));
+    nest.master_effects = vec![AudioEffect::Plugin(Box::new(PluginEffect {
+        name: "Tape \"Saturator\"".to_owned(),
+        vendor: "Acme".to_owned(),
+        path: PathBuf::from(r"C:\Program Files\Common Files\VST3\Tape.vst3"),
+        class_id: [0xab; 16],
+        params: vec![PluginParam {
+            id: 7,
+            value: drive,
+        }],
+        state: PluginState::new(vec![0, 1, 2, 250, 255]),
+    }))];
     nest.master = Gain(-150);
     nest.marks = Marks::default().with_in(Ticks(10));
-    sequence.media.push(MediaItem {
+    Arc::make_mut(&mut sequence.media).push(MediaItem {
+        poster: None,
+        transcript: Some(Arc::new(Transcript {
+            language: "en".to_owned(),
+            words: vec![Word {
+                start: Ticks(3),
+                end: Ticks(9),
+                text: "Hello,".to_owned(),
+            }],
+        })),
         id: SourceId(3),
         name: "Nested Sequence 01".to_owned(),
         path: PathBuf::new(),
@@ -125,11 +182,16 @@ fn sample() -> ProjectFile {
         subclip: None,
         interpreted_rate: None,
         interpreted_aspect: None,
+        interpreted_color: None,
+        interpreted_fields: None,
         alpha: Default::default(),
         log: Default::default(),
         offline: false,
         still: false,
         channel_map: None,
+        placed: None,
+        frame_fit: None,
+        timecode: None,
     });
     let mut clip = Clip::new(ClipId(7), SourceId(1), Ticks(0), Ticks(90_000), Ticks(3));
     clip.gain = Gain(-600);
@@ -153,8 +215,9 @@ fn sample() -> ProjectFile {
         blurriness: clip.look.opacity.clone(),
     });
     clip.look.effects.extend(VideoEffect::catalog());
+    clip.look.effect_masks = vec![vec![Mask::new(MaskShape::Ellipse)]];
     sequence.video.push(Track {
-        clips: vec![clip],
+        clips: vec![clip.into()],
         locked: true,
         ..Track::default()
     });
@@ -183,6 +246,13 @@ fn project_round_trips_through_text() {
 }
 
 #[test]
+fn a_file_saved_with_a_byte_order_mark_still_reads() {
+    let project = sample();
+    let text = format!("\u{feff}{}", project.to_text().unwrap());
+    assert_eq!(ProjectFile::from_text(&text).unwrap(), project);
+}
+
+#[test]
 fn fields_added_later_default_when_missing() {
     let project = ProjectFile::new(Sequence::new(Timebase::HZ_90K, VideoFormat::default()));
     let text = format!(
@@ -205,15 +275,19 @@ fn newer_or_unversioned_files_are_refused() {
         ProjectFile::from_text(r#"{"sequence": {}}"#),
         Err(ProjectError::MissingVersion)
     ));
+    assert!(matches!(
+        ProjectFile::from_text(r#"{"format_version": 0}"#),
+        Err(ProjectError::Invalid(_))
+    ));
 }
 
 #[test]
 fn overlapping_clips_are_refused() {
     let mut project = sample();
-    let mut clip = project.sequence.video[0].clips[0].clone();
+    let mut clip = Clip::clone(&project.sequence.video[0].clips[0]);
     clip.id = ClipId(8);
     clip.start = Ticks(45_000);
-    project.sequence.video[0].clips.push(clip);
+    project.sequence.video[0].clips.push(clip.into());
     let text = project.to_text().unwrap();
     assert!(matches!(
         ProjectFile::from_text(&text),
@@ -246,10 +320,28 @@ fn presets_round_trip_through_text() {
     let file = PresetsFile::new(vec![timeline::EffectPreset {
         name: "Soft \"look\"".to_owned(),
         video: vec![VideoEffect::GaussianBlur { blurriness }],
+        video_masks: vec![vec![Mask::new(MaskShape::Rectangle)]],
         audio: vec![AudioEffect::SwapChannels],
     }]);
     let text = file.to_text().unwrap();
     assert_eq!(PresetsFile::from_text(&text).unwrap(), file);
+}
+
+#[test]
+fn text_styles_round_trip_through_text() {
+    let title = timeline::Title {
+        font: timeline::TitleFont::File(PathBuf::from(r"C:\Fonts\Bold Face.ttf")),
+        stroke: Some(timeline::TextStroke::default()),
+        background: Some(timeline::Rgb::BLACK),
+        tracking: -40,
+        ..timeline::Title::default()
+    };
+    let file = TextStylesFile::new(vec![timeline::TextStyle::from_title(
+        "Lower".into(),
+        &title,
+    )]);
+    let text = file.to_text().unwrap();
+    assert_eq!(TextStylesFile::from_text(&text).unwrap(), file);
 }
 
 #[test]
@@ -266,4 +358,26 @@ fn ultra_keys_saved_before_spill_suppression_keep_their_edge_desaturation() {
         panic!("expected an Ultra Key");
     };
     assert_eq!((spill.value(), pedestal.value()), (50.0, 0.0));
+}
+
+mod damaged;
+
+#[test]
+fn a_project_moved_together_with_its_media_finds_it_again() {
+    let root = std::env::temp_dir().join(format!("cledit-moved-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let (before, after) = (root.join("before"), root.join("after"));
+    std::fs::create_dir_all(before.join("media")).unwrap();
+    let media = before.join("media").join("take.wav");
+    std::fs::write(&media, b"").unwrap();
+    let mut project = sample();
+    Arc::make_mut(&mut project.sequence.media)[0].path = media;
+    project.save(&before.join("cut.editproj")).unwrap();
+    std::fs::rename(&before, &after).unwrap();
+    let moved = ProjectFile::load(&after.join("cut.editproj"));
+    std::fs::remove_dir_all(&root).unwrap();
+    assert_eq!(
+        moved.unwrap().sequence.media[0].path,
+        after.join("media").join("take.wav")
+    );
 }

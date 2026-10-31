@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use crate::edit::ops::{self, Relinks};
-use crate::{Clip, Edge, Edit, Marks, Sequence, Ticks, TimelineError};
+use crate::{Clip, Edge, Edit, Marks, Sequence, Ticks, TimelineError, TrackRef};
 
 /// Replaces the sequence's in and out marks.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -59,7 +59,7 @@ impl Edit for ExtractMarked {
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
         let range = marked(sequence)?;
-        extract(sequence, range)?;
+        extract(sequence, &[], range)?;
         sequence.marks = Marks::default();
         Ok(())
     }
@@ -83,7 +83,7 @@ impl Edit for RippleTrimToPlayhead {
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
         let span = self.span(sequence).ok_or(TimelineError::NothingToEdit)?;
-        extract(sequence, span)
+        extract(sequence, &[], span)
     }
 }
 
@@ -165,13 +165,18 @@ fn clear(sequence: &mut Sequence, range: Range<Ticks>) -> Result<(), TimelineErr
     Ok(())
 }
 
-/// Removes `range` from the sync-locked tracks, closing it up.
-fn extract(sequence: &mut Sequence, range: Range<Ticks>) -> Result<(), TimelineError> {
-    let tracks = ops::rippled_tracks(sequence, &[]);
+/// Removes `range` from `edited` and the sync-locked tracks, closing it up.
+pub(super) fn extract(
+    sequence: &mut Sequence,
+    edited: &[TrackRef],
+    range: Range<Ticks>,
+) -> Result<(), TimelineError> {
+    let tracks = ops::rippled_tracks(sequence, edited);
     let mut relinks = Relinks::default();
     for &track in &tracks {
         ops::clear(sequence, track, range.clone(), &mut relinks)?;
     }
     ops::shift(sequence, &tracks, range.end, range.start - range.end, &[]);
+    ops::ripple_markers_and_captions(sequence, range.end, range.start - range.end);
     Ok(())
 }

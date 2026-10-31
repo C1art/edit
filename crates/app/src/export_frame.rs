@@ -14,17 +14,7 @@ impl Editor {
         let rate = sequence.format.frame_rate;
         let frame = rate.frame_at(self.playhead(), sequence.timebase);
         let project = self.project_path.as_deref();
-        let name = self
-            .timeline
-            .open_nest()
-            .and_then(|id| self.timeline.project().media_item(id))
-            .map(|item| item.name.clone())
-            .or_else(|| {
-                project?
-                    .file_stem()
-                    .map(|stem| stem.to_string_lossy().into())
-            })
-            .unwrap_or_else(|| "Sequence".to_owned());
+        let name = self.output_stem();
         let file = format!("{name} {frame:05}.{}", StillFormat::Png.extension());
         project
             .and_then(|path| path.parent())

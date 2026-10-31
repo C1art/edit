@@ -42,6 +42,9 @@ fn timeline_of(placements: &[(i64, i64)]) -> Timeline {
             has_audio: true,
             still: false,
             interpreted_rate: None,
+            placed: None,
+            frame_fit: None,
+            timecode: None,
         })
         .unwrap();
     let source = timeline.sequence().media[0].id;
@@ -101,10 +104,12 @@ fn seeks_show_the_clip_frame_or_black_in_gaps() {
         shown(player) == Some((Ticks(60 * FRAME), 1))
     });
     let frame = player.current_frame().unwrap();
-    let LayerPicture::Frame(picture) = &frame.layers[0].picture else {
-        panic!("a file clip shows a decoded frame");
+    let pts = match &frame.layers[0].picture {
+        LayerPicture::Frame(picture) => picture.pts,
+        LayerPicture::Planes(picture, _) => picture.pts,
+        _ => panic!("a file clip shows a decoded frame"),
     };
-    assert_eq!(picture.pts, Ticks(35 * FRAME));
+    assert_eq!(pts, Ticks(35 * FRAME));
 
     player.step(-25);
     pump_until(&mut player, |player| {
@@ -135,4 +140,19 @@ fn a_morph_cut_shows_one_picture_blended_from_both_sides() {
     let frame = player.current_frame().unwrap();
     assert_eq!(frame.layers.len(), 1);
     assert!(matches!(frame.layers[0].picture, LayerPicture::Frame(_)));
+}
+
+#[test]
+#[ignore = "decodes a real file with FFmpeg in real time"]
+fn playing_around_the_playhead_ignores_a_loop_elsewhere() {
+    let mut player = Player::new(sequence(), None).unwrap();
+    pump_until(&mut player, |player| player.current_frame().is_some());
+    player.set_looping(Some(Ticks::ZERO..Ticks(25 * FRAME)));
+    player.seek(Ticks(60 * FRAME));
+    player.play_range(
+        Ticks(55 * FRAME)..Ticks(65 * FRAME),
+        Some(Ticks(60 * FRAME)),
+    );
+    pump_until(&mut player, |player| !player.is_playing());
+    assert_eq!(player.position(), Ticks(60 * FRAME));
 }

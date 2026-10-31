@@ -180,3 +180,81 @@ fn fit_to_fill_changes_speed_so_the_source_range_fills_the_sequence_range() {
         assert_eq!(clip.speed, Speed::new(1, 2).unwrap());
     }
 }
+
+#[test]
+fn rippled_speed_change_of_neighbours_moves_each_by_its_own_change() {
+    let (mut timeline, source) = timeline();
+    for start in [0, 100, 200] {
+        timeline
+            .apply(place(source, start, 0, 100, PlaceMode::Overwrite))
+            .unwrap();
+    }
+    timeline
+        .apply(SetClipSpeed {
+            clips: vec![clip_on(&timeline, V1, 0), clip_on(&timeline, V1, 1)],
+            speed: Speed::new(1, 2).unwrap(),
+            ripple: true,
+            reverse: false,
+            maintain_pitch: false,
+        })
+        .unwrap();
+    let expected = vec![(0, 200, 0), (200, 400, 0), (400, 500, 0)];
+    assert_eq!(spans(&timeline, V1), expected);
+    assert_eq!(spans(&timeline, A1), expected);
+}
+
+#[test]
+fn rippling_an_l_cut_moves_what_follows_once_by_the_longer_side() {
+    let (mut timeline, source) = timeline();
+    for start in [0, 300] {
+        timeline
+            .apply(place(source, start, 0, 100, PlaceMode::Overwrite))
+            .unwrap();
+    }
+    let audio = clip_on(&timeline, A1, 0);
+    let trim = Trim {
+        clips: vec![audio],
+        edge: Edge::Tail,
+        delta: Ticks(50),
+        mode: TrimMode::Normal,
+    };
+    timeline.apply(Unlinked(trim)).unwrap();
+    timeline
+        .apply(SetClipSpeed {
+            clips: vec![audio],
+            speed: Speed::new(1, 2).unwrap(),
+            ripple: true,
+            reverse: false,
+            maintain_pitch: false,
+        })
+        .unwrap();
+    assert_eq!(spans(&timeline, V1), [(0, 200, 0), (450, 550, 0)]);
+    assert_eq!(spans(&timeline, A1), [(0, 300, 0), (450, 550, 0)]);
+}
+
+#[test]
+fn linked_clips_that_cannot_grow_alike_are_cut_short_alike() {
+    let (mut timeline, source) = timeline();
+    for start in [0, 100] {
+        timeline
+            .apply(place(source, start, 0, 100, PlaceMode::Overwrite))
+            .unwrap();
+    }
+    let later_audio = clip_on(&timeline, A1, 1);
+    timeline
+        .apply(Unlinked(Lift {
+            clips: vec![later_audio],
+        }))
+        .unwrap();
+    timeline
+        .apply(SetClipSpeed {
+            clips: vec![clip_on(&timeline, V1, 0)],
+            speed: Speed::new(1, 2).unwrap(),
+            ripple: false,
+            reverse: false,
+            maintain_pitch: false,
+        })
+        .unwrap();
+    assert_eq!(spans(&timeline, V1)[0], (0, 100, 0));
+    assert_eq!(spans(&timeline, A1), [(0, 100, 0)]);
+}

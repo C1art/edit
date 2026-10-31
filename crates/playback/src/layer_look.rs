@@ -1,9 +1,10 @@
 use render::{
     ColorAdjust, Creative, CreativeVignette, LayerLook, LayerMask, LayerWipe, Outline, PageFold,
-    PixelEffects, SecondaryAdjust, Warp, MAX_MASKS, MAX_OUTLINE_POINTS,
+    PixelEffects, Reach, Reframe, SecondaryAdjust, Warp, MAX_MASKS, MAX_OUTLINE_POINTS,
 };
 use timeline::{
-    ColorCorrection, HslSecondary, Look, Mask, MaskShape, MediaItem, Param, Reveal, Ticks, Timebase,
+    AutoReframe, ColorCorrection, HslSecondary, Look, Mask, MaskShape, MediaItem, Param, Reveal,
+    Ticks, Timebase, VideoEffect,
 };
 
 use crate::pixel_effects::{linear, pixel_effects, transform_opacity};
@@ -12,12 +13,16 @@ use crate::pixel_effects::{linear, pixel_effects, transform_opacity};
 const BLURRINESS_PER_SIGMA: f32 = 2.0;
 /// The Sharpen effect's default amount, as a share.
 const SHARPEN_DEFAULT: f32 = 0.5;
+/// Below this motion scale a picture is too small to see, and smearing it further would
+/// only blow its blur up toward infinity.
+const MIN_SMEAR_SCALE: f32 = 0.01;
 
-/// `look` for a picture of `media`, drawn with the pixel shape and alpha it's
-/// interpreted with.
+/// `look` for a picture of `media`, drawn with the pixel shape, alpha and color space
+/// it's interpreted with.
 pub(crate) fn interpreted(mut look: LayerLook, media: &MediaItem) -> LayerLook {
     look.pixel_aspect = media.pixel_aspect().ratio();
     look.effects.alpha = media.alpha;
+    look.effects.color_space = media.color_space();
     look
 }
 
@@ -33,25 +38,34 @@ pub(crate) fn layer_look(
     let value = |param: &Param| param.value_at(time);
     let percent = |param: &Param| param.value_at(time) / 100.0;
     let crop = &look.crop;
-    let position = look.motion.position.each_ref().map(value);
+    let reframe = look.effects.iter().rev().find_map(|effect| match effect {
+        VideoEffect::AutoReframe(reframe) => Some(reframe),
+        _ => None,
+    });
+    let nudge = reframe.map_or([0.0; 2], |reframe| reframe.offset.each_ref().map(value));
+    let position = [0, 1].map(|axis| look.motion.position[axis].value_at(time) + nudge[axis]);
     // Zooming about the canvas center scales the picture's offset from it too.
     let offset =
         [0, 1].map(|axis| (position[axis] + reveal.shift[axis] * canvas[axis]) * reveal.zoom);
     let mut effects = pixel_effects(&look.effects, time, timebase);
     // Lumetri's sharpen at 100 is the Sharpen effect's default.
     effects.sharpen += SHARPEN_DEFAULT * percent(&look.color.sharpen).max(0.0);
+    let scale = look
+        .motion
+        .scale_at(time)
+        .map(|percent| percent / 100.0 * reveal.zoom);
+    let rotation_degrees = value(&look.motion.rotation);
     LayerLook {
         offset,
-        scale: look
-            .motion
-            .scale_at(time)
-            .map(|percent| percent / 100.0 * reveal.zoom),
+        scale,
         anchor: look.motion.anchor.each_ref().map(value),
-        rotation_degrees: value(&look.motion.rotation),
+        rotation_degrees,
         crop: [&crop.left, &crop.top, &crop.right, &crop.bottom].map(percent),
         opacity: percent(&look.opacity) * transform_opacity(&look.effects, time) * reveal.fade,
-        opacity_masks: opacity_masks(&look.masks, time),
-        blur: look.blurriness_at(time) / BLURRINESS_PER_SIGMA,
+        opacity_masks: opacity_masks(&look.masks, &look.effects, time),
+        blur: look
+            .blurriness_at(time)
+            .map(|blurriness| blurriness / BLURRINESS_PER_SIGMA),
         color: color_adjust(&look.color, time),
         wipes: reveal.wipes.map(|wipe| {
             wipe.map(|wipe| LayerWipe {
@@ -65,20 +79,38 @@ pub(crate) fn layer_look(
             })
         }),
         wash: reveal.wash,
-        effects: smeared(turned(effects, reveal, canvas), reveal, canvas),
+        effects: smeared(
+            turned(effects, reveal, canvas),
+            [0, 1].map(|axis| reveal.smear[axis] * canvas[axis]),
+            (rotation_degrees, scale),
+        ),
         blend: reveal.blend.unwrap_or(look.blend),
+        reach: Reach::Everywhere,
         pixel_aspect: 1.0,
+        reframe: reframe.map(|reframe| reframed(reframe, time)),
     }
 }
 
-/// `effects` blurred along the transition's motion, in place of the clip's own
-/// directional blur.
-fn smeared(mut effects: PixelEffects, reveal: Reveal, canvas: [f32; 2]) -> PixelEffects {
-    let [x, y] = [0, 1].map(|axis| reveal.smear[axis] * canvas[axis]);
-    if x != 0.0 || y != 0.0 {
-        effects.style.blur_length = x.hypot(y);
-        effects.style.blur_direction = x.atan2(-y);
+/// `effects` blurred along the transition's motion of `smear` canvas pixels, in place
+/// of the clip's own directional blur. The blur runs across the picture before motion
+/// turns, scales or flips it, so the motion is taken back through those first.
+fn smeared(
+    mut effects: PixelEffects,
+    smear: [f32; 2],
+    (rotation_degrees, scale): (f32, [f32; 2]),
+) -> PixelEffects {
+    if smear == [0.0; 2] {
+        return effects;
     }
+    let (sin, cos) = rotation_degrees.to_radians().sin_cos();
+    let [x, y] = smear;
+    let turned_back = [x * cos + y * sin, y * cos - x * sin];
+    let [x, y] = [0, 1].map(|axis| {
+        let flip = if effects.flip[axis] { -1.0 } else { 1.0 };
+        turned_back[axis] * flip / scale[axis].abs().max(MIN_SMEAR_SCALE)
+    });
+    effects.style.blur_length = x.hypot(y);
+    effects.style.blur_direction = x.atan2(-y);
     effects
 }
 
@@ -178,27 +210,71 @@ fn secondary_adjust(secondary: &HslSecondary, time: Ticks) -> Option<SecondaryAd
     })
 }
 
-/// The first [`MAX_MASKS`] masks; the effect controls offer no more. A path still being
-/// drawn masks nothing yet.
-fn opacity_masks(masks: &[Mask], time: Ticks) -> [Option<LayerMask>; MAX_MASKS] {
-    let fraction = |param: &Param| param.value_at(time) / 100.0;
-    let mut layer_masks = [None; MAX_MASKS];
-    let shaped = masks.iter().filter_map(|mask| {
-        let outline = Outline::new(&mask.outline_at(time, MAX_OUTLINE_POINTS));
-        (mask.shape != MaskShape::Path || !outline.is_empty()).then_some((mask, outline))
+fn reframed(reframe: &AutoReframe, time: Ticks) -> Reframe {
+    Reframe {
+        subject: reframe.subject_at(time),
+        zoom: reframe.scale.value_at(time) / 100.0,
+    }
+}
+
+/// The garbage mattes, then the masks, as many as fit; the effect controls offer no
+/// more masks. A path still being drawn masks nothing yet.
+fn opacity_masks(
+    masks: &[Mask],
+    effects: &[VideoEffect],
+    time: Ticks,
+) -> [Option<LayerMask>; MAX_MASKS] {
+    let mattes = effects.iter().filter_map(|effect| match effect {
+        VideoEffect::GarbageMatte(matte) => Some(LayerMask {
+            shape: MaskShape::Path,
+            center: [0.5; 2],
+            size: [1.0; 2],
+            rotation_degrees: 0.0,
+            feather: 0.0,
+            expansion: 0.0,
+            opacity: 1.0,
+            inverted: false,
+            intersect: true,
+            outline: Outline::new(&matte.outline_at(time)),
+        }),
+        _ => None,
     });
-    for (slot, (mask, outline)) in layer_masks.iter_mut().zip(shaped) {
-        *slot = Some(LayerMask {
-            shape: mask.shape,
-            center: mask.center.each_ref().map(fraction),
-            size: mask.size.each_ref().map(fraction),
-            rotation_degrees: mask.rotation.value_at(time),
-            feather: mask.feather.value_at(time),
-            expansion: mask.expansion.value_at(time),
-            opacity: fraction(&mask.opacity),
-            inverted: mask.inverted,
-            outline,
-        });
+    let masks = masks.iter().filter_map(|mask| layer_mask(mask, time));
+    let mut layer_masks = [None; MAX_MASKS];
+    for (slot, mask) in layer_masks.iter_mut().zip(mattes.chain(masks)) {
+        *slot = Some(mask);
     }
     layer_masks
+}
+
+/// `mask` at `time`; `None` for a path still being drawn.
+pub(crate) fn layer_mask(mask: &Mask, time: Ticks) -> Option<LayerMask> {
+    let fraction = |param: &Param| param.value_at(time) / 100.0;
+    let outline = Outline::new(&mask.outline_at(time, MAX_OUTLINE_POINTS));
+    (mask.shape != MaskShape::Path || !outline.is_empty()).then(|| LayerMask {
+        shape: mask.shape,
+        center: mask.center.each_ref().map(fraction),
+        size: mask.size.each_ref().map(fraction),
+        rotation_degrees: mask.rotation.value_at(time),
+        feather: mask.feather.value_at(time),
+        expansion: mask.expansion.value_at(time),
+        opacity: fraction(&mask.opacity),
+        inverted: mask.inverted,
+        intersect: false,
+        outline,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_smear_runs_across_a_turned_and_shrunk_picture_along_its_own_axes() {
+        let effects = smeared(PixelEffects::NONE, [100.0, 0.0], (90.0, [0.5, 0.5]));
+        assert!((effects.style.blur_length - 200.0).abs() < 1e-3);
+        // A picture turned a quarter clockwise moves sideways on the canvas along its
+        // own vertical.
+        assert!(effects.style.blur_direction.sin().abs() < 1e-3);
+    }
 }

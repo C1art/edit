@@ -1,16 +1,6 @@
-use std::f32::consts::PI;
-
-use super::fft::Fft;
+use super::stft::{Spectrum, Stft, BINS, HOP, WINDOW};
 use crate::SampleRate;
 
-/// About 21 ms at 48 kHz: fine enough in frequency to part a voice from hiss, and the
-/// delay it adds stays well under what lip sync shows.
-const WINDOW: usize = 1024;
-/// Four overlapping windows cover each sample.
-const HOP: usize = WINDOW / 4;
-const BINS: usize = WINDOW / 2 + 1;
-/// Square-root Hann windows in and out overlap at a quarter window to twice the input.
-const OVERLAP_GAIN: f32 = 0.5;
 /// The noise is the quietest each frequency has been over the last `SPANS` spans of
 /// `SPAN_SECONDS`, so it follows a noise that rises within about a second.
 const SPANS: usize = 8;
@@ -40,10 +30,15 @@ const MAX_REDUCTION_DB: f32 = 30.0;
 /// down. Adds a window of delay.
 #[derive(Debug, Clone)]
 pub struct DeNoise {
-    analysis: Analysis,
+    stft: Stft,
     channels: [Channel; 2],
-    /// Samples taken since the last window.
-    filled: usize,
+    learning: Learning,
+}
+
+/// Where learning the noise has got to.
+#[derive(Debug, Clone)]
+struct Learning {
+    windows_per_span: usize,
     /// Windows to go before the input fills one again and the steady level settles, after
     /// which the noise is learnt.
     priming: usize,
@@ -52,45 +47,24 @@ pub struct DeNoise {
     span: usize,
 }
 
-/// What every channel's windows share.
-#[derive(Debug, Clone)]
-struct Analysis {
-    fft: Fft,
-    window: Vec<f32>,
-    windows_per_span: usize,
-}
-
 #[derive(Debug, Clone)]
 struct Channel {
-    /// The latest window of input, oldest first.
-    input: Vec<f32>,
-    /// Overlapping windows of output being added up; the front hop is complete.
-    sum: Vec<f32>,
-    /// The hop of output being handed out while the next fills.
-    ready: Vec<f32>,
     level: Vec<f32>,
     steady: Vec<f32>,
     /// Each bin's quietest steady level in the current span, then in each past span.
     span_quietest: Vec<f32>,
     past_quietest: Vec<[f32; SPANS]>,
     gain: Vec<f32>,
-    re: Vec<f32>,
-    im: Vec<f32>,
 }
 
 impl Channel {
     fn new() -> Self {
         Self {
-            input: vec![0.0; WINDOW],
-            sum: vec![0.0; WINDOW],
-            ready: vec![0.0; HOP],
             level: vec![0.0; BINS],
             steady: vec![0.0; BINS],
             span_quietest: vec![f32::INFINITY; BINS],
             past_quietest: vec![[f32::INFINITY; SPANS]; BINS],
             gain: vec![1.0; BINS],
-            re: vec![0.0; WINDOW],
-            im: vec![0.0; WINDOW],
         }
     }
 }
@@ -113,55 +87,47 @@ impl DeNoise {
     pub fn new(rate: SampleRate) -> Self {
         let windows_per_second = rate.0 as f32 / HOP as f32;
         Self {
-            analysis: Analysis {
-                fft: Fft::new(WINDOW),
-                window: (0..WINDOW)
-                    .map(|n| (PI * (n as f32 + 0.5) / WINDOW as f32).sin())
-                    .collect(),
-                windows_per_span: (windows_per_second * SPAN_SECONDS).round().max(1.0) as usize,
-            },
+            stft: Stft::new(),
             channels: [Channel::new(), Channel::new()],
-            filled: 0,
-            priming: PRIMING,
-            span_windows: 0,
-            span: 0,
+            learning: Learning {
+                windows_per_span: (windows_per_second * SPAN_SECONDS).round().max(1.0) as usize,
+                priming: PRIMING,
+                span_windows: 0,
+                span: 0,
+            },
         }
     }
 
     /// Forgets the sound in flight, as after a seek, but keeps the noise it learnt.
     pub fn reset(&mut self) {
+        self.stft.reset();
         for channel in &mut self.channels {
-            channel.input.fill(0.0);
-            channel.sum.fill(0.0);
-            channel.ready.fill(0.0);
             channel.gain.fill(1.0);
         }
-        self.filled = 0;
-        self.priming = PRIMING;
+        self.learning.priming = PRIMING;
     }
 
     /// Reduces the noise in interleaved stereo `samples` by `amount`, from 0 to 1.
     pub fn process(&mut self, amount: f32, samples: &mut [f32]) {
         let amount = amount.clamp(0.0, 1.0);
-        for frame in samples.as_chunks_mut::<2>().0 {
-            for (sample, channel) in frame.iter_mut().zip(&mut self.channels) {
-                channel.input[WINDOW - HOP + self.filled] = *sample;
-                *sample = channel.ready[self.filled];
+        let Self {
+            stft,
+            channels,
+            learning,
+        } = self;
+        stft.process(samples, |spectra| {
+            let phase = learning.next_window();
+            for (channel, spectrum) in channels.iter_mut().zip(spectra) {
+                channel.shape(spectrum, amount, phase, learning.span);
             }
-            self.filled += 1;
-            if self.filled == HOP {
-                self.filled = 0;
-                let phase = self.next_window();
-                for channel in &mut self.channels {
-                    self.analysis.window_out(channel, amount, phase, self.span);
-                }
-                if phase == Phase::SpanEnds {
-                    self.span = (self.span + 1) % SPANS;
-                }
+            if phase == Phase::SpanEnds {
+                learning.span = (learning.span + 1) % SPANS;
             }
-        }
+        });
     }
+}
 
+impl Learning {
     fn next_window(&mut self) -> Phase {
         if self.priming > 0 {
             self.priming -= 1;
@@ -172,7 +138,7 @@ impl DeNoise {
             };
         }
         self.span_windows += 1;
-        if self.span_windows == self.analysis.windows_per_span {
+        if self.span_windows == self.windows_per_span {
             self.span_windows = 0;
             Phase::SpanEnds
         } else {
@@ -181,45 +147,35 @@ impl DeNoise {
     }
 }
 
-impl Analysis {
-    fn window_out(&self, channel: &mut Channel, amount: f32, phase: Phase, span: usize) {
-        for ((re, im), (&input, &weight)) in channel
-            .re
-            .iter_mut()
-            .zip(&mut channel.im)
-            .zip(channel.input.iter().zip(&self.window))
-        {
-            *re = input * weight;
-            *im = 0.0;
-        }
-        self.fft.run(&mut channel.re, &mut channel.im, false);
+impl Channel {
+    fn shape(&mut self, spectrum: &mut Spectrum, amount: f32, phase: Phase, span: usize) {
         let floor = 10.0_f32.powf(-MAX_REDUCTION_DB * amount / 20.0);
         for bin in 0..BINS {
-            let power = channel.re[bin].powi(2) + channel.im[bin].powi(2);
+            let power = spectrum.power(bin);
             let smooth = |previous: f32, smoothing: f32| match phase {
                 Phase::Paused | Phase::Starting => power,
                 Phase::Settling | Phase::Learning | Phase::SpanEnds => {
                     smoothing * previous + (1.0 - smoothing) * power
                 }
             };
-            let level = smooth(channel.level[bin], LEVEL_SMOOTHING);
-            channel.level[bin] = level;
+            let level = smooth(self.level[bin], LEVEL_SMOOTHING);
+            self.level[bin] = level;
             if phase != Phase::Paused {
-                channel.steady[bin] = smooth(channel.steady[bin], NOISE_SMOOTHING);
+                self.steady[bin] = smooth(self.steady[bin], NOISE_SMOOTHING);
             }
             if matches!(phase, Phase::Learning | Phase::SpanEnds) {
-                channel.span_quietest[bin] = channel.span_quietest[bin].min(channel.steady[bin]);
+                self.span_quietest[bin] = self.span_quietest[bin].min(self.steady[bin]);
             }
-            let past = &mut channel.past_quietest[bin];
+            let past = &mut self.past_quietest[bin];
             let noise = past
                 .iter()
-                .fold(channel.span_quietest[bin], |quietest, &span| {
+                .fold(self.span_quietest[bin], |quietest, &span| {
                     quietest.min(span)
                 })
                 * MINIMUM_BIAS;
             if phase == Phase::SpanEnds {
-                past[span] = channel.span_quietest[bin];
-                channel.span_quietest[bin] = f32::INFINITY;
+                past[span] = self.span_quietest[bin];
+                self.span_quietest[bin] = f32::INFINITY;
             }
             // Nothing is cut before any noise has been heard.
             let wanted = if noise.is_finite() && level > 0.0 {
@@ -227,25 +183,10 @@ impl Analysis {
             } else {
                 1.0
             };
-            let gain = &mut channel.gain[bin];
+            let gain = &mut self.gain[bin];
             *gain = GAIN_SMOOTHING * *gain + (1.0 - GAIN_SMOOTHING) * wanted;
-            channel.re[bin] *= *gain;
-            channel.im[bin] *= *gain;
-            // The upper half mirrors the lower, as the input is real.
-            if bin > 0 && bin < WINDOW / 2 {
-                channel.re[WINDOW - bin] *= *gain;
-                channel.im[WINDOW - bin] *= *gain;
-            }
+            spectrum.scale(bin, *gain);
         }
-        self.fft.run(&mut channel.re, &mut channel.im, true);
-        let scale = OVERLAP_GAIN / WINDOW as f32;
-        for ((sum, &re), &weight) in channel.sum.iter_mut().zip(&channel.re).zip(&self.window) {
-            *sum += re * weight * scale;
-        }
-        channel.ready.copy_from_slice(&channel.sum[..HOP]);
-        channel.sum.copy_within(HOP.., 0);
-        channel.sum[WINDOW - HOP..].fill(0.0);
-        channel.input.copy_within(HOP.., 0);
     }
 }
 
@@ -284,10 +225,6 @@ mod tests {
         let hiss_before = rms(&samples[rate..2 * rate]);
         DeNoise::new(SampleRate(rate as u32)).process(1.0, &mut samples);
         let hiss_after = rms(&samples[rate..2 * rate]);
-        eprintln!(
-            "DBG hiss {hiss_before} -> {hiss_after}; tone -> {}",
-            rms(&samples[3 * rate..4 * rate])
-        );
         assert!(
             hiss_after < hiss_before * 0.1,
             "hiss {hiss_before} became {hiss_after}"

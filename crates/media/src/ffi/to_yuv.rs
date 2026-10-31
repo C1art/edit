@@ -2,11 +2,16 @@ use std::ptr::{self, NonNull};
 
 use ffmpeg_sys_next as sys;
 
+use super::error::check;
+use super::sws_context::{borrowed_buffer_release, threaded_context};
+use super::sws_flags::{SWS_BICUBIC, SWS_FULL_CHR_H_INP};
 use super::Frame;
 use crate::MediaError;
 
 /// Converts sRGB-encoded RGBA8 to limited-range BT.709 in the encoder's pixel format,
-/// scaling it to the encoded size.
+/// scaling it to the encoded size, on as many threads as there are cores: on one, with
+/// exact rounding, a 1080p picture took longer than an export frame's share of time,
+/// holding back the whole export.
 pub(crate) struct RgbaToYuv {
     context: NonNull<sys::SwsContext>,
     width: i32,
@@ -28,22 +33,19 @@ impl RgbaToYuv {
         let height = i32::try_from(height).map_err(|_| invalid())?;
         let out_width = i32::try_from(out_width).map_err(|_| invalid())?;
         let out_height = i32::try_from(out_height).map_err(|_| invalid())?;
-        // SAFETY: plain constructor call with validated sizes; null means unsupported input.
-        let context = NonNull::new(unsafe {
-            sys::sws_getContext(
-                width,
-                height,
-                sys::AVPixelFormat::AV_PIX_FMT_RGBA,
-                out_width,
-                out_height,
-                format,
-                sys::SWS_BICUBIC | sys::SWS_ACCURATE_RND | sys::SWS_FULL_CHR_H_INP,
-                ptr::null_mut(),
-                ptr::null_mut(),
-                ptr::null(),
-            )
-        })
-        .ok_or_else(invalid)?;
+        let options = [
+            (c"srcw", i64::from(width)),
+            (c"srch", i64::from(height)),
+            (c"src_format", sys::AVPixelFormat::AV_PIX_FMT_RGBA as i64),
+            (c"dstw", i64::from(out_width)),
+            (c"dsth", i64::from(out_height)),
+            (c"dst_format", format as i64),
+            // Exact rounding would take swscale off its fast paths for at most one level of
+            // difference; full chroma input keeps 4:4:4 outputs sharp.
+            (c"sws_flags", i64::from(SWS_BICUBIC | SWS_FULL_CHR_H_INP)),
+            (c"threads", 0),
+        ];
+        let context = threaded_context(&options)?;
         // SAFETY: `context` was just created; sws_getCoefficients returns static tables.
         unsafe {
             let bt709 = sys::sws_getCoefficients(sys::SWS_CS_ITU709);
@@ -72,27 +74,38 @@ impl RgbaToYuv {
             return Err(MediaError::InvalidFrame);
         }
         frame.make_writable()?;
-        let raw = frame.raw_mut();
-        if (raw.width, raw.height) != self.output {
+        if (frame.raw().width, frame.raw().height) != self.output {
             return Err(MediaError::InvalidFrame);
         }
-        let source = [rgba.as_ptr(), ptr::null(), ptr::null(), ptr::null()];
-        let source_stride = [self.width * 4, 0, 0, 0];
-        // SAFETY: `rgba` holds `height` rows of `width * 4` bytes, and the frame is a
-        // writable picture of the output size and format, whose planes match its linesizes.
-        let rows = unsafe {
-            sys::sws_scale(
-                self.context.as_ptr(),
-                source.as_ptr(),
-                source_stride.as_ptr(),
+        let mut source = Frame::new()?;
+        // SAFETY: `source` borrows `rgba` through a buffer whose release does nothing, and
+        // is dropped before this returns; swscale only reads it, and drops its own
+        // reference before sws_scale_frame returns. `rgba` holds `height` rows of
+        // `width * 4` bytes, and `frame` is a writable picture of the output size and
+        // format.
+        unsafe {
+            let buffer = sys::av_buffer_create(
+                rgba.as_ptr().cast_mut(),
+                rgba.len(),
+                Some(borrowed_buffer_release),
+                ptr::null_mut(),
                 0,
-                self.height,
-                raw.data.as_ptr(),
-                raw.linesize.as_ptr(),
-            )
-        };
-        if rows != self.output.1 {
-            return Err(MediaError::InvalidFrame);
+            );
+            if buffer.is_null() {
+                return Err(MediaError::OutOfMemory);
+            }
+            let raw = source.raw_mut();
+            raw.buf[0] = buffer;
+            raw.data[0] = rgba.as_ptr().cast_mut();
+            raw.linesize[0] = self.width * 4;
+            raw.width = self.width;
+            raw.height = self.height;
+            raw.format = sys::AVPixelFormat::AV_PIX_FMT_RGBA as i32;
+            check(sys::sws_scale_frame(
+                self.context.as_ptr(),
+                frame.as_mut_ptr(),
+                source.as_mut_ptr(),
+            ))?;
         }
         Ok(())
     }
@@ -100,7 +113,7 @@ impl RgbaToYuv {
 
 impl Drop for RgbaToYuv {
     fn drop(&mut self) {
-        // SAFETY: the context came from sws_getContext and is freed exactly once here.
+        // SAFETY: the context came from sws_alloc_context and is freed exactly once here.
         unsafe { sys::sws_freeContext(self.context.as_ptr()) };
     }
 }

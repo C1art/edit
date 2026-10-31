@@ -1,20 +1,22 @@
 use crate::blit::{self, Blit};
 use crate::compositor::extent;
+use crate::placement::Premultiplied;
 use crate::WORKING_FORMAT;
 
-/// More taps per side than this and the taps spread apart instead, which the linear
-/// sampler smooths over.
+/// More taps per side than this and the taps spread apart instead.
 const MAX_TAPS: f32 = 24.0;
 
-/// Two intermediate textures at the layer's size: the horizontal pass writes the first
-/// and the vertical pass writes the second, which is then placed like the source.
+/// Two intermediate textures at the layer's size that the passes write in turn: across,
+/// then down, the second written last and placed like the source. A blur too wide for
+/// neighbouring taps first runs a narrow blur each way, so its spread taps don't pick
+/// single texels out of fine detail and leave stripes.
 pub(crate) struct BlurTargets {
-    horizontal_uniform: wgpu::Buffer,
-    vertical_uniform: wgpu::Buffer,
-    horizontal: wgpu::BindGroup,
-    vertical: wgpu::BindGroup,
-    horizontal_view: wgpu::TextureView,
-    vertical_view: wgpu::TextureView,
+    uniforms: [wgpu::Buffer; 4],
+    /// Reading the source, the first, the second and the first texture again.
+    passes: [wgpu::BindGroup; 4],
+    first: wgpu::TextureView,
+    second: wgpu::TextureView,
+    prefiltered: bool,
     /// Places the blurred picture; shares the layer's placement buffer.
     pub(crate) placed: wgpu::BindGroup,
 }
@@ -42,60 +44,100 @@ impl BlurTargets {
                 })
                 .create_view(&wgpu::TextureViewDescriptor::default())
         };
-        let horizontal_view = view("blur_horizontal");
-        let vertical_view = view("blur_vertical");
-        let horizontal_uniform = Blit::placement_buffer(device);
-        let vertical_uniform = Blit::placement_buffer(device);
+        let first = view("blur_first");
+        let second = view("blur_second");
+        let uniforms = [(); 4].map(|()| Blit::placement_buffer(device));
+        let read = [source, &first, &second, &first];
+        let passes = [0, 1, 2, 3].map(|pass| blit.bind(device, read[pass], &uniforms[pass]));
         Self {
-            horizontal: blit.bind(device, source, &horizontal_uniform),
-            vertical: blit.bind(device, &horizontal_view, &vertical_uniform),
-            placed: blit.bind(device, &vertical_view, placement),
-            horizontal_uniform,
-            vertical_uniform,
-            horizontal_view,
-            vertical_view,
+            placed: blit.bind(device, &second, placement),
+            uniforms,
+            passes,
+            first,
+            second,
+            prefiltered: false,
         }
     }
 
-    /// `sigma` is in layer pixels.
-    pub(crate) fn write(&self, queue: &wgpu::Queue, (width, height): (u32, u32), sigma: f32) {
-        let horizontal = [1.0 / width as f32, 0.0];
-        let vertical = [0.0, 1.0 / height as f32];
-        queue.write_buffer(&self.horizontal_uniform, 0, &uniform(horizontal, sigma));
-        queue.write_buffer(&self.vertical_uniform, 0, &uniform(vertical, sigma));
+    /// `sigma` is the red, green, blue and alpha channels' across and then down, in
+    /// layer pixels. Returns whether the blurred picture is premultiplied: a straight
+    /// source is, when all its channels blur alike, so its colour doesn't bleed in from
+    /// transparent texels. Not where `alpha_kept` is false, as its alpha is then replaced.
+    pub(crate) fn write(
+        &mut self,
+        queue: &wgpu::Queue,
+        (width, height): (u32, u32),
+        sigma: [[f32; 4]; 2],
+        source: Premultiplied,
+        alpha_kept: bool,
+    ) -> Premultiplied {
+        let premultiply = source == Premultiplied::No
+            && alpha_kept
+            && sigma
+                .iter()
+                .all(|way| way.iter().all(|&each| each == way[3]));
+        let texel = [[1.0 / width as f32, 0.0], [0.0, 1.0 / height as f32]];
+        let spacing = sigma.map(|way| tap_layout(way.into_iter().fold(0.0, f32::max)).0);
+        self.prefiltered = spacing.iter().any(|&spacing| spacing > 1.0);
+        let passes = if self.prefiltered {
+            [0, 1]
+                .into_iter()
+                .flat_map(|way| {
+                    // Gaussians add in variance, so the two together blur by `sigma`.
+                    let narrow = sigma[way].map(|sigma| sigma.min(spacing[way]));
+                    let rest = [0, 1, 2, 3].map(|channel| {
+                        (sigma[way][channel].powi(2) - narrow[channel].powi(2))
+                            .max(0.0)
+                            .sqrt()
+                    });
+                    [
+                        uniform(texel[way], narrow, premultiply && way == 0),
+                        uniform(texel[way], rest, false),
+                    ]
+                })
+                .collect()
+        } else {
+            vec![
+                uniform(texel[0], sigma[0], premultiply),
+                uniform(texel[1], sigma[1], false),
+            ]
+        };
+        for (buffer, bytes) in self.uniforms.iter().zip(&passes) {
+            queue.write_buffer(buffer, 0, bytes);
+        }
+        if premultiply {
+            Premultiplied::InLight
+        } else {
+            source
+        }
     }
 
     pub(crate) fn draw(&self, encoder: &mut wgpu::CommandEncoder, blit: &Blit) {
-        blit::draw(
-            encoder,
-            &self.horizontal_view,
-            &blit.blur,
-            &[[&self.horizontal]],
-            wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-        );
-        blit::draw(
-            encoder,
-            &self.vertical_view,
-            &blit.blur,
-            &[[&self.vertical]],
-            wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-        );
+        let count = if self.prefiltered { 4 } else { 2 };
+        let targets = [&self.first, &self.second];
+        for (pass, bindings) in self.passes.iter().take(count).enumerate() {
+            blit::draw(
+                encoder,
+                targets[pass % 2],
+                &blit.blur,
+                &[[bindings]],
+                wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+            );
+        }
     }
 }
 
-/// Taps reach three sigma each side.
-fn uniform(texel: [f32; 2], sigma: f32) -> Vec<u8> {
-    let (spacing, taps) = tap_layout(sigma);
-    [
-        texel[0] * spacing,
-        texel[1] * spacing,
-        sigma / spacing,
-        taps,
-    ]
-    .into_iter()
-    .chain([0.0; 16])
-    .flat_map(f32::to_le_bytes)
-    .collect()
+/// Taps reach three of the widest sigma each side.
+fn uniform(texel: [f32; 2], sigma: [f32; 4], premultiply: bool) -> Vec<u8> {
+    let widest = sigma.into_iter().fold(0.0, f32::max);
+    let (spacing, taps) = tap_layout(widest);
+    [texel[0] * spacing, texel[1] * spacing, 0.0, taps]
+        .into_iter()
+        .chain(sigma.map(|sigma| sigma / spacing))
+        .chain([f32::from(u8::from(premultiply)), 0.0, 0.0, 0.0])
+        .chain([0.0; 8])
+        .flat_map(f32::to_le_bytes)
+        .collect()
 }
 
 /// Texels between taps and taps each side.

@@ -9,6 +9,14 @@ fn joining_a_razor_cut_restores_one_clip_on_both_linked_tracks_but_not_a_jump_cu
     timeline
         .apply(place(source, 300, 500, 100, PlaceMode::Overwrite))
         .unwrap();
+    for at in [50, 200] {
+        timeline
+            .apply(AddMarker {
+                owner: MarkerOwner::Clip(clip_on(&timeline, V1, 0)),
+                at: Ticks(at),
+            })
+            .unwrap();
+    }
     timeline
         .apply(Razor {
             at: Ticks(100),
@@ -26,4 +34,7 @@ fn joining_a_razor_cut_restores_one_clip_on_both_linked_tracks_but_not_a_jump_cu
     let joined = [(0, 300, 0), (300, 400, 500)];
     assert_eq!(spans(&timeline, V1), joined);
     assert_eq!(spans(&timeline, A1), joined);
+    let (_, clip) = timeline.sequence().clip(clip_on(&timeline, V1, 0)).unwrap();
+    let marked: Vec<Ticks> = clip.markers.iter().map(|marker| marker.at).collect();
+    assert_eq!(marked, [Ticks(50), Ticks(200)]);
 }

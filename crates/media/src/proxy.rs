@@ -4,8 +4,8 @@ use std::path::Path;
 use timeline::{FrameRate, Ticks, Timebase};
 
 use crate::{
-    DecodedFrame, EncodeProfile, MediaError, MediaReader, MediaWriter, RateControl, Streams,
-    VideoCodec, VideoFrame, VideoSettings,
+    Acceleration, DecodedFrame, EncodeProfile, MediaError, MediaReader, MediaWriter, RateControl,
+    Streams, VideoCodec, VideoFrame, VideoSettings,
 };
 
 /// Good enough to judge framing and motion; the original is used for export.
@@ -48,7 +48,11 @@ fn transcode(
     let timebase = Timebase::HZ_90K;
     let mut reader = MediaReader::open_streams(source, timebase, Streams::Video)?;
     let info = reader.info().clone();
-    let video = info.video.ok_or(MediaError::NoPlayableStream)?;
+    let video = info
+        .video
+        // A picture of unknown size would make a proxy too small to stand in for it.
+        .filter(|video| video.width > 0 && video.height > 0)
+        .ok_or(MediaError::NoPlayableStream)?;
     let rate = video.frame_rate.unwrap_or(FrameRate::FPS_25);
     let (width, height) = proxy_size((video.width, video.height), max_height);
     reader.set_video_size(Some((width, height)))?;
@@ -60,6 +64,7 @@ fn transcode(
         codec: VideoCodec::H264,
         rate_control: RateControl::Quality(PROXY_CRF),
         profile: EncodeProfile::Editing,
+        acceleration: Acceleration::Hardware,
     };
     let mut writer = MediaWriter::create(destination, Some(settings), None)?;
     let mut out = Retimer {
@@ -78,11 +83,14 @@ fn transcode(
             writer.write_video(&last.as_ref().unwrap_or(&frame).pixels)?;
             out.next += 1;
         }
-        if let Some(duration) = info.duration.filter(|d| *d > Ticks::ZERO) {
-            let done = frame.pts.0 as f64 / duration.0 as f64;
-            if progress(done.clamp(0.0, 1.0) as f32).is_break() {
-                return Err(MediaError::Cancelled);
-            }
+        // Without a known length there's nothing to measure against, but asking still
+        // lets the proxy be cancelled.
+        let done = info
+            .duration
+            .filter(|d| *d > Ticks::ZERO)
+            .map_or(0.0, |duration| frame.pts.0 as f64 / duration.0 as f64);
+        if progress(done.clamp(0.0, 1.0) as f32).is_break() {
+            return Err(MediaError::Cancelled);
         }
         last = Some(frame);
     }
@@ -134,8 +142,11 @@ mod tests {
         let path = dir.join("proxy.mp4");
         create_proxy(&fixture, &path, 120, |_| ControlFlow::Continue(())).unwrap();
 
-        let reader = MediaReader::open(&path, Timebase::HZ_90K).unwrap();
-        let info = reader.info().clone();
+        let info = MediaReader::open(&path, Timebase::HZ_90K)
+            .unwrap()
+            .info()
+            .clone();
+        // The reader is gone by now, as Windows won't remove a file that is still open.
         std::fs::remove_dir_all(&dir).unwrap();
         let video = info.video.unwrap();
         assert_eq!((video.width, video.height), (160, 120));

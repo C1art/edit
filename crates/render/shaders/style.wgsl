@@ -19,11 +19,15 @@ fn wave(uv: vec2<f32>) -> vec2<f32> {
     if wave.x == 0.0 {
         return uv;
     }
+// #if style_wave.x
     let picture = picture_size();
     let along = vec2<f32>(sin(wave.z), -cos(wave.z));
     let across = vec2<f32>(-along.y, along.x);
     let waves = dot(uv * picture, along) / wave.y - wave.w;
     return uv + across * wave.x * sin(TAU * waves) / picture;
+// #else
+    return uv;
+// #endif
 }
 
 fn lattice(p: vec3<f32>) -> f32 {
@@ -83,6 +87,7 @@ fn turbulent(uv: vec2<f32>) -> vec2<f32> {
     if center.w < 0.5 {
         return uv;
     }
+// #if style_turbulence_center.w
     let picture = picture_size();
     let at = (uv - center.xy) * picture / turbulence_settings.y;
     // Evolution moves through the noise's third dimension.
@@ -92,6 +97,9 @@ fn turbulent(uv: vec2<f32>) -> vec2<f32> {
         turbulence(p + vec3<f32>(71.3, 19.7, 37.1), turbulence_settings.z),
     );
     return uv + push * turbulence_settings.x / picture;
+// #else
+    return uv;
+// #endif
 }
 
 // Where the picture at `uv` is read from once waved, lensed, twirled and cut into
@@ -103,6 +111,7 @@ fn warp(uv_in: vec2<f32>) -> vec2<f32> {
     var p = (wave(turbulent(mirrored(uv_in))) - vec2<f32>(0.5)) * aspect;
     // The picture as seen on a ball: points at the rim show as they are, nearer the
     // middle they read from nearer it still, as an arc's length to its height.
+// #if style_sphere.w
     let sphere = placement.style_sphere;
     let sphere_center = (sphere.xy - vec2<f32>(0.5)) * aspect;
     let sphere_radius = sphere.z / max(picture.x, picture.y);
@@ -112,14 +121,18 @@ fn warp(uv_in: vec2<f32>) -> vec2<f32> {
         let read = sphere_radius * asin(reach / sphere_radius) * 2.0 / 3.14159265;
         p = sphere_center + from_center * read / reach;
     }
+// #endif
     // Scaling with the squared radius, normalized so the corners stay put: a bulge
     // reads nearer the center there, magnifying it.
+// #if style_warp.w
     let lens = placement.style_warp.w * 0.5;
     if lens != 0.0 {
         let r2 = dot(p, p) / (half_diagonal * half_diagonal);
         p *= (1.0 + lens * r2) / (1.0 + lens);
     }
+// #endif
     let shape = placement.style_shape;
+// #if style_shape.z
     let radius = shape.w * half_diagonal;
     let distance = length(p);
     if shape.z != 0.0 && distance < radius {
@@ -128,6 +141,7 @@ fn warp(uv_in: vec2<f32>) -> vec2<f32> {
         let turn = vec2<f32>(sin(angle), cos(angle));
         p = vec2<f32>(turn.y * p.x - turn.x * p.y, turn.x * p.x + turn.y * p.y);
     }
+// #endif
     var uv = p / aspect + vec2<f32>(0.5);
     let blocks = shape.xy;
     if blocks.x >= 1.0 {
@@ -144,12 +158,24 @@ fn warp(uv_in: vec2<f32>) -> vec2<f32> {
 fn steadied(uv: vec2<f32>, aspect: vec2<f32>) -> vec2<f32> {
     let stabilize = placement.style_stabilize;
     if all(stabilize == vec4<f32>(0.0, 0.0, 0.0, 1.0)) {
-        return uv;
+        return unskewed(uv, aspect);
     }
+// #if style_stabilize
     let p = (uv - vec2<f32>(0.5)) * aspect;
     let turn = vec2<f32>(sin(stabilize.z), cos(stabilize.z));
     let turned = vec2<f32>(turn.y * p.x - turn.x * p.y, turn.x * p.x + turn.y * p.y);
-    return (turned * stabilize.w + stabilize.xy) / aspect + vec2<f32>(0.5);
+    return unskewed((turned * stabilize.w + stabilize.xy) / aspect + vec2<f32>(0.5), aspect);
+// #else
+    return unskewed(uv, aspect);
+// #endif
+}
+
+// Each line was read a little before or after the frame's middle, when the picture had
+// not yet reached or had already passed where the frame shows it.
+fn unskewed(uv: vec2<f32>, aspect: vec2<f32>) -> vec2<f32> {
+    let shutter = placement.style_shutter;
+    let read = dot(uv - vec2<f32>(0.5), shutter.zw);
+    return uv + shutter.xy * read / aspect;
 }
 
 fn smeared(uv: vec2<f32>) -> vec4<f32> {
@@ -157,34 +183,58 @@ fn smeared(uv: vec2<f32>) -> vec4<f32> {
     if blur.x <= 0.0 {
         return textureSampleLevel(source, source_sampler, uv, 0.0);
     }
+// #if style_blur.x
     let reach = vec2<f32>(sin(blur.y), -cos(blur.y)) * blur.x / picture_size();
     var sum = vec4<f32>(0.0);
+    var covered = vec3<f32>(0.0);
     for (var tap = 0; tap < BLUR_TAPS; tap++) {
         let along = f32(tap) / f32(BLUR_TAPS - 1) * 2.0 - 1.0;
-        sum += textureSampleLevel(source, source_sampler, uv + reach * along, 0.0);
+        let tap_color = textureSampleLevel(source, source_sampler, uv + reach * along, 0.0);
+        sum += tap_color;
+        covered += tap_color.rgb * tap_color.a;
+    }
+    // A straight picture's colors count by their coverage, so the color stored under
+    // its transparent parts doesn't smear in as a dark fringe.
+    let straight = placement.axis_y_opacity.w < 0.5 && placement.key_spill.z < 0.5;
+    if straight && sum.a > 1e-4 {
+        return vec4<f32>(covered / sum.a, sum.a / f32(BLUR_TAPS));
     }
     return sum / f32(BLUR_TAPS);
+// #else
+    return textureSampleLevel(source, source_sampler, uv, 0.0);
+// #endif
 }
 
-// The picture at the warped `uv`, smeared and offset; transparent past its edges.
+// The picture at the warped `uv`, smeared and offset; transparent past its edges. Its
+// alpha is the one stored, which a premultiplied picture's colors must be divided by.
 fn picture_at(uv: vec2<f32>) -> vec4<f32> {
     let offset = placement.style_warp;
     var color = smeared(uv);
+// #if style_warp.z
     if offset.z > 0.0 {
         color = mix(color, smeared(fract(uv - offset.xy)), offset.z);
     }
+// #endif
+    return color * picture_inside(uv);
+}
+
+fn picture_inside(uv: vec2<f32>) -> f32 {
+    return f32(all(uv >= vec2<f32>(0.0)) && all(uv <= vec2<f32>(1.0)));
+}
+
+// The stored alpha as Interpret Footage reads it: as is, ignored or inverted.
+fn interpreted_alpha(stored: f32, uv: vec2<f32>) -> f32 {
     let alpha = placement.key_spill.z;
     if alpha > 1.5 {
-        color.a = 1.0 - color.a;
+        return (1.0 - stored) * picture_inside(uv);
     } else if alpha > 0.5 {
-        color.a = 1.0;
+        return picture_inside(uv);
     }
-    let inside = all(uv >= vec2<f32>(0.0)) && all(uv <= vec2<f32>(1.0));
-    return color * f32(inside);
+    return stored;
 }
 
 fn encoded_luma(uv: vec2<f32>) -> f32 {
-    let encoded = to_gamma(max(input_grade(picture_at(uv).rgb), vec3<f32>(0.0)));
+    let encoded = to_gamma(max(graded(picture_at(uv)), vec3<f32>(0.0)));
     return dot(encoded, vec3<f32>(0.2126, 0.7152, 0.0722));
 }
 
@@ -205,19 +255,23 @@ fn restyle(rgb_in: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
     if untouched {
         return rgb_in;
     }
+// #if style_tone style_grain.x style_grain.z style_emboss.w
     var encoded = to_gamma(max(rgb_in, vec3<f32>(0.0)));
+// #if style_grain.z
     if grain.z > 0.0 {
         let texel = 1.0 / vec2<f32>(textureDimensions(source));
-        let across = to_gamma(input_grade(picture_at(uv + vec2<f32>(texel.x, 0.0)).rgb))
-            - to_gamma(input_grade(picture_at(uv - vec2<f32>(texel.x, 0.0)).rgb));
-        let down = to_gamma(input_grade(picture_at(uv + vec2<f32>(0.0, texel.y)).rgb))
-            - to_gamma(input_grade(picture_at(uv - vec2<f32>(0.0, texel.y)).rgb));
+        let across = to_gamma(graded(picture_at(uv + vec2<f32>(texel.x, 0.0))))
+            - to_gamma(graded(picture_at(uv - vec2<f32>(texel.x, 0.0))));
+        let down = to_gamma(graded(picture_at(uv + vec2<f32>(0.0, texel.y))))
+            - to_gamma(graded(picture_at(uv - vec2<f32>(0.0, texel.y))));
         var edges = clamp((abs(across) + abs(down)) * 2.0, vec3<f32>(0.0), vec3<f32>(1.0));
         if grain.w < 0.5 {
             edges = vec3<f32>(1.0) - edges;
         }
         encoded = mix(encoded, edges, grain.z);
     }
+// #endif
+// #if style_emboss.w
     if emboss.w > 0.0 {
         // Lit from the light's side: a rise facing it is bright, one facing away dark.
         let toward = vec2<f32>(sin(emboss.x), -cos(emboss.x)) * emboss.y / picture_size();
@@ -225,6 +279,7 @@ fn restyle(rgb_in: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
         let relief = clamp(0.5 + rise * emboss.z * 2.0, 0.0, 1.0);
         encoded = mix(encoded, vec3<f32>(relief), emboss.w);
     }
+// #endif
     // Lowering contrast flattens toward grey; raising it steepens up to fourfold.
     let slope = select(1.0 + tone.y, 1.0 + 3.0 * tone.y, tone.y > 0.0);
     encoded = (encoded - vec3<f32>(0.5)) * slope + vec3<f32>(0.5) + tone.x * 0.4;
@@ -233,6 +288,7 @@ fn restyle(rgb_in: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
         let steps = tone.w - 1.0;
         encoded = round(clamp(encoded, vec3<f32>(0.0), vec3<f32>(1.0)) * steps) / steps;
     }
+// #if style_grain.x
     if grain.x > 0.0 {
         let pixel = floor(uv * vec2<f32>(textureDimensions(source))) + grain.y;
         let noise = vec3<f32>(
@@ -242,7 +298,11 @@ fn restyle(rgb_in: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
         ) - vec3<f32>(0.5);
         encoded += noise * grain.x;
     }
+// #endif
     return to_linear(max(encoded, vec3<f32>(0.0)));
+// #else
+    return rgb_in;
+// #endif
 }
 
 // How much shadow the picture casts on `uv`, softened by averaging it over a disc.
@@ -251,11 +311,13 @@ fn shadow_alpha(uv: vec2<f32>) -> f32 {
     if shadow.w <= 0.0 {
         return 0.0;
     }
+// #if style_shadow.w
     let picture = picture_size();
-    let caster = uv - shadow.xy / picture;
+    let caster = shadow_caster(uv) - shadow.xy / picture;
     if shadow.z < 0.5 {
         return cast_alpha(caster) * shadow.w;
     }
+// #if style_shadow.z
     var sum = 0.0;
     for (var tap = 0; tap < SHADOW_TAPS; tap++) {
         let radius = sqrt((f32(tap) + 0.5) / f32(SHADOW_TAPS)) * shadow.z;
@@ -263,6 +325,37 @@ fn shadow_alpha(uv: vec2<f32>) -> f32 {
         sum += cast_alpha(caster + vec2<f32>(cos(angle), sin(angle)) * radius / picture);
     }
     return sum / f32(SHADOW_TAPS) * shadow.w;
+// #else
+    return cast_alpha(caster) * shadow.w;
+// #endif
+// #else
+    return 0.0;
+// #endif
+}
+
+// Where on the picture the shadow at `uv` comes from: under it, or nearer a radial
+// shadow's light by its scale.
+fn shadow_caster(uv: vec2<f32>) -> vec2<f32> {
+    let radial = placement.point_shadow;
+    if radial.w < 0.5 {
+        return uv;
+    }
+    return radial.xy + (uv - radial.xy) / radial.z;
+}
+
+// The shadow's color, which a glass edge radial shadow takes partly from the picture.
+fn shadow_tint(uv: vec2<f32>) -> vec3<f32> {
+    let color = placement.style_shadow_color.rgb;
+    let look = placement.point_shadow_look;
+    if look.y < 0.5 {
+        return color;
+    }
+// #if point_shadow_look.y
+    let caster = source_color(warp(replicated(shadow_caster(uv))));
+    return mix(color, caster.rgb, look.z);
+// #else
+    return color;
+// #endif
 }
 
 // Unsharp masking against the four neighbors. Sampling at level 0 is allowed off
@@ -272,11 +365,12 @@ fn sharpen(rgb: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
     if amount <= 0.0 {
         return rgb;
     }
+// #if amounts.y
     let texel = 1.0 / vec2<f32>(textureDimensions(source));
-    // Neighbours pass through the input LUT too, so it doesn't read as detail.
-    let around = input_grade(textureSampleLevel(source, source_sampler, uv + vec2<f32>(texel.x, 0.0), 0.0).rgb)
-        + input_grade(textureSampleLevel(source, source_sampler, uv - vec2<f32>(texel.x, 0.0), 0.0).rgb)
-        + input_grade(textureSampleLevel(source, source_sampler, uv + vec2<f32>(0.0, texel.y), 0.0).rgb)
-        + input_grade(textureSampleLevel(source, source_sampler, uv - vec2<f32>(0.0, texel.y), 0.0).rgb);
+    let around = graded_at(uv + vec2<f32>(texel.x, 0.0)) + graded_at(uv - vec2<f32>(texel.x, 0.0))
+        + graded_at(uv + vec2<f32>(0.0, texel.y)) + graded_at(uv - vec2<f32>(0.0, texel.y));
     return max(rgb + amount * (rgb - around * 0.25), vec3<f32>(0.0));
+// #else
+    return rgb;
+// #endif
 }

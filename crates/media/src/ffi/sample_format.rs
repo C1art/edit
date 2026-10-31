@@ -9,13 +9,53 @@ use crate::MediaError;
 
 pub(crate) const OUTPUT_CHANNELS: u16 = 2;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 struct ConverterKey {
     format: sys::AVSampleFormat,
     sample_rate: i32,
     channels: i32,
     order: sys::AVChannelOrder,
     mask: u64,
+    /// A custom-order layout's channels, which its mask doesn't describe.
+    custom: Vec<i32>,
+}
+
+impl ConverterKey {
+    fn of(format: sys::AVSampleFormat, sample_rate: i32, layout: &sys::AVChannelLayout) -> Self {
+        let order = layout.order;
+        let (mask, custom) = match order {
+            sys::AVChannelOrder::AV_CHANNEL_ORDER_NATIVE
+            | sys::AVChannelOrder::AV_CHANNEL_ORDER_AMBISONIC => {
+                // SAFETY: `mask` is the active union member for these orders.
+                (unsafe { layout.u.mask }, Vec::new())
+            }
+            sys::AVChannelOrder::AV_CHANNEL_ORDER_CUSTOM => {
+                let count = usize::try_from(layout.nb_channels).unwrap_or(0);
+                // SAFETY: for a custom order `map` is the active member and points to
+                // `nb_channels` entries owned by the frame.
+                let map = unsafe { layout.u.map };
+                let custom = if map.is_null() {
+                    Vec::new()
+                } else {
+                    // SAFETY: as above; the slice lives no longer than this call.
+                    unsafe { std::slice::from_raw_parts(map, count) }
+                        .iter()
+                        .map(|channel| channel.id as i32)
+                        .collect()
+                };
+                (0, custom)
+            }
+            _ => (0, Vec::new()),
+        };
+        Self {
+            format,
+            sample_rate,
+            channels: layout.nb_channels,
+            order,
+            mask,
+            custom,
+        }
+    }
 }
 
 /// Converts decoded audio of any layout and sample format to interleaved stereo `f32` at
@@ -48,19 +88,12 @@ impl SampleConverter {
     ) -> Result<(u32, u16, Vec<f32>), MediaError> {
         let raw = frame.raw();
         let layout = &raw.ch_layout;
-        let key = ConverterKey {
-            format: decoder.raw().sample_fmt,
-            sample_rate: raw.sample_rate,
-            channels: layout.nb_channels,
-            order: layout.order,
-            // SAFETY: `mask` is the active union member for native-order layouts, and reading
-            // it for other orders only feeds the cache key.
-            mask: unsafe { layout.u.mask },
-        };
-        let context = self.context_for(key, layout)?;
+        let key = ConverterKey::of(decoder.raw().sample_fmt, raw.sample_rate, layout);
         let sample_rate = u32::try_from(key.sample_rate).map_err(|_| MediaError::InvalidFrame)?;
+        let channel_count = key.channels;
+        let context = self.context_for(key, layout)?;
         let channels = if self.keep_channels {
-            u16::try_from(key.channels).map_err(|_| MediaError::InvalidFrame)?
+            u16::try_from(channel_count).map_err(|_| MediaError::InvalidFrame)?
         } else {
             OUTPUT_CHANNELS
         };
@@ -77,7 +110,9 @@ impl SampleConverter {
         let converted = check(unsafe {
             sys::swr_convert(
                 context.as_ptr(),
-                &mut output,
+                // A raw pointer fits both the `uint8_t **` older FFmpeg takes and
+                // the `uint8_t *const *` of newer ones.
+                &raw mut output,
                 capacity,
                 raw.extended_data as *mut *const u8,
                 raw.nb_samples,
@@ -92,9 +127,9 @@ impl SampleConverter {
         key: ConverterKey,
         input_layout: &sys::AVChannelLayout,
     ) -> Result<NonNull<sys::SwrContext>, MediaError> {
-        if let Some((context, current)) = self.context {
-            if current == key {
-                return Ok(context);
+        if let Some((context, current)) = &self.context {
+            if *current == key {
+                return Ok(*context);
             }
         }
         self.free();

@@ -7,9 +7,11 @@ publish.workspace = true
 
 [dependencies]
 timeline.workspace = true
+project.workspace = true
 media.workspace = true
 render.workspace = true
 audio.workspace = true
+plugins.workspace = true
 crossbeam.workspace = true
 wgpu.workspace = true
 egui = { workspace = true, features = ["default_fonts"] }

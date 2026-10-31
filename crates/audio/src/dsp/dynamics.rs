@@ -3,10 +3,10 @@ use crate::SampleRate;
 
 /// How fast a level follower lets go of a peak, so a gate holds through the dips of
 /// a waveform rather than closing at every zero crossing.
-const LEVEL_HOLD_MS: f32 = 20.0;
+pub(super) const LEVEL_HOLD_MS: f32 = 20.0;
 
 /// The per-sample coefficient of a one-pole smoother with a time constant of `ms`.
-fn smoothing(ms: f32, rate: SampleRate) -> f32 {
+pub(super) fn smoothing(ms: f32, rate: SampleRate) -> f32 {
     (-1.0 / (ms.max(0.01) * 0.001 * rate.0 as f32)).exp()
 }
 
@@ -91,10 +91,10 @@ impl Gate {
         let (attack, release) = (smoothing(attack_ms, rate), smoothing(release_ms, rate));
         for frame in samples.as_chunks_mut::<2>().0 {
             let peak = frame[0].abs().max(frame[1].abs());
-            self.level = peak.max(self.level * hold);
+            self.level = super::flush(peak.max(self.level * hold));
             let open = if self.level >= threshold { 1.0 } else { 0.0 };
             let coefficient = if open > self.gain { attack } else { release };
-            self.gain = open + coefficient * (self.gain - open);
+            self.gain = super::flush(open + coefficient * (self.gain - open));
             frame.iter_mut().for_each(|sample| *sample *= self.gain);
         }
     }

@@ -1,7 +1,7 @@
 use egui::{CursorIcon, Rect, Response};
 use timeline::{Sequence, Ticks};
 
-use super::{layout, TimelineView, Tool};
+use super::{TimelineView, Tool};
 
 impl TimelineView {
     /// Pans with the Hand tool and zooms with the Zoom tool, Alt zooming out. Returns
@@ -27,10 +27,7 @@ impl TimelineView {
                     let delta = response.drag_delta();
                     let scale = self.scale(0.0);
                     self.scroll = (self.scroll - scale.span(delta.x)).max(Ticks::ZERO);
-                    let overflow =
-                        (layout::total_height(sequence, &self.heights) - tracks.height() + 20.0)
-                            .max(0.0);
-                    self.scroll_y = (self.scroll_y - delta.y).clamp(0.0, overflow);
+                    self.scroll_tracks(-delta.y, sequence, tracks);
                 }
                 true
             }

@@ -1,6 +1,8 @@
+use crate::edit::frame_size::scale_hundredths;
 use crate::edit::ops::{self, Relinks};
 use crate::{
-    Clip, ClipId, Edit, LinkId, Sequence, SourceId, Speed, Ticks, TimelineError, TrackRef,
+    Clip, ClipId, Edit, LinkId, Param, Sequence, SourceId, Speed, Ticks, TimelineError, TrackKind,
+    TrackRef,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -52,6 +54,10 @@ impl Edit for PlaceClip {
             return Err(TimelineError::NothingToEdit);
         }
         let conform = media.conform();
+        let fitted = media
+            .frame_fit
+            .zip(media.played_format())
+            .map(|(fit, picture)| Param::new(scale_hundredths(picture, sequence.format, fit)));
         let duration = self
             .fill
             .unwrap_or_else(|| conform.sequence_span(self.duration));
@@ -70,6 +76,7 @@ impl Edit for PlaceClip {
                 let tracks = ops::rippled_tracks(sequence, &targets);
                 ops::split(sequence, &tracks, self.at, &mut relinks);
                 ops::shift(sequence, &tracks, self.at, duration, &[]);
+                ops::ripple_markers_and_captions(sequence, self.at, duration);
             }
             PlaceMode::Overwrite => {
                 for &track in &targets {
@@ -79,7 +86,7 @@ impl Edit for PlaceClip {
         }
         let link = (targets.len() > 1).then(|| LinkId(sequence.ids.next()));
         for track in targets {
-            let clip = Clip {
+            let mut clip = Clip {
                 link,
                 conform,
                 speed,
@@ -91,7 +98,54 @@ impl Edit for PlaceClip {
                     self.source_in,
                 )
             };
+            if let (Some(scale), TrackKind::Video) = (&fitted, track.kind) {
+                clip.look.motion.scale = scale.clone();
+                clip.look.motion.scale_width = scale.clone();
+            }
             ops::insert(sequence, track, clip)?;
+        }
+        Ok(())
+    }
+}
+
+/// Lays several ranges of media end to end from `at` as one edit, as dragging a
+/// selection of items from the project does. Each is `(source, source_in, duration)`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlaceClips {
+    pub pieces: Vec<(SourceId, Ticks, Ticks)>,
+    pub at: Ticks,
+    pub video_track: Option<usize>,
+    pub audio_track: Option<usize>,
+    pub mode: PlaceMode,
+}
+
+impl Edit for PlaceClips {
+    fn name(&self) -> &'static str {
+        match self.mode {
+            PlaceMode::Insert => "Insert",
+            PlaceMode::Overwrite => "Overwrite",
+        }
+    }
+
+    fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
+        let mut at = self.at;
+        for &(source, source_in, duration) in &self.pieces {
+            let media = sequence
+                .media_item(source)
+                .ok_or(TimelineError::MediaNotFound(source))?;
+            let length = media.conform().sequence_span(duration);
+            PlaceClip {
+                source,
+                source_in,
+                duration,
+                at,
+                video_track: self.video_track,
+                audio_track: self.audio_track,
+                mode: self.mode,
+                fill: None,
+            }
+            .edit(sequence)?;
+            at = at + length;
         }
         Ok(())
     }

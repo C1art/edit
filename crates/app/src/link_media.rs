@@ -34,13 +34,24 @@ impl Editor {
         }
     }
 
-    /// After `source` was relinked into `folder`, looks there for the other missing files.
-    pub(crate) fn relinked(&mut self, source: SourceId, folder: Option<std::path::PathBuf>) {
+    /// After `source` was relinked from `old_folder` into `folder`, looks there for the
+    /// other missing files.
+    pub(crate) fn relinked(
+        &mut self,
+        source: SourceId,
+        folder: Option<std::path::PathBuf>,
+        old_folder: Option<std::path::PathBuf>,
+    ) {
         let Some(offline) = &mut self.offline else {
             return;
         };
         if let Some(folder) = folder.filter(|_| offline.is_offline(source)) {
-            offline.find_in(folder, self.timeline.project(), source);
+            offline.find_in(
+                folder,
+                old_folder.as_deref(),
+                self.timeline.project(),
+                source,
+            );
         }
         offline.relinked(source);
     }
@@ -62,8 +73,7 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
     }
     let mut locate = None;
     let mut leave = Vec::new();
-    egui::Window::new("Link Media")
-        .collapsible(false)
+    crate::dialog::window(ctx, "Link Media")
         .resizable(true)
         .default_width(560.0)
         .show(ctx, |ui| {
@@ -96,14 +106,15 @@ pub fn dialog(editor: &mut Editor, ctx: &egui::Context) {
                         }
                     });
             });
-            ui.separator();
-            if ui
-                .button("Offline All")
-                .on_hover_text("Keep working; missing clips show as Media Offline")
-                .clicked()
-            {
-                leave.extend(&missing);
-            }
+            crate::dialog::footer(ui, |ui| {
+                if ui
+                    .button("Offline All")
+                    .on_hover_text("Keep working; missing clips show as Media Offline")
+                    .clicked()
+                {
+                    leave.extend(&missing);
+                }
+            });
         });
     if let Some(offline) = &mut editor.offline {
         offline.left_offline.extend(leave);

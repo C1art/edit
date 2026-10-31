@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use crate::{Clip, ClipId, Edit, Sequence, TimelineError};
 
@@ -24,28 +25,54 @@ pub struct JoinThroughEdits {
     pub clips: Vec<ClipId>,
 }
 
+impl JoinThroughEdits {
+    /// Whether any through edit touches the chosen clips.
+    pub fn joins_any(&self, sequence: &Sequence) -> bool {
+        let chosen = self.chosen(sequence);
+        sequence.tracks().any(|(_, track)| {
+            track
+                .clips
+                .windows(2)
+                .any(|pair| joinable(&chosen, &pair[0], &pair[1]))
+        })
+    }
+
+    fn chosen(&self, sequence: &Sequence) -> HashSet<ClipId> {
+        sequence.with_links(&self.clips).into_iter().collect()
+    }
+}
+
+fn joinable(chosen: &HashSet<ClipId>, left: &Clip, right: &Clip) -> bool {
+    (chosen.contains(&left.id) || chosen.contains(&right.id)) && is_through_edit(left, right)
+}
+
 impl Edit for JoinThroughEdits {
     fn name(&self) -> &'static str {
         "Join Through Edits"
     }
 
     fn edit(&self, sequence: &mut Sequence) -> Result<(), TimelineError> {
-        let chosen: HashSet<ClipId> = sequence.with_links(&self.clips).into_iter().collect();
+        let chosen = self.chosen(sequence);
         let mut joined = false;
         for (_, track) in sequence.tracks_mut() {
             let mut index = 1;
             while index < track.clips.len() {
-                let (left, right) = (&track.clips[index - 1], &track.clips[index]);
-                let touched = chosen.contains(&left.id) || chosen.contains(&right.id);
-                if !(touched && is_through_edit(left, right)) {
+                if !joinable(&chosen, &track.clips[index - 1], &track.clips[index]) {
                     index += 1;
                     continue;
                 }
-                let right = track.clips.remove(index);
-                let left = &mut track.clips[index - 1];
+                let right = Arc::unwrap_or_clone(track.clips.remove(index));
+                let left = Arc::make_mut(&mut track.clips[index - 1]);
                 left.duration = left.duration + right.duration;
                 left.transition_out = right.transition_out;
-                left.markers.extend(right.markers);
+                left.pinned.outro = right.pinned.outro;
+                // A cut gives both pieces every marker of the clip.
+                for marker in right.markers {
+                    if !left.markers.contains(&marker) {
+                        left.markers.push(marker);
+                    }
+                }
+                left.markers.sort_by_key(|marker| marker.at);
                 joined = true;
             }
         }
