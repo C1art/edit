@@ -445,6 +445,14 @@ impl Editor {
     }
 
     /// An empty sequence takes on the format of the first video placed in it.
+    /// Runs an action of several edits so that it undoes as one step.
+    pub(crate) fn as_one_edit<T>(&mut self, act: impl FnOnce(&mut Self) -> T) -> T {
+        let mark = self.timeline.edit_mark();
+        let result = act(self);
+        self.timeline.join_since(mark);
+        result
+    }
+
     pub(crate) fn match_format(&mut self, source: SourceId) {
         let sequence = self.timeline.sequence();
         // A nest shares the project's format, which its contents shouldn't decide.
