@@ -268,6 +268,10 @@ fn newer_or_unversioned_files_are_refused() {
         ProjectFile::from_text(r#"{"sequence": {}}"#),
         Err(ProjectError::MissingVersion)
     ));
+    assert!(matches!(
+        ProjectFile::from_text(r#"{"format_version": 0}"#),
+        Err(ProjectError::Invalid(_))
+    ));
 }
 
 #[test]

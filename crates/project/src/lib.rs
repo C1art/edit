@@ -85,6 +85,12 @@ fn format_version(document: &Value, newest: u32) -> Result<u32, ProjectError> {
     if version > newest {
         return Err(ProjectError::UnsupportedVersion(version));
     }
+    // Versions count from 1, so no build ever wrote a lower one.
+    if version < 1 {
+        return Err(ProjectError::Invalid(format!(
+            "format version {version} doesn't exist"
+        )));
+    }
     Ok(version)
 }
 
