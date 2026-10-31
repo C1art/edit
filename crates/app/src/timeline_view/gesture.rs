@@ -282,17 +282,27 @@ fn clamped_move(
         .collect();
     let earliest = moved.iter().map(|&(_, start)| start).min();
     let delta = earliest.map_or(delta, |earliest| delta.max(Ticks::ZERO - earliest));
-    let lowest = |kind| {
+    let indices = || {
         moved
             .iter()
-            .filter(|(track, _)| track.kind == kind)
+            .filter(|(track, _)| track.kind == from.kind)
             .map(|(track, _)| track.index)
-            .min()
     };
     let offset = over
         .filter(|over| over.kind == from.kind)
         .map_or(0, |over| over.index as isize - from.index as isize);
-    let offset = lowest(from.kind).map_or(0, |lowest| offset.max(-(lowest as isize)));
+    let offset = indices()
+        .min()
+        .map_or(0, |lowest| offset.max(-(lowest as isize)));
+    // Past the last track the move would add one, and the rows drawn from that preview
+    // would no longer line up with those the pointer is tested against.
+    let tracks = sequence
+        .tracks()
+        .filter(|(track, _)| track.kind == from.kind)
+        .count();
+    let offset = indices().max().map_or(offset, |highest| {
+        offset.min(tracks as isize - 1 - highest as isize)
+    });
     let (video_tracks, audio_tracks) = match from.kind {
         TrackKind::Video => (offset, 0),
         TrackKind::Audio => (0, offset),
