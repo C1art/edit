@@ -34,13 +34,24 @@ impl Editor {
         }
     }
 
-    /// After `source` was relinked into `folder`, looks there for the other missing files.
-    pub(crate) fn relinked(&mut self, source: SourceId, folder: Option<std::path::PathBuf>) {
+    /// After `source` was relinked from `old_folder` into `folder`, looks there for the
+    /// other missing files.
+    pub(crate) fn relinked(
+        &mut self,
+        source: SourceId,
+        folder: Option<std::path::PathBuf>,
+        old_folder: Option<std::path::PathBuf>,
+    ) {
         let Some(offline) = &mut self.offline else {
             return;
         };
         if let Some(folder) = folder.filter(|_| offline.is_offline(source)) {
-            offline.find_in(folder, self.timeline.project(), source);
+            offline.find_in(
+                folder,
+                old_folder.as_deref(),
+                self.timeline.project(),
+                source,
+            );
         }
         offline.relinked(source);
     }

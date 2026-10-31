@@ -110,12 +110,25 @@ impl OfflineMedia {
         self.generation += 1;
     }
 
-    /// Asks for the other missing files in `folder`, where one of them was just found.
-    pub fn find_in(&mut self, folder: PathBuf, sequence: &Sequence, except: SourceId) {
+    /// Asks for the other missing files in `folder`, where one of them that was in
+    /// `old_folder` was just found. Cameras reuse names such as `C0001.MP4`, so a name
+    /// more than one item has only matches the items that were kept beside the found one.
+    pub fn find_in(
+        &mut self,
+        folder: PathBuf,
+        old_folder: Option<&Path>,
+        sequence: &Sequence,
+        except: SourceId,
+    ) {
+        let shared = |name: Option<&std::ffi::OsStr>| {
+            let named = |item: &&timeline::MediaItem| item.path.file_name() == name;
+            sequence.media.iter().filter(named).nth(1).is_some()
+        };
         let wanted = sequence
             .media
             .iter()
             .filter(|item| item.id != except && self.missing.contains(&item.id))
+            .filter(|item| item.path.parent() == old_folder || !shared(item.path.file_name()))
             .map(|item| (item.id, item.path.clone()))
             .collect();
         // The worker answers in order, so a check already asked for can't undo this.

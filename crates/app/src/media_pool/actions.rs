@@ -124,8 +124,15 @@ impl Editor {
             match replacing {
                 Some(source) => {
                     let folder = media.path.parent().map(Path::to_owned);
+                    let old_folder = self
+                        .timeline
+                        .project()
+                        .media
+                        .iter()
+                        .find(|item| item.id == source)
+                        .and_then(|item| item.path.parent().map(Path::to_owned));
                     if self.apply_to_pool(RelinkMedia { source, media }) {
-                        self.relinked(source, folder);
+                        self.relinked(source, folder, old_folder);
                         if self.source_shows(source) {
                             self.open_source(source);
                         }
