@@ -50,6 +50,7 @@ impl Editor {
 
 impl eframe::App for Editor {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        crate::startup_trace::frame();
         let ctx = ui.ctx().clone();
         self.poll_store();
         self.autosave_tick();
