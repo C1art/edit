@@ -25,7 +25,7 @@ compiled into `cledit.exe`. MIT License, Copyright (c) 2023-2024 The ggml author
 ## Rust crates
 
 Cledit is built from many Rust crates published on crates.io, including egui, eframe,
-wgpu, cpal, rubato, crossbeam, serde, vst3, whisper-rs, windows and velopack. They are
+wgpu, cpal, rubato, crossbeam, serde, vst3, whisper-rs, windows, ureq, serde_json and sha2. They are
 licensed under MIT, Apache-2.0, BSD, Zlib or similarly permissive terms; each crate's
 license is in its source at <https://crates.io>. `ffmpeg-sys-next` is under the WTFPL.
 

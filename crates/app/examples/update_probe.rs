@@ -1,16 +1,17 @@
-//! Updates an installed Cledit through the same Velopack calls the app makes, without its
-//! window, so the release build can check that an installed earlier version updates to the
-//! new one. It has to run from the installed `current` folder, where Velopack finds the
-//! install: `update_probe <expected version> [feed folder]`. Without a feed folder it updates
-//! from the GitHub releases, like the app.
+//! Updates an installed Cledit the way the app does, without its window, so the release
+//! build can check that an installed earlier version updates to the new one:
+//! `update_probe <expected version> [installer]`. Without an installer it downloads the
+//! one GitHub offers, like the app.
 
 use std::error::Error;
+use std::path::PathBuf;
 use std::process::ExitCode;
 
-use velopack::sources::{FileSource, GithubSource, UpdateSource};
-use velopack::{UpdateCheck, UpdateManager};
+#[path = "../src/updates/releases.rs"]
+#[allow(dead_code, reason = "the probe skips the app's own install check")]
+mod releases;
 
-const RELEASES: &str = "https://github.com/C1art/edit";
+const USAGE: &str = "usage: update_probe <expected version> [installer]";
 
 fn main() -> ExitCode {
     match update() {
@@ -24,32 +25,25 @@ fn main() -> ExitCode {
 
 fn update() -> Result<(), Box<dyn Error>> {
     let mut args = std::env::args().skip(1);
-    let expected = args
-        .next()
-        .ok_or("usage: update_probe <expected version> [feed folder]")?;
-    let source: Box<dyn UpdateSource> = match args.next() {
-        Some(feed) => Box::new(FileSource::new(feed)),
-        None => Box::new(GithubSource::new(RELEASES, None, false)),
+    let expected = args.next().ok_or(USAGE)?;
+    let installer = match args.next() {
+        Some(path) => PathBuf::from(path),
+        None => {
+            let release = releases::latest()?;
+            if release.version != expected {
+                return Err(
+                    format!("GitHub offers {}, expected {expected}", release.version).into(),
+                );
+            }
+            let installer = releases::download(&release.installer, |_| {})?;
+            println!("downloaded and checked {}", installer.display());
+            installer
+        }
     };
-    let manager = UpdateManager::new_boxed(source, None, None)?;
-    println!("installed: {}", manager.get_current_version_as_string());
-    let info = match manager.check_for_updates()? {
-        UpdateCheck::UpdateAvailable(info) => info,
-        UpdateCheck::NoUpdateAvailable => return Err("no update offered".into()),
-        UpdateCheck::RemoteIsEmpty => return Err("the release feed is empty".into()),
-    };
-    let offered = &info.TargetFullRelease.Version;
-    if *offered != expected {
-        return Err(format!("offered {offered}, expected {expected}").into());
+    let finished = releases::install(&installer, false)?.wait()?;
+    if !finished.success() {
+        return Err(format!("the installer failed: {finished}").into());
     }
-    manager.download_updates(&info, None)?;
-    println!("downloaded: {}", info.TargetFullRelease.FileName);
-    manager.wait_exit_then_apply_updates(
-        &info.TargetFullRelease,
-        true,
-        false,
-        Vec::<String>::new(),
-    )?;
-    println!("applying {offered} once this exits");
+    println!("installed {expected}");
     Ok(())
 }

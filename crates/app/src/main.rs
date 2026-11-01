@@ -161,8 +161,9 @@ use editor::Editor;
 use window_state::WindowState;
 
 fn main() -> eframe::Result {
-    let updated_to = updates::start_up();
-    let initial: Vec<PathBuf> = std::env::args_os().skip(1).map(PathBuf::from).collect();
+    let mut args: Vec<_> = std::env::args_os().skip(1).collect();
+    let updated_to = updates::start_up(&mut args);
+    let initial: Vec<PathBuf> = args.into_iter().map(PathBuf::from).collect();
     project_store::adopt_old_app_folder();
     let window = WindowState::load();
     let options = eframe::NativeOptions {

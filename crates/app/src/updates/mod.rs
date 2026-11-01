@@ -2,20 +2,21 @@
 //! downloaded in the background and put in place once the window has closed.
 
 mod dialog;
-mod file_type;
+mod releases;
 mod worker;
 
+use std::path::PathBuf;
 use std::sync::mpsc::Receiver as ProgressReceiver;
 
 use crossbeam::channel::{Receiver, Sender};
-use velopack::{UpdateInfo, VelopackAsset};
+use releases::Release;
 
 pub(crate) use dialog::{help_menu_item, ui};
 pub(crate) use worker::{apply_on_exit, start_up};
 
 /// What the window's closing hands to `apply_on_exit`.
 pub struct ApplyOnExit {
-    asset: VelopackAsset,
+    installer: PathBuf,
     restart: bool,
 }
 
@@ -28,7 +29,7 @@ enum Asked {
 #[derive(Debug)]
 enum Checked {
     UpToDate(String),
-    Available(Box<UpdateInfo>),
+    Available(Box<Release>),
     /// Run from a build folder rather than installed, so there is nothing to update.
     NotInstalled,
 }
@@ -41,16 +42,17 @@ enum State {
         asked: Asked,
         reply: Receiver<Result<Checked, String>>,
     },
-    Offered(Box<UpdateInfo>),
+    Offered(Box<Release>),
     Downloading {
-        info: Box<UpdateInfo>,
-        percent: i16,
-        progress: ProgressReceiver<i16>,
-        done: Receiver<Result<(), String>>,
+        release: Box<Release>,
+        percent: u8,
+        progress: ProgressReceiver<u8>,
+        done: Receiver<Result<PathBuf, String>>,
     },
     /// Downloaded; `asking` while the restart question is up.
     Ready {
-        info: Box<UpdateInfo>,
+        release: Box<Release>,
+        installer: PathBuf,
         asking: bool,
     },
 }
@@ -109,11 +111,11 @@ impl Updates {
 
     /// The window is closing for good: a downloaded update goes in once it has.
     pub(crate) fn window_closing(&mut self) {
-        let (State::Ready { info, .. }, Some(on_exit)) = (&self.state, &self.on_exit) else {
+        let (State::Ready { installer, .. }, Some(on_exit)) = (&self.state, &self.on_exit) else {
             return;
         };
         let _ = on_exit.send(ApplyOnExit {
-            asset: info.TargetFullRelease.clone(),
+            installer: installer.clone(),
             restart: self.restart,
         });
     }

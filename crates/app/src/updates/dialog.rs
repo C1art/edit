@@ -53,10 +53,9 @@ fn poll(updates: &mut Updates, ctx: &Context) -> Option<String> {
             updates.state = State::Idle;
             let asked_for = asked == Asked::FromMenu;
             match checked {
-                Ok(Checked::Available(info)) => {
-                    let version = &info.TargetFullRelease.Version;
-                    if offer(asked, version, updates.skipped.as_deref()) {
-                        updates.state = State::Offered(info);
+                Ok(Checked::Available(release)) => {
+                    if offer(asked, &release.version, updates.skipped.as_deref()) {
+                        updates.state = State::Offered(release);
                     }
                     None
                 }
@@ -69,7 +68,7 @@ fn poll(updates: &mut Updates, ctx: &Context) -> Option<String> {
             }
         }
         State::Downloading {
-            info,
+            release,
             percent,
             progress,
             done,
@@ -85,10 +84,14 @@ fn poll(updates: &mut Updates, ctx: &Context) -> Option<String> {
                 }
                 Err(TryRecvError::Disconnected) => Err("the download couldn't start".to_owned()),
             };
-            let info = std::mem::take(info);
+            let release = std::mem::take(release);
             match result {
-                Ok(()) => {
-                    updates.state = State::Ready { info, asking: true };
+                Ok(installer) => {
+                    updates.state = State::Ready {
+                        release,
+                        installer,
+                        asking: true,
+                    };
                     None
                 }
                 Err(error) => {
@@ -108,18 +111,17 @@ enum Answer {
 }
 
 fn offer_dialog(updates: &mut Updates, ctx: &Context) {
-    let State::Offered(info) = &updates.state else {
+    let State::Offered(release) = &updates.state else {
         return;
     };
-    let release = &info.TargetFullRelease;
     let mut answer = None;
     crate::dialog::window(ctx, "Update Available").show(ctx, |ui| {
         ui.label(format!(
             "Cledit {} is available. You have {}.",
-            release.Version,
+            release.version,
             env!("CARGO_PKG_VERSION")
         ));
-        let notes = release.NotesMarkdown.trim();
+        let notes = release.notes.trim();
         if !notes.is_empty() {
             ui.add_space(4.0);
             ScrollArea::vertical().max_height(240.0).show(ui, |ui| {
@@ -142,33 +144,36 @@ fn offer_dialog(updates: &mut Updates, ctx: &Context) {
     let Some(answer) = answer else {
         return;
     };
-    let State::Offered(info) = std::mem::take(&mut updates.state) else {
+    let State::Offered(release) = std::mem::take(&mut updates.state) else {
         return;
     };
     match answer {
         Answer::Update => {
-            let (progress, done) = super::worker::download(&info);
+            let (progress, done) = super::worker::download(&release);
             updates.state = State::Downloading {
-                info,
+                release,
                 percent: 0,
                 progress,
                 done,
             };
         }
         Answer::Later => {}
-        Answer::Skip => updates.skipped = Some(info.TargetFullRelease.Version.clone()),
+        Answer::Skip => updates.skipped = Some(release.version),
     }
 }
 
 fn restart_dialog(updates: &mut Updates, ctx: &Context) {
-    let State::Ready { info, asking } = &mut updates.state else {
+    let State::Ready {
+        release, asking, ..
+    } = &mut updates.state
+    else {
         return;
     };
     let mut restart = false;
     crate::dialog::window(ctx, "Update Ready").show(ctx, |ui| {
         ui.label(format!(
             "Cledit {} is ready. Restart now to use it, or it is installed when you quit.",
-            info.TargetFullRelease.Version
+            release.version
         ));
         crate::dialog::footer(ui, |ui| {
             if ui.button("Later").clicked() || ui.input(|input| input.key_pressed(Key::Escape)) {
