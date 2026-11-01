@@ -77,8 +77,13 @@ echo "::group::Installer"
 iscc="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
 [ -x "$iscc" ] || choco install innosetup -y --no-progress
 rm -rf Releases
-"$iscc" /Q "/DAppVersion=$version" "/DDist=$(cygpath -w "$PWD/dist")" \
-  "/DIcon=$(cygpath -w "$PWD/$icon")" "/DOutput=$(cygpath -w "$PWD/Releases")" installer/cledit.iss
+# Git Bash would turn ISCC's /switches into paths without MSYS_NO_PATHCONV.
+if ! MSYS_NO_PATHCONV=1 "$iscc" /Q "/DAppVersion=$version" "/DDist=$(cygpath -w "$PWD/dist")" \
+  "/DIcon=$(cygpath -w "$PWD/$icon")" "/DOutput=$(cygpath -w "$PWD/Releases")" \
+  installer/cledit.iss >"$RUNNER_TEMP/iscc.log" 2>&1; then
+  tail -5 "$RUNNER_TEMP/iscc.log" | tr -d '\r' | sed 's/^/::error::ISCC: /'
+  exit 1
+fi
 setup="Releases/Cledit-$version-Setup.exe"
 ls -l Releases
 echo "::endgroup::"
