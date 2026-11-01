@@ -1,7 +1,6 @@
-NOTE: This project is fully "vibecoded", mostly as an experiment inspired by the Adobe
+NOTE: This project is almost fully "vibecoded", mostly as an experiment inspired by the Adobe
 reverse engineering projects. If you stumbled across this repo, keep in mind that while
-I have done my best to ensure that all of the source is safe and stable, I cannot guarantee
-anything. Install and/or build at your own risk!
+I have done my best to ensure that all of the source is safe and stable, and reviewed nearly every line of code in the project, I cannot and will not guarantee anything. Install and/or build at your own risk!
 
 # Cledit
 
