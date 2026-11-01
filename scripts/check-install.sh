@@ -145,7 +145,9 @@ case "${1:-}" in
   update)
     # Choices unlike the installer's defaults, so the update is seen keeping them.
     install "$2" desktopicon,fileassoc
-    "$3" "$4" ${5:+"$(cygpath -w "$5")"} || fail "updating to $4 failed"
+    if ! probed=$("$3" "$4" ${5:+"$(cygpath -w "$5")"} 2>&1); then
+      fail "updating to $4 failed: $(tr -d '\r' <<<"$probed" | tr '\n' ' ')"
+    fi
     check_version "$4"
     check_dependencies
     check_file_type

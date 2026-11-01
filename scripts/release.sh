@@ -105,7 +105,10 @@ if [ -z "$previous" ] || [ "$previous" = "$version" ] \
 fi
 probe=target/release/examples/update_probe.exe
 
-if [ "${PUBLISH:-false}" = true ]; then
+# Once this version is published, updates come from GitHub, as users get them.
+if [ "$previous" = "$version" ]; then
+  local_setup=""
+elif [ "${PUBLISH:-false}" = true ]; then
   GH_TOKEN=$GITHUB_TOKEN gh release create "v$version" "$setup" --repo C1art/edit \
     --target "${GITHUB_SHA:?}" --title "Cledit $version" --notes-file "$notes"
   local_setup=""
