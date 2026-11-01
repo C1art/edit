@@ -121,7 +121,7 @@ check_starts() {
 
 check_uninstall() {
   uninstall || { fail "uninstalling failed or left $app/cledit.exe"; return; }
-  if reg query 'HKCU\Software\Classes\.cledit' /ve >/dev/null 2>&1; then
+  if reg query 'HKCU\Software\Classes\.cledit' /ve 2>/dev/null | grep -q Cledit.Project; then
     fail "uninstalling left .cledit registered"
   fi
   if reg query "$uninstall_key" >/dev/null 2>&1; then

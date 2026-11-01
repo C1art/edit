@@ -56,10 +56,11 @@ Name: "{autoprograms}\Cledit"; Filename: "{app}\cledit.exe"; Tasks: startmenuico
 Name: "{autodesktop}\Cledit"; Filename: "{app}\cledit.exe"; Tasks: desktopicon
 
 [Registry]
-Root: HKA; Subkey: "Software\Classes\.cledit\OpenWithProgids"; ValueType: string; ValueName: "Cledit.Project"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
-Root: HKA; Subkey: "Software\Classes\.cledit"; ValueType: string; ValueName: ""; ValueData: "Cledit.Project"; Flags: uninsdeletevalue; Tasks: fileassoc
-Root: HKA; Subkey: "Software\Classes\.editproj\OpenWithProgids"; ValueType: string; ValueName: "Cledit.Project"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
-Root: HKA; Subkey: "Software\Classes\.editproj"; ValueType: string; ValueName: ""; ValueData: "Cledit.Project"; Flags: uninsdeletevalue; Tasks: fileassoc
+; Uninstalled in reverse order, so each extension's subkey goes before the extension.
+Root: HKA; Subkey: "Software\Classes\.cledit"; ValueType: string; ValueName: ""; ValueData: "Cledit.Project"; Flags: uninsdeletevalue uninsdeletekeyifempty; Tasks: fileassoc
+Root: HKA; Subkey: "Software\Classes\.cledit\OpenWithProgids"; ValueType: string; ValueName: "Cledit.Project"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty; Tasks: fileassoc
+Root: HKA; Subkey: "Software\Classes\.editproj"; ValueType: string; ValueName: ""; ValueData: "Cledit.Project"; Flags: uninsdeletevalue uninsdeletekeyifempty; Tasks: fileassoc
+Root: HKA; Subkey: "Software\Classes\.editproj\OpenWithProgids"; ValueType: string; ValueName: "Cledit.Project"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty; Tasks: fileassoc
 Root: HKA; Subkey: "Software\Classes\Cledit.Project"; ValueType: string; ValueName: ""; ValueData: "Cledit Project"; Flags: uninsdeletekey; Tasks: fileassoc
 Root: HKA; Subkey: "Software\Classes\Cledit.Project\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\cledit.exe"",0"; Tasks: fileassoc
 Root: HKA; Subkey: "Software\Classes\Cledit.Project\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\cledit.exe"" ""%1"""; Tasks: fileassoc
