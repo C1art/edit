@@ -2,14 +2,18 @@
 # Installs Cledit on the Windows runner the way a user would and checks the result, so a
 # broken installer or update stops the release. Called by release.sh:
 #   check-install.sh fresh <Setup.exe> <version>
-#   check-install.sh update <earlier Setup.exe> <update_probe.exe> <version> [feed folder]
+#   check-install.sh update <earlier Setup.exe> <update_probe.exe> <version> [Setup.exe]
+# Without the last Setup.exe, the update comes from the latest GitHub release.
 set -Eeuo pipefail
 # The run's annotations are what can be read back without its logs, so failures go there.
 trap 'echo "::error::${BASH_SOURCE[0]}:${LINENO}: ${BASH_COMMAND} failed"' ERR
 export MSYS_NO_PATHCONV=1
 
-root="$(cygpath -u "$LOCALAPPDATA")/Cledit"
-current="$root/current"
+# Must match AppId in installer/cledit.iss.
+uninstall_key='HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\{C150D3A9-C758-4C99-A7A4-27CB8B72382C}_is1'
+app="$(cygpath -u "$LOCALAPPDATA")/Programs/Cledit"
+start_menu="$(cygpath -u "$APPDATA")/Microsoft/Windows/Start Menu/Programs/Cledit.lnk"
+desktop="$(cygpath -u "$(powershell -NoProfile -Command "[Environment]::GetFolderPath('Desktop')" | tr -d '\r')")/Cledit.lnk"
 failures=0
 
 fail() {
@@ -21,20 +25,33 @@ stop_cledit() {
   taskkill /F /IM cledit.exe >/dev/null 2>&1 || true
 }
 
+uninstall() {
+  stop_cledit
+  timeout 300 "$app/unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART || return 1
+  # The uninstaller finishes from a copy of itself in the temporary folder.
+  for _ in $(seq 60); do
+    [ -f "$app/cledit.exe" ] || return 0
+    sleep 2
+  done
+  return 1
+}
+
+# Tasks as named in installer/cledit.iss; the ones left out are unchecked.
 install() {
-  echo "Installing $1"
-  stop_cledit
-  rm -rf "$root"
-  timeout 600 "$1" --silent
-  # Setup may start Cledit when it finishes.
-  sleep 5
-  stop_cledit
-  [ -f "$current/cledit.exe" ] || { echo "::error::no cledit.exe in $current"; exit 1; }
+  echo "Installing $1 with $2"
+  if [ -f "$app/unins000.exe" ]; then
+    uninstall || true
+  fi
+  rm -rf "$app"
+  timeout 600 "$1" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART "/TASKS=$2" \
+    || { echo "::error::$1 failed"; exit 1; }
+  [ -f "$app/cledit.exe" ] || { echo "::error::no cledit.exe in $app"; exit 1; }
 }
 
 check_version() {
-  grep -q "<version>$1</version>" "$current/sq.version" \
-    || fail "the installed version is not $1: $(cat "$current/sq.version")"
+  local installed
+  installed=$(reg query "$uninstall_key" /v DisplayVersion | tr -d '\r' | awk '/DisplayVersion/ { print $3 }')
+  [ "$installed" = "$1" ] || fail "the installed version is ${installed:-missing}, not $1"
 }
 
 # Every DLL that Cledit or a DLL it ships loads must be next to it or part of Windows. The
@@ -44,8 +61,8 @@ check_dependencies() {
   vs=$(cygpath -u "$("/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe" \
     -latest -products '*' -property installationPath | tr -d '\r')")
   dumpbin=$(ls "$vs"/VC/Tools/MSVC/*/bin/Hostx64/x64/dumpbin.exe | sort -V | tail -1)
-  shipped=$(ls "$current" | tr '[:upper:]' '[:lower:]')
-  for binary in "$current"/*.exe "$current"/*.dll; do
+  shipped=$(ls "$app" | tr '[:upper:]' '[:lower:]')
+  for binary in "$app"/*.exe "$app"/*.dll; do
     local dlls
     dlls=$("$dumpbin" -nologo -dependents "$(cygpath -w "$binary")" | tr -d '\r' \
       | sed -n 's/^ \{4,\}\([A-Za-z0-9_.-]*\.[dD][lL][lL]\)$/\1/p' | tr '[:upper:]' '[:lower:]' | sort -u)
@@ -65,7 +82,7 @@ check_dependencies() {
       fi
     done
   done
-  echo "::notice::checked $checked DLLs loaded by $(ls "$current"/*.exe "$current"/*.dll | wc -l) installed files"
+  echo "::notice::checked $checked DLLs loaded by $(ls "$app"/*.exe "$app"/*.dll | wc -l) installed files"
 }
 
 check_file_type() {
@@ -77,9 +94,19 @@ check_file_type() {
     || fail "opening a project does not start cledit.exe"
 }
 
+# Whether a shortcut is there should match whether its task was checked.
+check_shortcut() {
+  local name=$1 path=$2 wanted=$3
+  if [ "$wanted" = yes ] && [ ! -f "$path" ]; then
+    fail "there is no $name shortcut"
+  elif [ "$wanted" = no ] && [ -f "$path" ]; then
+    fail "there is a $name shortcut that was not asked for"
+  fi
+}
+
 # The runner has no graphics card, so a window that fails to open is reported, not failed.
 check_starts() {
-  "$current/cledit.exe" &
+  "$app/cledit.exe" &
   local pid=$!
   sleep 20
   if kill -0 "$pid" 2>/dev/null; then
@@ -93,41 +120,41 @@ check_starts() {
 }
 
 check_uninstall() {
-  stop_cledit
-  if ! timeout 300 "$root/Update.exe" --silent uninstall; then
-    fail "uninstalling failed"
-    return
-  fi
-  if reg query 'HKCU\Software\Classes\.cledit' /ve >/dev/null 2>&1; then
+  uninstall || { fail "uninstalling failed or left $app/cledit.exe"; return; }
+  if reg query 'HKCU\Software\Classes\.cledit' /ve 2>/dev/null | grep -q Cledit.Project; then
     fail "uninstalling left .cledit registered"
   fi
-  [ ! -f "$current/cledit.exe" ] || fail "uninstalling left $current/cledit.exe"
+  if reg query "$uninstall_key" >/dev/null 2>&1; then
+    fail "uninstalling left Cledit in Apps"
+  fi
+  check_shortcut "Start menu" "$start_menu" no
+  check_shortcut desktop "$desktop" no
 }
 
 case "${1:-}" in
   fresh)
-    install "$2"
+    install "$2" startmenuicon,desktopicon,fileassoc
     check_version "$3"
     check_dependencies
     check_file_type
+    check_shortcut "Start menu" "$start_menu" yes
+    check_shortcut desktop "$desktop" yes
     check_starts
     check_uninstall
     ;;
   update)
-    install "$2"
-    cp "$3" "$current/"
-    "$current/$(basename "$3")" "$4" ${5:+"$(cygpath -w "$5")"}
-    echo "Waiting for the update to $4 to apply"
-    for _ in $(seq 60); do
-      grep -q "<version>$4</version>" "$current/sq.version" 2>/dev/null && break
-      sleep 3
-    done
+    # Choices unlike the installer's defaults, so the update is seen keeping them.
+    install "$2" desktopicon,fileassoc
+    "$3" "$4" ${5:+"$(cygpath -w "$5")"} || fail "updating to $4 failed"
     check_version "$4"
     check_dependencies
     check_file_type
+    check_shortcut "Start menu" "$start_menu" no
+    check_shortcut desktop "$desktop" yes
+    check_uninstall
     ;;
   *)
-    echo "usage: $0 fresh <Setup.exe> <version> | update <earlier Setup.exe> <update_probe.exe> <version> [feed folder]" >&2
+    echo "usage: $0 fresh <Setup.exe> <version> | update <earlier Setup.exe> <update_probe.exe> <version> [Setup.exe]" >&2
     exit 2
     ;;
 esac

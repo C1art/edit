@@ -22,7 +22,10 @@ plugins.workspace = true
 eframe.workspace = true
 egui.workspace = true
 crossbeam.workspace = true
-velopack.workspace = true
+serde.workspace = true
+ureq.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows.workspace = true
