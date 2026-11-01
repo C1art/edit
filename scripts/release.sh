@@ -111,6 +111,12 @@ if [ "$previous" = "$version" ]; then
 elif [ "${PUBLISH:-false}" = true ]; then
   GH_TOKEN=$GITHUB_TOKEN gh release create "v$version" "$setup" --repo C1art/edit \
     --target "${GITHUB_SHA:?}" --title "Cledit $version" --notes-file "$notes"
+  # GitHub can take a moment to list a new release as the latest, which is what Cledit asks for.
+  for _ in $(seq 30); do
+    curl -sSf -H "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/C1art/edit/releases/latest" \
+      | grep -q "\"tag_name\": *\"v$version\"" && break
+    sleep 10
+  done
   local_setup=""
 else
   local_setup=$setup
