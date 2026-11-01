@@ -47,12 +47,10 @@ impl AudioSwitch {
         std::thread::Builder::new()
             .name("audio open".to_owned())
             .spawn(move || {
-                crate::startup_trace::step("opening audio output");
                 let opened = AudioOutput::open(wanted.as_ref()).or_else(|error| match error {
                     AudioError::MissingDevice(_) => AudioOutput::open(None),
                     error => Err(error),
                 });
-                crate::startup_trace::step(format_args!("audio output open: {}", opened.is_ok()));
                 let _ = sender.send(opened);
                 ctx.request_repaint();
             })?;

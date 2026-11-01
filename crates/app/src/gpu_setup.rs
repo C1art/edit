@@ -11,10 +11,6 @@ pub(crate) fn wgpu_configuration() -> egui_wgpu::WgpuConfiguration {
     if let egui_wgpu::WgpuSetup::CreateNew(setup) = &mut config.wgpu_setup {
         let base = std::sync::Arc::clone(&setup.device_descriptor);
         setup.device_descriptor = std::sync::Arc::new(move |adapter| {
-            crate::startup_trace::step(format_args!(
-                "opening a device on {}",
-                adapter.get_info().name
-            ));
             let mut descriptor = base(adapter);
             descriptor.required_features |= render::texture_sharing_features(adapter);
             descriptor
@@ -44,13 +40,6 @@ fn choose_adapter(
         wgpu::Backend::Vulkan => 1,
         _ => 2,
     };
-    for adapter in adapters {
-        let info = adapter.get_info();
-        crate::startup_trace::step(format_args!(
-            "adapter: {} ({:?}, {:?})",
-            info.name, info.backend, info.device_type
-        ));
-    }
     adapters
         .iter()
         .filter(|adapter| surface.is_none_or(|surface| adapter.is_surface_supported(surface)))

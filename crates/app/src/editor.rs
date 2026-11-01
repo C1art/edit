@@ -204,7 +204,6 @@ impl Editor {
         initial: Vec<PathBuf>,
         window: WindowState,
     ) -> Self {
-        crate::startup_trace::step("window open");
         crate::theme::apply(&creation_context.egui_ctx);
         let mut notices = Vec::new();
         let render_state = creation_context.wgpu_render_state.clone();
@@ -213,7 +212,6 @@ impl Editor {
         }
         // Before anything decodes, so decoders open on the adapter that draws.
         crate::gpu_setup::decode_where_drawn(render_state.as_ref());
-        crate::startup_trace::step("starting workers");
         let timeline = Timeline::new(Sequence::with_default_tracks(
             Timebase::HZ_90K,
             VideoFormat::default(),
@@ -238,7 +236,6 @@ impl Editor {
                 .map_err(|error| notices.push(format!("Thumbnails disabled: {error}")))
                 .ok(),
         );
-        crate::startup_trace::step("opening the project store");
         let mut store = ProjectStore::new()
             .map_err(|error| notices.push(format!("Saving disabled: {error}")))
             .ok();
@@ -248,7 +245,6 @@ impl Editor {
                 .for_each(|setting| store.read_setting(setting));
             store.find_recoverable();
         }
-        crate::startup_trace::step("opening the program monitor");
         let program = Viewer::new(
             Arc::new(timeline.sequence().clone()),
             None,
@@ -396,7 +392,6 @@ impl Editor {
         for path in initial {
             editor.open_path(path);
         }
-        crate::startup_trace::step("editor ready");
         editor
     }
 

@@ -130,7 +130,6 @@ mod source;
 mod source_drag;
 mod source_waveform;
 mod speed_dialog;
-mod startup_trace;
 mod still_length;
 mod subclip_dialog;
 mod text_styles;
@@ -162,9 +161,7 @@ use editor::Editor;
 use window_state::WindowState;
 
 fn main() -> eframe::Result {
-    startup_trace::step(concat!("Cledit ", env!("CARGO_PKG_VERSION"), " starting"));
     let updated_to = updates::start_up();
-    startup_trace::step("update hooks done");
     let initial: Vec<PathBuf> = std::env::args_os().skip(1).map(PathBuf::from).collect();
     project_store::adopt_old_app_folder();
     let window = WindowState::load();
@@ -180,7 +177,6 @@ fn main() -> eframe::Result {
         ..Default::default()
     };
     let (on_exit, apply) = crossbeam::channel::unbounded();
-    startup_trace::step("opening the window");
     let ran = eframe::run_native(
         "Cledit",
         options,
